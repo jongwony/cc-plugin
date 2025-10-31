@@ -1,0 +1,13 @@
+{
+  "name": "claude-marketplace",
+  "owner": {
+    "name": "jongwony"
+  },
+  "plugins": [
+    {
+      "name": "context-collector",
+      "source": "./context-collector",
+      "description": "Custom agents for efficient context"
+    }
+  ]
+}

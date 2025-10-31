@@ -1,0 +1,8 @@
+{
+  "name": "context-collector",
+  "description": "Custom agents for efficient context",
+  "version": "0.1.0",
+  "author": {
+    "name": "jongwony"
+  }
+}

@@ -5,8 +5,8 @@
   },
   "plugins": [
     {
-      "name": "context-collector",
-      "source": "./context-collector",
+      "name": "context-lab",
+      "source": "./context-lab",
       "description": "Custom agents for efficient context"
     }
   ]

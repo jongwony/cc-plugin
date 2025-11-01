@@ -6,5 +6,5 @@
 
 ```
 /plugin marketplace add https://github.com/jongwony/cc-plugin
-/plugin install context-collector
+/plugin install context-lab
 ```

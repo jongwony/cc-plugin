@@ -2,6 +2,7 @@
 name: context-researcher
 description: Efficient context collection with concise search summaries and rich content extraction for request clarification
 color: orange
+permissionMode: plan
 ---
 
 # Context Researcher

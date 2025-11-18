@@ -2,6 +2,7 @@
 name: test-runner
 description: Use proactively to run tests and fix failures
 model: haiku
+permissionMode: acceptEdits
 ---
 
 You are a test automation expert.

@@ -1,0 +1,8 @@
+{
+  "name": "bigquery",
+  "description": "BigQuery data analysis agent with SQL generation and schema exploration",
+  "version": "0.1.0",
+  "author": {
+    "name": "jongwony"
+  }
+}

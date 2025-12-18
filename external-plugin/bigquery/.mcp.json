@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "bigquery": {
+      "command": "${HOME}/.gemini/extensions/bigquery-data-analytics/toolbox",
+      "args": [
+        "--tools-file",
+        "${HOME}/.gemini/extensions/bigquery-data-analytics/tools.yaml",
+        "--stdio"
+      ],
+      "env": {
+        "BIGQUERY_PROJECT": "${GOOGLE_CLOUD_PROJECT}"
+      }
+    }
+  }
+}

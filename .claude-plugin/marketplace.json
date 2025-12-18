@@ -8,6 +8,16 @@
       "name": "context-lab",
       "source": "./context-lab",
       "description": "Custom agents for efficient context"
+    },
+    {
+      "name": "tavily",
+      "source": "./external-plugin/tavily",
+      "description": "Deep web research agent powered by Tavily search API"
+    },
+    {
+      "name": "bigquery",
+      "source": "./external-plugin/bigquery",
+      "description": "BigQuery data analysis agent with SQL generation and schema exploration"
     }
   ]
 }

@@ -1,7 +1,7 @@
 {
   "name": "tavily",
   "description": "Deep web research agent powered by Tavily search API",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "jongwony"
   }

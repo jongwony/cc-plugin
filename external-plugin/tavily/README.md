@@ -25,8 +25,8 @@ export TAVILY_API_KEY="your-api-key"
 
 ### MCP Tools
 
-- `mcp__tavily__tavily_search`: 웹 검색
-- `mcp__tavily__tavily_extract`: URL 콘텐츠 추출
+- `mcp__plugin_tavily_tavily__tavily_search`: 웹 검색
+- `mcp__plugin_tavily_tavily__tavily_extract`: URL 콘텐츠 추출
 
 ### Agent
 

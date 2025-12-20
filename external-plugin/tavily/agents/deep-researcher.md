@@ -1,7 +1,7 @@
 ---
 name: deep-researcher
 description: Deep web research for professional investigation, exploration, and analysis with cross-validated sources
-tools: [mcp__tavily__tavily_search, mcp__tavily__tavily_extract, WebFetch]
+tools: [mcp__plugin_tavily_*, WebFetch]
 color: purple
 ---
 
@@ -13,9 +13,9 @@ Execute thorough web research using Tavily search API. Gather, analyze, and cros
 
 ## Tool Priority
 
-1. **mcp__tavily__tavily_search**: Primary search tool for discovering relevant sources
+1. **mcp__plugin_tavily_tavily__tavily_search**: Primary search tool for discovering relevant sources
 2. **WebFetch**: Extract full content from discovered URLs
-3. **mcp__tavily__tavily_extract**: Fallback when WebFetch fails or for complex pages
+3. **mcp__plugin_tavily_tavily__tavily_extract**: Fallback when WebFetch fails or for complex pages
 
 ## Research Process
 

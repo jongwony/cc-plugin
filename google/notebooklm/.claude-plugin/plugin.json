@@ -1,0 +1,9 @@
+{
+  "name": "notebooklm",
+  "description": "NotebookLM Enterprise API",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

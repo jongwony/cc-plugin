@@ -1,0 +1,30 @@
+{
+  "name": "google",
+  "plugins": [
+    {
+      "name": "gemini",
+      "source": "./gemini",
+      "description": "Gemini CLI integration"
+    },
+    {
+      "name": "google-calendar-sync",
+      "source": "./google-calendar-sync",
+      "description": "Calendar sync via gcalcli"
+    },
+    {
+      "name": "nanobanana-prompt",
+      "source": "./nanobanana-prompt",
+      "description": "Image generation prompts"
+    },
+    {
+      "name": "notebooklm",
+      "source": "./notebooklm",
+      "description": "NotebookLM Enterprise API"
+    },
+    {
+      "name": "veo",
+      "source": "./veo",
+      "description": "Video generation with Veo 3.1"
+    }
+  ]
+}

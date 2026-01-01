@@ -1,0 +1,15 @@
+{
+  "name": "session",
+  "plugins": [
+    {
+      "name": "search",
+      "source": "./search",
+      "description": "Session history search"
+    },
+    {
+      "name": "stash",
+      "source": "./stash",
+      "description": "Git stash + session linking"
+    }
+  ]
+}

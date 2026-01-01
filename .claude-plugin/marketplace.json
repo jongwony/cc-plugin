@@ -18,6 +18,51 @@
       "name": "bigquery",
       "source": "./external-plugin/bigquery",
       "description": "BigQuery data analysis agent with SQL generation and schema exploration"
+    },
+    {
+      "name": "google",
+      "source": "./google",
+      "description": "Google ecosystem integrations"
+    },
+    {
+      "name": "session",
+      "source": "./session",
+      "description": "Session management utilities"
+    },
+    {
+      "name": "linear",
+      "source": "./linear",
+      "description": "Linear activity, documents, milestones"
+    },
+    {
+      "name": "amplitude-user-lookup",
+      "source": "./amplitude-user-lookup",
+      "description": "Amplitude user behavior queries"
+    },
+    {
+      "name": "claude-code-internals",
+      "source": "./claude-code-internals",
+      "description": "Claude Code internals explorer"
+    },
+    {
+      "name": "codex",
+      "source": "./codex",
+      "description": "OpenAI Codex CLI integration"
+    },
+    {
+      "name": "fossil-ui",
+      "source": "./fossil-ui",
+      "description": "Git to Fossil export"
+    },
+    {
+      "name": "github-activity",
+      "source": "./github-activity",
+      "description": "GitHub activity reports"
+    },
+    {
+      "name": "pdf-split",
+      "source": "./pdf-split",
+      "description": "PDF chapter splitting"
     }
   ]
 }

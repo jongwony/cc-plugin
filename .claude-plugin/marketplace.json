@@ -58,6 +58,11 @@
       "name": "pdf-split",
       "source": "./pdf-split",
       "description": "PDF chapter splitting"
+    },
+    {
+      "name": "activity-workflow",
+      "source": "./activity-workflow",
+      "description": "Orchestrates activity collection and Google Calendar sync"
     }
   ]
 }

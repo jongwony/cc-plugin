@@ -1,6 +1,6 @@
 {
-  "name": "linear-extended",
-  "description": "Create and manage Linear documents and project milestones",
+  "name": "session",
+  "description": "Session utilities: search history, git stash linking",
   "version": "1.0.0",
   "author": {
     "name": "Jongwon Choi",

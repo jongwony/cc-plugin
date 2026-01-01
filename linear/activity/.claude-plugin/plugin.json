@@ -1,9 +1,0 @@
-{
-  "name": "linear-activity",
-  "description": "Generate Linear activity reports for date ranges",
-  "version": "1.0.0",
-  "author": {
-    "name": "Jongwon Choi",
-    "url": "https://github.com/jongwony"
-  }
-}

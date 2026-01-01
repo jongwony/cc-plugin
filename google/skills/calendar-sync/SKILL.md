@@ -1,5 +1,5 @@
 ---
-name: google-calendar-sync
+name: calendar-sync
 description: Calendar sync via gcalcli
 ---
 

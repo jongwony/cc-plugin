@@ -1,0 +1,9 @@
+{
+  "name": "google",
+  "description": "Google services: Gemini CLI, Veo, NotebookLM, image prompts, calendar sync",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

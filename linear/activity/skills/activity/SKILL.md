@@ -1,5 +1,5 @@
 ---
-name: linear-activity
+name: activity
 description: Generate Linear activity reports for date ranges.
 ---
 

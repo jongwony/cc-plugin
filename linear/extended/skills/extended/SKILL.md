@@ -1,5 +1,5 @@
 ---
-name: linear-extended
+name: extended
 description: Create and manage Linear documents and project milestones
 ---
 

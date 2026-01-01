@@ -2,13 +2,13 @@
   "name": "linear",
   "plugins": [
     {
-      "name": "linear-activity",
-      "source": "./linear-activity",
+      "name": "activity",
+      "source": "./activity",
       "description": "Generate Linear activity reports for date ranges"
     },
     {
-      "name": "linear-extended",
-      "source": "./linear-extended",
+      "name": "extended",
+      "source": "./extended",
       "description": "Create and manage Linear documents and project milestones"
     }
   ]

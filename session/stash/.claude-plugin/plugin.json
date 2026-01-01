@@ -1,5 +1,5 @@
 {
-  "name": "stash",
+  "name": "session-stash",
   "description": "Git stash + session linking",
   "version": "1.0.0",
   "author": {

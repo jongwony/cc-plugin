@@ -15,19 +15,49 @@
       "description": "BigQuery data analysis agent with SQL generation and schema exploration"
     },
     {
-      "name": "google",
-      "source": "./google",
-      "description": "Google ecosystem integrations"
+      "name": "gemini",
+      "source": "./google/gemini",
+      "description": "Gemini CLI integration"
     },
     {
-      "name": "session",
-      "source": "./session",
-      "description": "Session management utilities"
+      "name": "google-calendar-sync",
+      "source": "./google/google-calendar-sync",
+      "description": "Calendar sync via gcalcli"
     },
     {
-      "name": "linear",
-      "source": "./linear",
-      "description": "Linear activity, documents, milestones"
+      "name": "nanobanana-prompt",
+      "source": "./google/nanobanana-prompt",
+      "description": "Image generation prompts"
+    },
+    {
+      "name": "notebooklm",
+      "source": "./google/notebooklm",
+      "description": "NotebookLM Enterprise API"
+    },
+    {
+      "name": "veo",
+      "source": "./google/veo",
+      "description": "Video generation with Veo 3.1"
+    },
+    {
+      "name": "session-search",
+      "source": "./session/search",
+      "description": "Session search utilities"
+    },
+    {
+      "name": "session-stash",
+      "source": "./session/stash",
+      "description": "Session stash utilities"
+    },
+    {
+      "name": "linear-activity",
+      "source": "./linear/activity",
+      "description": "Linear activity tracking"
+    },
+    {
+      "name": "linear-extended",
+      "source": "./linear/extended",
+      "description": "Linear documents and milestones"
     },
     {
       "name": "amplitude-user-lookup",

@@ -1,7 +1,17 @@
 ---
 name: claude-code-internals
-description: Claude Code internals explorer
+description: >-
+  This skill should be used when the user asks to "explore claude code source",
+  "find internal features", "investigate cli.js", "check beta headers",
+  "discover hidden settings", or mentions "minified code analysis",
+  "anthropic-beta headers", "context management internals".
 ---
+
+<constraints>
+- Minified code: variable names unreliable, search string literals only
+- Version-specific: findings may change between CLI versions
+- Token-intensive: delegate initial exploration to Explore subagent
+</constraints>
 
 # Claude Code Internals Explorer
 
@@ -19,7 +29,7 @@ Analyze Claude Code's minified source to understand internal behavior and discov
 1. **Delegate exploration** to Explore subagent:
 ```
 Task tool (subagent_type: Explore)
-Prompt: "Run ~/.claude/skills/claude-code-internals/scripts/find_installation.sh,
+Prompt: "Run ${CLAUDE_PLUGIN_ROOT}/scripts/find_installation.sh,
         then search for [keyword] in cli.js. Report file paths and matching lines."
 ```
 
@@ -39,7 +49,7 @@ Call Task tool with:
 
 Example delegation:
 ```
-Find Claude Code installation path using ~/.claude/skills/claude-code-internals/scripts/find_installation.sh.
+Find Claude Code installation path using ${CLAUDE_PLUGIN_ROOT}/scripts/find_installation.sh.
 Then search for patterns related to [feature] in cli.js.
 Return: installation path, version, matching lines with context.
 ```
@@ -84,10 +94,10 @@ See `references/search-patterns.md` for comprehensive patterns by category.
 
 When you find relevant code:
 
-1. Note line numbers: `grep -n "pattern" cli.js`
-2. Extract context: `sed -n 'LINE-10,LINE+10p' cli.js`
+1. Note line numbers with `grep -n "pattern" cli.js`
+2. Extract surrounding context with `sed -n 'LINE-10,LINE+10p' cli.js`
 3. Trace related code by searching for adjacent strings
-4. Compare with `references/known-features.md`
+4. Compare findings with `references/known-features.md`
 
 ### 5. Document Discoveries
 
@@ -111,6 +121,14 @@ Update `references/known-features.md` with:
 - **scripts/find_installation.sh**: Locate Claude Code installation
 - **references/search-patterns.md**: Comprehensive grep patterns by category
 - **references/known-features.md**: Baseline of known features for comparison
+
+## Resource Map
+
+| Resource | Path | Load When |
+|----------|------|-----------|
+| Known features baseline | `references/known-features.md` | Comparing with new discoveries |
+| Search pattern library | `references/search-patterns.md` | Investigating specific category |
+| Installation finder | `scripts/find_installation.sh` | Starting investigation |
 
 ## Tips
 

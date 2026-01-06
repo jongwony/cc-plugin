@@ -1,6 +1,6 @@
 # Known Claude Code Features
 
-Last updated: 2025-12 (v2.0.76)
+Last updated: 2026-01 (v2.0.76+)
 
 ## Table of Contents
 1. [Slash Commands](#slash-commands)
@@ -10,6 +10,8 @@ Last updated: 2025-12 (v2.0.76)
 5. [Hook Events](#hook-events)
 6. [Internal Constants](#internal-constants)
 7. [Debug & Session Internals](#debug--session-internals)
+8. [Skill & Plugin System](#skill--plugin-system)
+9. [Context Display Behavior](#context-display-behavior)
 
 ---
 
@@ -37,6 +39,8 @@ Last updated: 2025-12 (v2.0.76)
 | `/terminal-setup` | Configure terminal | Yes |
 | `/usage` | Show plan usage | Yes |
 | `/vim` | Vim keybindings | Yes |
+| `/skills` | List available skills | Yes |
+| `/tasks` | Show background tasks | Yes |
 
 ## Settings
 
@@ -98,10 +102,18 @@ Last updated: 2025-12 (v2.0.76)
 
 | Event | Trigger | Description |
 |-------|---------|-------------|
-| `PreCompact` | `manual`, `auto` | Before compaction |
-| `PostCompact` | - | After compaction |
-| `PreToolExecution` | - | Before tool runs |
-| `PostToolExecution` | - | After tool completes |
+| `PreToolUse` | Before tool execution | Validate/modify tool input |
+| `PostToolUse` | After tool execution | Process tool output |
+| `Stop` | Agent completion | Final processing |
+| `SubagentStop` | Subagent completion | Subagent result handling |
+| `PreCompact` | `manual`, `auto` | Before context compaction |
+| `PostCompact` | After compaction | Post-compaction processing |
+| `SessionStart` | Session begins | Initialization |
+| `SessionEnd` | Session ends | Cleanup |
+| `UserPromptSubmit` | User sends message | Pre-process user input |
+| `Notification` | System notification | Handle notifications |
+
+**Note**: `PreToolExecution`/`PostToolExecution` are deprecated names for `PreToolUse`/`PostToolUse`.
 
 ## Internal Constants
 
@@ -160,6 +172,78 @@ Example:
 | Multiple terminals | Each gets own session ID and debug file |
 | `latest` symlink | Points to most recently **started** session |
 | Existing sessions | Unaffected by new session starting |
+
+---
+
+## Skill & Plugin System
+
+### Skill Injection Mechanism
+
+Skills with `type:"prompt"` inject content into **main agent context** (user message role):
+
+```
+Skill Tool invoked
+    ↓
+SKILL.md content → Main agent context (user message)
+    ↓
+Main agent executes (same context as conversation)
+```
+
+**Key properties**:
+- Skills are NOT separate execution environments
+- Main agent CAN call subagents when following skill instructions
+- Subagents CANNOT use: `AskUserQuestion`, `EnterPlanMode`, `ExitPlanMode`
+
+### Progressive Disclosure (3-Tier)
+
+| Tier | Content | When Loaded | Token Impact |
+|------|---------|-------------|--------------|
+| **1** | Metadata (name + description) | Session start | ~100 tokens/skill |
+| **2** | Full SKILL.md | Skill activation | 1-5k tokens |
+| **3** | references/, scripts/ | Demand (Read/Bash) | Variable |
+
+**Verification**: `/context` Skills section shows "potential tokens if invoked", NOT actually loaded.
+
+### Plugin Variables
+
+| Variable | Expansion | Use Case |
+|----------|-----------|----------|
+| `${CLAUDE_PLUGIN_ROOT}` | Plugin installation path | Reference bundled scripts/assets |
+
+---
+
+## Context Display Behavior
+
+### /context Output Structure
+
+The `/context` command shows context breakdown:
+
+```
+Main Breakdown (ACTUAL context):
+├─ System prompt:   3.1k
+├─ System tools:   17.5k  ← Skill tool metadata only
+├─ Memory files:    4.6k
+└─ Messages:       82.1k
+
+Skills Section (INFORMATIONAL):
+├─ Skill A: 5.5k  ← "tokens if invoked"
+└─ Skill B: 3.2k
+```
+
+**Important**: Skills section total is NOT included in Main Breakdown. It shows potential token cost, not actual loaded content.
+
+### XML Tags in Injections
+
+All injections use `user` role messages (Claude API only has system/user/assistant). XML tags are semantic markers:
+
+| Tag | Purpose |
+|-----|---------|
+| `<system-reminder>` | System-injected instructions |
+| `<command-message>` | Skill/command content |
+| `<bash-stdout>` | Shell output |
+| `<tool-result>` | Tool execution result |
+
+**Internal flag**: `isMeta: true` distinguishes system injections from user input (not exposed in API).
 
 ---
 

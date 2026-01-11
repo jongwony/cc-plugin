@@ -1,6 +1,8 @@
 ---
 name: fossil-ui
-description: Git to Fossil export
+description: |
+  This skill should be used when the user asks to "convert git to fossil", "export repo to fossil", "browse git history in fossil", "launch fossil UI", or "view timeline in fossil". Exports current git repository to Fossil database and launches web UI for browsing.
+context: fork
 ---
 
 # Fossil UI

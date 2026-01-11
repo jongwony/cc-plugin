@@ -1,6 +1,7 @@
 ---
 name: gemini
-description: Gemini CLI integration
+description: |
+  This skill should be used when the user asks to "run gemini", "use gemini CLI", "delegate to gemini", "gemini resume", or "continue with gemini". Executes tasks via Gemini CLI with model selection, approval modes, and session management.
 ---
 
 # Gemini CLI Skill Guide

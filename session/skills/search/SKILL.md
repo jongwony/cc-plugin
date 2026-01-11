@@ -1,6 +1,8 @@
 ---
 name: search
-description: Session history search
+description: |
+  This skill should be used when the user asks to "find past conversation", "search session history", "where did we discuss X", "find when I worked on Y", or "search old sessions by keyword". Searches Claude Code session files in ~/.claude/projects/ by topic, keyword, or date.
+context: fork
 ---
 
 # Session Search

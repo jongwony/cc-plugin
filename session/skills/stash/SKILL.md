@@ -1,6 +1,7 @@
 ---
 name: stash
-description: Git stash + session linking
+description: |
+  This skill should be used when the user asks to "stash with session", "save work for later session", "link stash to session", "find stash by session ID", or "restore session stash". Saves git changes associated with Claude Code session ID for later retrieval.
 ---
 
 # Stash Session

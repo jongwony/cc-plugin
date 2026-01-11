@@ -1,6 +1,7 @@
 ---
 name: codex
-description: OpenAI Codex CLI integration
+description: |
+  This skill should be used when the user asks to "run codex", "use codex CLI", "delegate to codex", "codex resume", or "continue with codex". Executes tasks via OpenAI Codex CLI with model selection, reasoning effort configuration, and session management.
 ---
 
 # Codex Skill Guide

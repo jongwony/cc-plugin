@@ -2,6 +2,8 @@
 name: activity
 description: |
   This skill should be used when the user asks to "collect Linear activity", "generate Linear report", "show my Linear issues", "what did I work on in Linear", or requests activity summaries from Linear for specific date ranges. Provides workflow for collecting issues, projects, and cycles via Linear MCP.
+context: fork
+agent: linear-collector
 ---
 
 # Linear Activity Reporter

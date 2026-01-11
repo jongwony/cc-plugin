@@ -3,6 +3,10 @@ name: daily-activity-sync
 description: Orchestrate developer activity collection from GitHub and Linear, then sync to Google Calendar.
 tools: [Bash, Read, Write, mcp__plugin_linear_linear__*]
 color: cyan
+skills:
+    - linear:activity
+    - github-activity:github-activity
+    - google:calendar-sync
 ---
 
 # Daily Activity Sync

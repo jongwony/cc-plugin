@@ -5,6 +5,7 @@ description: >-
   "find internal features", "investigate cli.js", "check beta headers",
   "discover hidden settings", or mentions "minified code analysis",
   "anthropic-beta headers", "context management internals".
+context: fork
 ---
 
 <constraints>

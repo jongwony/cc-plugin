@@ -1,6 +1,8 @@
 ---
 name: amplitude-user-lookup
-description: Amplitude user behavior queries
+description: |
+  This skill should be used when the user asks to "lookup Amplitude user", "find user by device ID", "get user activity from Amplitude", or "search Amplitude user events". Queries Amplitude REST API for user data using Device ID or User ID.
+context: fork
 ---
 
 # Amplitude User Lookup

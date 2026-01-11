@@ -1,6 +1,8 @@
 ---
 name: nanobanana-prompt
-description: Image generation prompts
+description: |
+  This skill should be used when the user asks to "generate image", "create image with nanobanana", "write image prompt", "make icon/pattern/sticker", or "image generation". Crafts effective prompts for nanobanana MCP with Gemini Imagen.
+context: fork
 ---
 
 # Nanobanana Image Generation

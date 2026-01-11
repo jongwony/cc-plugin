@@ -1,6 +1,8 @@
 ---
 name: veo
-description: Video generation with Veo 3.1
+description: |
+  This skill should be used when the user asks to "generate video", "create video with Veo", "text to video", "image to video", "animate image", or "video generation". Generates videos using Google Veo 3.1 API with text, image, or video inputs.
+context: fork
 ---
 
 # Veo Video Generation

@@ -1,6 +1,9 @@
 ---
 name: github-activity
-description: GitHub activity reports
+description: |
+  This skill should be used when the user asks to "collect GitHub activity", "generate GitHub report", "show my PRs and commits", "what did I work on in GitHub", or requests activity summaries from GitHub for specific date ranges. Provides workflow for collecting issues, PRs, and commits via GitHub CLI.
+agent: github-activity
+context: fork
 ---
 
 # GitHub Activity Reporter

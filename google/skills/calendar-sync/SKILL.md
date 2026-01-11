@@ -1,6 +1,8 @@
 ---
 name: calendar-sync
-description: Calendar sync via gcalcli
+description: |
+  This skill should be used when the user asks to "sync to Google Calendar", "import activities to calendar", "add GitHub/Linear events to calendar", or "convert activity report to calendar". Transforms structured activity data into gcalcli commands for Google Calendar import.
+context: fork
 ---
 
 # Calendar Sync

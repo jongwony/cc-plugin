@@ -24,24 +24,22 @@ Example: `claude:abc123de My feature work in progress`
 
 ### Save (Default)
 
-Stash current changes with session ID tag.
+Stash current changes with current session ID tag.
+
+**Current Session ID**: `${CLAUDE_SESSION_ID}`
 
 #### Workflow
 
-1. Call AskUserQuestion to collect Session ID:
-   - Prompt: "Enter the Session ID from your statusline (e.g., abc123de):"
-   - User copies value from Claude Code statusline
-
-2. Call AskUserQuestion to collect stash message:
+1. Call AskUserQuestion to collect stash message:
    - Prompt: "Enter a description for this stash (optional):"
    - Default to "WIP" if empty
 
-3. Execute stash:
+2. Execute stash:
    ```bash
-   git stash push -m "claude:[session_id] [message]"
+   git stash push -m "claude:${CLAUDE_SESSION_ID} [message]"
    ```
 
-4. Confirm success with stash reference.
+3. Confirm success with stash reference.
 
 ### List
 
@@ -106,13 +104,14 @@ Remove stash by session ID (irreversible).
    git stash drop stash@{n}
    ```
 
-## Session ID Location
+## Session ID Format
 
-Users find Session ID in Claude Code statusline (bottom of terminal). Format: short hash (e.g., `abc123de`).
+- **Save**: Uses `${CLAUDE_SESSION_ID}` (full UUID, e.g., `02349458-8910-4228-b931-ac9f0c83081e`)
+- **List/Pop/Drop**: Accepts both full UUID and short hash (first 8 characters)
 
 ## Notes
 
 - Stash includes untracked files by default (`-u` flag available)
 - Multiple stashes per session allowed
 - Empty working directory: stash command will fail gracefully
-- Session ID validation: 8+ alphanumeric characters expected
+- Full UUID enables direct matching with session files in `~/.claude/projects/`

@@ -9,96 +9,99 @@ context: fork
 ---
 
 <constraints>
-- Minified code: variable names unreliable, search string literals only
+- ALWAYS delegate: strings output is 350K+ lines, never run in main context
+- Binary format: Use `strings` to extract readable text from standalone binary
 - Version-specific: findings may change between CLI versions
-- Token-intensive: delegate initial exploration to Explore subagent
 </constraints>
 
 # Claude Code Internals Explorer
 
-Analyze Claude Code's minified source to understand internal behavior and discover features.
+Analyze Claude Code's standalone binary to understand internal behavior and discover features.
 
 ## Important Caveats
 
-- **Minified code**: Variable names are obfuscated (e.g., `UnB`, `cT0`)
+- **ALWAYS delegate**: `strings` output is 350,000+ lines — running in main context wastes tokens
+- **Standalone binary**: Claude Code ships as a compiled binary, not readable JavaScript
 - **Version-specific**: Findings may change between versions
 - **Unofficial**: Discovered features may be unsupported/unstable
-- **Token-intensive**: Mitigated via subagent delegation (see Workflow Phase 0)
 
 ## Quick Start
 
-1. **Delegate exploration** to Explore subagent:
+**Delegate all binary exploration to subagent:**
+
 ```
 Task tool (subagent_type: Explore)
-Prompt: "Run ${CLAUDE_PLUGIN_ROOT}/scripts/find_installation.sh,
-        then search for [keyword] in cli.js. Report file paths and matching lines."
+Prompt: "Run ${CLAUDE_PLUGIN_ROOT}/scripts/find_installation.sh to get binary path.
+        Then search for [keyword] using: strings $BINARY | grep -E '[pattern]'
+        Return: version, matching lines with context (-B2 -A2)."
 ```
 
-2. **Analyze findings** in main context (subagent returns summary)
-
-3. **Iterate** with follow-up delegation if deeper investigation needed
+The subagent handles token-heavy strings output; main context receives only summarized findings.
 
 ## Workflow
 
-### 0. Delegate Context Gathering
+### 1. Delegate Binary Exploration (Required)
 
-**Principle**: Initial exploration consumes tokens in subagent context, preserving main context for analysis.
+**Principle**: strings output (350K+ lines) consumes tokens in subagent context, preserving main context for analysis.
 
 Call Task tool with:
 - `subagent_type`: `Explore`
 - `prompt`: Specify search target and expected output format
 
-Example delegation:
+Example delegations:
+
 ```
-Find Claude Code installation path using ${CLAUDE_PLUGIN_ROOT}/scripts/find_installation.sh.
-Then search for patterns related to [feature] in cli.js.
-Return: installation path, version, matching lines with context.
+# Feature investigation
+Find Claude Code binary using ${CLAUDE_PLUGIN_ROOT}/scripts/find_installation.sh.
+Search for "anthropic-beta" using: strings $BINARY | grep -E "anthropic-beta|20[0-9]{2}-[0-9]{2}"
+Return: version, all matching lines.
+
+# Settings discovery
+Run find_installation.sh, then search for setting patterns:
+strings $BINARY | grep -E "autoCompact|permission|default.*:"
+Return: setting names and apparent default values.
 ```
 
 The subagent will:
-1. Execute shell scripts and grep commands
-2. Filter and summarize findings
-3. Return structured results to main context
+1. Execute shell scripts and strings commands
+2. Filter results with grep
+3. Return summarized findings to main context
 
 Main agent then performs interpretation and decision-making.
 
-### 1. Locate Source
+### 2. Subagent Search Commands (Reference)
 
-Run `scripts/find_installation.sh` to find:
-- `cli.js` path (minified JavaScript source, ~9.9MB)
-- Current version
-- Binary location
+> **Note**: These commands are for subagent execution, not main context.
 
-Typical path: `~/.npm/_npx/*/node_modules/@anthropic-ai/claude-code/cli.js`
+```bash
+# Get binary path
+BINARY="$HOME/.local/share/claude/versions/$(ls -t ~/.local/share/claude/versions | head -1)"
 
-### 2. Choose Investigation Type
+# Search with context
+strings "$BINARY" | grep -B2 -A2 "pattern"
+
+# Cache for multiple searches (within subagent session)
+strings "$BINARY" > /tmp/claude-strings.txt
+grep "pattern1" /tmp/claude-strings.txt
+grep "pattern2" /tmp/claude-strings.txt
+```
+
+### 3. Investigation Types
 
 | Goal | Approach |
 |------|----------|
-| **Specific feature** | Search for known keywords |
+| **Specific feature** | Search for known keywords with `strings \| grep` |
 | **New version changes** | Compare with `known-features.md`, check release notes |
 | **Hidden settings** | Search for setting patterns |
 | **Beta features** | Search for beta headers |
 
-### 3. Search Strategies
-
-For minified code, search **string literals** (not variable names).
-
-Quick example:
-```bash
-grep -E "anthropic-beta|context-management" cli.js
-```
-
-See `references/search-patterns.md` for comprehensive patterns by category.
-
 ### 4. Analyze Findings
 
-When you find relevant code:
+When you find relevant strings:
 
-1. Note line numbers with `grep -n "pattern" cli.js`
-2. Extract surrounding context with `sed -n 'LINE-10,LINE+10p' cli.js`
-3. Trace related code by searching for adjacent strings
-4. Compare findings with `references/known-features.md`
+1. Note context with `grep -B2 -A2` for surrounding lines
+2. Search for related strings to understand feature scope
+3. Compare findings with `references/known-features.md`
 
 ### 5. Document Discoveries
 
@@ -112,15 +115,15 @@ Update `references/known-features.md` with:
 
 | Task | Approach |
 |------|----------|
-| Check feature enabled | `grep -n "feature_name" cli.js` -> examine conditional logic |
+| Check feature enabled | `strings $BINARY \| grep "feature_name"` |
 | Find default values | See `references/search-patterns.md` Settings section |
 | Discover new commands | See `references/search-patterns.md` Commands section |
 | Compare release notes | Search mentioned features -> compare with `references/known-features.md` |
 
 ## Resources
 
-- **scripts/find_installation.sh**: Locate Claude Code installation
-- **references/search-patterns.md**: Comprehensive grep patterns by category
+- **scripts/find_installation.sh**: Locate Claude Code binary
+- **references/search-patterns.md**: Comprehensive search patterns by category
 - **references/known-features.md**: Baseline of known features for comparison
 
 ## Resource Map
@@ -133,8 +136,8 @@ Update `references/known-features.md` with:
 
 ## Tips
 
-1. **Start narrow**: Search specific terms before broad exploration
-2. **Use line numbers**: `-n` flag helps locate code for context reading
+1. **Cache strings output**: Run `strings $BINARY > /tmp/claude-strings.txt` once, grep multiple times
+2. **Start narrow**: Search specific terms before broad exploration
 3. **Chain searches**: Find one string, search nearby for related code
 4. **Save findings**: Update known-features.md to track discoveries
 5. **Version awareness**: Note version when documenting findings

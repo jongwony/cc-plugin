@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Find Claude Code standalone binary path
 # Usage: source this script or run directly
+# When sourced: exports BINARY_PATH for use in caller
 
 set -e
 
@@ -18,7 +19,7 @@ if [[ -z "$LATEST" ]]; then
   exit 1
 fi
 
-BINARY_PATH="$VERSIONS_DIR/$LATEST"
+export BINARY_PATH="$VERSIONS_DIR/$LATEST"
 
 # Output in parseable format
 echo "Version: $LATEST"

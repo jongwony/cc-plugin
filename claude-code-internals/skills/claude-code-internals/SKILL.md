@@ -74,14 +74,15 @@ Main agent then performs interpretation and decision-making.
 > **Note**: These commands are for subagent execution, not main context.
 
 ```bash
-# Get binary path
-BINARY="$HOME/.local/share/claude/versions/$(ls -t ~/.local/share/claude/versions | head -1)"
+# Get binary path using find_installation.sh
+source ${CLAUDE_PLUGIN_ROOT}/scripts/find_installation.sh
+# Sets: BINARY_PATH variable
 
 # Search with context
-strings "$BINARY" | grep -B2 -A2 "pattern"
+strings "$BINARY_PATH" | grep -B2 -A2 "pattern"
 
 # Cache for multiple searches (within subagent session)
-strings "$BINARY" > /tmp/claude-strings.txt
+strings "$BINARY_PATH" > /tmp/claude-strings.txt
 grep "pattern1" /tmp/claude-strings.txt
 grep "pattern2" /tmp/claude-strings.txt
 ```
@@ -115,7 +116,7 @@ Update `references/known-features.md` with:
 
 | Task | Approach |
 |------|----------|
-| Check feature enabled | `strings $BINARY \| grep "feature_name"` |
+| Check feature enabled | `strings $BINARY_PATH \| grep "feature_name"` |
 | Find default values | See `references/search-patterns.md` Settings section |
 | Discover new commands | See `references/search-patterns.md` Commands section |
 | Compare release notes | Search mentioned features -> compare with `references/known-features.md` |
@@ -136,7 +137,7 @@ Update `references/known-features.md` with:
 
 ## Tips
 
-1. **Cache strings output**: Run `strings $BINARY > /tmp/claude-strings.txt` once, grep multiple times
+1. **Cache strings output**: Run `strings $BINARY_PATH > /tmp/claude-strings.txt` once, grep multiple times
 2. **Start narrow**: Search specific terms before broad exploration
 3. **Chain searches**: Find one string, search nearby for related code
 4. **Save findings**: Update known-features.md to track discoveries

@@ -2,12 +2,32 @@
 # Zero-Context Binary Analyzer
 # Headless CLI로 바이너리 분석 실행, 결과만 반환
 # 세션 로그 오염 방지를 위해 --no-session-persistence 사용
+#
+# Usage:
+#   analyze-binary.sh <prompt_file> [allowed_tools]
+#   analyze-binary.sh /tmp/internals_prompt.txt "Bash,Read,Glob,Grep"
+#
+# Prompt file should contain the full investigation prompt.
+# The script injects BINARY_PATH as environment context.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-QUERY="${1:-beta headers}"
-MAX_LINES="${2:-30}"
+PROMPT_FILE="${1:-}"
+ALLOWED_TOOLS="${2:-Bash,Read,Glob,Grep}"
+
+# Validate prompt file
+if [[ -z "$PROMPT_FILE" ]]; then
+    echo "Usage: analyze-binary.sh <prompt_file> [allowed_tools]"
+    echo "  prompt_file: Path to file containing investigation prompt"
+    echo "  allowed_tools: Comma-separated tool list (default: Bash,Read,Glob,Grep)"
+    exit 1
+fi
+
+if [[ ! -f "$PROMPT_FILE" ]]; then
+    echo "Error: Prompt file not found: $PROMPT_FILE"
+    exit 1
+fi
 
 # Binary path 획득
 source "$SCRIPT_DIR/find_installation.sh" 2>/dev/null
@@ -17,15 +37,12 @@ if [[ -z "${BINARY_PATH:-}" ]]; then
     exit 1
 fi
 
-# Headless CLI 실행 (세션 미저장, JSON 출력)
-claude -p "Search Claude Code binary at $BINARY_PATH for: $QUERY
-
-Instructions:
-1. Use: strings \"\$BINARY_PATH\" | grep -E '[relevant-pattern]' | head -$MAX_LINES
-2. Show matching lines with context (-B1 -A1) if helpful
-3. Summarize findings in 3-5 bullet points
-
-Binary path: $BINARY_PATH" \
+# Inject binary path context and execute
+{
+    echo "BINARY_PATH=$BINARY_PATH"
+    echo "---"
+    cat "$PROMPT_FILE"
+} | claude \
+    --allowedTools "$ALLOWED_TOOLS" \
     --no-session-persistence \
-    --output-format stream-json \
-    2>/dev/null | jq -rs 'map(select(.type == "result") | .result) | .[0] // "No result"'
+    2>/dev/null

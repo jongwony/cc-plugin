@@ -9,23 +9,13 @@ context: fork
 ---
 
 <constraints>
-- ALWAYS delegate: strings output is 350K+ lines, never run in main context
-- Binary format: Use `strings` to extract readable text from standalone binary
-- Version-specific: findings may change between CLI versions
-- **CRITICAL: Always limit output** with `| head -50` to prevent session file bloat (can cause SIGTRAP on startup)
-- **PATH REFERENCE**: Use relative paths for scripts within this skill (e.g., `scripts/analyze-binary.sh`)
+- **Output limit**: Always use `| head -N` (SIGTRAP risk from session bloat)
+- **Relative paths**: Use `scripts/`, `references/` (not absolute paths)
 </constraints>
 
 # Claude Code Internals Explorer
 
-Analyze Claude Code's standalone binary to understand internal behavior and discover features.
-
-## Important Caveats
-
-- **ALWAYS delegate**: `strings` output is 350,000+ lines — running in main context wastes tokens
-- **Standalone binary**: Claude Code ships as a compiled binary, not readable JavaScript
-- **Version-specific**: Findings may change between versions
-- **Unofficial**: Discovered features may be unsupported/unstable
+Procedures for analyzing Claude Code's standalone binary.
 
 ## Quick Start
 
@@ -46,30 +36,76 @@ The subagent handles token-heavy strings output; main context receives only summ
 
 **Problem**: Subagent output is recorded in session logs. Binary analysis can cause session file bloat → SIGTRAP crashes.
 
-**Solution**: Use Headless CLI wrapper via Bash subagent. Script internals are not logged; only final stdout is recorded.
+**Solution**: Write prompt to temp file, then execute via Headless CLI wrapper. Script internals are not logged; only final stdout is recorded.
 
-```
-Task tool (subagent_type: Bash)
-Prompt: "scripts/analyze-binary.sh 'beta headers' 30"
-```
+### Workflow
 
-**Script options**:
-- Argument 1: Search query (default: "beta headers")
-- Argument 2: Max lines per pattern (default: 30)
+1. **Write prompt** to temp file (supports multiline)
+2. **Execute** `scripts/analyze-binary.sh <prompt_file> [allowed_tools]`
 
-**Examples**:
+### Script Interface
+
+| Argument | Description | Default |
+|----------|-------------|---------|
+| `$1` | Prompt file path (required) | - |
+| `$2` | Allowed tools (comma-separated) | `Bash,Read,Glob,Grep` |
+
+The script injects `BINARY_PATH` automatically.
+
+### Example
+
 ```bash
-# Search for beta headers
-scripts/analyze-binary.sh "anthropic-beta"
+# Use unique ID in filename for parallel independence
+PROMPT_FILE="/tmp/internals_prompt_$$.txt"
 
-# Find context settings with more results
-scripts/analyze-binary.sh "contextWindow|warningThreshold" 50
+# 1. Write prompt to temp file
+cat > "$PROMPT_FILE" << 'EOF'
+Search the binary for beta headers.
 
-# Discover slash commands
-scripts/analyze-binary.sh "slash.*command"
+Instructions:
+1. Use: strings "$BINARY_PATH" | grep -E "anthropic-beta|20[0-9]{2}-[0-9]{2}" | head -30
+2. List all matching headers with their apparent status
+3. Note any patterns suggesting feature flags
+EOF
+
+# 2. Execute with tool restriction
+scripts/analyze-binary.sh "$PROMPT_FILE" "Bash,Read,Glob,Grep"
+
+# 3. Cleanup (optional - /tmp clears on reboot)
+rm -f "$PROMPT_FILE"
 ```
 
-> **Why this works**: Bash subagent executes the script as an external process. Only the script's stdout (summarized results) appears in session logs, not the intermediate 350K+ lines from `strings`.
+### Dynamic Prompting
+
+The agent constructs prompts dynamically based on investigation context.
+
+**File naming convention**: `/tmp/internals_prompt_<unique_id>.txt`
+- Use `$$` (PID) or UUID for parallel execution independence
+- Multiple concurrent investigations won't conflict
+
+```bash
+PROMPT_FILE="/tmp/internals_prompt_$(date +%s%N).txt"
+
+cat > "$PROMPT_FILE" << 'EOF'
+Investigate context management settings.
+1. Search for contextWindow, warningThreshold, errorThreshold
+2. Find related numeric constants (5-6 digit numbers)
+3. Return: setting name, value, surrounding context
+EOF
+
+scripts/analyze-binary.sh "$PROMPT_FILE"
+```
+
+### Tool Inheritance
+
+Agent's tool restrictions are passed to Headless CLI via `--allowedTools`:
+
+| Agent tools | Script invocation |
+|-------------|-------------------|
+| `[Bash, Read, Glob, Grep]` | `analyze-binary.sh /tmp/p.txt "Bash,Read,Glob,Grep"` |
+| `[Read, Grep]` | `analyze-binary.sh /tmp/p.txt "Read,Grep"` |
+
+> **Why this works**: Bash subagent executes the script as an external process. Only the script's stdout appears in session logs, not the intermediate 350K+ lines from `strings`.
 
 ---
 
@@ -77,9 +113,7 @@ scripts/analyze-binary.sh "slash.*command"
 
 ## Workflow
 
-### 1. Delegate Binary Exploration (Required)
-
-**Principle**: strings output (350K+ lines) consumes tokens in subagent context, preserving main context for analysis.
+### 1. Delegate Binary Exploration
 
 Call Task tool with:
 - `subagent_type`: `Explore`
@@ -99,12 +133,7 @@ strings $BINARY | grep -E "autoCompact|permission|default.*:" | head -50
 Return: setting names and apparent default values (max 50 lines).
 ```
 
-The subagent will:
-1. Execute shell scripts and strings commands
-2. Filter results with grep
-3. Return summarized findings to main context
-
-Main agent then performs interpretation and decision-making.
+The subagent executes commands and returns summarized findings.
 
 ### 2. Subagent Search Commands (Reference)
 
@@ -134,21 +163,11 @@ grep "pattern2" /tmp/claude-strings.txt | head -30
 | **Hidden settings** | Search for setting patterns |
 | **Beta features** | Search for beta headers |
 
-### 4. Analyze Findings
+### 4. Analyze & Document
 
-When you find relevant strings:
-
-1. Note context with `grep -B2 -A2` for surrounding lines
-2. Search for related strings to understand feature scope
-3. Compare findings with `references/known-features.md`
-
-### 5. Document Discoveries
-
-Update `references/known-features.md` with:
-- New features found
-- Changed defaults/thresholds
-- New beta headers
-- Corrected information
+1. Use `grep -B2 -A2` for context
+2. Compare with `references/known-features.md`
+3. Update `known-features.md` with new discoveries
 
 ## Common Investigations
 
@@ -176,11 +195,7 @@ Update `references/known-features.md` with:
 
 ## Tips
 
-1. **Cache strings output**: Run `strings $BINARY_PATH > /tmp/claude-strings.txt` once, grep multiple times
-2. **Start narrow**: Search specific terms before broad exploration
+1. **Cache strings**: `strings $BINARY_PATH > /tmp/claude-strings.txt` once, grep multiple times
+2. **Start narrow**: Specific terms before broad exploration
 3. **Chain searches**: Find one string, search nearby for related code
-4. **Save findings**: Update known-features.md to track discoveries
-5. **Version awareness**: Note version when documenting findings
-6. **Always limit output**: Use `| head -N` on every grep to prevent session bloat
-7. **Clean temp files**: Remove `/tmp/claude-strings.txt` after investigation
-8. **Session hygiene**: If session file grows large, start a new session to avoid startup issues
+4. **Clean up**: Remove `/tmp/claude-strings.txt` after investigation

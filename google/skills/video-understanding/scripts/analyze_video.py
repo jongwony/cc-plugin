@@ -34,7 +34,7 @@ except ImportError:
 
 
 # Default model
-MODEL = "gemini-2.5-flash-preview-05-20"
+MODEL = "gemini-3-flash-preview"
 
 # Analysis type prompts
 PROMPTS = {

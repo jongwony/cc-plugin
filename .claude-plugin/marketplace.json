@@ -17,7 +17,7 @@
     {
       "name": "google",
       "source": "./google",
-      "description": "Google services: Gemini CLI, Veo, NotebookLM, image prompts, calendar sync"
+      "description": "Google services: Gemini CLI, Veo, video understanding, image prompts, calendar sync"
     },
     {
       "name": "session",

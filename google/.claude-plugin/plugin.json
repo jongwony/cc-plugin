@@ -1,7 +1,7 @@
 {
   "name": "google",
-  "description": "Google services: Gemini CLI, Veo, image prompts, calendar sync",
-  "version": "1.1.0",
+  "description": "Google services: Gemini CLI, Veo, video understanding, image prompts, calendar sync",
+  "version": "1.2.0",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

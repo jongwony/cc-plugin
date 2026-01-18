@@ -13,6 +13,7 @@ context: fork
 - Binary format: Use `strings` to extract readable text from standalone binary
 - Version-specific: findings may change between CLI versions
 - **CRITICAL: Always limit output** with `| head -50` to prevent session file bloat (can cause SIGTRAP on startup)
+- **PATH REFERENCE**: Use relative paths for scripts within this skill (e.g., `scripts/analyze-binary.sh`)
 </constraints>
 
 # Claude Code Internals Explorer
@@ -28,11 +29,13 @@ Analyze Claude Code's standalone binary to understand internal behavior and disc
 
 ## Quick Start
 
+> **Note**: All script paths are relative to this skill's directory (where SKILL.md resides).
+
 **Delegate all binary exploration to subagent:**
 
 ```
 Task tool (subagent_type: Explore)
-Prompt: "Run ${CLAUDE_PLUGIN_ROOT}/scripts/find_installation.sh to get binary path.
+Prompt: "Run scripts/find_installation.sh to get binary path.
         Then search for [keyword] using: strings $BINARY | grep -E '[pattern]' | head -50
         Return: version, matching lines with context (-B2 -A2)."
 ```
@@ -47,7 +50,7 @@ The subagent handles token-heavy strings output; main context receives only summ
 
 ```
 Task tool (subagent_type: Bash)
-Prompt: "${CLAUDE_PLUGIN_ROOT}/scripts/analyze-binary.sh 'beta headers' 30"
+Prompt: "scripts/analyze-binary.sh 'beta headers' 30"
 ```
 
 **Script options**:
@@ -57,13 +60,13 @@ Prompt: "${CLAUDE_PLUGIN_ROOT}/scripts/analyze-binary.sh 'beta headers' 30"
 **Examples**:
 ```bash
 # Search for beta headers
-${CLAUDE_PLUGIN_ROOT}/scripts/analyze-binary.sh "anthropic-beta"
+scripts/analyze-binary.sh "anthropic-beta"
 
 # Find context settings with more results
-${CLAUDE_PLUGIN_ROOT}/scripts/analyze-binary.sh "contextWindow|warningThreshold" 50
+scripts/analyze-binary.sh "contextWindow|warningThreshold" 50
 
 # Discover slash commands
-${CLAUDE_PLUGIN_ROOT}/scripts/analyze-binary.sh "slash.*command"
+scripts/analyze-binary.sh "slash.*command"
 ```
 
 > **Why this works**: Bash subagent executes the script as an external process. Only the script's stdout (summarized results) appears in session logs, not the intermediate 350K+ lines from `strings`.
@@ -86,7 +89,7 @@ Example delegations:
 
 ```
 # Feature investigation
-Find Claude Code binary using ${CLAUDE_PLUGIN_ROOT}/scripts/find_installation.sh.
+Find Claude Code binary using scripts/find_installation.sh.
 Search for "anthropic-beta" using: strings $BINARY | grep -E "anthropic-beta|20[0-9]{2}-[0-9]{2}" | head -30
 Return: version, matching lines (max 30).
 
@@ -109,7 +112,7 @@ Main agent then performs interpretation and decision-making.
 
 ```bash
 # Get binary path using find_installation.sh
-source ${CLAUDE_PLUGIN_ROOT}/scripts/find_installation.sh
+source scripts/find_installation.sh
 # Sets: BINARY_PATH variable
 
 # Search with context (ALWAYS limit output!)

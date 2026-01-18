@@ -63,10 +63,15 @@ tools: [Read, Write, mcp__plugin_linear_linear__*]  # 특정 MCP만
 tools: [mcp__bigquery__*, Read]                      # Read-only + MCP
 ```
 
-**Agent-Skill 분리 원칙:**
-- Agent = "how to behave" (원칙, 경계, 오류 철학)
-- Skill = "what to do" (워크플로우, 절차, 명령어)
-- `skills:` 로드 시 agent에서 스킬 내용 중복 제거
+**Agent-Skill Separation Principle:**
+- Agent = "how to behave" (principles, boundaries, error philosophy)
+- Skill = "what to do" (workflow, procedures, commands)
+- When `skills:` loads a skill, avoid duplicating skill content in agent
+
+**Gap Tracking Convention (Syneidesis):**
+- Use `[Gap:Type]` prefix in TodoWrite
+- Types: `[Gap:Procedural]`, `[Gap:Assumption]`, `[Gap:Consideration]`
+- Explicitly track unverified assumptions/procedures
 
 ### MCP 설정
 

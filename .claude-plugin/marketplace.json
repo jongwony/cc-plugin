@@ -63,6 +63,11 @@
       "name": "activity-workflow",
       "source": "./activity-workflow",
       "description": "Orchestrates activity collection and Google Calendar sync"
+    },
+    {
+      "name": "slack",
+      "source": "./slack",
+      "description": "Slack utilities: search messages, fetch threads"
     }
   ]
 }

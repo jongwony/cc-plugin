@@ -149,8 +149,24 @@ class SlackSearcher:
             if not permalink and team:
                 permalink = self.build_permalink(team, channel_id, ts)
 
-            # Format output
-            output_lines.append(f"[{i}] #{channel_name} | {username} | {time_str}")
+            # Extract thread_ts from permalink (API doesn't return it directly)
+            thread_link = None
+            is_thread_reply = False
+            if permalink:
+                thread_ts_match = re.search(r'thread_ts=(\d+\.\d+)', permalink)
+                if thread_ts_match:
+                    thread_ts = thread_ts_match.group(1)
+                    is_thread_reply = True
+                    # Extract team domain from permalink for consistent URL format
+                    team_match = re.search(r'https://([^.]+)\.slack\.com', permalink)
+                    team_domain = team_match.group(1) if team_match else team
+                    thread_link = self.build_permalink(team_domain, channel_id, thread_ts)
+
+            # Format output - indicate if message is in a thread
+            header = f"[{i}] #{channel_name} | {username} | {time_str}"
+            if is_thread_reply:
+                header += " [reply]"
+            output_lines.append(header)
 
             # Truncate long messages
             if len(text) > 500:
@@ -159,6 +175,9 @@ class SlackSearcher:
             for line in text.split("\n")[:5]:  # Max 5 lines per message
                 output_lines.append(f"    {line}")
 
+            # Show thread root link first (for slack-thread usage)
+            if thread_link:
+                output_lines.append(f"    Thread: {thread_link}")
             if permalink:
                 output_lines.append(f"    → {permalink}")
             output_lines.append("")

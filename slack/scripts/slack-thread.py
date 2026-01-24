@@ -12,7 +12,6 @@ Unix Philosophy: Do one thing well - fetch Slack threads and output clean text
 """
 
 import argparse
-import json
 import os
 import re
 import sys
@@ -112,6 +111,46 @@ class SlackThreadFetcher:
 
         return text.strip()
 
+    def format_media(self, item: dict, item_type: str) -> list[str]:
+        """Format file or attachment for output"""
+        if item_type == "file":
+            # Deleted file
+            if item.get("mode") == "tombstone":
+                return ["[File Deleted]"]
+
+            url = item.get("url_private", "")
+            if not url:
+                return []
+
+            name = item.get("name") or item.get("title") or "unnamed"
+            mimetype = item.get("mimetype", "")
+            filetype = item.get("filetype", "").lower()
+
+            # Determine type
+            if mimetype.startswith("image/") or filetype in {"png", "jpg", "jpeg", "gif"}:
+                return [f"[Image] {name}", f"  {url}"]
+            elif mimetype.startswith("video/") or filetype in {"mp4", "mov", "webm"}:
+                return [f"[Video] {name}", f"  {url}"]
+            elif filetype == "pdf":
+                lines = [f"[PDF] {name}", f"  {url}"]
+                if download := item.get("url_private_download"):
+                    lines.append(f"  download: {download}")
+                return lines
+            else:
+                return [f"[File] {name}", f"  {url}"]
+
+        else:  # attachment
+            # Link unfurl (1-depth)
+            if from_url := item.get("from_url"):
+                title = item.get("title") or item.get("fallback") or "Link"
+                return [f"[Link] {title}", f"  {from_url}"]
+
+            # Actual attachment (title only)
+            title = item.get("title") or item.get("fallback")
+            if title:
+                return [f"[Attachment] {title}"]
+            return []
+
     def format_thread(self, url: str, messages: list[dict]) -> str:
         """Format thread messages for output"""
         output_lines = []
@@ -144,17 +183,15 @@ class SlackThreadFetcher:
             for line in text.split("\n"):
                 output_lines.append(f"{'   ' if is_reply else ''}{line}")
 
-            # Get message attachments
-            attachments = msg.get("attachments", [])
-            for attachment in attachments:
-                output_lines.append(f"Attachment: {json.dumps(attachment)}")
+            # Format attachments and files
+            indent = "   " if is_reply else ""
+            for attachment in msg.get("attachments", []):
+                for line in self.format_media(attachment, "attachment"):
+                    output_lines.append(f"{indent}{line}")
 
-            # Get message files
-            files = msg.get("files", [])
-            for file in files:
-                file_url = file.get("url_private")
-                if file_url:
-                    output_lines.append(f"File: {file_url}")
+            for file in msg.get("files", []):
+                for line in self.format_media(file, "file"):
+                    output_lines.append(f"{indent}{line}")
 
             output_lines.append("")  # Empty line between messages
 

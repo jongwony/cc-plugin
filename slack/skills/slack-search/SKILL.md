@@ -5,6 +5,7 @@ description: |
   "look up Slack conversations", "search in Slack workspace", or mentions "slack search",
   "find in slack". Searches Slack messages via CLI tool.
 user_invocable: true
+context: fork
 ---
 
 # Slack Search Skill

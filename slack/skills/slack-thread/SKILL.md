@@ -5,6 +5,7 @@ description: |
   "get thread content", "read Slack conversation", "slack-thread",
   or provides a Slack thread URL. Fetches and formats thread messages.
 user_invocable: true
+context: fork
 ---
 
 # Slack Thread Skill

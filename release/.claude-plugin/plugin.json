@@ -1,0 +1,9 @@
+{
+  "name": "release",
+  "description": "Automated version bump, git tag, push, and GitHub release note creation",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

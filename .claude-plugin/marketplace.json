@@ -68,6 +68,11 @@
       "name": "slack",
       "source": "./slack",
       "description": "Slack utilities: search messages, fetch threads"
+    },
+    {
+      "name": "release",
+      "source": "./release",
+      "description": "Automated version bump, git tag, and GitHub release creation"
     }
   ]
 }

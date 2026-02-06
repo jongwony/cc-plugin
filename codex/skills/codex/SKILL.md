@@ -14,7 +14,7 @@ All prompts passed to `codex` MUST be in English.
 2. Pipe the file content to codex: `cat /tmp/codex_prompt.txt | codex exec ...`
 
 ## Running a Task
-1. Ask the user (via `AskUserQuestion`) which model and reasoning effort in a **single prompt with two questions**.
+1. Ask the user (via `AskUserQuestion`) which model(s) and reasoning effort in a **single prompt with two questions**. Model selection is **multi-select** — multiple models can be chosen for parallel execution.
 
 | Model | Characteristics |
 |-------|-----------------|
@@ -22,13 +22,18 @@ All prompts passed to `codex` MUST be in English.
 | `gpt-5.2-codex` | Prior-generation agentic coding model |
 | `gpt-5.1-codex-max` | Codex-optimized flagship for deep and fast reasoning |
 | `gpt-5.2` | General-purpose frontier model (knowledge, reasoning, coding) |
+
+   Reasoning effort is selected once and applied identically to all chosen models.
+
 2. Select sandbox mode; default to `--sandbox read-only` unless edits or network access are necessary.
 3. Assemble command with options (always include `--skip-git-repo-check`):
    - `-m, --model <MODEL>` / `--config model_reasoning_effort="<medium|high|xhigh>"`
    - `--sandbox <read-only|workspace-write|danger-full-access>` / `--full-auto` / `-C <DIR>`
-4. Resume: `cat /tmp/codex_prompt.txt | codex exec --skip-git-repo-check resume --last 2>/dev/null`. If user requests different model/reasoning, insert flags between `exec` and `resume`.
+   - **Single model**: run one Bash call as usual.
+   - **Multiple models**: issue parallel Bash tool calls (one per model) in a single response. Each call uses the same prompt, sandbox, and reasoning effort but a different `-m` value.
+4. Resume: `cat /tmp/codex_prompt.txt | codex exec --skip-git-repo-check resume --last 2>/dev/null`. If user requests different model/reasoning, insert flags between `exec` and `resume`. Resume applies to the last single session only.
 5. Append `2>/dev/null` to suppress thinking tokens (stderr). Show stderr only for debugging.
-6. Run command, summarize outcome, inform user: "Resume anytime with 'codex resume'."
+6. Run command(s), summarize each outcome, inform user: "Resume anytime with 'codex resume'."
 
 ### Quick Reference
 | Use case | Command pattern |

@@ -18,9 +18,10 @@ All prompts passed to `codex` MUST be in English.
 
 | Model | Characteristics |
 |-------|-----------------|
-| `gpt-5.2-codex` | Latest frontier agentic coding model (current default) |
+| `gpt-5.3-codex` | Current default agentic coding model |
+| `gpt-5.2-codex` | Prior-generation agentic coding model |
 | `gpt-5.1-codex-max` | Codex-optimized flagship for deep and fast reasoning |
-| `gpt-5.2` | Latest frontier model with improvements across knowledge, reasoning and coding |
+| `gpt-5.2` | General-purpose frontier model (knowledge, reasoning, coding) |
 2. Select sandbox mode; default to `--sandbox read-only` unless edits or network access are necessary.
 3. Assemble command with options (always include `--skip-git-repo-check`):
    - `-m, --model <MODEL>` / `--config model_reasoning_effort="<medium|high|xhigh>"`
@@ -58,7 +59,9 @@ Three OpenAI prompting guides are available as Jupyter notebooks. Read the appro
 | GPT-5.1 agentic steerability, metaprompting, solution_persistence | `references/gpt-5-1_prompting_guide.ipynb` |
 | Codex-Max starter prompt, tools (apply_patch, shell), compaction | `references/gpt-5-1-codex-max_prompting_guide.ipynb` |
 
-### GPT-5.2 Guide (Latest)
+> If no model-specific guide exists, use the nearest lower version's guide as fallback (e.g., for gpt-5.3-codex, use the GPT-5.2 guide).
+
+### GPT-5.2 Guide
 **File**: `references/gpt-5-2_prompting_guide.ipynb`
 
 Key sections (grep patterns for navigation):

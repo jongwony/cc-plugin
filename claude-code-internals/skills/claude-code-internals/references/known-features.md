@@ -258,3 +258,5 @@ When exploring new versions, check for:
 - [ ] New hook events
 - [ ] New environment variables
 - [ ] New tool definitions
+
+**Methodology**: Never judge change scope from release notes alone. Binary occurrence comparison (e.g., string count diff between versions) is essential — release notes may list items as "Added" that already existed in prior versions (observed in v2.1.33: 4 of 6 "Added" items were already present in v2.1.32).

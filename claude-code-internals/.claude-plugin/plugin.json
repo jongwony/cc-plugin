@@ -1,7 +1,7 @@
 {
   "name": "claude-code-internals",
   "description": "Claude Code internals explorer",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

@@ -1,6 +1,6 @@
 # Known Claude Code Features
 
-Last updated: 2026-01 (v2.0.76+)
+Last updated: 2026-02 (v2.1.37)
 
 ## Table of Contents
 1. [Slash Commands](#slash-commands)
@@ -244,6 +244,66 @@ All injections use `user` role messages (Claude API only has system/user/assista
 | `<tool-result>` | Tool execution result |
 
 **Internal flag**: `isMeta: true` distinguishes system injections from user input (not exposed in API).
+
+---
+
+## Agent Memory (v2.1.37+)
+
+### Frontmatter Field
+
+Agents support a `memory` field in YAML frontmatter:
+
+```yaml
+---
+name: my-agent
+memory: project   # "user" | "project" | "local"
+---
+```
+
+Valid values: `["user", "project", "local"]`. Invalid values produce an error log.
+
+### Memory Scopes
+
+| Scope | Storage Path | Characteristics |
+|-------|-------------|-----------------|
+| `user` | `~/.claude/agent-memory/{agent-name}/` | Shared across all projects; general learnings |
+| `project` | `{project}/.claude/agent-memory/{agent-name}/` | Project-specific; checked into VCS (team shared) |
+| `local` | `{project}/.claude/agent-memory-local/{agent-name}/` | Project-specific; NOT in VCS (personal) |
+
+Each directory auto-creates `MEMORY.md` (with `memory.md` → `MEMORY.md` migration).
+
+### Implementation Details
+
+| Aspect | Behavior |
+|--------|----------|
+| **Tool auto-injection** | When `memory` is set, `Read`, `Write`, `Edit` tools are auto-added to agent's tool list |
+| **System prompt** | Memory instructions appended to agent's system prompt via `Lq1()` |
+| **Permission** | Agent memory paths auto-allowed for read/write (no user confirmation needed) |
+| **Feature flag** | Gated by `tengu_oboe` flag; disabled via `CLAUDE_CODE_DISABLE_AUTO_MEMORY` env var |
+| **Scope guideline (user)** | "keep learnings general since they apply across all projects" |
+| **Scope guideline (project)** | "tailor your memories to this project (shared via version control)" |
+| **Scope guideline (local)** | "tailor your memories to this project and machine (not checked into VCS)" |
+
+### Agent Creation Wizard
+
+Memory scope selection step in wizard UI:
+
+| Option | Value |
+|--------|-------|
+| Enable (~/.claude/agent-memory/) **(Recommended)** | `user` |
+| None (no persistent memory) | `none` |
+| Project scope (.claude/agent-memory/) | `project` |
+| Local scope (.claude/agent-memory-local/) | `local` |
+
+### Internal Functions
+
+| Function (Minified) | Purpose |
+|---------------------|---------|
+| `f0A(agentName, scope)` | Resolve memory directory path for agent+scope |
+| `Lq1(agentType, scope)` | Generate memory instructions for system prompt |
+| `Ub1(path)` | Check if path is an agent-memory path |
+| `GQ7(file, ...)` | Parse agent .md file including memory frontmatter |
+| `G0A({displayName, memoryDir, extraGuidelines})` | Generate memory prompt block |
 
 ---
 

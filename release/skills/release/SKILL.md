@@ -144,37 +144,55 @@ git push origin "v$NEW_VERSION"
 
 ### Phase 8: Create GitHub Release
 
-Generate release notes from commits:
+Generate release notes from commit log, categorized by conventional commit type.
+
+**Step 1**: Collect non-merge commits since last tag:
 
 ```bash
-gh release create "v$NEW_VERSION" \
-  --title "v$NEW_VERSION" \
-  --generate-notes
+git log ${LAST_TAG}..v${NEW_VERSION} --oneline --no-merges
 ```
 
-Or with custom notes:
+**Step 2**: Categorize commits into sections:
+
+| Commit prefix | Section header |
+|---------------|---------------|
+| `feat!:`, `BREAKING CHANGE:` | **Breaking Changes** |
+| `feat:` | **Features** |
+| `fix:` | **Bug Fixes** |
+| `perf:` | **Performance** |
+| `refactor:` | **Refactor** |
+| `docs:` | **Documentation** |
+| `test:`, `ci:`, `build:`, `chore:` | (omit unless noteworthy) |
+
+**Step 3**: Create release with categorized notes:
 
 ```bash
 gh release create "v$NEW_VERSION" \
   --title "v$NEW_VERSION" \
   --notes "$(cat <<'EOF'
-## What's Changed
+## Breaking Changes
 
-### Features
-- Add feature X (#123)
+- Description of breaking change
 
-### Bug Fixes
-- Fix issue Y (#124)
+## Features
 
-### Documentation
-- Update README
+- Feature description (#PR)
 
-**Full Changelog**: https://github.com/owner/repo/compare/v1.2.3...v1.3.0
+## Bug Fixes
+
+- Fix description
+
+**Full Changelog**: https://github.com/owner/repo/compare/vOLD...vNEW
 EOF
 )"
 ```
 
-**Prefer `--generate-notes`**: GitHub auto-generates from PRs and commits. Only use custom notes if user requests specific format.
+**Rules**:
+- Omit empty sections (e.g., no Breaking Changes → skip that header)
+- Use commit message as-is for bullet text (strip type prefix)
+- Include PR number if available
+- `chore: bump version` commits are always excluded
+- Append `**Full Changelog**` comparison link at the end
 
 ## Output Summary
 
@@ -247,16 +265,16 @@ User requests alpha/beta/rc:
 1.3.0-rc.1
 ```
 
-Use `--prerelease` flag:
+Use `--prerelease` flag (with same commit-based notes from Phase 8):
 ```bash
-gh release create "v$NEW_VERSION" --prerelease --generate-notes
+gh release create "v$NEW_VERSION" --prerelease --notes "..."
 ```
 
 ### Draft Release
 
 User wants to review before publishing:
 ```bash
-gh release create "v$NEW_VERSION" --draft --generate-notes
+gh release create "v$NEW_VERSION" --draft --notes "..."
 ```
 
 ### Changelog File

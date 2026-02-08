@@ -106,16 +106,17 @@ Group related activities into coherent work sessions for clean calendar visualiz
 **Session formation rules:**
 1. Sort activities by timestamp (completion time)
 2. Backdate each activity to get time range
-3. Merge overlapping/adjacent activities (gap ≤ 30min) into sessions
-4. Same repository activities prefer single session
+3. Group by repository/project first, then merge within each group
+4. Merge overlapping/adjacent activities (gap ≤ 30min) into sessions only within the same repository/project
+5. Cross-repository activities are always separate events, even if temporally adjacent
 
 **Example transformation:**
 
 Raw activity data:
 ```
-09:00 🔨 Commit A (30min work)
-09:30 🔨 Commit B (30min work)
-10:00 🔀 PR #234 created (60min work)
+09:00 🔨 Commit A in org/repo (30min work)
+09:30 🔨 Commit B in org/repo (30min work)
+10:00 🔀 PR #234 created in org/repo (60min work)
 ```
 
 **Before (forward projection - wrong):**
@@ -132,13 +133,24 @@ Raw activity data:
 - Session start: earliest backdate (09:00 - 30min = 08:30)
 - Session end: latest timestamp (10:00, when PR completed)
 
-**Overlap resolution** (when backdated blocks collide):
+**Cross-repository isolation** (different repos stay separate):
+```
+Input:
+  09:39 ✅ PR #1 merged in org/foundation
+  10:08 ✅ PR #10 merged in user/ClaudeTasks (29min gap, but different repo)
+
+Result: TWO separate events (not merged despite gap ≤ 30min)
+  09:15-09:39 ✅ PR #1 in org/foundation
+  09:45-10:08 ✅ PR #10 in user/ClaudeTasks
+```
+
+**Overlap resolution** (when backdated blocks collide within same repo):
 ```
 Input:
   09:00 🔨 Commit (30min) → 08:30-09:00
   09:15 💬 Comment (15min) → 09:00-09:15
 
-Resolution: Merge into 08:30-09:15 session
+Resolution: Merge into 08:30-09:15 session (same repo)
 ```
 
 **Session output format:**

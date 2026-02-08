@@ -35,9 +35,11 @@ Example: PR created at 10:00 with 60min duration → Calendar block: 09:00-10:00
 
 ## Grouping Rules (Session-Based)
 
-**Commits**: Group within 2-hour window, backdate to session start
+**Repository boundary**: Only merge activities within the same repository/project. Cross-repository activities are always separate calendar events, even when temporally adjacent (gap ≤ 30min).
+
+**Commits**: Group within 2-hour window, same repo, backdate to session start
 ```
-Timestamps (completion times):
+Timestamps (completion times, same repo):
   09:15 Commit A (15min) → backdated 09:00-09:15
   09:30 Commit B (15min) → backdated 09:15-09:30
   10:00 Commit C (15min) → backdated 09:45-10:00
@@ -56,14 +58,25 @@ Timestamps:
 Result: "13:50-14:35 💬 Discussion on issue #123"
 ```
 
-**Sequential Work**: commits → PR naturally form session
+**Sequential Work**: commits → PR naturally form session (same repo)
 ```
-Timestamps:
+Timestamps (same repo):
   09:30 Commit (30min)     → 09:00-09:30
   10:00 PR Created (60min) → 09:00-10:00  ← overlaps!
 
 Result: "09:00-10:00 🔨🔀 Work session: 1 commit + PR #234"
         (merge overlapping backdated ranges)
+```
+
+**Cross-repository isolation**:
+```
+Timestamps (different repos):
+  09:39 PR merged in org/foundation
+  10:08 PR merged in user/ClaudeTasks  ← 29min gap, different repo
+
+Result: TWO separate events (never merged across repos)
+  09:15-09:39 ✅ PR in org/foundation
+  09:45-10:08 ✅ PR in user/ClaudeTasks
 ```
 
 **Max session duration**: 4 hours (split if exceeded)
@@ -89,22 +102,30 @@ def estimate_duration(activity):
     return activity.duration_minutes or round(base / 5) * 5
 
 def build_sessions(activities):
-    """Group overlapping backdated blocks into sessions."""
+    """Group overlapping backdated blocks into sessions, respecting repo boundaries."""
     blocks = sorted([calculate_time_block(a) for a in activities], key=lambda b: b.start)
-    sessions = []
-    current = None
 
+    # Group by repository/project first
+    repo_groups = defaultdict(list)
     for block in blocks:
-        if current and blocks_overlap_or_adjacent(current, block, gap=30):
-            current = merge_blocks(current, block)
-        else:
-            if current:
-                sessions.append(current)
-            current = block
+        repo_key = block.activity.repository or block.activity.project or "unknown"
+        repo_groups[repo_key].append(block)
 
-    if current:
-        sessions.append(current)
-    return sessions
+    # Merge within each repository group
+    sessions = []
+    for repo, repo_blocks in repo_groups.items():
+        current = None
+        for block in sorted(repo_blocks, key=lambda b: b.start):
+            if current and blocks_overlap_or_adjacent(current, block, gap=30):
+                current = merge_blocks(current, block)
+            else:
+                if current:
+                    sessions.append(current)
+                current = block
+        if current:
+            sessions.append(current)
+
+    return sorted(sessions, key=lambda s: s.start)
 ```
 
 ## Best Practices

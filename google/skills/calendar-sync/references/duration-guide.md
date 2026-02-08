@@ -35,9 +35,11 @@ Example: PR created at 10:00 with 60min duration → Calendar block: 09:00-10:00
 
 ## Grouping Rules (Session-Based)
 
-**Commits**: Group within 2-hour window, backdate to session start
+**Repository boundary**: Only merge activities within the same repository/project (GitHub: `repository`, Linear: `metadata.project`). Cross-repository activities are always separate calendar events, even when temporally adjacent (gap ≤ 30min). Activities without attribution are never merged with each other.
+
+**Commits**: Group within 2-hour window, same repo, backdate to session start
 ```
-Timestamps (completion times):
+Timestamps (completion times, same repo):
   09:15 Commit A (15min) → backdated 09:00-09:15
   09:30 Commit B (15min) → backdated 09:15-09:30
   10:00 Commit C (15min) → backdated 09:45-10:00
@@ -46,9 +48,9 @@ Result: "09:00-10:00 🔨 3 commits in org/repo"
         (session spans earliest start to latest end)
 ```
 
-**Issue Comments**: Group same issue within 1-hour window
+**Issue Comments**: Group same repo within 1-hour window
 ```
-Timestamps:
+Timestamps (same repo):
   14:00 Comment 1 (10min) → 13:50-14:00
   14:20 Comment 2 (15min) → 14:05-14:20
   14:35 Comment 3 (10min) → 14:25-14:35
@@ -56,14 +58,26 @@ Timestamps:
 Result: "13:50-14:35 💬 Discussion on issue #123"
 ```
 
-**Sequential Work**: commits → PR naturally form session
+**Sequential Work**: commits → PR naturally form session (same repo)
 ```
-Timestamps:
+Timestamps (same repo):
   09:30 Commit (30min)     → 09:00-09:30
   10:00 PR Created (60min) → 09:00-10:00  ← overlaps!
 
 Result: "09:00-10:00 🔨🔀 Work session: 1 commit + PR #234"
         (merge overlapping backdated ranges)
+```
+
+**Cross-repository isolation**:
+```
+Timestamps (different repos):
+  09:39 PR merged in org/foundation (15min) → 09:15-09:39
+  10:08 PR merged in user/ClaudeTasks (15min) → 09:45-10:08
+  (29min gap, but different repo)
+
+Result: TWO separate events (never merged across repos)
+  09:15-09:39 ✅ PR in org/foundation
+  09:45-10:08 ✅ PR in user/ClaudeTasks
 ```
 
 **Max session duration**: 4 hours (split if exceeded)
@@ -89,22 +103,41 @@ def estimate_duration(activity):
     return activity.duration_minutes or round(base / 5) * 5
 
 def build_sessions(activities):
-    """Group overlapping backdated blocks into sessions."""
-    blocks = sorted([calculate_time_block(a) for a in activities], key=lambda b: b.start)
-    sessions = []
-    current = None
+    """Group overlapping backdated blocks into sessions, respecting repo boundaries."""
+    blocks = [calculate_time_block(a) for a in activities]
 
+    # Group by repository/project (GitHub: repository, Linear: metadata.project)
+    # Activities without attribution become isolated sessions (never merged with each other)
+    from collections import defaultdict
+    repo_groups = defaultdict(list)
+    isolated = []
     for block in blocks:
-        if current and blocks_overlap_or_adjacent(current, block, gap=30):
-            current = merge_blocks(current, block)
+        repo_key = (
+            getattr(block.activity, 'repository', None)
+            or getattr(block.activity, 'metadata', {}).get('project')
+        )
+        if repo_key:
+            repo_groups[repo_key].append(block)
         else:
-            if current:
-                sessions.append(current)
-            current = block
+            isolated.append(block)  # no repo/project → standalone event
 
-    if current:
-        sessions.append(current)
-    return sessions
+    # Merge within each repository group
+    sessions = []
+    for repo, repo_blocks in repo_groups.items():
+        current = None
+        for block in sorted(repo_blocks, key=lambda b: b.start):
+            if current and blocks_overlap_or_adjacent(current, block, gap=30):
+                current = merge_blocks(current, block)
+            else:
+                if current:
+                    sessions.append(current)
+                current = block
+        if current:
+            sessions.append(current)
+
+    sessions.extend(isolated)
+    # Repo grouping destroys temporal order; final sort restores it
+    return sorted(sessions, key=lambda s: s.start)
 ```
 
 ## Best Practices

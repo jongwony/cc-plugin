@@ -106,9 +106,8 @@ Group related activities into coherent work sessions for clean calendar visualiz
 **Session formation rules:**
 1. Sort activities by timestamp (completion time)
 2. Backdate each activity to get time range
-3. Group by repository/project first, then merge within each group
-4. Merge overlapping/adjacent activities (gap ≤ 30min) into sessions only within the same repository/project
-5. Cross-repository activities are always separate events, even if temporally adjacent
+3. Group by repository/project first (GitHub: `repository`, Linear: `metadata.project`)
+4. Merge overlapping/adjacent activities (gap ≤ 30min) within each group; never merge across repositories
 
 **Example transformation:**
 
@@ -136,8 +135,9 @@ Raw activity data:
 **Cross-repository isolation** (different repos stay separate):
 ```
 Input:
-  09:39 ✅ PR #1 merged in org/foundation
-  10:08 ✅ PR #10 merged in user/ClaudeTasks (29min gap, but different repo)
+  09:39 ✅ PR #1 merged in org/foundation (15min) → 09:15-09:39
+  10:08 ✅ PR #10 merged in user/ClaudeTasks (15min) → 09:45-10:08
+  (29min gap, but different repo)
 
 Result: TWO separate events (not merged despite gap ≤ 30min)
   09:15-09:39 ✅ PR #1 in org/foundation
@@ -154,7 +154,7 @@ Resolution: Merge into 08:30-09:15 session (same repo)
 ```
 
 **Session output format:**
-- **Title**: `{icons} {summary} in {repo}`
+- **Title**: `{icons} {summary} in {repo}` (always single repo per session)
 - **Start**: Earliest backdated start (snapped to 15min)
 - **End**: Latest activity timestamp
 - **Description**: Timeline of activities
@@ -168,7 +168,9 @@ Resolution: Merge into 08:30-09:15 session (same repo)
   https://github.com/org/repo/pull/234
   ```
 
-**User override:** "without grouping" or "separate events" to disable session merge.
+**User override:**
+- "without grouping" or "separate events" → disable all session merging
+- "without repository grouping" or "merge across repos" → disable repository boundary only (temporal merge preserved)
 
 ### 5. Check for Duplicates (Optional)
 
@@ -256,6 +258,7 @@ echo "Import Summary: $SUCCESS/$TOTAL succeeded"
 - "Convert markdown to calendar events" → Auto-detect format, create events
 - "Sync ~/reports/github-2025-11-01.json without duplicate check" → Fast import with grouping
 - "Sync activities without grouping" → Create separate calendar events for each activity
+- "Sync activities without repository grouping" → Merge across repos by time only (pre-1.3 behavior)
 
 ## Troubleshooting
 

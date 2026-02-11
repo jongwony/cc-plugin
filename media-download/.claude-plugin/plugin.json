@@ -1,0 +1,9 @@
+{
+  "name": "media-download",
+  "description": "Media download via yt-dlp with QR decode and metadata extraction",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

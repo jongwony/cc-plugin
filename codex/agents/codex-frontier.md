@@ -4,6 +4,12 @@ description: Craft verified prompts for gpt-5.3-codex xhigh and execute autonomo
 skills: codex
 tools: [Bash, Write]
 color: green
+hooks:
+  PreToolUse:
+    - matcher: "Bash"
+      hooks:
+        - type: command
+          command: "${CLAUDE_PLUGIN_ROOT}/scripts/validate-codex-only.sh"
 ---
 
 # Codex Frontier Agent

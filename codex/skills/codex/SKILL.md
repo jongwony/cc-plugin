@@ -10,8 +10,8 @@ description: |
 All prompts passed to `codex` MUST be in English.
 
 ## Prompt Delivery
-1. Write the prompt to a temporary file using the Write tool
-2. Pipe the file content to codex: `cat /tmp/codex_prompt.txt | codex exec ...`
+1. Write the prompt to `/tmp/codex_prompt_${CLAUDE_SESSION_ID}.txt` using the Write tool
+2. Pipe the file content to codex: `cat /tmp/codex_prompt_${CLAUDE_SESSION_ID}.txt | codex exec ...`
 
 ## Running a Task
 1. Ask the user (via `AskUserQuestion`) which model(s) and reasoning effort in a **single prompt with two questions**. Model selection is **multi-select** — multiple models can be chosen for parallel execution.
@@ -31,7 +31,7 @@ All prompts passed to `codex` MUST be in English.
    - `--sandbox <read-only|workspace-write|danger-full-access>` / `--full-auto` / `-C <DIR>`
    - **Single model**: run one Bash call as usual.
    - **Multiple models**: issue parallel Bash tool calls (one per model) in a single response. Each call uses the same prompt, sandbox, and reasoning effort but a different `-m` value.
-4. Resume: `cat /tmp/codex_prompt.txt | codex exec --skip-git-repo-check resume --last 2>/dev/null`. If user requests different model/reasoning, insert flags between `exec` and `resume`. Resume applies to the last single session only.
+4. Resume: `cat /tmp/codex_prompt_${CLAUDE_SESSION_ID}.txt | codex exec --skip-git-repo-check resume --last 2>/dev/null`. If user requests different model/reasoning, insert flags between `exec` and `resume`. Resume applies to the last single session only.
 5. Append `2>/dev/null` to suppress thinking tokens (stderr). Show stderr only for debugging.
 6. Run command(s), summarize each outcome, inform user: "Resume anytime with 'codex resume'."
 

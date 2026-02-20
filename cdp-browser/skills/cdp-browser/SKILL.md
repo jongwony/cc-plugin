@@ -1,0 +1,163 @@
+---
+name: cdp-browser
+description: |
+  This skill should be used when the user asks to "take browser screenshot",
+  "list browser tabs", "click page element", "navigate browser",
+  "automate browser", "inspect accessibility tree", "monitor network",
+  "run JavaScript in browser", "fill form in browser", "debug web page",
+  or mentions CDP. Provides direct Chrome DevTools Protocol browser automation without Puppeteer.
+user_invocable: true
+context: fork
+argument-hint: "<operation> [args...]"
+---
+
+# CDP Browser Automation
+
+Direct Chrome DevTools Protocol client bypassing Puppeteer. Immune to frozen-tab timeouts.
+
+## Prerequisites
+
+Chrome must be running with remote debugging enabled:
+```bash
+# macOS
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+```
+
+## Execution
+
+Each Bash call is a separate shell. Always combine the variable assignment with the command:
+```bash
+V1="${CLAUDE_PLUGIN_ROOT}/scripts/v1_core.py" && $V1 list
+V2="${CLAUDE_PLUGIN_ROOT}/scripts/v2_interact.py" && $V2 click --selector "a"
+V3="${CLAUDE_PLUGIN_ROOT}/scripts/v3_advanced.py" && $V3 network_start
+```
+
+## Quick Reference
+
+### v1 — Core (`v1_core.py`)
+
+```bash
+V1="${CLAUDE_PLUGIN_ROOT}/scripts/v1_core.py"
+
+$V1 version                                    # Browser info
+$V1 list                                       # List tabs (default: first 50 pages)
+$V1 list --search "github" --limit 20          # Search tabs
+$V1 list --type all                            # Include iframes, workers
+$V1 select 0                                   # Select tab by index
+$V1 select AB71CD183BCE05DD...                  # Select by target ID
+$V1 screenshot                                 # PNG of selected tab
+$V1 screenshot --full-page --format jpeg -o /tmp/page.jpg
+$V1 snapshot --depth 3                         # Accessibility tree
+$V1 evaluate "document.title"                  # Run JavaScript
+$V1 evaluate "fetch('/api').then(r=>r.json())" --await
+$V1 navigate "https://example.com"             # Navigate
+$V1 navigate "https://example.com" --wait-for none
+```
+
+### v2 — Interaction (`v2_interact.py`)
+
+```bash
+V2="${CLAUDE_PLUGIN_ROOT}/scripts/v2_interact.py"
+
+$V2 click 100 200                              # Click at coordinates
+$V2 click --selector "button.submit"           # Click CSS selector
+$V2 fill --selector "input[name=q]" "search query"
+$V2 press_key Enter                            # Press key
+$V2 press_key a --modifiers ctrl               # Ctrl+A
+$V2 hover --selector "a.nav-link"
+$V2 new_page "https://example.com"             # Open new tab
+$V2 close_page                                 # Close selected tab
+```
+
+### v3 — Advanced (`v3_advanced.py`)
+
+```bash
+V3="${CLAUDE_PLUGIN_ROOT}/scripts/v3_advanced.py"
+
+# Network monitoring (background collector)
+$V3 network_start                              # Start collecting
+$V3 network_list --filter "api"                # View requests
+$V3 network_stop                               # Stop + summary
+
+# Console monitoring
+$V3 console_start
+$V3 console_list --level error                 # Errors only
+$V3 console_stop
+
+# Performance tracing
+$V3 perf_start --categories "devtools.timeline"
+$V3 perf_stop -o /tmp/trace.json               # Save trace
+
+# Device emulation
+$V3 emulate --width 375 --height 812 --scale 3 --mobile
+$V3 emulate_reset                                       # Reset emulation to defaults
+
+# Drag and dialog
+$V3 drag 100 100 300 300 --steps 20
+$V3 dialog accept                              # Handle alert/confirm
+$V3 dialog accept "prompt input"               # Handle prompt
+```
+
+> **Note**: `dialog` is reactive — it handles an already-open dialog. It will fail if no dialog is currently visible. Trigger the dialog first (e.g., via `evaluate` or navigation), then call `dialog` to respond.
+
+## Typical Workflows
+
+### Screenshot Analysis
+```
+1. v1 list --search "target"    → Find the tab
+2. v1 select <index>            → Select it
+3. v1 screenshot                → Capture PNG
+4. Read /tmp/cdp-screenshot-*.png → View in Claude
+```
+
+### Form Interaction
+```
+1. v1 select <tab>
+2. v1 snapshot --depth 3        → Understand page structure
+3. v2 fill --selector "input" "text"
+4. v2 click --selector "button[type=submit]"
+5. v1 screenshot                → Verify result
+```
+
+### Network Debugging
+```
+1. v1 select <tab>
+2. v3 network_start             → Begin capture
+3. v1 navigate "https://..."    → Trigger requests
+4. v3 network_list --filter "api" → Inspect
+5. v3 network_stop              → Cleanup
+```
+
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CDP_HOST` | `127.0.0.1` | Chrome DevTools host |
+| `CDP_PORT` | `9222` | Chrome DevTools port |
+
+Or use `--host` / `--port` flags on any command.
+
+## State
+
+- Selected tab: `~/.cache/cdp-browser/state.json`
+- Network events: `~/.cache/cdp-browser/network-events.jsonl`
+- Console events: `~/.cache/cdp-browser/console-events.jsonl`
+
+## Error Handling
+
+| Error | Cause | Resolution |
+|-------|-------|------------|
+| CDP HTTP endpoint unreachable | Browser not running with `--remote-debugging-port` | Start browser with CDP enabled |
+| Timeout waiting for response | Tab frozen/suspended | Select a different active tab |
+| WebSocket connection failed | Tab closed or navigated away | Re-select tab with `list` + `select` |
+| Element not found | Invalid CSS selector | Check selector with `evaluate` + `querySelector` |
+
+## Protocol Reference
+
+For CDP domain methods, key codes, and device presets, see `references/cdp-protocol.md`.
+
+## Argument Dispatch
+
+When user provides arguments to `/cdp-browser`:
+- Single word matching a subcommand → run directly (e.g., `/cdp-browser list`)
+- Free-form request → map to appropriate v1/v2/v3 command sequence

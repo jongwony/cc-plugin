@@ -10,8 +10,11 @@ description: |
 All prompts passed to `codex` MUST be in English.
 
 ## Prompt Delivery
-1. Write the prompt to `/tmp/codex_prompt_${CLAUDE_SESSION_ID}.txt` using the Write tool
-2. Pipe the file content to codex: `cat /tmp/codex_prompt_${CLAUDE_SESSION_ID}.txt | codex exec ...`
+1. Generate a short unique suffix (e.g., `a3f9`, timestamp fragment, or task keyword) for this invocation
+2. Write the prompt to `/tmp/codex_prompt_<suffix>.txt` using the Write tool
+3. Execute via wrapper script: `$HOME/.claude/scripts/codex-run.sh [options] /tmp/codex_prompt_<suffix>.txt`
+
+This per-invocation naming prevents file collisions across parallel sessions and team agents.
 
 ## Running a Task
 1. Ask the user (via `AskUserQuestion`) which model(s) and reasoning effort in a **single prompt with two questions**. Model selection is **multi-select** — multiple models can be chosen for parallel execution.
@@ -26,23 +29,22 @@ All prompts passed to `codex` MUST be in English.
    Reasoning effort is selected once and applied identically to all chosen models.
 
 2. Select sandbox mode; default to `--sandbox read-only` unless edits or network access are necessary.
-3. Assemble command with options (always include `--skip-git-repo-check`):
-   - `-m, --model <MODEL>` / `--config model_reasoning_effort="<medium|high|xhigh>"`
-   - `--sandbox <read-only|workspace-write|danger-full-access>` / `--full-auto` / `-C <DIR>`
+3. Execute via `$HOME/.claude/scripts/codex-run.sh` with appropriate options:
+   - `-m MODEL` / `-r EFFORT` / `-s SANDBOX` / `--full-auto` / `-C DIR`
    - **Single model**: run one Bash call as usual.
    - **Multiple models**: issue parallel Bash tool calls (one per model) in a single response. Each call uses the same prompt, sandbox, and reasoning effort but a different `-m` value.
-4. Resume: `cat /tmp/codex_prompt_${CLAUDE_SESSION_ID}.txt | codex exec --skip-git-repo-check resume --last 2>/dev/null`. If user requests different model/reasoning, insert flags between `exec` and `resume`. Resume applies to the last single session only.
-5. Append `2>/dev/null` to suppress thinking tokens (stderr). Show stderr only for debugging.
-6. Run command(s), summarize each outcome, inform user: "Resume anytime with 'codex resume'."
+4. Resume: Write new instructions to a fresh `/tmp/codex_prompt_<suffix>.txt`, then `$HOME/.claude/scripts/codex-run.sh --resume /tmp/codex_prompt_<suffix>.txt`. Resume applies to the last single session only. Codex tracks sessions internally — no external session ID needed.
+5. Run command(s), summarize each outcome, inform user: "Resume anytime with 'codex resume'."
 
 ### Quick Reference
 | Use case | Command pattern |
 | --- | --- |
-| Read-only analysis | `codex exec --skip-git-repo-check -m MODEL --config ... --sandbox read-only 2>/dev/null` |
-| Apply edits | `... --sandbox workspace-write --full-auto 2>/dev/null` |
-| Network access | `... --sandbox danger-full-access --full-auto 2>/dev/null` |
-| Resume session | `cat FILE \| codex exec --skip-git-repo-check resume --last 2>/dev/null` |
-| Different dir | Add `-C <DIR>` to any command |
+| Read-only analysis | `$HOME/.claude/scripts/codex-run.sh -m MODEL /tmp/codex_prompt_<suffix>.txt` |
+| Apply edits | `$HOME/.claude/scripts/codex-run.sh -s workspace-write --full-auto /tmp/codex_prompt_<suffix>.txt` |
+| Network access | `$HOME/.claude/scripts/codex-run.sh -s danger-full-access --full-auto /tmp/codex_prompt_<suffix>.txt` |
+| Resume session | `$HOME/.claude/scripts/codex-run.sh --resume /tmp/codex_prompt_<suffix>.txt` |
+| Different dir | Add `-C <DIR>` to any pattern above |
+| Custom model | Add `-m gpt-5.2-codex -r high` to any pattern above |
 
 ## Following Up
 After `codex` completes, use `AskUserQuestion` to confirm next steps. Restate model/reasoning/sandbox when proposing actions.

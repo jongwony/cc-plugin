@@ -9,7 +9,7 @@ if [ -z "$CMD" ]; then
   exit 0
 fi
 
-if echo "$CMD" | grep -qE '^\s*codex\b'; then
+if echo "$CMD" | grep -qE '^\s*(codex\b|.*/codex-run\.sh\b)'; then
   exit 0
 fi
 

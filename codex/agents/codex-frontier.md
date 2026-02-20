@@ -9,7 +9,7 @@ hooks:
     - matcher: "Bash"
       hooks:
         - type: command
-          command: "${CLAUDE_PLUGIN_ROOT}/scripts/validate-codex-only.sh"
+          command: "$HOME/.claude/scripts/validate-codex-only.sh"
 ---
 
 # Codex Frontier Agent
@@ -67,8 +67,8 @@ Before writing the final prompt file:
 ### Initial Flow
 
 1. Craft the prompt: embed caller context, apply reference guide patterns, include verification directives for codex
-2. Write to `/tmp/codex_prompt_${CLAUDE_SESSION_ID}.txt`
-3. Execute via `codex exec` with fixed parameters (model, reasoning, --skip-git-repo-check)
+2. Generate a short unique suffix and write to `/tmp/codex_prompt_<suffix>.txt`
+3. Execute via `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh /tmp/codex_prompt_<suffix>.txt`
 4. Summarize codex results and return
 
 ### Resume Flow (Team Message Received)
@@ -76,8 +76,8 @@ Before writing the final prompt file:
 Triggered when receiving a message from a teammate with additional instructions or feedback:
 
 1. Extract the new directive or feedback from the incoming message
-2. Update the prompt at `/tmp/codex_prompt_${CLAUDE_SESSION_ID}.txt` reflecting the new guidance
-3. Execute `codex exec resume --last` with the updated prompt piped in
+2. Write a new prompt to `/tmp/codex_prompt_<new-suffix>.txt` incorporating the feedback
+3. Execute `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh --resume /tmp/codex_prompt_<new-suffix>.txt`
 4. Summarize results
 5. Send results back via `SendMessage` to the requesting teammate
 
@@ -88,6 +88,17 @@ When operating as a teammate in a multi-agent session:
 - **Receiving work**: Accept task delegation via team messages. Extract requirements and enter Initial Flow
 - **Returning results**: Use `SendMessage` to deliver outcomes to the delegating agent. Include: completion status, summary of changes, any caveats or follow-up needs
 - **Feedback loops**: On receiving follow-up messages, enter Resume Flow rather than restarting from scratch
+
+## Teammate Spawn Resilience
+
+When codex-frontier is spawned as a teammate via `handleSpawnInProcess`, the plugin agent definition (system prompt, tools, skills, hooks) may not load natively. This is a known Claude Code platform limitation — `found=false` in the built-in registry lookup is universal for plugin agents.
+
+**Mitigation layers:**
+- **SubagentStart hook** (`~/.claude/scripts/inject-agent-context.sh`): Injects essential context (fixed parameters, execution patterns, delegation philosophy) as `additionalContext` when agent_name matches `codex-frontier`
+- **Wrapper script** (`codex-run.sh`): Bundled in the plugin at `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh`. Guarantees CLI parameters (model, reasoning, --skip-git-repo-check, stderr suppression). The SubagentStart hook references a deployed copy at `$HOME/.claude/scripts/codex-run.sh` as fallback when `${CLAUDE_PLUGIN_ROOT}` is unavailable
+- **This document**: Serves as the canonical definition when the plugin system loads it correctly
+
+The hook + script combination ensures codex-frontier operates correctly in both scenarios: native plugin load (full definition) and teammate spawn (injected context + script defaults).
 
 ## Philosophical Boundaries
 

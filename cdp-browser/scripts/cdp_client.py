@@ -10,8 +10,10 @@ Import via sys.path manipulation in v1/v2/v3 scripts:
     from cdp_client import CDPClient
 """
 
+import fcntl
 import json
 import os
+import tempfile
 import time
 import urllib.request
 import urllib.error
@@ -44,7 +46,10 @@ class CDPClient:
         url = f"{self._base_url}{path}"
         try:
             with urllib.request.urlopen(url, timeout=5) as resp:
-                return json.loads(resp.read())
+                try:
+                    return json.loads(resp.read())
+                except json.JSONDecodeError:
+                    raise CDPError(f"Invalid JSON response from CDP endpoint: {path}")
         except urllib.error.URLError as e:
             raise CDPError(f"CDP HTTP endpoint unreachable ({self._base_url}): {e}")
 
@@ -175,6 +180,35 @@ class CDPClient:
 
     # ── State persistence ─────────────────────────────────────────
 
+    @staticmethod
+    def _atomic_save_state(state):
+        """Write state to a temp file then atomically rename."""
+        os.makedirs(STATE_DIR, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(dir=STATE_DIR, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(state, f, indent=2)
+            os.rename(tmp_path, STATE_FILE)
+        except BaseException:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
+    def _locked_state_update(self, update_fn):
+        """Read-modify-write state under an exclusive file lock."""
+        os.makedirs(STATE_DIR, exist_ok=True)
+        lock_path = STATE_FILE + ".lock"
+        with open(lock_path, "w") as lock_f:
+            fcntl.flock(lock_f, fcntl.LOCK_EX)
+            try:
+                state = self.load_state()
+                update_fn(state)
+                self._atomic_save_state(state)
+            finally:
+                fcntl.flock(lock_f, fcntl.LOCK_UN)
+
     def load_state(self):
         """Load persisted state."""
         try:
@@ -185,14 +219,16 @@ class CDPClient:
 
     def save_state(self, target_id, host=None, port=None):
         """Save selected target to state file."""
-        os.makedirs(STATE_DIR, exist_ok=True)
-        state = self.load_state()
-        state["selected_target"] = target_id
-        state["host"] = host or self.host
-        state["port"] = port or self.port
-        state["timestamp"] = time.time()
-        with open(STATE_FILE, "w") as f:
-            json.dump(state, f, indent=2)
+        h = host or self.host
+        p = port or self.port
+
+        def _update(state):
+            state["selected_target"] = target_id
+            state["host"] = h
+            state["port"] = p
+            state["timestamp"] = time.time()
+
+        self._locked_state_update(_update)
 
     def get_selected_target(self):
         """Get the currently selected target ID from state."""
@@ -201,22 +237,26 @@ class CDPClient:
 
     def save_pid(self, process_type, pid):
         """Save a background process PID to state."""
-        os.makedirs(STATE_DIR, exist_ok=True)
-        state = self.load_state()
-        pids = state.setdefault("pids", {})
-        pids[process_type] = pid
-        with open(STATE_FILE, "w") as f:
-            json.dump(state, f, indent=2)
+        def _update(state):
+            pids = state.setdefault("pids", {})
+            pids[process_type] = {"pid": pid, "create_time": time.time()}
+
+        self._locked_state_update(_update)
 
     def get_pid(self, process_type):
-        """Get a saved background process PID."""
+        """Get a saved background process PID entry."""
         state = self.load_state()
-        return state.get("pids", {}).get(process_type)
+        entry = state.get("pids", {}).get(process_type)
+        if entry is None:
+            return None
+        # Backwards compat: old format stored bare int
+        if isinstance(entry, int):
+            return {"pid": entry, "create_time": 0}
+        return entry
 
     def clear_pid(self, process_type):
         """Remove a saved PID."""
-        state = self.load_state()
-        pids = state.get("pids", {})
-        pids.pop(process_type, None)
-        with open(STATE_FILE, "w") as f:
-            json.dump(state, f, indent=2)
+        def _update(state):
+            state.get("pids", {}).pop(process_type, None)
+
+        self._locked_state_update(_update)

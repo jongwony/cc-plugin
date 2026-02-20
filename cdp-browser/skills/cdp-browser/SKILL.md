@@ -90,12 +90,15 @@ $V3 perf_stop -o /tmp/trace.json               # Save trace
 
 # Device emulation
 $V3 emulate --width 375 --height 812 --scale 3 --mobile
+$V3 emulate_reset                                       # Reset emulation to defaults
 
 # Drag and dialog
 $V3 drag 100 100 300 300 --steps 20
 $V3 dialog accept                              # Handle alert/confirm
 $V3 dialog accept "prompt input"               # Handle prompt
 ```
+
+> **Note**: `dialog` is reactive — it handles an already-open dialog. It will fail if no dialog is currently visible. Trigger the dialog first (e.g., via `evaluate` or navigation), then call `dialog` to respond.
 
 ## Typical Workflows
 

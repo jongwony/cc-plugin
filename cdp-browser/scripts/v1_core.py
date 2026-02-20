@@ -33,23 +33,26 @@ def cmd_version(client, args):
 def cmd_list(client, args):
     """List browser tabs."""
     type_filter = args.type if args.type != "all" else "all"
-    tabs = client.list_tabs(type_filter=type_filter if type_filter != "all" else None)
+    all_tabs = client.list_tabs(type_filter=type_filter if type_filter != "all" else None)
 
-    # Apply search filter
+    # Preserve original indexes so `select <index>` stays consistent
+    indexed_tabs = list(enumerate(all_tabs))
+
+    # Apply search filter (keeping original index)
     if args.search:
         query = args.search.lower()
-        tabs = [
-            t for t in tabs
+        indexed_tabs = [
+            (i, t) for i, t in indexed_tabs
             if query in t.get("title", "").lower() or query in t.get("url", "").lower()
         ]
 
     # Apply limit
-    total = len(tabs)
-    tabs = tabs[:args.limit]
+    total = len(indexed_tabs)
+    indexed_tabs = indexed_tabs[:args.limit]
 
     selected = client.get_selected_target()
 
-    for i, tab in enumerate(tabs):
+    for i, tab in indexed_tabs:
         tid = tab.get("id", "?")
         title = tab.get("title", "Untitled")[:70]
         url = tab.get("url", "")[:80]
@@ -61,7 +64,7 @@ def cmd_list(client, args):
 
     if total > args.limit:
         print(f"\n  ... and {total - args.limit} more (use --limit or --search to filter)")
-    print(f"\nTotal: {total} tabs (showing {min(len(tabs), args.limit)})")
+    print(f"\nTotal: {total} tabs (showing {min(len(indexed_tabs), args.limit)})")
 
 
 def cmd_select(client, args):
@@ -103,6 +106,7 @@ def cmd_select(client, args):
 def cmd_screenshot(client, args):
     """Take a screenshot of the selected tab."""
     client.connect()
+    full_page_active = False
     try:
         params = {"format": args.format}
         if args.format == "jpeg":
@@ -122,12 +126,10 @@ def cmd_screenshot(client, args):
                 "deviceScaleFactor": 1,
                 "mobile": False,
             })
+            full_page_active = True
             params["captureBeyondViewport"] = True
 
         result = client.send("Page.captureScreenshot", params)
-
-        if args.full_page:
-            client.send("Emulation.clearDeviceMetricsOverride")
 
         # Decode and save
         data = base64.b64decode(result["data"])
@@ -136,6 +138,11 @@ def cmd_screenshot(client, args):
         Path(output).write_bytes(data)
         print(f"Screenshot saved: {output} ({len(data)} bytes)")
     finally:
+        if full_page_active:
+            try:
+                client.send("Emulation.clearDeviceMetricsOverride")
+            except Exception:
+                pass
         client.close()
 
 
@@ -224,9 +231,17 @@ def cmd_evaluate(client, args):
 
 def cmd_navigate(client, args):
     """Navigate to a URL."""
+    import websocket
+
     client.connect()
     try:
         result = client.send("Page.navigate", {"url": args.url})
+
+        # Check navigation error before entering wait loop
+        error = result.get("errorText")
+        if error:
+            print(f"Navigation error: {error}", file=sys.stderr)
+            sys.exit(1)
 
         if args.wait_for == "load":
             # Wait for Page.loadEventFired
@@ -238,13 +253,10 @@ def cmd_navigate(client, args):
                     resp = json.loads(raw)
                     if resp.get("method") == "Page.loadEventFired":
                         break
-                except Exception:
+                except websocket.WebSocketTimeoutException:
                     continue
-
-        error = result.get("errorText")
-        if error:
-            print(f"Navigation error: {error}", file=sys.stderr)
-            sys.exit(1)
+                except (websocket.WebSocketConnectionClosedException, ConnectionError):
+                    break
 
         frame_id = result.get("frameId", "")
         print(f"Navigated to: {args.url}")

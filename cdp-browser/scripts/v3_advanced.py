@@ -28,8 +28,14 @@ AUTO_TIMEOUT = 300  # 5 minutes
 
 def _kill_existing(client, process_type):
     """Kill existing background process if running."""
-    pid = client.get_pid(process_type)
-    if pid:
+    entry = client.get_pid(process_type)
+    if entry:
+        pid = entry["pid"]
+        create_time = entry.get("create_time", 0)
+        # Skip kill if process has long exceeded its expected lifetime (likely PID reuse)
+        if create_time and time.time() - create_time > AUTO_TIMEOUT + 60:
+            client.clear_pid(process_type)
+            return
         try:
             os.kill(pid, signal.SIGTERM)
             time.sleep(0.2)
@@ -61,10 +67,17 @@ def _run_collector(client, process_type, events_file, enable_method, event_names
         return
 
     # Child — collector process
+    _shutdown = False
+
+    def _handle_sigterm(*_):
+        nonlocal _shutdown
+        _shutdown = True
+
+    error_log = os.path.join(CACHE_DIR, f"{process_type}-error.log")
     try:
         # Detach from parent
         os.setsid()
-        signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+        signal.signal(signal.SIGTERM, _handle_sigterm)
 
         ws = websocket.create_connection(
             f"ws://{client.host}:{client.port}/devtools/page/{target_id}",
@@ -85,7 +98,7 @@ def _run_collector(client, process_type, events_file, enable_method, event_names
         # Collect events
         start_time = time.time()
         with open(events_file, "a") as f:
-            while time.time() - start_time < AUTO_TIMEOUT:
+            while not _shutdown and time.time() - start_time < AUTO_TIMEOUT:
                 try:
                     ws.settimeout(1.0)
                     raw = ws.recv()
@@ -99,14 +112,20 @@ def _run_collector(client, process_type, events_file, enable_method, event_names
                         }
                         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
                         f.flush()
-                except Exception:
+                except websocket.WebSocketTimeoutException:
                     continue
+                except (websocket.WebSocketConnectionClosedException, ConnectionError):
+                    break
 
         ws.close()
-    except Exception:
-        pass
-    finally:
         os._exit(0)
+    except Exception as exc:
+        try:
+            with open(error_log, "a") as ef:
+                ef.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {exc}\n")
+        except Exception:
+            pass
+        os._exit(1)
 
 
 def cmd_network_start(client, args):
@@ -134,7 +153,10 @@ def cmd_network_list(client, args):
         for line in f:
             if not line.strip():
                 continue
-            entry = json.loads(line)
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
             method = entry["method"]
             params = entry["params"]
 
@@ -206,14 +228,17 @@ def cmd_console_list(client, args):
         for line in f:
             if not line.strip():
                 continue
-            entry = json.loads(line)
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
             params = entry["params"]
 
             if entry["method"] == "Runtime.consoleAPICalled":
                 level = params.get("type", "log")
                 call_args = params.get("args", [])
                 text = " ".join(
-                    a.get("value", a.get("description", str(a)))
+                    str(a.get("value", a.get("description", repr(a))))
                     for a in call_args
                 )[:200]
                 messages.append({"level": level, "text": text, "t": entry["t"]})
@@ -228,9 +253,12 @@ def cmd_console_list(client, args):
                     "t": entry["t"],
                 })
 
-    # Filter by level
+    # Filter by level (normalize warn/warning as equivalent)
     if args.level and args.level != "all":
-        messages = [m for m in messages if m["level"] == args.level]
+        if args.level in ("warn", "warning"):
+            messages = [m for m in messages if m["level"] in ("warn", "warning")]
+        else:
+            messages = [m for m in messages if m["level"] == args.level]
 
     if not messages:
         print("No matching console messages.")
@@ -269,6 +297,8 @@ def cmd_perf_start(client, args):
 
 def cmd_perf_stop(client, args):
     """Stop tracing and save results."""
+    import websocket
+
     client.connect()
     try:
         client.send("Tracing.end")
@@ -286,8 +316,10 @@ def cmd_perf_stop(client, args):
                     chunks.extend(resp.get("params", {}).get("value", []))
                 elif method == "Tracing.tracingComplete":
                     break
-            except Exception:
+            except websocket.WebSocketTimeoutException:
                 continue
+            except (websocket.WebSocketConnectionClosedException, ConnectionError):
+                break
 
         output = args.output or f"/tmp/cdp-trace-{int(time.time())}.json"
         with open(output, "w") as f:
@@ -313,11 +345,21 @@ def cmd_emulate(client, args):
         client.close()
 
 
+def cmd_emulate_reset(client, args):
+    """Reset device emulation to defaults."""
+    client.connect()
+    try:
+        client.send("Emulation.clearDeviceMetricsOverride")
+        print("Emulation reset to defaults.")
+    finally:
+        client.close()
+
+
 def cmd_drag(client, args):
     """Drag from (x1,y1) to (x2,y2)."""
     client.connect()
     try:
-        steps = args.steps or 10
+        steps = max(1, args.steps or 10)
         dx = (args.x2 - args.x1) / steps
         dy = (args.y2 - args.y1) / steps
 
@@ -381,7 +423,7 @@ def main():
     # console
     sub.add_parser("console_start", help="Start console collector")
     p_cl = sub.add_parser("console_list", help="List console messages")
-    p_cl.add_argument("--level", choices=["error", "warn", "all"], default="all")
+    p_cl.add_argument("--level", choices=["error", "warn", "warning", "all"], default="all")
     sub.add_parser("console_stop", help="Stop console collector")
 
     # perf
@@ -396,6 +438,7 @@ def main():
     p_em.add_argument("--height", type=int, required=True)
     p_em.add_argument("--scale", type=float, default=1.0, help="Device scale factor")
     p_em.add_argument("--mobile", action="store_true")
+    sub.add_parser("emulate_reset", help="Reset device emulation")
 
     # drag
     p_drag = sub.add_parser("drag", help="Drag gesture")
@@ -423,6 +466,7 @@ def main():
         "perf_start": cmd_perf_start,
         "perf_stop": cmd_perf_stop,
         "emulate": cmd_emulate,
+        "emulate_reset": cmd_emulate_reset,
         "drag": cmd_drag,
         "dialog": cmd_dialog,
     }

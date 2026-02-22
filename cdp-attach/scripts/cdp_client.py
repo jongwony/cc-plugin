@@ -19,7 +19,7 @@ import urllib.request
 import urllib.error
 
 # State file location
-STATE_DIR = os.path.expanduser("~/.cache/cdp-browser")
+STATE_DIR = os.path.expanduser("~/.cache/cdp-attach")
 STATE_FILE = os.path.join(STATE_DIR, "state.json")
 
 
@@ -118,6 +118,14 @@ class CDPClient:
 
         self._msg_id = 0
         self._event_buffer = []
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+        return False
 
     def send(self, method, params=None, timeout=30):
         """Send CDP command and wait for response.

@@ -1,0 +1,9 @@
+{
+  "name": "cdp-attach",
+  "description": "Attach to running CDP instance: tab management, screenshots, interaction, network/console monitoring",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

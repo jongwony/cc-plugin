@@ -1,9 +1,0 @@
-{
-  "name": "cdp-browser",
-  "description": "CDP browser automation: tab management, screenshots, interaction, network/console monitoring (Puppeteer-free)",
-  "version": "1.0.0",
-  "author": {
-    "name": "Jongwon Choi",
-    "url": "https://github.com/jongwony"
-  }
-}

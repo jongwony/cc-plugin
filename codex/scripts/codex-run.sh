@@ -16,7 +16,7 @@ set -euo pipefail
 MODEL="gpt-5.3-codex"
 EFFORT="xhigh"
 SANDBOX="read-only"
-FULL_AUTO=""
+FULL_AUTO=false
 RESUME=false
 CWD=""
 
@@ -45,12 +45,12 @@ USAGE
 # Parse options
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -m) MODEL="$2"; shift 2 ;;
-    -r) EFFORT="$2"; shift 2 ;;
-    -s) SANDBOX="$2"; shift 2 ;;
-    -C) CWD="$2"; shift 2 ;;
+    -m) [[ $# -ge 2 ]] || { echo "Error: -m requires a value" >&2; usage 1; }; MODEL="$2"; shift 2 ;;
+    -r) [[ $# -ge 2 ]] || { echo "Error: -r requires a value" >&2; usage 1; }; EFFORT="$2"; shift 2 ;;
+    -s) [[ $# -ge 2 ]] || { echo "Error: -s requires a value" >&2; usage 1; }; SANDBOX="$2"; shift 2 ;;
+    -C) [[ $# -ge 2 ]] || { echo "Error: -C requires a value" >&2; usage 1; }; CWD="$2"; shift 2 ;;
     --resume) RESUME=true; shift ;;
-    --full-auto) FULL_AUTO="--full-auto"; shift ;;
+    --full-auto) FULL_AUTO=true; shift ;;
     -h|--help) usage 0 ;;
     -*) echo "Unknown option: $1" >&2; usage 1 ;;
     *) PROMPT_FILE="$1"; shift ;;
@@ -68,19 +68,31 @@ if [[ ! -f "$PROMPT_FILE" ]]; then
   exit 1
 fi
 
-# Build CWD flag
-CWD_FLAG=""
-if [[ -n "$CWD" ]]; then
-  CWD_FLAG="-C $CWD"
+# Build extra args array (preserves quoting for paths with spaces)
+EXTRA_ARGS=()
+[[ "$FULL_AUTO" == true ]] && EXTRA_ARGS+=(--full-auto)
+[[ -n "$CWD" ]] && EXTRA_ARGS+=(-C "$CWD")
+
+# Warn if non-default options are passed with --resume (they are ignored)
+if [[ "$RESUME" == true ]]; then
+  IGNORED=()
+  [[ "$MODEL" != "gpt-5.3-codex" ]] && IGNORED+=("-m $MODEL")
+  [[ "$EFFORT" != "xhigh" ]] && IGNORED+=("-r $EFFORT")
+  [[ "$SANDBOX" != "read-only" ]] && IGNORED+=("-s $SANDBOX")
+  [[ "$FULL_AUTO" == true ]] && IGNORED+=("--full-auto")
+  [[ -n "$CWD" ]] && IGNORED+=("-C $CWD")
+  if [[ ${#IGNORED[@]} -gt 0 ]]; then
+    echo "Warning: --resume ignores options: ${IGNORED[*]} (uses last session settings)" >&2
+  fi
 fi
 
 # Execute
 if [[ "$RESUME" == true ]]; then
-  cat "$PROMPT_FILE" | codex exec --skip-git-repo-check resume --last 2>/dev/null
+  codex exec --skip-git-repo-check resume --last 2>/dev/null < "$PROMPT_FILE"
 else
-  cat "$PROMPT_FILE" | codex exec --skip-git-repo-check \
+  codex exec --skip-git-repo-check \
     -m "$MODEL" \
     --config model_reasoning_effort="$EFFORT" \
     --sandbox "$SANDBOX" \
-    $FULL_AUTO $CWD_FLAG 2>/dev/null
+    "${EXTRA_ARGS[@]}" 2>/dev/null < "$PROMPT_FILE"
 fi

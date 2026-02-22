@@ -145,6 +145,7 @@ When operating as a teammate in a multi-agent session:
 When codex-frontier is spawned as a teammate via `handleSpawnInProcess`, the plugin agent definition (system prompt, tools, skills, hooks) may not load natively. This is a known Claude Code platform limitation — `found=false` in the built-in registry lookup is universal for plugin agents.
 
 **Mitigation layers:**
+- **PreToolUse hook** (`~/.claude/scripts/validate-codex-only.sh`): Restricts Bash to codex CLI and codex-run.sh commands, preventing unintended tool usage even if agent context is degraded
 - **SubagentStart hook** (`~/.claude/scripts/inject-agent-context.sh`): Injects essential context (fixed parameters, execution patterns, delegation philosophy) as `additionalContext` when agent_name matches `codex-frontier`
 - **Wrapper script** (`codex-run.sh`): Bundled in the plugin at `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh`. Guarantees CLI parameters (model, reasoning, --skip-git-repo-check, stderr suppression). The SubagentStart hook references a deployed copy at `$HOME/.claude/scripts/codex-run.sh` as fallback when `${CLAUDE_PLUGIN_ROOT}` is unavailable
 - **This document**: Serves as the canonical definition when the plugin system loads it correctly

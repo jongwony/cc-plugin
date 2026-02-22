@@ -42,8 +42,8 @@ This per-invocation naming prevents file collisions across parallel sessions and
 | Read-only analysis | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -m MODEL /tmp/codex_prompt_<suffix>.txt` |
 | Apply edits | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s workspace-write --full-auto /tmp/codex_prompt_<suffix>.txt` |
 | Network access | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s danger-full-access --full-auto /tmp/codex_prompt_<suffix>.txt` |
-| Resume session | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh --resume /tmp/codex_prompt_<suffix>.txt` |
-| Different dir | Add `-C <DIR>` to any pattern above |
+| Resume session | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh --resume /tmp/codex_prompt_<suffix>.txt` (options like -m, -r, -s are ignored; uses last session settings) |
+| Different dir | Add `-C <DIR>` to non-resume patterns above |
 | Custom model | Add `-m gpt-5.2-codex -r high` to any pattern above |
 
 ## Following Up

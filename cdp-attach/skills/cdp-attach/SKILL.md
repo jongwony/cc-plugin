@@ -1,25 +1,28 @@
 ---
-name: cdp-browser
+name: cdp-attach
 description: |
   This skill should be used when the user asks to "take browser screenshot",
   "list browser tabs", "click page element", "navigate browser",
   "automate browser", "inspect accessibility tree", "monitor network",
   "run JavaScript in browser", "fill form in browser", "debug web page",
-  or mentions CDP. Provides direct Chrome DevTools Protocol browser automation without Puppeteer.
+  or mentions CDP. Attaches to a running CDP instance for browser automation.
 user_invocable: true
 context: fork
 argument-hint: "<operation> [args...]"
 ---
 
-# CDP Browser Automation
+# CDP Attach
 
-Direct Chrome DevTools Protocol client bypassing Puppeteer. Immune to frozen-tab timeouts.
+Attach to a running Chrome DevTools Protocol instance. Immune to frozen-tab timeouts.
 
 ## Prerequisites
 
-Chrome must be running with remote debugging enabled:
+A CDP-enabled browser must be running. Typical launch methods:
 ```bash
-# macOS
+# Via claude --chrome (recommended)
+claude --chrome
+
+# Manual launch
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
 ```
 
@@ -139,9 +142,9 @@ Or use `--host` / `--port` flags on any command.
 
 ## State
 
-- Selected tab: `~/.cache/cdp-browser/state.json`
-- Network events: `~/.cache/cdp-browser/network-events.jsonl`
-- Console events: `~/.cache/cdp-browser/console-events.jsonl`
+- Selected tab: `~/.cache/cdp-attach/state.json`
+- Network events: `~/.cache/cdp-attach/network-events.jsonl`
+- Console events: `~/.cache/cdp-attach/console-events.jsonl`
 
 ## Error Handling
 
@@ -158,6 +161,6 @@ For CDP domain methods, key codes, and device presets, see `references/cdp-proto
 
 ## Argument Dispatch
 
-When user provides arguments to `/cdp-browser`:
-- Single word matching a subcommand → run directly (e.g., `/cdp-browser list`)
+When user provides arguments to `/cdp-attach`:
+- Single word matching a subcommand → run directly (e.g., `/cdp-attach list`)
 - Free-form request → map to appropriate v1/v2/v3 command sequence

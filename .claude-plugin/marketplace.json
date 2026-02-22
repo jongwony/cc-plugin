@@ -73,6 +73,11 @@
       "name": "release",
       "source": "./release",
       "description": "Automated version bump, git tag, and GitHub release creation"
+    },
+    {
+      "name": "cdp-attach",
+      "source": "./cdp-attach",
+      "description": "Attach to running CDP instance for browser automation"
     }
   ]
 }

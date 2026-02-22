@@ -20,7 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cdp_client import CDPClient, CDPError
 
-CACHE_DIR = os.path.expanduser("~/.cache/cdp-browser")
+CACHE_DIR = os.path.expanduser("~/.cache/cdp-attach")
 NETWORK_EVENTS = os.path.join(CACHE_DIR, "network-events.jsonl")
 CONSOLE_EVENTS = os.path.join(CACHE_DIR, "console-events.jsonl")
 AUTO_TIMEOUT = 300  # 5 minutes

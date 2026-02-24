@@ -12,6 +12,7 @@ v1_core — Core CDP operations: list, select, screenshot, snapshot, evaluate, n
 import argparse
 import base64
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -19,6 +20,17 @@ from pathlib import Path
 # Import shared client from same directory
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cdp_client import CDPClient, CDPError
+
+
+_TOP_LEVEL_CONST_LET_RE = re.compile(r'(?m)^(\s*)(const|let)\b')
+
+
+def _redeclare_safe(expression):
+    """Replace top-level const/let with var to prevent re-declaration errors."""
+    new_expr = _TOP_LEVEL_CONST_LET_RE.sub(r'\1var', expression)
+    if new_expr != expression:
+        print("[cdp-attach] const/let rewritten to var (scope-safe mode)", file=sys.stderr)
+    return new_expr
 
 
 def cmd_version(client, args):
@@ -116,8 +128,8 @@ def cmd_screenshot(client, args):
             # Get full page dimensions
             metrics = client.send("Page.getLayoutMetrics")
             content = metrics.get("contentSize", {})
-            width = content.get("width", 1280)
-            height = content.get("height", 800)
+            width = max(content.get("width", 1280), 1)
+            height = max(content.get("height", 800), 1)
 
             # Override device metrics for full page
             client.send("Emulation.setDeviceMetricsOverride", {
@@ -191,10 +203,31 @@ def cmd_snapshot(client, args):
 
 def cmd_evaluate(client, args):
     """Evaluate JavaScript expression."""
+    # Fix 2: Resolve expression from --stdin or positional arg
+    if args.stdin:
+        expression = sys.stdin.read().strip()
+    elif args.expression:
+        expression = args.expression
+    else:
+        print("Error: Provide expression argument or use --stdin", file=sys.stderr)
+        sys.exit(1)
+
+    # Fix 1: Rewrite const/let to var for re-declaration safety
+    if not args.no_rewrite:
+        expression = _redeclare_safe(expression)
+
+    # Fix 3: Auto-wrap await expressions in async IIFE
+    if args.await_promise and 'await ' in expression and not expression.strip().startswith('(async'):
+        stripped = expression.rstrip().rstrip(';')
+        if ';' not in stripped and '\n' not in stripped:
+            expression = f"(async () => {{ return {stripped}; }})()"
+        else:
+            expression = f"(async () => {{ {expression} }})()"
+
     client.connect()
     try:
         params = {
-            "expression": args.expression,
+            "expression": expression,
             "returnByValue": True,
         }
         if args.await_promise:
@@ -245,6 +278,7 @@ def cmd_navigate(client, args):
 
         if args.wait_for == "load":
             # Wait for Page.loadEventFired
+            loaded = False
             deadline = time.time() + 30
             while time.time() < deadline:
                 try:
@@ -252,11 +286,14 @@ def cmd_navigate(client, args):
                     raw = client._ws.recv()
                     resp = json.loads(raw)
                     if resp.get("method") == "Page.loadEventFired":
+                        loaded = True
                         break
                 except websocket.WebSocketTimeoutException:
                     continue
                 except (websocket.WebSocketConnectionClosedException, ConnectionError):
                     break
+            if not loaded:
+                print("Warning: Page load event not received within 30s — page may not be fully loaded", file=sys.stderr)
 
         frame_id = result.get("frameId", "")
         print(f"Navigated to: {args.url}")
@@ -299,7 +336,12 @@ def main():
 
     # evaluate
     p_eval = sub.add_parser("evaluate", help="Evaluate JavaScript")
-    p_eval.add_argument("expression", help="JavaScript expression")
+    p_eval.add_argument("expression", nargs="?", default=None,
+                        help="JavaScript expression (or use --stdin)")
+    p_eval.add_argument("--stdin", action="store_true",
+                        help="Read expression from stdin (avoids shell quoting)")
+    p_eval.add_argument("--no-rewrite", action="store_true",
+                        help="Disable automatic const/let to var rewriting")
     p_eval.add_argument("--await", dest="await_promise", action="store_true",
                         help="Await promise result")
 

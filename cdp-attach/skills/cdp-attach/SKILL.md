@@ -26,6 +26,29 @@ claude --chrome
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
 ```
 
+## Scope Guard
+
+cdp-attach is for **acting on** the attached browser, not for **researching through** it.
+
+**WILL** use cdp-attach for:
+- Capturing current state (screenshot, snapshot, network/console logs)
+- Interacting with attached page (click, fill, JS evaluate, dialog handling)
+- Navigating as a workflow step (e.g., form submit → result page, SPA state transitions)
+- Monitoring (network_start/stop, console, performance tracing)
+- Error diagnosis (screenshot + Read of error pages during automation)
+- API response debugging (navigate to endpoint as part of debugging workflow)
+
+**WILL NOT** use cdp-attach for:
+- Browsing documentation or API references
+- Searching for information via web pages
+- Opening new tabs to research topics
+- Reading web content for knowledge gathering
+
+**Litmus test**: "Am I acting on the page, or learning from it?"
+If learning → switch to Tavily MCP (`tavily_search`, `tavily_extract`) or Prothesis for multi-perspective investigation.
+
+**Redirect rule**: When a research need arises mid-workflow, pause the cdp-attach context, resolve via Tavily, then resume cdp-attach with the findings.
+
 ## Execution
 
 Each Bash call is a separate shell. Always combine the variable assignment with the command:
@@ -53,9 +76,34 @@ $V1 screenshot --full-page --format jpeg -o /tmp/page.jpg
 $V1 snapshot --depth 3                         # Accessibility tree
 $V1 evaluate "document.title"                  # Run JavaScript
 $V1 evaluate "fetch('/api').then(r=>r.json())" --await
+$V1 evaluate --stdin <<< 'var x = document.title; x'  # Stdin mode
+$V1 evaluate --no-rewrite "const x = 1"       # Skip var rewriting
 $V1 navigate "https://example.com"             # Navigate
 $V1 navigate "https://example.com" --wait-for none
 ```
+
+### Common Mistakes
+
+**Commands that do NOT exist:**
+- `read_screenshot` — use `v1 screenshot` then `Read /tmp/cdp-screenshot-*.png`
+
+**Arguments that do NOT exist:**
+- `click --coordinates x y` — use positional: `click 100 200`
+- `click --text "..."` — use `click --selector` with a CSS selector instead
+- `screenshot --selector` — not supported; screenshot captures the full viewport (or `--full-page`)
+
+**JavaScript in evaluate:**
+- `const`/`let` are auto-rewritten to `var` by default (prevents re-declaration errors on repeated calls). Use `--no-rewrite` to disable.
+- For complex JS with quotes/backticks, use `--stdin` with heredoc:
+  ```bash
+  $V1 evaluate --stdin <<'JS'
+  document.querySelectorAll('a').forEach(a => console.log(a.href))
+  JS
+  ```
+- Use `--await` flag for promises (auto-wraps in async IIFE if needed):
+  ```bash
+  $V1 evaluate --await "await fetch('/api').then(r => r.json())"
+  ```
 
 ### v2 — Interaction (`v2_interact.py`)
 

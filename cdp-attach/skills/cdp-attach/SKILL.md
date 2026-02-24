@@ -53,9 +53,34 @@ $V1 screenshot --full-page --format jpeg -o /tmp/page.jpg
 $V1 snapshot --depth 3                         # Accessibility tree
 $V1 evaluate "document.title"                  # Run JavaScript
 $V1 evaluate "fetch('/api').then(r=>r.json())" --await
+$V1 evaluate --stdin <<< 'var x = document.title; x'  # Stdin mode
+$V1 evaluate --no-rewrite "const x = 1"       # Skip var rewriting
 $V1 navigate "https://example.com"             # Navigate
 $V1 navigate "https://example.com" --wait-for none
 ```
+
+### Common Mistakes
+
+**Commands that do NOT exist:**
+- `read_screenshot` — use `v1 screenshot` then `Read /tmp/cdp-screenshot-*.png`
+
+**Arguments that do NOT exist:**
+- `click --coordinates x y` — use positional: `click 100 200`
+- `click --text "..."` — use `click --selector` with a CSS selector instead
+- `screenshot --selector` — not supported; screenshot captures the full viewport (or `--full-page`)
+
+**JavaScript in evaluate:**
+- `const`/`let` are auto-rewritten to `var` by default (prevents re-declaration errors on repeated calls). Use `--no-rewrite` to disable.
+- For complex JS with quotes/backticks, use `--stdin` with heredoc:
+  ```bash
+  $V1 evaluate --stdin <<'JS'
+  document.querySelectorAll('a').forEach(a => console.log(a.href))
+  JS
+  ```
+- Use `--await` flag for promises (auto-wraps in async IIFE if needed):
+  ```bash
+  $V1 evaluate --await "await fetch('/api').then(r => r.json())"
+  ```
 
 ### v2 — Interaction (`v2_interact.py`)
 

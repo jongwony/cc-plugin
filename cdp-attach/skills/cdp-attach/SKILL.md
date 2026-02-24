@@ -26,6 +26,29 @@ claude --chrome
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
 ```
 
+## Scope Guard
+
+cdp-attach is for **acting on** the attached browser, not for **researching through** it.
+
+**WILL** use cdp-attach for:
+- Capturing current state (screenshot, snapshot, network/console logs)
+- Interacting with attached page (click, fill, JS evaluate, dialog handling)
+- Navigating as a workflow step (e.g., form submit → result page, SPA state transitions)
+- Monitoring (network_start/stop, console, performance tracing)
+- Error diagnosis (screenshot + Read of error pages during automation)
+- API response debugging (navigate to endpoint as part of debugging workflow)
+
+**WILL NOT** use cdp-attach for:
+- Browsing documentation or API references
+- Searching for information via web pages
+- Opening new tabs to research topics
+- Reading web content for knowledge gathering
+
+**Litmus test**: "Am I acting on the page, or learning from it?"
+If learning → switch to Tavily MCP (`tavily_search`, `tavily_extract`) or Prothesis for multi-perspective investigation.
+
+**Redirect rule**: When a research need arises mid-workflow, pause the cdp-attach context, resolve via Tavily, then resume cdp-attach with the findings.
+
 ## Execution
 
 Each Bash call is a separate shell. Always combine the variable assignment with the command:

@@ -94,5 +94,5 @@ else
     -m "$MODEL" \
     --config model_reasoning_effort="$EFFORT" \
     --sandbox "$SANDBOX" \
-    "${EXTRA_ARGS[@]}" 2>/dev/null < "$PROMPT_FILE"
+    ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} 2>/dev/null < "$PROMPT_FILE"
 fi

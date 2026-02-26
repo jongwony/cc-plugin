@@ -73,6 +73,42 @@ class CDPClient:
         """Get browser version info."""
         return self._http_get("/json/version")
 
+    def is_headless(self):
+        """Check if the browser is running in headless mode.
+
+        Raises CDPError if the CDP endpoint is unreachable (fail-closed).
+        """
+        info = self.get_version()
+        if not isinstance(info, dict):
+            raise CDPError(
+                f"Unexpected /json/version response (expected dict, got {type(info).__name__}). "
+                "The CDP endpoint may not be a Chrome browser."
+            )
+        browser = info.get("Browser", "").lower()
+        ua = info.get("User-Agent", "").lower()
+        # Detects classic/old headless ("HeadlessChrome" in Browser or User-Agent).
+        # Chrome's "new headless" mode (--headless=new, default since 132+)
+        # deliberately mimics headed Chrome and is NOT detectable here.
+        return "headless" in browser or "headlesschrome" in ua
+
+    def require_headed(self):
+        """Raise CDPError if the browser is running headless.
+
+        Headless browsers pose silent execution risks — actions happen
+        without user visibility. Use a visible browser instance instead.
+
+        Fails closed: also raises CDPError if the endpoint is unreachable.
+        """
+        if self.is_headless():
+            raise CDPError(
+                "Headless Chrome detected — cdp-attach requires a visible browser.\n"
+                "Silent execution risk: actions occur without user visibility.\n"
+                "\n"
+                "Launch a visible Chrome instance:\n"
+                "  /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome "
+                "--remote-debugging-port=9222"
+            )
+
     def new_tab(self, url=""):
         """Open a new tab."""
         path = f"/json/new?{url}" if url else "/json/new"

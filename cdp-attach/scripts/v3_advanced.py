@@ -456,6 +456,10 @@ def main():
     args = parser.parse_args()
     client = CDPClient(host=args.host, port=args.port)
 
+    # Exempt from headless guard: read local files or manage local PIDs,
+    # never sending CDP commands to the browser. Keep in sync with commands dict.
+    LOCAL_COMMANDS = {"network_list", "network_stop", "console_list", "console_stop"}
+
     commands = {
         "network_start": cmd_network_start,
         "network_list": cmd_network_list,
@@ -472,6 +476,9 @@ def main():
     }
 
     try:
+        # Block headless browsers (except local-only commands)
+        if args.command not in LOCAL_COMMANDS:
+            client.require_headed()
         commands[args.command](client, args)
     except CDPError as e:
         print(f"Error: {e}", file=sys.stderr)

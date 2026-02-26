@@ -17,14 +17,14 @@ Attach to a running Chrome DevTools Protocol instance. Immune to frozen-tab time
 
 ## Prerequisites
 
-A CDP-enabled browser must be running. Typical launch methods:
-```bash
-# Via claude --chrome (recommended)
-claude --chrome
+A **visible** (headed) CDP-enabled browser must be running. Headless instances are blocked — silent execution without user visibility is a security risk.
 
-# Manual launch
+```bash
+# Manual launch (visible browser)
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
 ```
+
+> **Note**: `claude --chrome` may launch a headless instance. If `v1 version` shows `HeadlessChrome`, use the manual launch method above instead.
 
 ## Scope Guard
 

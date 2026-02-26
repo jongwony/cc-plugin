@@ -365,6 +365,9 @@ def main():
     }
 
     try:
+        # Block headless browsers (except version for diagnostics)
+        if args.command != "version":
+            client.require_headed()
         commands[args.command](client, args)
     except CDPError as e:
         print(f"Error: {e}", file=sys.stderr)

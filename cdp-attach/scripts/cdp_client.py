@@ -79,10 +79,16 @@ class CDPClient:
         Raises CDPError if the CDP endpoint is unreachable (fail-closed).
         """
         info = self.get_version()
+        if not isinstance(info, dict):
+            raise CDPError(
+                f"Unexpected /json/version response (expected dict, got {type(info).__name__}). "
+                "The CDP endpoint may not be a Chrome browser."
+            )
         browser = info.get("Browser", "").lower()
         ua = info.get("User-Agent", "").lower()
-        # Detects classic headless ("HeadlessChrome") only.
-        # Chrome --headless=new (112+) is indistinguishable via /json/version.
+        # Detects classic/old headless ("HeadlessChrome" in Browser or User-Agent).
+        # Chrome's "new headless" mode (--headless=new, default since 132+)
+        # deliberately mimics headed Chrome and is NOT detectable here.
         return "headless" in browser or "headlesschrome" in ua
 
     def require_headed(self):
@@ -90,6 +96,8 @@ class CDPClient:
 
         Headless browsers pose silent execution risks — actions happen
         without user visibility. Use a visible browser instance instead.
+
+        Fails closed: also raises CDPError if the endpoint is unreachable.
         """
         if self.is_headless():
             raise CDPError(

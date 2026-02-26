@@ -456,7 +456,8 @@ def main():
     args = parser.parse_args()
     client = CDPClient(host=args.host, port=args.port)
 
-    # Commands that only read local state or manage local processes
+    # Exempt from headless guard: read local files or manage local PIDs,
+    # never sending CDP commands to the browser. Keep in sync with commands dict.
     LOCAL_COMMANDS = {"network_list", "network_stop", "console_list", "console_stop"}
 
     commands = {

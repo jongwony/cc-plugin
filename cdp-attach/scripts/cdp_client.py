@@ -74,14 +74,16 @@ class CDPClient:
         return self._http_get("/json/version")
 
     def is_headless(self):
-        """Check if the connected browser is running in headless mode."""
-        try:
-            info = self.get_version()
-            browser = info.get("Browser", "")
-            ua = info.get("User-Agent", "")
-            return "Headless" in browser or "HeadlessChrome" in ua
-        except CDPError:
-            return False
+        """Check if the browser is running in headless mode.
+
+        Raises CDPError if the CDP endpoint is unreachable (fail-closed).
+        """
+        info = self.get_version()
+        browser = info.get("Browser", "").lower()
+        ua = info.get("User-Agent", "").lower()
+        # Detects classic headless ("HeadlessChrome") only.
+        # Chrome --headless=new (112+) is indistinguishable via /json/version.
+        return "headless" in browser or "headlesschrome" in ua
 
     def require_headed(self):
         """Raise CDPError if the browser is running headless.

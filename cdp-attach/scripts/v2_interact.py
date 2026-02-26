@@ -257,7 +257,6 @@ def main():
 
     args = parser.parse_args()
     client = CDPClient(host=args.host, port=args.port)
-    client.require_headed()
 
     commands = {
         "click": cmd_click,
@@ -269,6 +268,7 @@ def main():
     }
 
     try:
+        client.require_headed()  # Block headless browsers
         commands[args.command](client, args)
     except CDPError as e:
         print(f"Error: {e}", file=sys.stderr)

@@ -455,6 +455,7 @@ def main():
 
     args = parser.parse_args()
     client = CDPClient(host=args.host, port=args.port)
+    client.require_headed()
 
     commands = {
         "network_start": cmd_network_start,

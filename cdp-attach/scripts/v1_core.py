@@ -354,6 +354,10 @@ def main():
     args = parser.parse_args()
     client = CDPClient(host=args.host, port=args.port)
 
+    # Block headless browsers (except version for diagnostics)
+    if args.command != "version":
+        client.require_headed()
+
     commands = {
         "version": cmd_version,
         "list": cmd_list,

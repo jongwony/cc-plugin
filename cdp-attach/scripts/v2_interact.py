@@ -257,6 +257,7 @@ def main():
 
     args = parser.parse_args()
     client = CDPClient(host=args.host, port=args.port)
+    client.require_headed()
 
     commands = {
         "click": cmd_click,

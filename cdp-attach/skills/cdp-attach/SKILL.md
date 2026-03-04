@@ -203,6 +203,17 @@ Or use `--host` / `--port` flags on any command.
 | WebSocket connection failed | Tab closed or navigated away | Re-select tab with `list` + `select` |
 | Element not found | Invalid CSS selector | Check selector with `evaluate` + `querySelector` |
 
+### Fallback Strategy
+
+Tab attachment and screenshot capture are inherently flaky. When a CDP operation fails after 2 attempts, escalate through the fallback chain before abandoning CDP entirely.
+
+| Symptom | 1st fallback (stay in CDP) | 2nd fallback (leave CDP) |
+|---------|---------------------------|--------------------------|
+| Tab attachment fails | `v1 list` → re-select a different tab index | Ask user to manually navigate, then retry |
+| Screenshot capture times out | `v1 evaluate "document.title"` to extract DOM text directly | Ask user to capture screenshot manually |
+| DOM navigation unreliable (react-select, dynamic SPAs) | `v1 evaluate` with JS to manipulate state directly | Manual intervention — inform user which element to interact with |
+| HTTP/TLS inspection needed | `v1 evaluate` with `fetch()` to inspect responses | `curl` / `openssl s_client` as CLI alternative |
+
 ## Protocol Reference
 
 For CDP domain methods, key codes, and device presets, see `references/cdp-protocol.md`.

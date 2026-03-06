@@ -21,10 +21,8 @@ This per-invocation naming prevents file collisions across parallel sessions and
 
 | Model | Characteristics |
 |-------|-----------------|
-| `gpt-5.3-codex` | Current default agentic coding model |
-| `gpt-5.2-codex` | Prior-generation agentic coding model |
-| `gpt-5.1-codex-max` | Codex-optimized flagship for deep and fast reasoning |
-| `gpt-5.2` | General-purpose frontier model (knowledge, reasoning, coding) |
+| `gpt-5.4` | Current default model for Codex CLI tasks |
+| `gpt-5.3-codex` | Prior codex-specific coding model |
 
    Reasoning effort is selected once and applied identically to all chosen models.
 
@@ -44,7 +42,7 @@ This per-invocation naming prevents file collisions across parallel sessions and
 | Network access | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s danger-full-access --full-auto /tmp/codex_prompt_<suffix>.txt` |
 | Resume session | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh --resume /tmp/codex_prompt_<suffix>.txt` (options like -m, -r, -s are ignored; uses last session settings) |
 | Different dir | Add `-C <DIR>` to non-resume patterns above |
-| Custom model | Add `-m gpt-5.2-codex -r high` to any pattern above |
+| Custom model | Add `-m gpt-5.3-codex -r high` to any pattern above |
 
 ## Following Up
 After `codex` completes, use `AskUserQuestion` to confirm next steps. Restate model/reasoning/sandbox when proposing actions.
@@ -62,11 +60,10 @@ Three OpenAI prompting guides are available as Jupyter notebooks. Read the appro
 
 | User Question Type | Read This File |
 |-------------------|----------------|
-| GPT-5.2 prompting, verbosity control, scope discipline, migration | `references/gpt-5-2_prompting_guide.ipynb` |
+| GPT-5.4 / GPT-5.3 prompting, verbosity control, scope discipline, migration | `references/gpt-5-2_prompting_guide.ipynb` |
 | GPT-5.1 agentic steerability, metaprompting, solution_persistence | `references/gpt-5-1_prompting_guide.ipynb` |
-| Codex-Max starter prompt, tools (apply_patch, shell), compaction | `references/gpt-5-1-codex-max_prompting_guide.ipynb` |
 
-> If no model-specific guide exists, use the nearest lower version's guide as fallback (e.g., for gpt-5.3-codex, use the GPT-5.2 guide).
+> If no model-specific guide exists, use the nearest available guide as fallback. For `gpt-5.4` and `gpt-5.3-codex`, use the GPT-5.2 guide.
 
 ### GPT-5.2 Guide
 **File**: `references/gpt-5-2_prompting_guide.ipynb`
@@ -88,16 +85,6 @@ Key sections (grep patterns for navigation):
 - `solution_persistence` - End-to-end completion prompting
 - `Using the "none" reasoning mode` - Low-latency non-reasoning usage
 - `How to metaprompt effectively` - Iterative prompt debugging
-
-### GPT-5.1-Codex-Max Guide
-**File**: `references/gpt-5-1-codex-max_prompting_guide.ipynb`
-
-Key sections (grep patterns for navigation):
-- `Recommended Starter Prompt` - Full production system prompt
-- `Compaction` - Multi-hour context management
-- `Apply_patch` - File editing tool implementation
-- `Shell_command` - Terminal tool implementation
-- `Parallel Tool Calling` - Batch tool execution patterns
 
 ## Prompt Crafting Workflow
 

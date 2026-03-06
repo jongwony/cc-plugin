@@ -3,7 +3,7 @@
 # Single entry point for all codex invocations.
 #
 # Usage: codex-run.sh [options] <prompt_file>
-#   -m MODEL    Model name (default: gpt-5.3-codex)
+#   -m MODEL    Model name (default: gpt-5.4)
 #   -r EFFORT   Reasoning effort (default: xhigh)
 #   -s SANDBOX  Sandbox mode (default: read-only)
 #   -C DIR      Working directory
@@ -13,7 +13,7 @@
 set -euo pipefail
 
 # Defaults
-MODEL="gpt-5.3-codex"
+MODEL="gpt-5.4"
 EFFORT="xhigh"
 SANDBOX="read-only"
 FULL_AUTO=false
@@ -25,7 +25,7 @@ usage() {
 Usage: codex-run.sh [options] <prompt_file>
 
 Options:
-  -m MODEL      Model name (default: gpt-5.3-codex)
+  -m MODEL      Model name (default: gpt-5.4)
   -r EFFORT     Reasoning effort: medium|high|xhigh (default: xhigh)
   -s SANDBOX    Sandbox: read-only|workspace-write|danger-full-access (default: read-only)
   -C DIR        Working directory for codex
@@ -35,7 +35,7 @@ Options:
 
 Examples:
   codex-run.sh /tmp/codex_prompt_a3f9.txt
-  codex-run.sh -m gpt-5.2-codex -r high /tmp/codex_prompt_a3f9.txt
+  codex-run.sh -m gpt-5.3-codex -r high /tmp/codex_prompt_a3f9.txt
   codex-run.sh --resume /tmp/codex_prompt_a3f9.txt
   codex-run.sh -s workspace-write --full-auto /tmp/codex_prompt_a3f9.txt
 USAGE
@@ -76,7 +76,7 @@ EXTRA_ARGS=()
 # Warn if non-default options are passed with --resume (they are ignored)
 if [[ "$RESUME" == true ]]; then
   IGNORED=()
-  [[ "$MODEL" != "gpt-5.3-codex" ]] && IGNORED+=("-m $MODEL")
+  [[ "$MODEL" != "gpt-5.4" ]] && IGNORED+=("-m $MODEL")
   [[ "$EFFORT" != "xhigh" ]] && IGNORED+=("-r $EFFORT")
   [[ "$SANDBOX" != "read-only" ]] && IGNORED+=("-s $SANDBOX")
   [[ "$FULL_AUTO" == true ]] && IGNORED+=("--full-auto")

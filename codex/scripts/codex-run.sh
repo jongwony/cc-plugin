@@ -1,21 +1,17 @@
 #!/bin/bash
 # codex-run.sh — Parameterized CLI wrapper for codex exec.
-# Single entry point for all codex invocations.
-#
-# Usage: codex-run.sh [options] <prompt_file>
-#   -m MODEL    Model name (default: gpt-5.4)
-#   -r EFFORT   Reasoning effort (default: xhigh)
-#   -s SANDBOX  Sandbox mode (default: read-only)
-#   -C DIR      Working directory
-#   --resume    Resume last session
-#   --full-auto Enable full auto mode
+# Single entry point for all codex invocations. Run with -h for usage.
 
 set -euo pipefail
 
 # Defaults
-MODEL="gpt-5.4"
-EFFORT="xhigh"
-SANDBOX="read-only"
+readonly DEFAULT_MODEL="gpt-5.4"
+readonly DEFAULT_EFFORT="xhigh"
+readonly DEFAULT_SANDBOX="read-only"
+
+MODEL="$DEFAULT_MODEL"
+EFFORT="$DEFAULT_EFFORT"
+SANDBOX="$DEFAULT_SANDBOX"
 FULL_AUTO=false
 RESUME=false
 CWD=""
@@ -25,13 +21,13 @@ usage() {
 Usage: codex-run.sh [options] <prompt_file>
 
 Options:
-  -m MODEL      Model name (default: gpt-5.4)
-  -r EFFORT     Reasoning effort: medium|high|xhigh (default: xhigh)
-  -s SANDBOX    Sandbox: read-only|workspace-write|danger-full-access (default: read-only)
-  -C DIR        Working directory for codex
-  --resume      Resume last codex session
-  --full-auto   Enable full auto mode
-  -h, --help    Show this help
+  -m, --model MODEL      Model name (default: gpt-5.4)
+  -r, --effort EFFORT    Reasoning effort: medium|high|xhigh (default: xhigh)
+  -s, --sandbox SANDBOX  Sandbox: read-only|workspace-write|danger-full-access (default: read-only)
+  -C, --cwd DIR          Working directory for codex
+  --resume               Resume last codex session
+  --full-auto            Enable full auto mode
+  -h, --help             Show this help
 
 Examples:
   codex-run.sh /tmp/codex_prompt_a3f9.txt
@@ -45,10 +41,10 @@ USAGE
 # Parse options
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -m) [[ $# -ge 2 ]] || { echo "Error: -m requires a value" >&2; usage 1; }; MODEL="$2"; shift 2 ;;
-    -r) [[ $# -ge 2 ]] || { echo "Error: -r requires a value" >&2; usage 1; }; EFFORT="$2"; shift 2 ;;
-    -s) [[ $# -ge 2 ]] || { echo "Error: -s requires a value" >&2; usage 1; }; SANDBOX="$2"; shift 2 ;;
-    -C) [[ $# -ge 2 ]] || { echo "Error: -C requires a value" >&2; usage 1; }; CWD="$2"; shift 2 ;;
+    -m|--model) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; MODEL="$2"; shift 2 ;;
+    -r|--effort) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; EFFORT="$2"; shift 2 ;;
+    -s|--sandbox) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; SANDBOX="$2"; shift 2 ;;
+    -C|--cwd) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; CWD="$2"; shift 2 ;;
     --resume) RESUME=true; shift ;;
     --full-auto) FULL_AUTO=true; shift ;;
     -h|--help) usage 0 ;;
@@ -68,28 +64,23 @@ if [[ ! -f "$PROMPT_FILE" ]]; then
   exit 1
 fi
 
-# Build extra args array (preserves quoting for paths with spaces)
-EXTRA_ARGS=()
-[[ "$FULL_AUTO" == true ]] && EXTRA_ARGS+=(--full-auto)
-[[ -n "$CWD" ]] && EXTRA_ARGS+=(-C "$CWD")
-
-# Warn if non-default options are passed with --resume (they are ignored)
+# Execute
 if [[ "$RESUME" == true ]]; then
+  # Warn if non-default options are passed with --resume (they are ignored)
   IGNORED=()
-  [[ "$MODEL" != "gpt-5.4" ]] && IGNORED+=("-m $MODEL")
-  [[ "$EFFORT" != "xhigh" ]] && IGNORED+=("-r $EFFORT")
-  [[ "$SANDBOX" != "read-only" ]] && IGNORED+=("-s $SANDBOX")
+  [[ "$MODEL" != "$DEFAULT_MODEL" ]] && IGNORED+=("-m $MODEL")
+  [[ "$EFFORT" != "$DEFAULT_EFFORT" ]] && IGNORED+=("-r $EFFORT")
+  [[ "$SANDBOX" != "$DEFAULT_SANDBOX" ]] && IGNORED+=("-s $SANDBOX")
   [[ "$FULL_AUTO" == true ]] && IGNORED+=("--full-auto")
   [[ -n "$CWD" ]] && IGNORED+=("-C $CWD")
   if [[ ${#IGNORED[@]} -gt 0 ]]; then
     echo "Warning: --resume ignores options: ${IGNORED[*]} (uses last session settings)" >&2
   fi
-fi
-
-# Execute
-if [[ "$RESUME" == true ]]; then
   codex exec --skip-git-repo-check resume --last 2>/dev/null < "$PROMPT_FILE"
 else
+  EXTRA_ARGS=()
+  [[ "$FULL_AUTO" == true ]] && EXTRA_ARGS+=(--full-auto)
+  [[ -n "$CWD" ]] && EXTRA_ARGS+=(-C "$CWD")
   codex exec --skip-git-repo-check \
     -m "$MODEL" \
     --config model_reasoning_effort="$EFFORT" \

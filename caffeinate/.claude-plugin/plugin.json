@@ -1,0 +1,9 @@
+{
+  "name": "caffeinate",
+  "description": "macOS sleep prevention toggle with battery and network monitoring",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

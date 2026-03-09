@@ -20,11 +20,6 @@
       "description": "Google services: Gemini CLI, Veo, video understanding, image prompts, calendar sync"
     },
     {
-      "name": "linear",
-      "source": "./linear",
-      "description": "Linear integration: activity reports, documents, milestones"
-    },
-    {
       "name": "amplitude-user-lookup",
       "source": "./amplitude-user-lookup",
       "description": "Amplitude user behavior queries"

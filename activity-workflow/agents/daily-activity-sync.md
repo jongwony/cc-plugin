@@ -1,10 +1,9 @@
 ---
 name: daily-activity-sync
 description: Orchestrate developer activity collection from GitHub and Linear, then sync to Google Calendar.
-tools: [Bash, Read, Write, mcp__plugin_linear_linear__*]
+tools: [Bash, Read, Write, mcp__claude_ai_Linear__*]
 color: cyan
 skills:
-    - linear:activity
     - github-activity:github-activity
     - google:calendar-sync
 ---
@@ -65,7 +64,7 @@ gh search commits --author=@me --committer-date="${START_DATE}..${END_DATE}" \
 
 Use MCP tools:
 ```
-mcp__plugin_linear_linear__list_issues(
+mcp__claude_ai_Linear__list_issues(
   assignee="me",
   updatedAt="${START_DATE}T00:00:00Z"
 )

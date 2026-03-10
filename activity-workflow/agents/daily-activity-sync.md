@@ -62,7 +62,12 @@ gh search commits --author=@me --committer-date="${START_DATE}..${END_DATE}" \
 
 ### Phase 3: Linear Activity Collection
 
-Use MCP tools:
+Load deferred Linear MCP tools first:
+```
+ToolSearch("select:mcp__claude_ai_Linear__list_issues")
+```
+
+Then collect:
 ```
 mcp__claude_ai_Linear__list_issues(
   assignee="me",

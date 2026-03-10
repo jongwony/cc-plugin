@@ -10,11 +10,6 @@
       "description": "Deep web research agent powered by Tavily search API"
     },
     {
-      "name": "bigquery",
-      "source": "./external-plugin/bigquery",
-      "description": "BigQuery data analysis agent with SQL generation and schema exploration"
-    },
-    {
       "name": "google",
       "source": "./google",
       "description": "Google services: Gemini CLI, Veo, video understanding, image prompts, calendar sync"

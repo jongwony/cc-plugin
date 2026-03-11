@@ -413,7 +413,10 @@ def cmd_find_element(client, args):
         if has_ax:
             # Accessibility.queryAXTree → backendDOMNodeId
             _ensure_a11y(client)
-            ax_params = {}
+            # queryAXTree requires a root node to start from
+            doc = client.send("DOM.getDocument", {"depth": 0})
+            root_node_id = doc["root"]["nodeId"]
+            ax_params = {"nodeId": root_node_id}
             if args.name:
                 ax_params["accessibleName"] = args.name
             if args.role:

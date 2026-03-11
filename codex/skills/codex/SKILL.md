@@ -52,39 +52,25 @@ After `codex` completes, use `AskUserQuestion` to confirm next steps. Restate mo
 - Before you use high-impact flags (`--full-auto`, `--sandbox danger-full-access`, `--skip-git-repo-check`) ask the user for permission using AskUserQuestion unless it was already given.
 - When output includes warnings or partial results, summarize them and ask how to adjust using `AskUserQuestion`.
 
-## Reference Guides (Jupyter Notebooks)
+## Reference Guide
 
-Three OpenAI prompting guides are available as Jupyter notebooks. Read the appropriate notebook when detailed guidance is needed.
+Read the reference when detailed GPT-5.4 prompting guidance is needed.
 
-### When to Read References
-
-| User Question Type | Read This File |
-|-------------------|----------------|
-| GPT-5.4 / GPT-5.3 prompting, verbosity control, scope discipline, migration | `references/gpt-5-2_prompting_guide.ipynb` |
-| GPT-5.1 agentic steerability, metaprompting, solution_persistence | `references/gpt-5-1_prompting_guide.ipynb` |
-
-> If no model-specific guide exists, use the nearest available guide as fallback. For `gpt-5.4` and `gpt-5.3-codex`, use the GPT-5.2 guide.
-
-### GPT-5.2 Guide
-**File**: `references/gpt-5-2_prompting_guide.ipynb`
+**File**: `references/gpt-5-4_prompting_guide.md`
 
 Key sections (grep patterns for navigation):
-- `Key behavioral differences` - Changes from GPT-5.1: deliberate scaffolding, lower verbosity, stronger instruction adherence
-- `Controlling verbosity` - Length constraints via `<output_verbosity_spec>` block
-- `Preventing Scope drift` - Prevent feature creep via `<design_and_scope_constraints>` block
-- `Long-context` - Handle 10k+ tokens via `<long_context_handling>` block
-- `uncertainty_and_ambiguity` - Hallucination prevention, clarification question patterns
+- `Where GPT-5.4 is strongest` - Strengths: tone adherence, agentic robustness, evidence-rich synthesis, long-context analysis
+- `Where explicit prompting still helps` - Weak spots: low-context tool routing, dependency-aware workflows, reasoning effort selection
+- `Keep outputs compact` - Token efficiency via `<output_contract>` and `<verbosity_controls>` blocks
+- `tool_persistence_rules` - Persistent tool use, dependency checks, parallel tool calling
+- `completeness_contract` - Long-horizon task coverage and `<empty_result_recovery>` fallback
+- `verification_loop` - Pre-commit verification, missing context gating, action safety
+- `research_mode` - 3-pass research (plan → retrieve → synthesize) with citation rules
+- `Prompting patterns for coding tasks` - Autonomy, persistence, intermediary updates, formatting, frontend tasks
+- `Treat reasoning effort as a last-mile knob` - reasoning_effort selection: none/low/medium/high/xhigh guidance
+- `Migrate prompts to GPT-5.4` - Migration table from gpt-5.2, gpt-5.3-codex, gpt-4.1, gpt-4o
+- `phase` - Responses API phase parameter for long-running agents
 - `Compaction` - Extended context management via `/responses/compact` endpoint
-- `Prompt Migration Guide` - reasoning_effort mapping table (read reference for details)
-
-### GPT-5.1 General Guide
-**File**: `references/gpt-5-1_prompting_guide.ipynb`
-
-Key sections (grep patterns for navigation):
-- `Agentic steerability` - Personality, tone, verbosity control
-- `solution_persistence` - End-to-end completion prompting
-- `Using the "none" reasoning mode` - Low-latency non-reasoning usage
-- `How to metaprompt effectively` - Iterative prompt debugging
 
 ## Prompt Crafting Workflow
 

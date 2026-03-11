@@ -68,7 +68,6 @@ Key sections (grep patterns for navigation):
 - `research_mode` - 3-pass research (plan → retrieve → synthesize) with citation rules
 - `Prompting patterns for coding tasks` - Autonomy, persistence, intermediary updates, formatting, frontend tasks
 - `Treat reasoning effort as a last-mile knob` - reasoning_effort selection: none/low/medium/high/xhigh guidance
-- `Migrate prompts to GPT-5.4` - Migration table from gpt-5.2, gpt-5.3-codex, gpt-4.1, gpt-4o
 - `phase` - Responses API phase parameter for long-running agents
 - `Compaction` - Extended context management via `/responses/compact` endpoint
 

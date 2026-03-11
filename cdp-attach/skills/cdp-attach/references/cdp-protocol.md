@@ -40,12 +40,35 @@ Input.insertText({text})
 
 **Modifier bitmask**: Alt=1, Ctrl=2, Shift=4, Meta=8
 
+### DOM
+
+```
+DOM.enable()
+DOM.getDocument({depth, pierce})        → {root: {nodeId, ...}}
+DOM.querySelector({nodeId, selector})   → {nodeId}
+DOM.querySelectorAll({nodeId, selector}) → {nodeIds[]}
+DOM.performSearch({query, includeUserAgentShadowDOM})  → {searchId, resultCount}
+DOM.getSearchResults({searchId, fromIndex, toIndex})   → {nodeIds[]}
+DOM.discardSearchResults({searchId})
+DOM.describeNode({nodeId?, backendNodeId?, depth})     → {node: {localName, backendNodeId, ...}}
+DOM.resolveNode({nodeId?, backendNodeId?})             → {object: {objectId, ...}}
+DOM.getBoxModel({nodeId?, backendNodeId?})             → {model: {content[], padding[], border[], margin[]}}
+  content/padding/border/margin: [x1,y1, x2,y2, x3,y3, x4,y4] (quad)
+DOM.getContentQuads({nodeId?, backendNodeId?})         → {quads: [[x1,y1,...x4,y4], ...]}
+DOM.scrollIntoViewIfNeeded({nodeId?, backendNodeId?})
+DOM.getFlattenedDocument({depth, pierce})              → {nodes[]}
+  pierce: true → includes shadow DOM subtrees
+```
+
 ### Accessibility
 
 ```
 Accessibility.enable()
 Accessibility.getFullAXTree({depth})    → {nodes[]}
-  node: {nodeId, role: {value}, name: {value}, parentId, childIds[]}
+  node: {nodeId, role: {value}, name: {value}, parentId, childIds[], backendDOMNodeId}
+Accessibility.queryAXTree({nodeId?, backendNodeId?, accessibleName?, role?})  → {nodes[]}
+  Searches accessibility tree by accessible name and/or ARIA role.
+  Returns nodes with backendDOMNodeId for use with DOM.getBoxModel.
 ```
 
 ### Network

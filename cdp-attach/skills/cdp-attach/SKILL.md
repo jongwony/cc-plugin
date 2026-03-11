@@ -91,6 +91,9 @@ $V1 navigate "https://example.com" --wait-for none
 - `click --coordinates x y` — use positional: `click 100 200`
 - `click --text "..."` — use `click --selector` with a CSS selector instead
 - `screenshot --selector` — not supported; screenshot captures the full viewport (or `--full-page`)
+- `find_element --id` — use `--node-id` or `--backend-node-id` in `get_bounds`
+- `scan_interactive --selector` — not supported; use `find_element --selector` instead
+- `get_bounds --text` — use `find_element --text` first, then `get_bounds --node-id`
 
 **JavaScript in evaluate:**
 - `const`/`let` are auto-rewritten to `var` by default (prevents re-declaration errors on repeated calls). Use `--no-rewrite` to disable.
@@ -118,6 +121,32 @@ $V2 press_key a --modifiers ctrl               # Ctrl+A
 $V2 hover --selector "a.nav-link"
 $V2 new_page "https://example.com"             # Open new tab
 $V2 close_page                                 # Close selected tab
+```
+
+### v2 — Element Discovery (`v2_interact.py`)
+
+When CSS selectors fail (collapsed SPA panels, shadow DOM, hashed classes), use CDP DOM/Accessibility API.
+
+```bash
+V2="${CLAUDE_PLUGIN_ROOT}/scripts/v2_interact.py"
+
+# find_element — semantic element search
+$V2 find_element --name "Search" --role button     # accessible name + role
+$V2 find_element --text "Property Info"            # visible text
+$V2 find_element --xpath "//button[contains(.,'Search')]"
+$V2 find_element --selector "div.panel" --pierce   # pierce shadow DOM
+
+# get_bounds — coordinate resolution + auto scroll-into-view
+$V2 get_bounds --node-id 42                    # use find_element result
+$V2 get_bounds --backend-node-id 87
+$V2 get_bounds --selector "button.submit"
+$V2 get_bounds --selector "button.submit" --no-scroll
+
+# scan_interactive — enumerate interactive elements
+$V2 scan_interactive                           # all
+$V2 scan_interactive --viewport                # viewport-visible only
+$V2 scan_interactive --role button,link        # filter by role
+$V2 scan_interactive --limit 30
 ```
 
 ### v3 — Advanced (`v3_advanced.py`)
@@ -170,6 +199,32 @@ $V3 dialog accept "prompt input"               # Handle prompt
 5. v1 screenshot                → Verify result
 ```
 
+### SPA / Dynamic Page Interaction
+When CSS selector fails (zero-dimension, hashed class, shadow DOM):
+```
+1. v2 scan_interactive                  → List interactive elements + coordinates
+2. v2 click <x> <y>                     → Click by coordinates
+
+Or:
+1. v2 find_element --name "Search"       → Discover backendNodeId
+2. v2 get_bounds --backend-node-id <id>  → Resolve coordinates
+3. v2 click <x> <y>                     → Click
+```
+
+### Vision Fallback (last resort)
+When all programmatic approaches fail:
+```
+1. v1 screenshot -o /tmp/page.png       → Capture page
+2. Read /tmp/page.png                   → AI visually estimates coordinates
+3. v2 click <x> <y>                     → Click estimated coordinates
+4. v1 screenshot                        → Verify result
+```
+
+**Known Limitations:**
+- During React hydration, `find_element --name/--role` may return empty results. Wait for hydration via `v1 evaluate`, then retry.
+- `scan_interactive` makes a CDP call per element; use `--limit` to constrain (default 50).
+- nodeId is invalidated on DOM changes. For stable references, use backendNodeId.
+
 ### Network Debugging
 ```
 1. v1 select <tab>
@@ -211,7 +266,7 @@ Tab attachment and screenshot capture are inherently flaky. When a CDP operation
 |---------|---------------------------|--------------------------|
 | Tab attachment fails | `v1 list` → re-select a different tab index | Ask user to manually navigate, then retry |
 | Screenshot capture times out | `v1 evaluate "document.title"` to extract DOM text directly | Ask user to capture screenshot manually |
-| DOM navigation unreliable (react-select, dynamic SPAs) | `v1 evaluate` with JS to manipulate state directly | Manual intervention — inform user which element to interact with |
+| DOM navigation unreliable (react-select, dynamic SPAs) | `v2 scan_interactive` or `v2 find_element --name/--role` to discover elements via CDP DOM/Accessibility API | Vision fallback: screenshot → Read → click coordinates |
 | HTTP/TLS inspection needed | `v1 evaluate` with `fetch()` to inspect responses | `curl` / `openssl s_client` as CLI alternative |
 
 ## Protocol Reference

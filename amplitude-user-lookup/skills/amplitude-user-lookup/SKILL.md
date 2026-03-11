@@ -25,23 +25,23 @@ Get keys from: Amplitude Dashboard > Settings > Projects > General
 ### 1. Search User (Device ID -> Amplitude ID)
 
 ```bash
-python scripts/user_search.py "DEVICE-ID-HERE"
+uv run scripts/user_search.py "DEVICE-ID-HERE"
 ```
 
 ### 2. Get User Activity
 
 ```bash
-python scripts/user_activity.py AMPLITUDE_ID --limit 50
+uv run scripts/user_activity.py AMPLITUDE_ID --limit 50
 ```
 
 ### Combined Workflow
 
 ```bash
 # Get Amplitude ID first
-AMP_ID=$(python scripts/user_search.py "DEVICE-ID" --json | jq -r '.matches[0].amplitude_id')
+AMP_ID=$(uv run scripts/user_search.py "DEVICE-ID" --json | jq -r '.matches[0].amplitude_id')
 
 # Then get activity
-python scripts/user_activity.py $AMP_ID --limit 100
+uv run scripts/user_activity.py $AMP_ID --limit 100
 ```
 
 ## Script Options

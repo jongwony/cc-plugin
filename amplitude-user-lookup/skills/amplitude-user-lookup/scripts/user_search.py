@@ -1,11 +1,15 @@
-#!/usr/bin/env python3
+#!/usr/bin/env uv run --quiet --script
+# /// script
+# requires-python = ">=3.8"
+# dependencies = []
+# ///
 """
 Amplitude User Search API
 Search for users by device_id or user_id and get their Amplitude ID.
 
 Usage:
-    python user_search.py <device_id_or_user_id>
-    python user_search.py <device_id_or_user_id> --json
+    uv run user_search.py <device_id_or_user_id>
+    uv run user_search.py <device_id_or_user_id> --json
 
 Environment Variables:
     AMPLITUDE_API_KEY: Amplitude API Key (required)
@@ -18,6 +22,7 @@ import os
 import sys
 import urllib.request
 import urllib.error
+import urllib.parse
 import base64
 
 
@@ -61,9 +66,6 @@ def user_search(user_query: str) -> dict:
     except urllib.error.URLError as e:
         return {"error": f"URL Error: {e.reason}"}
 
-
-# Need to import urllib.parse for quote
-import urllib.parse
 
 
 def main():

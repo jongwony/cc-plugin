@@ -34,6 +34,22 @@ description: |  # 3인칭 + 트리거 문구
 
 `references/` 폴더에 API 문서, 예제 배치. `scripts/` 폴더에 헬퍼 스크립트(bash/python) 배치.
 
+### Python Script Convention
+
+Python scripts MUST use **PEP 723 inline script metadata + uv**:
+
+```python
+#!/usr/bin/env uv run --quiet --script
+# /// script
+# requires-python = ">=3.8"
+# dependencies = ["package-name>=1.0"]  # empty list if none
+# ///
+```
+
+- Invoke via `uv run scripts/script_name.py` (never `python`/`python3` directly)
+- Prevents macOS compatibility issues with `python` vs `python3` binary
+- Always include `dependencies = []` even when no external packages are needed
+
 ### 에이전트 구조
 
 ```yaml

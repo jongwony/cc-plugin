@@ -1,13 +1,17 @@
-#!/usr/bin/env python3
+#!/usr/bin/env uv run --quiet --script
+# /// script
+# requires-python = ">=3.8"
+# dependencies = []
+# ///
 """
 Amplitude User Activity API
 Get event stream for a user by their Amplitude ID.
 
 Usage:
-    python user_activity.py <amplitude_id>
-    python user_activity.py <amplitude_id> --limit 50
-    python user_activity.py <amplitude_id> --direction earliest
-    python user_activity.py <amplitude_id> --json
+    uv run user_activity.py <amplitude_id>
+    uv run user_activity.py <amplitude_id> --limit 50
+    uv run user_activity.py <amplitude_id> --direction earliest
+    uv run user_activity.py <amplitude_id> --json
 
 Environment Variables:
     AMPLITUDE_API_KEY: Amplitude API Key (required)

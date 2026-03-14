@@ -1,6 +1,6 @@
 # Known Claude Code Features
 
-Last updated: 2026-02 (v2.1.37)
+Last updated: 2026-03 (v2.1.76)
 
 ## Table of Contents
 1. [Slash Commands](#slash-commands)
@@ -12,6 +12,7 @@ Last updated: 2026-02 (v2.1.37)
 7. [Debug & Session Internals](#debug--session-internals)
 8. [Skill & Plugin System](#skill--plugin-system)
 9. [Context Display Behavior](#context-display-behavior)
+10. [MCP Elicitation](#mcp-elicitation)
 
 ---
 
@@ -104,7 +105,9 @@ Last updated: 2026-02 (v2.1.37)
 |-------|---------|-------------|
 | `PreToolUse` | Before tool execution | Validate/modify tool input |
 | `PostToolUse` | After tool execution | Process tool output |
+| `PostToolUseFailure` | After tool execution fails | Handle tool errors |
 | `Stop` | Agent completion | Final processing |
+| `SubagentStart` | Subagent starts | Subagent initialization |
 | `SubagentStop` | Subagent completion | Subagent result handling |
 | `PreCompact` | `manual`, `auto` | Before context compaction |
 | `PostCompact` | After compaction | Post-compaction processing |
@@ -112,8 +115,20 @@ Last updated: 2026-02 (v2.1.37)
 | `SessionEnd` | Session ends | Cleanup |
 | `UserPromptSubmit` | User sends message | Pre-process user input |
 | `Notification` | System notification | Handle notifications |
+| `PermissionRequest` | Permission dialog shown | Programmatic allow/deny |
+| `Setup` | `init`, `maintenance` | Repo setup hooks |
+| `TeammateIdle` | Teammate about to idle | Prevent idle |
+| `TaskCompleted` | Task marked completed | Prevent/observe completion |
+| `Elicitation` | MCP server requests user input | Auto-respond accept/decline/cancel |
+| `ElicitationResult` | User responds to elicitation | Override response before sending |
+| `ConfigChange` | Config file changes | Block/allow config changes |
+| `WorktreeCreate` | Git worktree created | Handle worktree creation |
+| `WorktreeRemove` | Git worktree removed | Handle worktree removal |
+| `InstructionsLoaded` | CLAUDE.md/rule loaded | Observe instruction loading |
 
 **Note**: `PreToolExecution`/`PostToolExecution` are deprecated names for `PreToolUse`/`PostToolUse`.
+
+**Notification types**: `permission_prompt`, `idle_prompt`, `auth_success`, `elicitation_dialog`, `elicitation_complete`, `elicitation_response`.
 
 ## Internal Constants
 
@@ -304,6 +319,131 @@ Memory scope selection step in wizard UI:
 | `Ub1(path)` | Check if path is an agent-memory path |
 | `GQ7(file, ...)` | Parse agent .md file including memory frontmatter |
 | `G0A({displayName, memoryDir, extraGuidelines})` | Generate memory prompt block |
+
+---
+
+## MCP Elicitation
+
+**Confidence**: Confirmed (v2.1.76)
+**Feature flag**: `tengu_mcp_elicitation`
+
+MCP Elicitation allows MCP servers to request user input during tool execution. Claude Code implements both the **form mode** and **URL mode** from the MCP specification.
+
+### Two Modes
+
+| Mode | MCP Method | Description | Use Case |
+|------|-----------|-------------|----------|
+| **Form** | `elicitation/create` | Server sends message + JSON schema; client renders form UI | Configuration, preferences, simple input |
+| **URL** | `elicitation/create` + `notifications/elicitation/complete` | Server sends URL; user completes flow in browser | OAuth, API keys, payments (sensitive data) |
+
+### Protocol Flow
+
+#### Form Mode
+
+```
+MCP Server                          Claude Code (Client)
+    │                                      │
+    │── elicitation/create ──────────────>  │
+    │   {message, requestedSchema}         │
+    │                                      │── [Elicitation hook] ──>
+    │                                      │<── hook response (optional auto-respond)
+    │                                      │
+    │                                      │── UI: "Claude Code needs your input"
+    │                                      │   [Accept] [Decline]
+    │                                      │
+    │  <── result {action, content} ─────  │── [ElicitationResult hook] ──>
+    │      action: accept|decline|cancel   │
+```
+
+#### URL Mode
+
+```
+MCP Server                          Claude Code (Client)
+    │                                      │
+    │── tools/call ────────────────────>   │
+    │                                      │
+    │  <── error -32042 ─────────────────  │
+    │      (UrlElicitationRequired)        │
+    │      {elicitations: [{id, url}]}     │
+    │                                      │── UI: elicitation_url_dialog
+    │                                      │   [Reopen URL] [Cancel] [Accept] [Decline]
+    │                                      │
+    │  <── notifications/elicitation/      │   (user completes flow in browser)
+    │      complete {elicitationId}        │
+    │                                      │── Retry original tool call
+```
+
+### Capability Declaration
+
+Client declares `elicitation` capability during MCP `initialize` handshake. The server checks:
+- `Client does not support form elicitation.` — form mode not declared
+- `Client does not support url elicitation.` — URL mode not declared
+- `Client does not support elicitation (required for ...)` — no elicitation capability at all
+
+### Hook Integration
+
+Two dedicated hook events provide programmatic control:
+
+| Hook Event | Input | Output Actions | Use Case |
+|------------|-------|---------------|----------|
+| `Elicitation` | `{mcp_server_name, message, requested_schema}` | `accept`, `decline`, `cancel` | Auto-respond without showing dialog |
+| `ElicitationResult` | `{mcp_server_name, action, content, mode, elicitation_id}` | `accept`, `decline`, `cancel` + optional content override | Modify/block response before sending to server |
+
+**Exit codes**:
+- `0` — use hook response if provided
+- `2` — deny the elicitation / block the response
+- Other — show stderr to user only
+
+Both hooks support `matcherMetadata` on `mcp_server_name`, allowing per-server hook targeting.
+
+### UI Components
+
+| Component | Notification Type | Description |
+|-----------|------------------|-------------|
+| Form dialog | `elicitation_dialog` | Renders JSON schema as form fields (string, number, boolean) |
+| URL dialog | `elicitation_url_dialog` | Shows URL with open/reopen/cancel/accept/decline buttons |
+| Active state | `elicitation_active` | Status indicator while elicitation is pending |
+
+**Form dialog features**:
+- Field validation: `isRequired`, `minItems`, `maxItems`
+- Error messages: "This field is required", "Select at least N item(s)"
+- Scrollable lists with "N more above/below" indicators
+
+### Telemetry Events
+
+| Event | When |
+|-------|------|
+| `tengu_mcp_elicitation` | Feature flag check |
+| `tengu_mcp_elicitation_shown` | Dialog displayed to user |
+| `tengu_mcp_elicitation_response` | User response recorded |
+
+### Error Handling
+
+| Error Code | Name | Meaning |
+|------------|------|---------|
+| `-32042` | `UrlElicitationRequired` | MCP server requires URL-mode elicitation (returned as tools/call error) |
+
+**Validation**:
+- `Invalid elicitation request` — malformed request params
+- `Elicitation response content does not match requested schema` — response validation against JSON schema
+- `Error validating elicitation response` — schema validation failure
+- `Ignoring completion notification for unknown elicitation` — stale/unknown elicitation ID
+
+### Internal Functions (Minified)
+
+| Context | Function/Method | Purpose |
+|---------|----------------|---------|
+| MCP SDK | `elicitInput()` | Send elicitation request to client |
+| MCP SDK | `createElicitationCompletionNotifier()` | Create URL-mode completion notifier |
+| MCP SDK | `elicitInputStream` | Stream-based elicitation input |
+| Capability | `assertCapabilityForMethod("elicitation/create")` | Check client capability |
+
+### MCP Protocol Methods
+
+| Method | Direction | Purpose |
+|--------|-----------|---------|
+| `elicitation/create` | Server → Client | Request user input |
+| `notifications/elicitation/complete` | Client → Server | Notify URL-mode elicitation completed |
 
 ---
 

@@ -16,6 +16,39 @@ All prompts passed to `codex` MUST be in English.
 
 This per-invocation naming prevents file collisions across parallel sessions and team agents.
 
+## Context Classification
+
+Before writing the prompt file, classify available context on two orthogonal axes:
+
+| | Session (already available) | Exploration (needs collection) |
+|---|---|---|
+| **AI-verifiable** | Extract paths, patterns, commands as **Pointers** — codex self-verifies | Provide search hints, entry points — codex self-explores |
+| **User-specific** | Summarize intent, constraints, preferences from current session — **reference-only** | **Blocked** — no collection requests or questions |
+
+**Rules**:
+- **Pointers**: Provide file paths, grep patterns, test commands. Do not inline file contents — codex has its own tools to read and verify.
+- **Session Context**: Extract only what is already known from the current conversation. Organize as intent, constraints, and preferences.
+- **No collection requests**: Never embed questions or requests for additional user-specific information in the prompt. If codex needs more context, the user will resume with it. Blocked applies only to content written into `/tmp` prompt, not to pre-prompt orchestration (e.g., `AskUserQuestion` for model selection).
+
+### Prompt Template
+
+Structure `/tmp/codex_prompt_<suffix>.txt` with these sections:
+
+    ## Task
+    [User's request — framed as a complete end-to-end objective]
+
+    ## Pointers
+    - files: [relevant file paths for codex to read/verify]
+    - patterns: [grep patterns or keywords to explore]
+    - commands: [test/build commands if relevant]
+
+    ## Session Context
+    - intent: [user's goal in one sentence]
+    - constraints: [limitations, compatibility requirements]
+    - preferences: [coding style, library choices, conventions]
+
+Omit empty sections. `## Pointers` enables codex to self-verify; `## Session Context` provides reference-only background without requiring follow-up.
+
 ## Running a Task
 1. Ask the user (via `AskUserQuestion`) which model(s) and reasoning effort in a **single prompt with two questions**. Model selection is **multi-select** — multiple models can be chosen for parallel execution.
 
@@ -27,12 +60,13 @@ This per-invocation naming prevents file collisions across parallel sessions and
    Reasoning effort is selected once and applied identically to all chosen models.
 
 2. Select sandbox mode; default to `--sandbox read-only` unless edits or network access are necessary.
-3. Execute via `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh` with appropriate options:
+3. Craft prompt per Context Classification and Prompt Template — classify context, write to `/tmp/codex_prompt_<suffix>.txt`.
+4. Execute via `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh` with appropriate options:
    - `-m MODEL` / `-r EFFORT` / `-s SANDBOX` / `--full-auto` / `-C DIR`
    - **Single model**: run one Bash call as usual.
    - **Multiple models**: issue parallel Bash tool calls (one per model) in a single response. Each call uses the same prompt, sandbox, and reasoning effort but a different `-m` value.
-4. Resume: Write new instructions to a fresh `/tmp/codex_prompt_<suffix>.txt`, then `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh --resume /tmp/codex_prompt_<suffix>.txt`. Resume applies to the last single session only. Codex tracks sessions internally — no external session ID needed.
-5. Run command(s), summarize each outcome, inform user: "Resume anytime with 'codex resume'."
+5. Resume: Write new instructions to a fresh `/tmp/codex_prompt_<suffix>.txt`, then `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh --resume /tmp/codex_prompt_<suffix>.txt`. Resume applies to the last single session only. Codex tracks sessions internally — no external session ID needed.
+6. Run command(s), summarize each outcome, inform user: "Resume anytime with 'codex resume'."
 
 ### Quick Reference
 | Use case | Command pattern |
@@ -74,5 +108,6 @@ Key sections (grep patterns for navigation):
 ## Prompt Crafting Workflow
 
 1. **Clarify first**: Use `AskUserQuestion` for ambiguous requests before crafting prompts
-2. **Structure the prompt**: Frame tasks as "complete end-to-end", include context, define constraints explicitly
-3. **Execute and iterate**: Use metaprompting (root-cause analysis + surgical refinement) rather than complete rewrites
+2. **Classify context**: Apply the 2×2 matrix (see Context Classification) — separate pointers from session context, block user-specific collection requests
+3. **Structure the prompt**: Use the Prompt Template sections. Frame tasks as "complete end-to-end", define constraints explicitly
+4. **Execute and iterate**: Use metaprompting (root-cause analysis + surgical refinement) rather than complete rewrites

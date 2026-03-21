@@ -45,4 +45,9 @@ fi
 } | claude \
     --allowedTools "$ALLOWED_TOOLS" \
     --no-session-persistence \
+    --model sonnet \
+    --disable-slash-commands \
+    --strict-mcp-config \
+    --dangerously-skip-permissions \
+    --settings-sources "" \
     2>/dev/null

@@ -1,5 +1,5 @@
 ---
-name: codex-session
+name: codex-plus-session
 description: |
   This skill should be used when the user asks to "find codex session", "codex session context", "lookup codex session", "show codex history", "codex session summary", or provides a Codex session UUID. Finds and summarizes OpenAI Codex session files from ~/.codex/sessions/.
 ---

@@ -25,9 +25,9 @@
       "description": "Claude Code internals explorer"
     },
     {
-      "name": "codex",
-      "source": "./codex",
-      "description": "OpenAI Codex CLI integration"
+      "name": "codex-plus",
+      "source": "./codex-plus",
+      "description": "Enhanced OpenAI Codex CLI integration (multi-model, context classification)"
     },
     {
       "name": "github-activity",

@@ -43,7 +43,7 @@ Launch Codex in background FIRST, then invoke /frame (interactive). This maximiz
 
 Check `which codex 2>/dev/null`. If Codex CLI is not found, skip to Step 2 and note in Phase 5 output that this was a single-model review.
 
-Generate a unique suffix for temp files: `SUFFIX=$(date +%s%N | tail -c 8)`
+Generate a unique suffix for temp files: `SUFFIX=$(openssl rand -hex 4)`
 
 Write review prompt to `/tmp/ensemble_codex_review_${SUFFIX}.txt`, embedding the actual diff so Codex knows exactly what changed:
 
@@ -67,9 +67,16 @@ Report only high-confidence findings. Ground all claims in the actual diff — d
 End with: VERDICT: approve | needs-attention
 ```
 
-Execute with `Bash(run_in_background: true)`:
+Locate the codex-run.sh wrapper first, fall back to direct exec if unavailable.
+
+Run via `Bash(run_in_background: true, timeout: 300000)`:
 ```bash
-codex exec --skip-git-repo-check -m gpt-5.4 --config model_reasoning_effort="high" --sandbox read-only < /tmp/ensemble_codex_review_${SUFFIX}.txt
+CODEX_RUN=$(find ~/.claude/plugins -path "*/codex-plus/scripts/codex-run.sh" -print -quit 2>/dev/null)
+if [ -n "$CODEX_RUN" ]; then
+  "$CODEX_RUN" -s read-only -r high /tmp/ensemble_codex_review_${SUFFIX}.txt
+else
+  codex exec --skip-git-repo-check -m gpt-5.4 --config model_reasoning_effort="high" --sandbox read-only < /tmp/ensemble_codex_review_${SUFFIX}.txt
+fi
 ```
 
 **Optional: codex-adversarial** — If the user requests adversarial review or the change is large/architectural, also launch an adversarial prompt in background with a separate suffix:
@@ -85,10 +92,25 @@ Scope: {PR #{number} — {title} | working tree changes}
 
 Question: Is this the right approach? What assumptions does it depend on? Where could this fail under real-world conditions? What second-order effects might occur?
 
+Focus: design flaws, assumption failures, approach alternatives, second-order effects on downstream consumers and deployment.
+
+Severity: critical | high | medium | low | suggestion
+Report only high-confidence findings. Ground all claims in the actual diff — do not speculate about code you have not seen.
+
 Report each finding as:
 - [{severity}] {file}:{line_range} — {description}
 
 End with: VERDICT: approve | needs-attention
+```
+
+Execute with `Bash(run_in_background: true, timeout: 300000)`:
+```bash
+CODEX_RUN=$(find ~/.claude/plugins -path "*/codex-plus/scripts/codex-run.sh" -print -quit 2>/dev/null)
+if [ -n "$CODEX_RUN" ]; then
+  "$CODEX_RUN" -s read-only -r high /tmp/ensemble_codex_review_${SUFFIX}.txt
+else
+  codex exec --skip-git-repo-check -m gpt-5.4 --config model_reasoning_effort="high" --sandbox read-only < /tmp/ensemble_codex_review_${SUFFIX}.txt
+fi
 ```
 
 ### Step 2: Invoke /frame Mode 2 (foreground, interactive)
@@ -140,6 +162,8 @@ Identify findings that appear in BOTH /frame's Lens L AND Codex output:
 - Both /frame assessment AND Codex verdict say `needs-attention` → `needs-attention`
 - Otherwise → `approve`
 
+**Single-source mode**: When only one source produced output (Codex unavailable or /frame failed), any `high` or `critical` finding from the available source → `needs-attention`. Cross-model agreement rules apply only when both sources are present.
+
 ## Phase 5: Output
 
 ```markdown
@@ -171,10 +195,11 @@ Verdict: {codex verdict}
 
 When /frame (prothesis:frame skill) is not available, fall back to direct agent spawning for Claude-side review:
 
-1. Spawn `Agent(subagent_type: "pr-review-toolkit:code-reviewer")` with the diff and file list
-2. Spawn `Agent(subagent_type: "pr-review-toolkit:code-simplifier")` with the same input
-3. Both run with `run_in_background: true`, in parallel with Codex
-4. Collect results and aggregate as in Phase 4, treating each agent's findings as a separate reviewer instead of Lens L sections
+1. Spawn two Agent subagents with inline review prompts (no external plugin dependency):
+   - **Code Review Agent**: `Agent(prompt: "Review the following code changes for bugs, logic errors, security vulnerabilities, and code quality. Scope: {scope}. Changed files: {file_list}. Diff: {diff}. Report each finding as: - [{severity}] {file}:{line_range} — {description}. End with: VERDICT: approve | needs-attention", run_in_background: true)`
+   - **Simplification Agent**: `Agent(prompt: "Review the following code changes for clarity, consistency, and maintainability. Scope: {scope}. Changed files: {file_list}. Diff: {diff}. Report each finding as: - [{severity}] {file}:{line_range} — {description}. End with: VERDICT: approve | needs-attention", run_in_background: true)`
+2. Launch both in parallel with Codex (all run_in_background: true)
+3. Collect results and aggregate as in Phase 4, treating each agent's findings as a separate reviewer instead of Lens L sections
 
 This mode loses /frame's perspective selection and Lens synthesis but preserves the cross-model value of Codex + Claude comparison.
 

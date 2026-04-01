@@ -12,7 +12,7 @@ description: >
 Run the toggle script and report the result:
 
 ```bash
-bash ~/.claude/cc-plugin/caffeinate/scripts/toggle.sh
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/toggle.sh"
 ```
 
 - Output `STARTED` → sleep prevention activated (`caffeinate -ims`).

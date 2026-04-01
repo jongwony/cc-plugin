@@ -1,7 +1,7 @@
 ---
 name: review-ensemble
 description: |
-  This skill should be used when the user asks to "ensemble review", "multi-model review", "cross-model review", "review-ensemble", or wants multiple independent reviewers to analyze changes in parallel. Orchestrates /frame (Claude multi-perspective review with agent-aware mapping) + Codex (cross-model independent review), then aggregates into a unified verdict.
+  This skill should be used when the user asks to "ensemble review", "multi-model review", "cross-model review", "review-ensemble", "review from different angles", "thorough code review", "comprehensive review", or wants multiple independent reviewers to analyze changes in parallel. Also trigger when the user wants code reviewed by both Claude and another model, asks for "cross-model" or "multi-perspective" analysis of code changes, or says "review this PR from multiple viewpoints". Orchestrates /frame (Claude multi-perspective review with agent-aware mapping) + Codex (cross-model independent review), then aggregates into a unified verdict.
 skills:
   - prothesis:frame
 ---
@@ -18,7 +18,7 @@ review-ensemble
 └── Cross-model aggregation (Lens L + Codex findings → unified verdict)
 ```
 
-**Principle**: /frame owns Claude-side orchestration (perspective selection, agent mapping, investigation, synthesis). review-ensemble adds the cross-model dimension — independent findings from a different model family provide the highest-confidence signal when they converge with /frame's Lens.
+**Why this composition**: /frame owns Claude-side orchestration — it selects perspectives, maps them to specialized agents, and synthesizes findings into a Lens. Adding Codex provides an independent model family's view. When two independent model families converge on the same issue, that signal is stronger than any single model's confidence score.
 
 ## Phase 1: Scope Detection
 
@@ -28,7 +28,12 @@ review-ensemble
 4. No PR: scope = working tree (`git diff HEAD`)
 5. No changes: ask the user what to review
 
-Record scope type, PR number, changed files list.
+Record scope type, PR number, changed files list, and the **full diff content** (needed for Codex prompt in Phase 2).
+
+Also capture diff statistics for context:
+```bash
+gh pr diff {NUMBER} --stat   # or: git diff HEAD --stat
+```
 
 ## Phase 2: Parallel Launch
 
@@ -36,15 +41,21 @@ Launch Codex in background FIRST, then invoke /frame (interactive). This maximiz
 
 ### Step 1: Launch Codex Reviewers (background)
 
-Check `which codex 2>/dev/null`. If available, launch review in background.
+Check `which codex 2>/dev/null`. If Codex CLI is not found, skip to Step 2 and note in Phase 5 output that this was a single-model review.
 
-Write review prompt to `/tmp/ensemble_codex_review_<suffix>.txt`:
+Generate a unique suffix for temp files: `SUFFIX=$(date +%s%N | tail -c 8)`
+
+Write review prompt to `/tmp/ensemble_codex_review_${SUFFIX}.txt`, embedding the actual diff so Codex knows exactly what changed:
 
 ```
-Review the code changes in this repository for correctness, security, and edge cases.
+Review the following code changes for correctness, security, and edge cases.
 
-Changed files:
-{file_list}
+Scope: {PR #{number} — {title} on branch {branch} | working tree changes}
+Diff statistics: {diff_stat_output}
+
+--- Begin Diff ---
+{full_diff_content}
+--- End Diff ---
 
 Focus: logic errors, security vulnerabilities, missing error handling, edge cases, API contract violations.
 
@@ -52,26 +63,27 @@ Report each finding as:
 - [{severity}] {file}:{line_range} — {description}
 
 Severity: critical | high | medium | low | suggestion
-Report only high-confidence findings.
+Report only high-confidence findings. Ground all claims in the actual diff — do not speculate about code you have not seen.
 End with: VERDICT: approve | needs-attention
 ```
 
-Execute:
+Execute with `Bash(run_in_background: true)`:
 ```bash
-codex exec --skip-git-repo-check -m gpt-5.4 --config model_reasoning_effort="high" --sandbox read-only < /tmp/ensemble_codex_review_<suffix>.txt
+codex exec --skip-git-repo-check -m gpt-5.4 --config model_reasoning_effort="high" --sandbox read-only < /tmp/ensemble_codex_review_${SUFFIX}.txt
 ```
 
-Run via `Bash(run_in_background: true)`.
-
-**Optional: codex-adversarial** — If the user requests adversarial review or the change is large/architectural, also launch an adversarial prompt in background:
+**Optional: codex-adversarial** — If the user requests adversarial review or the change is large/architectural, also launch an adversarial prompt in background with a separate suffix:
 
 ```
-You are a skeptical reviewer. Challenge the implementation approach and design choices.
+You are a skeptical reviewer. Challenge the implementation approach and design choices in the following diff.
 
-Changed files:
-{file_list}
+Scope: {PR #{number} — {title} | working tree changes}
 
-Question: Is this the right approach? What assumptions does it depend on? Where could this fail under real-world conditions?
+--- Begin Diff ---
+{full_diff_content}
+--- End Diff ---
+
+Question: Is this the right approach? What assumptions does it depend on? Where could this fail under real-world conditions? What second-order effects might occur?
 
 Report each finding as:
 - [{severity}] {file}:{line_range} — {description}
@@ -81,6 +93,9 @@ End with: VERDICT: approve | needs-attention
 
 ### Step 2: Invoke /frame Mode 2 (foreground, interactive)
 
+Check if the `prothesis:frame` skill is available. If not available (epistemic-protocols plugin not installed), fall back to the **manual review mode** described in the Fallback section below.
+
+If available:
 ```
 Skill("prothesis:frame", args: "Assemble a code review team for these changes. Scope: {scope_description}. Changed files: {file_list}")
 ```
@@ -99,10 +114,13 @@ The Lens L output contains:
 
 ## Phase 3: Collection
 
-After /frame completes (Lens L in context):
-1. Collect Codex background results via `BashOutput`
+After /frame completes (Lens L in context), the background Codex task will send a completion notification automatically. When the notification arrives:
+
+1. Read the Codex output from the completed background task
 2. Parse Codex findings: `[severity] file:line — description` format + VERDICT
 3. Record both Lens L and Codex findings for aggregation
+
+If the Codex background task has not completed yet when /frame finishes, wait for the notification — do not poll or sleep.
 
 ## Phase 4: Cross-Model Aggregation
 
@@ -112,7 +130,7 @@ Combine /frame's Lens L (Claude multi-perspective synthesis) with Codex findings
 
 Identify findings that appear in BOTH /frame's Lens L AND Codex output:
 - Same file + overlapping concern = cross-model agreement
-- Use semantic judgment — different wording about the same logical concern counts
+- Different wording about the same logical concern counts — match by semantic overlap, not exact text
 - Cross-model agreements have the **highest confidence** — two independent model families converged on the same issue
 
 ### Unified Verdict
@@ -149,10 +167,22 @@ Verdict: {codex verdict}
 - Cross-model agreements: {N}
 ```
 
+## Fallback: Manual Review Mode
+
+When /frame (prothesis:frame skill) is not available, fall back to direct agent spawning for Claude-side review:
+
+1. Spawn `Agent(subagent_type: "pr-review-toolkit:code-reviewer")` with the diff and file list
+2. Spawn `Agent(subagent_type: "pr-review-toolkit:code-simplifier")` with the same input
+3. Both run with `run_in_background: true`, in parallel with Codex
+4. Collect results and aggregate as in Phase 4, treating each agent's findings as a separate reviewer instead of Lens L sections
+
+This mode loses /frame's perspective selection and Lens synthesis but preserves the cross-model value of Codex + Claude comparison.
+
 ## Error Handling
 
 | Condition | Action |
 |-----------|--------|
+| /frame skill not available | Fall back to manual review mode (see Fallback section) |
 | /frame timeout or failure | Present partial results from Codex only |
 | Codex CLI not found | Run /frame only, note single-model limitation in output |
 | Codex timeout (>300s) | Present /frame Lens only, note Codex timeout |
@@ -161,9 +191,9 @@ Verdict: {codex verdict}
 
 ## Rules
 
-- /frame owns Claude-side review — do not duplicate with separate Claude Agent spawns
+- /frame owns Claude-side review — do not duplicate with separate Claude Agent spawns (unless in fallback mode)
 - Codex runs independently — it does not see /frame's output and vice versa
 - Cross-model agreement is the primary confidence signal
 - Launch Codex BEFORE /frame to maximize parallelism
-- Generate a unique suffix for each /tmp prompt file to prevent collisions
+- Always embed the actual diff in the Codex prompt — file names alone are insufficient for meaningful review
 - If Codex is unavailable, /frame alone still provides multi-perspective value via Lens L

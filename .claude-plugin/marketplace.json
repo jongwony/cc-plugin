@@ -63,6 +63,11 @@
       "name": "caffeinate",
       "source": "./caffeinate",
       "description": "macOS sleep prevention toggle with battery and network monitoring"
+    },
+    {
+      "name": "review-ensemble",
+      "source": "./review-ensemble",
+      "description": "Multi-reviewer code review composition layer (ensemble, cross-model)"
     }
   ]
 }

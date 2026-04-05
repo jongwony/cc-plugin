@@ -114,6 +114,10 @@ tools: [mcp__bigquery__*, Read]                      # Read-only + MCP
 }
 ```
 
+## Prerequisites
+
+- **review-ensemble**: Requires [Codex CLI](https://github.com/openai/codex) for cross-model review. Falls back to /frame-only mode when unavailable.
+
 ## 개발 워크플로우
 
 ### 테스트

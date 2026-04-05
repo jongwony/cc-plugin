@@ -119,13 +119,13 @@ Check if the `prothesis:frame` skill is available. If not available (epistemic-p
 
 If available:
 ```
-Skill("prothesis:frame", args: "Assemble a code review team for these changes. Scope: {scope_description}. Changed files: {file_list}")
+Skill("prothesis:frame", args: "Assemble a code review team for these changes. Scope: {scope_description}. Changed files: {file_list}. [select_all_perspectives]")
 ```
 
 /frame will:
 1. **Phase 0**: Mission Brief (elidable — explicit argument provided)
 2. **Phase 1**: Context gathering (codebase exploration)
-3. **Phase 2**: Perspective selection (always_gated — user selects review perspectives)
+3. **Phase 2**: Perspective selection (elidable — select_all_perspectives: auto-select all proposed lenses)
 4. **Phase 3**: AgentMap? → map perspectives to available agents → team investigation
 5. **Phase 4**: Cross-dialogue + synthesis → **Lens L** (convergence, divergence, assessment)
 

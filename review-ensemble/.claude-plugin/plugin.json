@@ -1,7 +1,7 @@
 {
   "name": "review-ensemble",
   "description": "Multi-reviewer code review composition layer (ensemble, cross-model)",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

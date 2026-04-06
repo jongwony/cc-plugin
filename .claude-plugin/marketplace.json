@@ -68,6 +68,11 @@
       "name": "review-ensemble",
       "source": "./review-ensemble",
       "description": "Multi-reviewer code review composition layer (ensemble, cross-model)"
+    },
+    {
+      "name": "safe-uninstall",
+      "source": "./safe-uninstall",
+      "description": "Safely identify, investigate, and remove macOS programs with risk-assessed execution"
     }
   ]
 }

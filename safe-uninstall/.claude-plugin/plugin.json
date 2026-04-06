@@ -1,0 +1,9 @@
+{
+  "name": "safe-uninstall",
+  "description": "Safely identify, investigate, and remove macOS programs with risk-assessed execution",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

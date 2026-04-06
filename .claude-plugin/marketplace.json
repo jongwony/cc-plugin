@@ -73,6 +73,11 @@
       "name": "safe-uninstall",
       "source": "./safe-uninstall",
       "description": "Safely identify, investigate, and remove macOS programs with risk-assessed execution"
+    },
+    {
+      "name": "dallem",
+      "source": "./dallem",
+      "description": "Therapy reservation assistant with CDP automation and Google Calendar conflict checking"
     }
   ]
 }

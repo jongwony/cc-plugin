@@ -49,5 +49,5 @@ fi
     --disable-slash-commands \
     --strict-mcp-config \
     --dangerously-skip-permissions \
-    --settings-sources "" \
+    --setting-sources "" \
     2>/dev/null

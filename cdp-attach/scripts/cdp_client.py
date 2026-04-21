@@ -5,6 +5,13 @@ Bypasses Puppeteer to avoid frozen-tab timeouts. Uses:
 - HTTP API (urllib.request) for tab discovery (immune to frozen tabs)
 - Per-tab WebSocket (websocket-client) for CDP commands
 
+Runtime — Python + uv (not Node). Benchmarked 2026-04-21 on /json/list:
+  uv run + stdlib urllib  → p50 67ms
+  node v25 + fetch        → p50 90ms  (+46%)
+Per-invocation bottleneck is WebSocket re-handshake, not language. A
+daemon would help; a language swap would not. See CLAUDE.md project-wide
+"Python Script Convention" rule before reconsidering.
+
 Import via sys.path manipulation in v1/v2/v3 scripts:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from cdp_client import CDPClient

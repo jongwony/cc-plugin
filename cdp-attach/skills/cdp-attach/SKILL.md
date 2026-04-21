@@ -80,7 +80,18 @@ $V1 evaluate --stdin <<< 'var x = document.title; x'  # Stdin mode
 $V1 evaluate --no-rewrite "const x = 1"       # Skip var rewriting
 $V1 navigate "https://example.com"             # Navigate
 $V1 navigate "https://example.com" --wait-for none
+
+$V1 evaluate "document.title" --frame "iframe.embedded"   # Evaluate inside an iframe
+$V1 evaluate --frame main "location.href"                 # Explicit top frame
+
+$V1 wait --selector "div.loaded" --timeout-ms 10000       # Element appears
+$V1 wait --text "Order complete"                          # Text appears somewhere
+$V1 wait --url-contains "/dashboard"                      # URL navigation
+$V1 wait --load-state networkidle                         # Page lifecycle state
+$V1 wait --function "window.__APP_READY__ === true"       # Custom JS predicate
 ```
+
+> **Note on `--frame`**: accepts a CSS selector matching a frame owner (e.g. `iframe`, `frame`, `object`, `embed`) or the literal `main` for the top-level document. Cross-origin frames resolve the same way because CDP exposes per-frame execution contexts regardless of origin.
 
 ### Common Mistakes
 
@@ -168,15 +179,34 @@ $V3 console_stop
 $V3 perf_start --categories "devtools.timeline"
 $V3 perf_stop -o /tmp/trace.json               # Save trace
 
-# Device emulation
-$V3 emulate --width 375 --height 812 --scale 3 --mobile
-$V3 emulate_reset                                       # Reset emulation to defaults
+# Device / environment emulation
+$V3 emulate --width 375 --height 812 --scale 3 --mobile  # Viewport + device
+$V3 emulate --geolocation "37.5665,126.9780"             # Override geolocation
+$V3 emulate --offline true                               # Simulate offline
+$V3 emulate_reset                                        # Reset device, geo, and network conditions
+
+# Pre-load script injection (runs before each new document loads)
+$V3 add_init_script "window.__TEST_HOOK__ = true"
+$V3 add_init_script --stdin <<'JS'
+Object.defineProperty(navigator, 'webdriver', { get: () => false });
+JS
+$V3 remove_init_script "1"                     # Identifier returned by add_init_script
+
+# Download synchronization (blocks until downloadProgress completes)
+$V3 download_wait --timeout-ms 60000
+$V3 download_wait --download-path /tmp/my-dl --timeout-ms 30000
+
+# Session state archive (cookies + localStorage + sessionStorage, batch only)
+$V3 state_save ~/.cache/my-session.json
+$V3 state_load ~/.cache/my-session.json
 
 # Drag and dialog
 $V3 drag 100 100 300 300 --steps 20
 $V3 dialog accept                              # Handle alert/confirm
 $V3 dialog accept "prompt input"               # Handle prompt
 ```
+
+> **Note on `state_save` / `state_load`**: batch session packaging only. Individual cookie or storage reads/writes go through `v1 evaluate` (browser is the authoritative state holder). `state_save` captures **current-tab origin cookies** (via `Network.getCookies` URL filter) plus that tab's `localStorage` / `sessionStorage`; pass `--all-cookies` to capture the entire browser cookie jar instead. IndexedDB is not included in v1 of the state snapshot.
 
 > **Note**: `dialog` is reactive — it handles an already-open dialog. It will fail if no dialog is currently visible. Trigger the dialog first (e.g., via `evaluate` or navigation), then call `dialog` to respond.
 

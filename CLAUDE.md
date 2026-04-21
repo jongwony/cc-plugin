@@ -138,3 +138,13 @@ marketplace.json은 source 경로만 관리 (버전 미포함).
 ```bash
 git mv old-path.md new-path.md  # 히스토리 보존
 ```
+
+### 스킬 확장 원칙 (외부 도구 수입)
+
+외부 도구(cmux, Playwright, Puppeteer 등) 기능을 기존 스킬에 import 할 때 3 test 통과 필요:
+
+1. **Irreducibility** — 기존 primitive(`evaluate`, `find_element`, `screenshot` 등)로 재현 불가능할 때만 import. Ergonomic wrapper 는 스크립트 내부 개선으로 처리.
+2. **Environment neutrality** — 도구 특정 IPC/runtime 이 아닌 프로토콜 레벨(CDP 등) 능력이어야 함. 원 도구 미설치 환경에서도 동작해야 한다.
+3. **SSOT respect** — 권위 소스(브라우저의 쿠키/`localStorage`/`sessionStorage` 등)가 보유한 상태는 권위 경로로 접근, 전용 `set`/`get`/`clear` 미러링 명령을 추가하지 않는다.
+
+적용 사례: `cdp-attach` 에 cmux 기능 7 종 수입 — 자세한 채택/제외 결정은 PR 히스토리 참조.

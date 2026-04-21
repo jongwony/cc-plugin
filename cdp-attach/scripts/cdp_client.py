@@ -110,9 +110,18 @@ class CDPClient:
             )
 
     def new_tab(self, url=""):
-        """Open a new tab."""
+        """Open a new tab. Chrome 115+ requires PUT for /json/new."""
         path = f"/json/new?{url}" if url else "/json/new"
-        return self._http_get(path)
+        full_url = f"{self._base_url}{path}"
+        try:
+            req = urllib.request.Request(full_url, method="PUT")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                try:
+                    return json.loads(resp.read())
+                except json.JSONDecodeError:
+                    raise CDPError(f"Invalid JSON response from CDP endpoint: {path}")
+        except urllib.error.URLError as e:
+            raise CDPError(f"CDP HTTP endpoint unreachable ({self._base_url}): {e}")
 
     def close_tab(self, target_id):
         """Close a tab by target ID."""
@@ -221,6 +230,68 @@ class CDPClient:
         events = self._event_buffer[:]
         self._event_buffer.clear()
         return events
+
+    def resolve_frame_context_id(self, frame_selector):
+        """Resolve a CSS selector identifying a frame owner element
+        (iframe/frame/object/embed) to the executionContextId of the
+        embedded document.
+
+        Returns None when frame_selector is falsy or equals 'main'
+        (caller should use the default top-frame context).
+        Raises CDPError when the selector does not match a frame owner
+        or no execution context is discovered within a short grace period.
+        """
+        if not frame_selector or frame_selector == "main":
+            return None
+
+        import websocket
+
+        self.send("Runtime.enable")
+        self.send("DOM.enable")
+
+        doc = self.send("DOM.getDocument", {"depth": 1, "pierce": True})
+        root_node_id = doc.get("root", {}).get("nodeId", 0)
+        if not root_node_id:
+            raise CDPError("DOM.getDocument returned no root nodeId")
+
+        q = self.send("DOM.querySelector", {
+            "nodeId": root_node_id,
+            "selector": frame_selector,
+        })
+        node_id = q.get("nodeId", 0)
+        if not node_id:
+            raise CDPError(f"No element matches frame selector: {frame_selector!r}")
+
+        desc = self.send("DOM.describeNode", {"nodeId": node_id})
+        frame_id = desc.get("node", {}).get("frameId")
+        if not frame_id:
+            raise CDPError(
+                f"Element {frame_selector!r} is not a frame owner (no frameId)"
+            )
+
+        deadline = time.time() + 1.5
+        while time.time() < deadline:
+            for ev in self.drain_events():
+                if ev.get("method") != "Runtime.executionContextCreated":
+                    continue
+                ctx = ev.get("params", {}).get("context", {})
+                aux = ctx.get("auxData", {})
+                if aux.get("frameId") == frame_id:
+                    return ctx.get("id")
+            try:
+                self._ws.settimeout(0.15)
+                raw = self._ws.recv()
+                self._event_buffer.append(json.loads(raw))
+            except websocket.WebSocketTimeoutException:
+                continue
+            except Exception:
+                break
+
+        raise CDPError(
+            f"No execution context found for frame {frame_id} "
+            f"(selector={frame_selector!r}). Frame may be cross-origin isolated "
+            "or not yet loaded."
+        )
 
     # ── State persistence ─────────────────────────────────────────
 

@@ -330,27 +330,315 @@ def cmd_perf_stop(client, args):
 
 
 def cmd_emulate(client, args):
-    """Set device emulation."""
+    """Apply device / geolocation / network-offline emulation."""
+    has_size = args.width is not None and args.height is not None
+    if (args.width is None) != (args.height is None):
+        print("Error: --width and --height must be provided together", file=sys.stderr)
+        sys.exit(1)
+
+    if not (has_size or args.geolocation or args.offline is not None):
+        print(
+            "Error: provide at least one of --width/--height, --geolocation, --offline",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     client.connect()
     try:
-        params = {
-            "width": args.width,
-            "height": args.height,
-            "deviceScaleFactor": args.scale,
-            "mobile": args.mobile,
-        }
-        client.send("Emulation.setDeviceMetricsOverride", params)
-        print(f"Emulation set: {args.width}x{args.height} (scale={args.scale}, mobile={args.mobile})")
+        applied = []
+
+        if has_size:
+            client.send("Emulation.setDeviceMetricsOverride", {
+                "width": args.width,
+                "height": args.height,
+                "deviceScaleFactor": args.scale,
+                "mobile": args.mobile,
+            })
+            applied.append(f"viewport {args.width}x{args.height} (scale={args.scale}, mobile={args.mobile})")
+
+        if args.geolocation:
+            parts = [p.strip() for p in args.geolocation.split(",")]
+            if len(parts) != 2:
+                raise CDPError(
+                    f"--geolocation expects 'lat,lon' (got {args.geolocation!r})"
+                )
+            try:
+                lat, lon = float(parts[0]), float(parts[1])
+            except ValueError:
+                raise CDPError(f"--geolocation lat/lon not numeric: {args.geolocation!r}")
+            client.send("Emulation.setGeolocationOverride", {
+                "latitude": lat,
+                "longitude": lon,
+                "accuracy": 10,
+            })
+            applied.append(f"geolocation ({lat}, {lon})")
+
+        if args.offline is not None:
+            client.send("Network.enable")
+            client.send("Network.emulateNetworkConditions", {
+                "offline": args.offline,
+                "latency": 0,
+                "downloadThroughput": -1,
+                "uploadThroughput": -1,
+            })
+            applied.append(f"offline={args.offline}")
+
+        print(f"Emulation applied: {', '.join(applied)}")
     finally:
         client.close()
 
 
 def cmd_emulate_reset(client, args):
-    """Reset device emulation to defaults."""
+    """Reset device, geolocation, and offline emulation to defaults."""
     client.connect()
     try:
-        client.send("Emulation.clearDeviceMetricsOverride")
-        print("Emulation reset to defaults.")
+        reset = []
+        try:
+            client.send("Emulation.clearDeviceMetricsOverride")
+            reset.append("device")
+        except CDPError:
+            pass
+        try:
+            client.send("Emulation.clearGeolocationOverride")
+            reset.append("geolocation")
+        except CDPError:
+            pass
+        try:
+            client.send("Network.enable")
+            client.send("Network.emulateNetworkConditions", {
+                "offline": False,
+                "latency": 0,
+                "downloadThroughput": -1,
+                "uploadThroughput": -1,
+            })
+            reset.append("offline")
+        except CDPError:
+            pass
+        print(f"Emulation reset: {', '.join(reset) or 'none'}")
+    finally:
+        client.close()
+
+
+def cmd_add_init_script(client, args):
+    """Install a script that runs on every new document before its own scripts."""
+    if args.stdin:
+        source = sys.stdin.read()
+    elif args.script:
+        source = args.script
+    else:
+        print("Error: provide script argument or use --stdin", file=sys.stderr)
+        sys.exit(1)
+
+    if not source.strip():
+        print("Error: script source is empty", file=sys.stderr)
+        sys.exit(1)
+
+    client.connect()
+    try:
+        client.send("Page.enable")
+        result = client.send("Page.addScriptToEvaluateOnNewDocument", {
+            "source": source,
+        })
+        identifier = result.get("identifier", "")
+        print(f"Init script registered. Identifier: {identifier}")
+        print("  Retain this identifier to remove with: remove_init_script <id>")
+    finally:
+        client.close()
+
+
+def cmd_remove_init_script(client, args):
+    """Remove a previously-registered init script by its identifier."""
+    client.connect()
+    try:
+        client.send("Page.enable")
+        client.send("Page.removeScriptToEvaluateOnNewDocument", {
+            "identifier": args.identifier,
+        })
+        print(f"Init script removed: {args.identifier}")
+    finally:
+        client.close()
+
+
+def cmd_download_wait(client, args):
+    """Block until the next download completes, writing to download-path."""
+    import websocket
+
+    download_path = os.path.abspath(
+        os.path.expanduser(args.download_path or "/tmp/cdp-attach/downloads")
+    )
+    os.makedirs(download_path, exist_ok=True)
+
+    client.connect()
+    try:
+        client.send("Browser.setDownloadBehavior", {
+            "behavior": "allow",
+            "downloadPath": download_path,
+            "eventsEnabled": True,
+        })
+        client.send("Page.enable")
+
+        deadline = time.time() + args.timeout_ms / 1000.0
+        inflight = {}
+
+        while time.time() < deadline:
+            try:
+                client._ws.settimeout(1.0)
+                raw = client._ws.recv()
+                resp = json.loads(raw)
+                method = resp.get("method", "")
+                params = resp.get("params", {})
+
+                if method == "Browser.downloadWillBegin":
+                    guid = params.get("guid", "")
+                    inflight[guid] = {
+                        "url": params.get("url", ""),
+                        "filename": params.get("suggestedFilename", ""),
+                    }
+                    print(f"Download started: {inflight[guid]['filename']}")
+                elif method == "Browser.downloadProgress":
+                    guid = params.get("guid", "")
+                    state = params.get("state", "")
+                    if state == "completed":
+                        meta = inflight.get(guid, {})
+                        filename = meta.get("filename", "") or guid
+                        candidate_named = os.path.join(download_path, filename)
+                        candidate_guid = os.path.join(download_path, guid)
+                        if os.path.exists(candidate_named):
+                            saved_path = candidate_named
+                        elif os.path.exists(candidate_guid):
+                            saved_path = candidate_guid
+                        else:
+                            saved_path = candidate_named
+                        print(f"Download completed: {filename}")
+                        print(f"  Saved as: {saved_path}")
+                        print(f"  Bytes: {params.get('totalBytes', 0)}")
+                        return
+                    if state == "canceled":
+                        print("Download canceled", file=sys.stderr)
+                        sys.exit(1)
+            except websocket.WebSocketTimeoutException:
+                continue
+            except (websocket.WebSocketConnectionClosedException, ConnectionError):
+                break
+
+        print(f"Download wait timeout after {args.timeout_ms}ms", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        client.close()
+
+
+_STATE_DUMP_JS = (
+    "(() => {"
+    " const ls = {};"
+    " for (const k of Object.keys(localStorage)) ls[k] = localStorage.getItem(k);"
+    " const ss = {};"
+    " for (const k of Object.keys(sessionStorage)) ss[k] = sessionStorage.getItem(k);"
+    " return {localStorage: ls, sessionStorage: ss, url: location.href};"
+    "})()"
+)
+
+
+def cmd_state_save(client, args):
+    """Save current-tab origin cookies + localStorage + sessionStorage to a JSON file.
+
+    Cookies are filtered to the current tab's URL via Network.getCookies,
+    so only origin-applicable cookies are captured (about:blank/data: → 0).
+    Use --all-cookies to capture the entire browser cookie jar instead.
+    """
+    client.connect()
+    try:
+        client.send("Network.enable")
+
+        storage_result = client.send("Runtime.evaluate", {
+            "expression": _STATE_DUMP_JS,
+            "returnByValue": True,
+        })
+        storage = storage_result.get("result", {}).get("value", {}) or {}
+        current_url = storage.get("url") or ""
+
+        if getattr(args, "all_cookies", False):
+            cookies = client.send("Network.getAllCookies").get("cookies", [])
+            scope_label = "all"
+        elif current_url:
+            cookies = client.send(
+                "Network.getCookies", {"urls": [current_url]}
+            ).get("cookies", [])
+            scope_label = "origin-scoped"
+        else:
+            cookies = []
+            scope_label = "origin-scoped (null origin → empty)"
+
+        snapshot = {
+            "version": 1,
+            "timestamp": time.time(),
+            "url": current_url or None,
+            "cookies": cookies,
+            "localStorage": storage.get("localStorage", {}),
+            "sessionStorage": storage.get("sessionStorage", {}),
+        }
+
+        output_path = os.path.abspath(os.path.expanduser(args.path))
+        parent_dir = os.path.dirname(output_path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
+        with open(output_path, "w") as f:
+            json.dump(snapshot, f, indent=2, ensure_ascii=False)
+
+        print(f"State saved: {output_path}")
+        print(f"  URL: {snapshot['url']}")
+        print(f"  Cookies: {len(snapshot['cookies'])} ({scope_label})")
+        print(f"  localStorage keys: {len(snapshot['localStorage'])}")
+        print(f"  sessionStorage keys: {len(snapshot['sessionStorage'])}")
+    finally:
+        client.close()
+
+
+def cmd_state_load(client, args):
+    """Restore cookies + storage previously saved via state_save."""
+    input_path = os.path.abspath(os.path.expanduser(args.path))
+    if not os.path.exists(input_path):
+        print(f"Error: state file not found: {input_path}", file=sys.stderr)
+        sys.exit(1)
+
+    with open(input_path) as f:
+        snapshot = json.load(f)
+
+    if snapshot.get("version") != 1:
+        print(
+            f"Error: unsupported state file version: {snapshot.get('version')!r}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    cookies = snapshot.get("cookies", []) or []
+    ls = snapshot.get("localStorage", {}) or {}
+    ss = snapshot.get("sessionStorage", {}) or {}
+
+    client.connect()
+    try:
+        client.send("Network.enable")
+        if cookies:
+            client.send("Network.setCookies", {"cookies": cookies})
+
+        if ls or ss:
+            setter_js = (
+                "((ls, ss) => {"
+                " for (const k of Object.keys(ls)) localStorage.setItem(k, ls[k]);"
+                " for (const k of Object.keys(ss)) sessionStorage.setItem(k, ss[k]);"
+                " return {ls: Object.keys(ls).length, ss: Object.keys(ss).length};"
+                f"}})({json.dumps(ls)}, {json.dumps(ss)})"
+            )
+            client.send("Runtime.evaluate", {
+                "expression": setter_js,
+                "returnByValue": True,
+            })
+
+        print(f"State loaded from: {input_path}")
+        print(f"  Cookies set: {len(cookies)}")
+        print(f"  localStorage keys: {len(ls)}")
+        print(f"  sessionStorage keys: {len(ss)}")
+        if snapshot.get("url"):
+            print(f"  Source URL: {snapshot['url']}")
     finally:
         client.close()
 
@@ -433,12 +721,62 @@ def main():
     p_pst.add_argument("--output", "-o", help="Output trace file path")
 
     # emulate
-    p_em = sub.add_parser("emulate", help="Device emulation")
-    p_em.add_argument("--width", type=int, required=True)
-    p_em.add_argument("--height", type=int, required=True)
+    p_em = sub.add_parser("emulate", help="Device / geolocation / offline emulation")
+    p_em.add_argument("--width", type=int, help="Viewport width (requires --height)")
+    p_em.add_argument("--height", type=int, help="Viewport height (requires --width)")
     p_em.add_argument("--scale", type=float, default=1.0, help="Device scale factor")
-    p_em.add_argument("--mobile", action="store_true")
-    sub.add_parser("emulate_reset", help="Reset device emulation")
+    p_em.add_argument("--mobile", action="store_true", help="Mobile emulation flag")
+    p_em.add_argument("--geolocation", help="Geolocation override formatted as 'lat,lon'")
+    p_em.add_argument(
+        "--offline",
+        type=lambda v: v.strip().lower() in ("1", "true", "yes", "on"),
+        default=None,
+        help="Offline network state: true/false (leave unset to keep current)",
+    )
+    sub.add_parser("emulate_reset", help="Reset device, geolocation, and offline emulation")
+
+    # add_init_script / remove_init_script
+    p_ais = sub.add_parser(
+        "add_init_script",
+        help="Register a script to run on every new document (pre-load)",
+    )
+    p_ais.add_argument("script", nargs="?",
+                       help="JavaScript source (or use --stdin)")
+    p_ais.add_argument("--stdin", action="store_true",
+                       help="Read script source from stdin")
+    p_ris = sub.add_parser(
+        "remove_init_script",
+        help="Remove a previously-registered init script",
+    )
+    p_ris.add_argument("identifier", help="Identifier returned by add_init_script")
+
+    # download_wait
+    p_dw = sub.add_parser(
+        "download_wait",
+        help="Block until the next download completes",
+    )
+    p_dw.add_argument("--timeout-ms", dest="timeout_ms", type=int, default=60000,
+                      help="Timeout in milliseconds (default: 60000)")
+    p_dw.add_argument("--download-path", dest="download_path",
+                      help="Directory to save downloads (default: /tmp/cdp-attach/downloads)")
+
+    # state_save / state_load
+    p_ss = sub.add_parser(
+        "state_save",
+        help="Save current-tab origin cookies + storage to a JSON file",
+    )
+    p_ss.add_argument("path", help="Output JSON file path")
+    p_ss.add_argument(
+        "--all-cookies",
+        dest="all_cookies",
+        action="store_true",
+        help="Capture browser-wide cookie jar instead of only current-tab origin",
+    )
+    p_sl = sub.add_parser(
+        "state_load",
+        help="Restore session state from a JSON file produced by state_save",
+    )
+    p_sl.add_argument("path", help="Input JSON file path")
 
     # drag
     p_drag = sub.add_parser("drag", help="Drag gesture")
@@ -471,6 +809,11 @@ def main():
         "perf_stop": cmd_perf_stop,
         "emulate": cmd_emulate,
         "emulate_reset": cmd_emulate_reset,
+        "add_init_script": cmd_add_init_script,
+        "remove_init_script": cmd_remove_init_script,
+        "download_wait": cmd_download_wait,
+        "state_save": cmd_state_save,
+        "state_load": cmd_state_load,
         "drag": cmd_drag,
         "dialog": cmd_dialog,
     }

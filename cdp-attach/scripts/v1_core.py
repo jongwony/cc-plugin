@@ -226,12 +226,16 @@ def cmd_evaluate(client, args):
 
     client.connect()
     try:
+        context_id = client.resolve_frame_context_id(args.frame)
+
         params = {
             "expression": expression,
             "returnByValue": True,
         }
         if args.await_promise:
             params["awaitPromise"] = True
+        if context_id is not None:
+            params["contextId"] = context_id
 
         result = client.send("Runtime.evaluate", params)
         obj = result.get("result", {})
@@ -302,6 +306,122 @@ def cmd_navigate(client, args):
         client.close()
 
 
+_WAIT_LIFECYCLE_NAMES = {
+    "load": "load",
+    "domcontentloaded": "DOMContentLoaded",
+    "networkidle": "networkIdle",
+}
+
+
+def _wait_poll(client, expression, label, deadline):
+    """Poll Runtime.evaluate until expression returns truthy or deadline passes."""
+    start = time.time()
+    while time.time() < deadline:
+        result = client.send("Runtime.evaluate", {
+            "expression": expression,
+            "returnByValue": True,
+        })
+        obj = result.get("result", {})
+        if obj.get("value"):
+            elapsed_ms = int((time.time() - start) * 1000)
+            print(f"Wait satisfied: {label} ({elapsed_ms}ms)")
+            return
+        time.sleep(0.2)
+
+    print(f"Wait timeout: {label}", file=sys.stderr)
+    sys.exit(1)
+
+
+def _wait_lifecycle(client, state, deadline):
+    """Subscribe to Page.lifecycleEvent and block until the named state arrives.
+
+    Pre-checks document.readyState first so an already-loaded page succeeds
+    immediately — Page.lifecycleEvent only fires for future transitions,
+    not for states the page has already passed.
+    """
+    import websocket
+
+    target_name = _WAIT_LIFECYCLE_NAMES[state]
+
+    if state in ("load", "domcontentloaded"):
+        pre = client.send("Runtime.evaluate", {
+            "expression": "document.readyState",
+            "returnByValue": True,
+        })
+        ready = pre.get("result", {}).get("value", "")
+        if state == "load" and ready == "complete":
+            print(f"Wait satisfied: load-state {state} (already ready)")
+            return
+        if state == "domcontentloaded" and ready in ("interactive", "complete"):
+            print(f"Wait satisfied: load-state {state} (already ready)")
+            return
+
+    client.send("Page.enable")
+    client.send("Page.setLifecycleEventsEnabled", {"enabled": True})
+
+    while time.time() < deadline:
+        try:
+            client._ws.settimeout(1.0)
+            raw = client._ws.recv()
+            resp = json.loads(raw)
+            if resp.get("method") == "Page.lifecycleEvent":
+                name = resp.get("params", {}).get("name", "")
+                if name == target_name:
+                    print(f"Wait satisfied: load-state {state}")
+                    return
+        except websocket.WebSocketTimeoutException:
+            continue
+        except (websocket.WebSocketConnectionClosedException, ConnectionError):
+            break
+
+    print(f"Wait timeout: load-state {state}", file=sys.stderr)
+    sys.exit(1)
+
+
+def cmd_wait(client, args):
+    """Wait for a readiness condition: selector, text, URL, lifecycle, or JS predicate."""
+    modes = [
+        ("selector", args.selector),
+        ("text", args.text),
+        ("url-contains", args.url_contains),
+        ("load-state", args.load_state),
+        ("function", args.function),
+    ]
+    active = [(name, value) for name, value in modes if value is not None]
+    if len(active) != 1:
+        print(
+            "Error: provide exactly one of --selector, --text, --url-contains, "
+            "--load-state, --function",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    deadline = time.time() + args.timeout_ms / 1000.0
+    mode, value = active[0]
+
+    client.connect()
+    try:
+        if mode == "load-state":
+            _wait_lifecycle(client, value, deadline)
+        elif mode == "selector":
+            expr = f"!!document.querySelector({json.dumps(value)})"
+            _wait_poll(client, expr, f"selector {value!r}", deadline)
+        elif mode == "text":
+            expr = (
+                "!!Array.from(document.querySelectorAll('body, body *')).find("
+                f"el => (el.textContent || '').includes({json.dumps(value)}))"
+            )
+            _wait_poll(client, expr, f"text {value!r}", deadline)
+        elif mode == "url-contains":
+            expr = f"location.href.includes({json.dumps(value)})"
+            _wait_poll(client, expr, f"url contains {value!r}", deadline)
+        elif mode == "function":
+            expr = f"!!({value})"
+            _wait_poll(client, expr, f"function {value!r}", deadline)
+    finally:
+        client.close()
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="cdp-v1",
@@ -344,12 +464,27 @@ def main():
                         help="Disable automatic const/let to var rewriting")
     p_eval.add_argument("--await", dest="await_promise", action="store_true",
                         help="Await promise result")
+    p_eval.add_argument("--frame", default=None,
+                        help="CSS selector of a frame owner element, or 'main' for top frame")
 
     # navigate
     p_nav = sub.add_parser("navigate", help="Navigate to URL")
     p_nav.add_argument("url", help="Target URL")
     p_nav.add_argument("--wait-for", choices=["load", "none"], default="load",
                        help="Wait condition (default: load)")
+
+    # wait
+    p_wait = sub.add_parser("wait", help="Wait for a readiness condition")
+    p_wait.add_argument("--selector", help="CSS selector to appear in DOM")
+    p_wait.add_argument("--text", help="Substring present in any element's textContent")
+    p_wait.add_argument("--url-contains", dest="url_contains",
+                        help="Substring of location.href")
+    p_wait.add_argument("--load-state", dest="load_state",
+                        choices=list(_WAIT_LIFECYCLE_NAMES.keys()),
+                        help="Page lifecycle state to await")
+    p_wait.add_argument("--function", help="JavaScript boolean expression")
+    p_wait.add_argument("--timeout-ms", dest="timeout_ms", type=int, default=30000,
+                        help="Timeout in milliseconds (default: 30000)")
 
     args = parser.parse_args()
     client = CDPClient(host=args.host, port=args.port)
@@ -362,6 +497,7 @@ def main():
         "snapshot": cmd_snapshot,
         "evaluate": cmd_evaluate,
         "navigate": cmd_navigate,
+        "wait": cmd_wait,
     }
 
     try:

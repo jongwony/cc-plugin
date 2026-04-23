@@ -49,6 +49,15 @@ Structure `/tmp/codex_prompt_<suffix>.txt` with these sections:
 
 Omit empty sections. `## Pointers` enables codex to self-verify; `## Session Context` provides reference-only background without requiring follow-up.
 
+## Image Generation Requests
+
+When the delegated task is image generation or image editing:
+
+- Include `$imagegen` in the prompt so downstream clients treat it as an explicit image-generation request.
+- Keep the local prompt here minimal and task-specific. Do not restate detailed image prompting doctrine in this skill.
+- Defer prompt construction details to the installed `imagegen` skill when available.
+- Use `references/image-gen-models-prompting-guide.ipynb` only as the backing reference for model choice, prompt structure, text rendering, edits, and multi-image workflows.
+
 ## Running a Task
 1. Ask the user (via `AskUserQuestion`) which model(s) and reasoning effort in a **single prompt with two questions**. Model selection is **multi-select** — multiple models can be chosen for parallel execution.
 
@@ -104,6 +113,12 @@ Key sections (grep patterns for navigation):
 - `Treat reasoning effort as a last-mile knob` - reasoning_effort selection: none/low/medium/high/xhigh guidance
 - `phase` - Responses API phase parameter for long-running agents
 - `Compaction` - Extended context management via `/responses/compact` endpoint
+
+Read the image reference when the delegated task involves image generation, image editing, slides, diagrams, ads, UI mockups, in-image text, or image prompt tuning.
+
+**File**: `references/image-gen-models-prompting-guide.ipynb`
+
+Use the notebook directly instead of duplicating its per-use-case guidance here.
 
 ## Prompt Crafting Workflow
 

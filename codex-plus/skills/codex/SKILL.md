@@ -63,8 +63,8 @@ When the delegated task is image generation or image editing:
 
 | Model | Characteristics |
 |-------|-----------------|
-| `gpt-5.4` | Current default model for Codex CLI tasks |
-| `gpt-5.3-codex` | Prior codex-specific coding model |
+| `gpt-5.5` | Current default model for Codex CLI tasks |
+| `gpt-5.4` | Supplementary model (prior default) |
 
    Reasoning effort is selected once and applied identically to all chosen models.
 
@@ -85,7 +85,7 @@ When the delegated task is image generation or image editing:
 | Network access | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s danger-full-access --full-auto /tmp/codex_prompt_<suffix>.txt` |
 | Resume session | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh --resume /tmp/codex_prompt_<suffix>.txt` (options like -m, -r, -s are ignored; uses last session settings) |
 | Different dir | Add `-C <DIR>` to non-resume patterns above |
-| Custom model | Add `-m gpt-5.3-codex -r high` to any pattern above |
+| Custom model | Add `-m gpt-5.4 -r high` to any pattern above |
 
 ## Following Up
 After `codex` completes, use `AskUserQuestion` to confirm next steps. Restate model/reasoning/sandbox when proposing actions.

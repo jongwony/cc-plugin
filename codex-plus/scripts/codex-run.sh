@@ -5,7 +5,7 @@
 set -euo pipefail
 
 # Defaults
-readonly DEFAULT_MODEL="gpt-5.4"
+readonly DEFAULT_MODEL="gpt-5.5"
 readonly DEFAULT_EFFORT="xhigh"
 readonly DEFAULT_SANDBOX="read-only"
 
@@ -21,7 +21,7 @@ usage() {
 Usage: codex-run.sh [options] <prompt_file>
 
 Options:
-  -m, --model MODEL      Model name (default: gpt-5.4)
+  -m, --model MODEL      Model name (default: gpt-5.5)
   -r, --effort EFFORT    Reasoning effort: medium|high|xhigh (default: xhigh)
   -s, --sandbox SANDBOX  Sandbox: read-only|workspace-write|danger-full-access (default: read-only)
   -C, --cwd DIR          Working directory for codex
@@ -31,7 +31,7 @@ Options:
 
 Examples:
   codex-run.sh /tmp/codex_prompt_a3f9.txt
-  codex-run.sh -m gpt-5.3-codex -r high /tmp/codex_prompt_a3f9.txt
+  codex-run.sh -m gpt-5.4 -r high /tmp/codex_prompt_a3f9.txt
   codex-run.sh --resume /tmp/codex_prompt_a3f9.txt
   codex-run.sh -s workspace-write --full-auto /tmp/codex_prompt_a3f9.txt
 USAGE

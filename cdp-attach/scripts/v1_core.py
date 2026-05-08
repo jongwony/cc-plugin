@@ -12,6 +12,7 @@ v1_core — Core CDP operations: list, select, screenshot, snapshot, evaluate, n
 import argparse
 import base64
 import json
+import os
 import re
 import sys
 import time
@@ -19,7 +20,7 @@ from pathlib import Path
 
 # Import shared client from same directory
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cdp_client import CDPClient, CDPError
+from cdp_client import CDPClient, CDPError, ERRORS_FILE
 
 
 _TOP_LEVEL_CONST_LET_RE = re.compile(r'(?m)^(\s*)(const|let)\b')
@@ -422,6 +423,61 @@ def cmd_wait(client, args):
         client.close()
 
 
+def cmd_error_list(client, args):
+    """List recent error events from errors.jsonl."""
+    if not os.path.exists(ERRORS_FILE):
+        print(f"No errors logged ({ERRORS_FILE} not found)")
+        return
+
+    cutoff = time.time() - args.since_seconds if args.since_seconds else 0
+    filter_str = (args.filter or "").lower()
+
+    with open(ERRORS_FILE) as f:
+        lines = f.readlines()
+
+    matching = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if cutoff and entry.get("t", 0) < cutoff:
+            continue
+        if filter_str:
+            haystack = " ".join(
+                str(entry.get(k, "")) for k in ("category", "method", "error", "kind")
+            ).lower()
+            if filter_str not in haystack:
+                continue
+        matching.append(entry)
+
+    matching = matching[-args.limit:]
+
+    if not matching:
+        print(f"No matching errors (limit={args.limit}, filter={args.filter!r})")
+        return
+
+    for entry in matching:
+        ts = entry.get("t", 0)
+        ts_str = time.strftime("%H:%M:%S", time.localtime(ts))
+        category = entry.get("category", "?")
+        method = entry.get("method", "")
+        kind = entry.get("kind", "")
+        suffix_parts = [p for p in (method, kind) if p]
+        suffix = f" {'/'.join(suffix_parts)}" if suffix_parts else ""
+        error = entry.get("error", "")
+        print(f"[{ts_str}] {category}{suffix}: {error}")
+
+
+# Commands that bypass the headless guard:
+# - version: diagnostic/info-only
+# - error_list: reads local JSONL file, no CDP commands
+LOCAL_COMMANDS = {"version", "error_list"}
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="cdp-v1",
@@ -486,6 +542,13 @@ def main():
     p_wait.add_argument("--timeout-ms", dest="timeout_ms", type=int, default=30000,
                         help="Timeout in milliseconds (default: 30000)")
 
+    # error_list
+    p_err = sub.add_parser("error_list", help="List recent CDP error events from errors.jsonl")
+    p_err.add_argument("--limit", type=int, default=50, help="Max entries to show (default: 50)")
+    p_err.add_argument("--filter", help="Substring to match in category/method/error/kind")
+    p_err.add_argument("--since-seconds", dest="since_seconds", type=int,
+                       help="Only entries within last N seconds")
+
     args = parser.parse_args()
     client = CDPClient(host=args.host, port=args.port)
 
@@ -498,11 +561,12 @@ def main():
         "evaluate": cmd_evaluate,
         "navigate": cmd_navigate,
         "wait": cmd_wait,
+        "error_list": cmd_error_list,
     }
 
     try:
-        # Block headless browsers (except version for diagnostics)
-        if args.command != "version":
+        # Block headless browsers (except for diagnostic / local commands).
+        if args.command not in LOCAL_COMMANDS:
             client.require_headed()
         commands[args.command](client, args)
     except CDPError as e:

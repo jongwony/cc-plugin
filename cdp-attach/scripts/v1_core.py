@@ -423,6 +423,46 @@ def cmd_wait(client, args):
         client.close()
 
 
+def cmd_cdp_call(client, args):
+    """Send a raw CDP method and print the result.
+
+    Escape hatch for CDP primitives not exposed by v1/v2/v3 commands.
+    """
+    if args.params_json and args.stdin:
+        print("Error: --params-json and --stdin are mutually exclusive", file=sys.stderr)
+        sys.exit(1)
+
+    params = None
+    if args.stdin:
+        raw = sys.stdin.read().strip()
+        if raw:
+            try:
+                params = json.loads(raw)
+            except json.JSONDecodeError as e:
+                print(f"Error: invalid JSON on stdin: {e}", file=sys.stderr)
+                sys.exit(1)
+    elif args.params_json:
+        try:
+            params = json.loads(args.params_json)
+        except json.JSONDecodeError as e:
+            print(f"Error: invalid JSON in --params-json: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    if params is not None and not isinstance(params, dict):
+        print(
+            f"Error: params must be a JSON object (got {type(params).__name__})",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    client.connect()
+    try:
+        result = client.send(args.method, params=params)
+        print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+    finally:
+        client.close()
+
+
 def cmd_error_list(client, args):
     """List recent error events from errors.jsonl."""
     if not os.path.exists(ERRORS_FILE):
@@ -542,6 +582,17 @@ def main():
     p_wait.add_argument("--timeout-ms", dest="timeout_ms", type=int, default=30000,
                         help="Timeout in milliseconds (default: 30000)")
 
+    # cdp_call
+    p_call = sub.add_parser(
+        "cdp_call",
+        help="Send a raw CDP method (escape hatch for primitives not exposed by v1/v2/v3)",
+    )
+    p_call.add_argument("method", help="CDP method, e.g. Page.captureScreenshot")
+    p_call.add_argument("--params-json", dest="params_json",
+                        help="JSON string with params object")
+    p_call.add_argument("--stdin", action="store_true",
+                        help="Read params JSON from stdin")
+
     # error_list
     p_err = sub.add_parser("error_list", help="List recent CDP error events from errors.jsonl")
     p_err.add_argument("--limit", type=int, default=50, help="Max entries to show (default: 50)")
@@ -561,6 +612,7 @@ def main():
         "evaluate": cmd_evaluate,
         "navigate": cmd_navigate,
         "wait": cmd_wait,
+        "cdp_call": cmd_cdp_call,
         "error_list": cmd_error_list,
     }
 

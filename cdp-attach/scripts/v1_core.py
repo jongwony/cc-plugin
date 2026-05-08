@@ -590,7 +590,7 @@ def cmd_error_list(client, args):
     matching = matching[-args.limit:]
 
     if not matching:
-        print(f"No matching errors (limit={args.limit}, filter={args.filter!r})")
+        print(f"No matching errors (limit={args.limit}, filter={filter_str!r})")
         return
 
     for entry in matching:
@@ -603,13 +603,6 @@ def cmd_error_list(client, args):
         suffix = f" {'/'.join(suffix_parts)}" if suffix_parts else ""
         error = entry.get("error", "")
         print(f"[{ts_str}] {category}{suffix}: {error}")
-
-
-# Commands that bypass the headless guard:
-# - version: diagnostic/info-only
-# - error_list: reads local JSONL file, no CDP commands
-# - doctor: diagnostic, reports headless status itself
-LOCAL_COMMANDS = {"version", "error_list", "doctor"}
 
 
 def main():
@@ -702,6 +695,10 @@ def main():
 
     args = parser.parse_args()
     client = CDPClient(host=args.host, port=args.port)
+
+    # Exempt from headless guard: diagnostic / local-file commands only.
+    # Keep in sync with commands dict below.
+    LOCAL_COMMANDS = {"version", "error_list", "doctor"}
 
     commands = {
         "version": cmd_version,

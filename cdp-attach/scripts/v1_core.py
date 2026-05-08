@@ -20,7 +20,7 @@ from pathlib import Path
 
 # Import shared client from same directory
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cdp_client import CDPClient, CDPError, ERRORS_FILE
+from cdp_client import CDPClient, CDPError, ERRORS_FILE, STATE_DIR
 
 
 _TOP_LEVEL_CONST_LET_RE = re.compile(r'(?m)^(\s*)(const|let)\b')
@@ -423,6 +423,99 @@ def cmd_wait(client, args):
         client.close()
 
 
+def cmd_doctor(client, args):
+    """Diagnostic check for cdp-attach setup. Reports headless/headed status itself."""
+    fail_count = 0
+
+    def step(label, ok, detail=""):
+        nonlocal fail_count
+        if not ok:
+            fail_count += 1
+        marker = "PASS" if ok else "FAIL"
+        suffix = f" — {detail}" if detail else ""
+        print(f"  [{marker}] {label}{suffix}")
+
+    print(f"cdp-attach doctor — host={client.host} port={client.port}")
+
+    # Step 1: HTTP /json/version
+    try:
+        info = client.get_version()
+        browser = info.get("Browser", "?") if isinstance(info, dict) else "?"
+        step("HTTP /json/version reachable", True, browser)
+    except Exception as e:
+        step("HTTP /json/version reachable", False, str(e))
+        print(f"\n{fail_count} check(s) failed (cannot continue without HTTP).")
+        sys.exit(1)
+
+    # Step 2: headed/headless (informational; doctor does not require headed)
+    try:
+        is_h = client.is_headless()
+        step("Browser visible (not headless)", not is_h, "headless" if is_h else "headed")
+    except Exception as e:
+        step("Browser visible (not headless)", False, str(e))
+
+    # Step 3: /json/list non-empty
+    tabs = []
+    try:
+        tabs = client.list_tabs(type_filter="page")
+        step("Tab list non-empty", len(tabs) > 0, f"{len(tabs)} tab(s)")
+    except Exception as e:
+        step("Tab list non-empty", False, str(e))
+
+    # Step 4: selected_target valid
+    selected = client.get_selected_target()
+    target_ids = {t.get("id") for t in tabs}
+    if selected is None:
+        step("Selected target valid", True, "none selected (use 'select' first)")
+        ws_target = None
+    else:
+        valid = selected in target_ids
+        detail = f"{selected[:8]}..." + ("" if valid else " (not in tab list)")
+        step("Selected target valid", valid, detail)
+        ws_target = selected if valid else None
+
+    # Step 5/6: WebSocket handshake + Runtime.evaluate
+    if ws_target:
+        try:
+            client.connect(target_id=ws_target)
+            step("WebSocket handshake", True)
+            try:
+                result = client.send(
+                    "Runtime.evaluate",
+                    {"expression": "1+1", "returnByValue": True},
+                )
+                value = result.get("result", {}).get("value")
+                step("Runtime.evaluate 1+1 == 2", value == 2, str(value))
+            except Exception as e:
+                step("Runtime.evaluate 1+1 == 2", False, str(e))
+            finally:
+                client.close()
+        except Exception as e:
+            step("WebSocket handshake", False, str(e))
+            step("Runtime.evaluate 1+1 == 2", False, "skipped")
+    else:
+        step("WebSocket handshake", False, "no valid target")
+        step("Runtime.evaluate 1+1 == 2", False, "skipped")
+
+    # Step 7: cache dir writable
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        test_path = os.path.join(STATE_DIR, ".doctor-write-test")
+        with open(test_path, "w") as f:
+            f.write("ok")
+        os.remove(test_path)
+        step("Cache dir writable", True, STATE_DIR)
+    except Exception as e:
+        step("Cache dir writable", False, f"{STATE_DIR}: {e}")
+
+    print()
+    if fail_count == 0:
+        print("All checks passed.")
+    else:
+        print(f"{fail_count} check(s) failed.")
+        sys.exit(1)
+
+
 def cmd_cdp_call(client, args):
     """Send a raw CDP method and print the result.
 
@@ -515,7 +608,8 @@ def cmd_error_list(client, args):
 # Commands that bypass the headless guard:
 # - version: diagnostic/info-only
 # - error_list: reads local JSONL file, no CDP commands
-LOCAL_COMMANDS = {"version", "error_list"}
+# - doctor: diagnostic, reports headless status itself
+LOCAL_COMMANDS = {"version", "error_list", "doctor"}
 
 
 def main():
@@ -582,6 +676,12 @@ def main():
     p_wait.add_argument("--timeout-ms", dest="timeout_ms", type=int, default=30000,
                         help="Timeout in milliseconds (default: 30000)")
 
+    # doctor
+    sub.add_parser(
+        "doctor",
+        help="Diagnostic check (HTTP, WebSocket, eval, cache writable)",
+    )
+
     # cdp_call
     p_call = sub.add_parser(
         "cdp_call",
@@ -612,6 +712,7 @@ def main():
         "evaluate": cmd_evaluate,
         "navigate": cmd_navigate,
         "wait": cmd_wait,
+        "doctor": cmd_doctor,
         "cdp_call": cmd_cdp_call,
         "error_list": cmd_error_list,
     }

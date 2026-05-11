@@ -28,6 +28,31 @@ import urllib.error
 # State file location
 STATE_DIR = os.path.expanduser("~/.cache/cdp-attach")
 STATE_FILE = os.path.join(STATE_DIR, "state.json")
+ERRORS_FILE = os.path.join(STATE_DIR, "errors.jsonl")
+ERRORS_ROTATE_BYTES = 1024 * 1024  # 1MB
+
+
+def _log_error(category, payload):
+    """Append an error event to ~/.cache/cdp-attach/errors.jsonl.
+
+    Best-effort: never raises. Disabled when CDP_ATTACH_NO_ERROR_LOG=1.
+    Rotates errors.jsonl -> errors.jsonl.1 when size exceeds ERRORS_ROTATE_BYTES.
+    """
+    if os.environ.get("CDP_ATTACH_NO_ERROR_LOG") == "1":
+        return
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        try:
+            if os.path.getsize(ERRORS_FILE) > ERRORS_ROTATE_BYTES:
+                os.replace(ERRORS_FILE, ERRORS_FILE + ".1")
+        except FileNotFoundError:
+            pass
+        entry = {"t": time.time(), "category": category, **payload}
+        with open(ERRORS_FILE, "a") as f:
+            f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
+    except Exception:
+        # Logger must never break the caller.
+        pass
 
 
 class CDPError(Exception):
@@ -208,20 +233,43 @@ class CDPClient:
                 if resp.get("id") == msg_id:
                     if "error" in resp:
                         err = resp["error"]
-                        raise CDPError(f"CDP error ({err.get('code')}): {err.get('message')}")
+                        error_msg = f"CDP error ({err.get('code')}): {err.get('message')}"
+                        _log_error("send", {
+                            "method": method,
+                            "params": params or {},
+                            "error": error_msg,
+                            "code": err.get("code"),
+                        })
+                        raise CDPError(error_msg)
                     return resp.get("result", {})
                 else:
                     # Buffer events (no 'id' field) for later inspection
                     self._event_buffer.append(resp)
+            except CDPError:
+                # Already logged at the raise site.
+                raise
             except Exception as e:
                 if "timed out" in str(e).lower():
                     continue
+                _log_error("send", {
+                    "method": method,
+                    "params": params or {},
+                    "error": f"{type(e).__name__}: {e}",
+                    "kind": "ws_error",
+                })
                 raise
 
-        raise CDPError(
+        timeout_msg = (
             f"Timeout waiting for response to {method} ({timeout}s). "
             "Tab may be frozen or suspended."
         )
+        _log_error("send", {
+            "method": method,
+            "params": params or {},
+            "error": timeout_msg,
+            "kind": "timeout",
+        })
+        raise CDPError(timeout_msg)
 
     def close(self):
         """Close WebSocket connection."""

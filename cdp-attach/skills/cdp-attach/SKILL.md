@@ -89,9 +89,19 @@ $V1 wait --text "Order complete"                          # Text appears somewhe
 $V1 wait --url-contains "/dashboard"                      # URL navigation
 $V1 wait --load-state networkidle                         # Page lifecycle state
 $V1 wait --function "window.__APP_READY__ === true"       # Custom JS predicate
+
+$V1 doctor                                                # 7-step diagnostic (HTTP/WS/eval/cache)
+$V1 cdp_call Page.getLayoutMetrics                        # Raw CDP escape hatch (no params)
+$V1 cdp_call Storage.getCookies --params-json '{"urls":["https://example.com"]}'
+$V1 cdp_call DOM.getDocument --stdin <<< '{"depth":1}'    # Read params from stdin
+$V1 error_list                                            # Recent CDP errors (last 50)
+$V1 error_list --filter "Network" --limit 20              # Filter category/method/error
+$V1 error_list --since-seconds 300                        # Last 5 minutes only
 ```
 
 > **Note on `--frame`**: accepts a CSS selector matching a frame owner (e.g. `iframe`, `frame`, `object`, `embed`) or the literal `main` for the top-level document. Cross-origin frames resolve the same way because CDP exposes per-frame execution contexts regardless of origin.
+
+> **Note on `doctor`, `cdp_call`, `error_list`**: bypass the headless guard so they run on any reachable CDP endpoint. `doctor` reports headless state itself; `cdp_call` is the escape hatch for CDP methods not wrapped by v1/v2/v3; `error_list` reads `~/.cache/cdp-attach/errors.jsonl`, which `cdp_client.send()` populates automatically on every CDP failure (CDP error response, timeout, or WebSocket error). Disable error logging with `CDP_ATTACH_NO_ERROR_LOG=1`. The file rotates to `errors.jsonl.1` at 1MB.
 
 ### Common Mistakes
 

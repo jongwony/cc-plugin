@@ -12,6 +12,7 @@ v1_core — Core CDP operations: list, select, screenshot, snapshot, evaluate, n
 import argparse
 import base64
 import json
+import os
 import re
 import sys
 import time
@@ -19,7 +20,7 @@ from pathlib import Path
 
 # Import shared client from same directory
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cdp_client import CDPClient, CDPError
+from cdp_client import CDPClient, CDPError, ERRORS_FILE, STATE_DIR
 
 
 _TOP_LEVEL_CONST_LET_RE = re.compile(r'(?m)^(\s*)(const|let)\b')
@@ -203,7 +204,6 @@ def cmd_snapshot(client, args):
 
 def cmd_evaluate(client, args):
     """Evaluate JavaScript expression."""
-    # Fix 2: Resolve expression from --stdin or positional arg
     if args.stdin:
         expression = sys.stdin.read().strip()
     elif args.expression:
@@ -212,11 +212,10 @@ def cmd_evaluate(client, args):
         print("Error: Provide expression argument or use --stdin", file=sys.stderr)
         sys.exit(1)
 
-    # Fix 1: Rewrite const/let to var for re-declaration safety
     if not args.no_rewrite:
         expression = _redeclare_safe(expression)
 
-    # Fix 3: Auto-wrap await expressions in async IIFE
+    # Auto-wrap await expressions in async IIFE
     if args.await_promise and 'await ' in expression and not expression.strip().startswith('(async'):
         stripped = expression.rstrip().rstrip(';')
         if ';' not in stripped and '\n' not in stripped:
@@ -422,6 +421,192 @@ def cmd_wait(client, args):
         client.close()
 
 
+def cmd_doctor(client, args):
+    """Diagnostic check for cdp-attach setup. Reports headless/headed status itself."""
+    fail_count = 0
+
+    def step(label, ok, detail=""):
+        nonlocal fail_count
+        if not ok:
+            fail_count += 1
+        marker = "PASS" if ok else "FAIL"
+        suffix = f" — {detail}" if detail else ""
+        print(f"  [{marker}] {label}{suffix}")
+
+    print(f"cdp-attach doctor — host={client.host} port={client.port}")
+
+    try:
+        info = client.get_version()
+        browser = info.get("Browser", "?") if isinstance(info, dict) else "?"
+        step("HTTP /json/version reachable", True, browser)
+    except Exception as e:
+        step("HTTP /json/version reachable", False, str(e))
+        print(f"\n{fail_count} check(s) failed (cannot continue without HTTP).")
+        sys.exit(1)
+
+    # Step 2: headed/headless (informational; doctor does not require headed)
+    try:
+        is_h = client.is_headless()
+        step("Browser visible (not headless)", not is_h, "headless" if is_h else "headed")
+    except Exception as e:
+        step("Browser visible (not headless)", False, str(e))
+
+    tabs = []
+    try:
+        tabs = client.list_tabs(type_filter="page")
+        step("Tab list non-empty", len(tabs) > 0, f"{len(tabs)} tab(s)")
+    except Exception as e:
+        step("Tab list non-empty", False, str(e))
+
+    selected = client.get_selected_target()
+    target_ids = {t.get("id") for t in tabs}
+    if selected is None:
+        step("Selected target valid", True, "none selected (use 'select' first)")
+        ws_target = None
+    else:
+        valid = selected in target_ids
+        detail = f"{selected[:8]}..." + ("" if valid else " (not in tab list)")
+        step("Selected target valid", valid, detail)
+        ws_target = selected if valid else None
+
+    # Step 5/6: WebSocket handshake + Runtime.evaluate
+    if ws_target:
+        try:
+            client.connect(target_id=ws_target)
+            step("WebSocket handshake", True)
+            try:
+                result = client.send(
+                    "Runtime.evaluate",
+                    {"expression": "1+1", "returnByValue": True},
+                )
+                value = result.get("result", {}).get("value")
+                step("Runtime.evaluate 1+1 == 2", value == 2, str(value))
+            except Exception as e:
+                step("Runtime.evaluate 1+1 == 2", False, str(e))
+            finally:
+                client.close()
+        except Exception as e:
+            step("WebSocket handshake", False, str(e))
+            step("Runtime.evaluate 1+1 == 2", False, "skipped")
+    else:
+        step("WebSocket handshake", False, "no valid target")
+        step("Runtime.evaluate 1+1 == 2", False, "skipped")
+
+    # Step 7: cache dir writable
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        test_path = os.path.join(STATE_DIR, ".doctor-write-test")
+        with open(test_path, "w") as f:
+            f.write("ok")
+        os.remove(test_path)
+        step("Cache dir writable", True, STATE_DIR)
+    except Exception as e:
+        step("Cache dir writable", False, f"{STATE_DIR}: {e}")
+
+    print()
+    if fail_count == 0:
+        print("All checks passed.")
+    else:
+        print(f"{fail_count} check(s) failed.")
+        sys.exit(1)
+
+
+def cmd_cdp_call(client, args):
+    """Send a raw CDP method and print the result.
+
+    Escape hatch for CDP primitives not exposed by v1/v2/v3 commands.
+    """
+    if args.params_json and args.stdin:
+        print("Error: --params-json and --stdin are mutually exclusive", file=sys.stderr)
+        sys.exit(1)
+
+    params = None
+    if args.stdin:
+        raw = sys.stdin.read().strip()
+        if raw:
+            try:
+                params = json.loads(raw)
+            except json.JSONDecodeError as e:
+                print(f"Error: invalid JSON on stdin: {e}", file=sys.stderr)
+                sys.exit(1)
+    elif args.params_json:
+        try:
+            params = json.loads(args.params_json)
+        except json.JSONDecodeError as e:
+            print(f"Error: invalid JSON in --params-json: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    if params is not None and not isinstance(params, dict):
+        print(
+            f"Error: params must be a JSON object (got {type(params).__name__})",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    client.connect()
+    try:
+        result = client.send(args.method, params=params)
+        print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+    finally:
+        client.close()
+
+
+def cmd_error_list(client, args):
+    """List recent error events from errors.jsonl."""
+    cutoff = time.time() - args.since_seconds if args.since_seconds else 0
+    filter_str = (args.filter or "").lower()
+
+    try:
+        with open(ERRORS_FILE) as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        print(f"No errors logged ({ERRORS_FILE} not found)")
+        return
+
+    matching = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if cutoff and entry.get("t", 0) < cutoff:
+            continue
+        if filter_str:
+            haystack = " ".join(
+                str(entry.get(k, "")) for k in ("category", "method", "error", "kind")
+            ).lower()
+            if filter_str not in haystack:
+                continue
+        matching.append(entry)
+
+    matching = matching[-args.limit:]
+
+    if not matching:
+        print(f"No matching errors (limit={args.limit}, filter={args.filter!r})")
+        return
+
+    for entry in matching:
+        ts = entry.get("t", 0)
+        ts_str = time.strftime("%H:%M:%S", time.localtime(ts))
+        category = entry.get("category", "?")
+        method = entry.get("method", "")
+        kind = entry.get("kind", "")
+        suffix_parts = [p for p in (method, kind) if p]
+        suffix = f" {'/'.join(suffix_parts)}" if suffix_parts else ""
+        error = entry.get("error", "")
+        print(f"[{ts_str}] {category}{suffix}: {error}")
+
+
+# Commands that bypass the headless guard:
+# - version: diagnostic/info-only
+# - error_list: reads local JSONL file, no CDP commands
+# - doctor: diagnostic, reports headless status itself
+LOCAL_COMMANDS = {"version", "error_list", "doctor"}
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="cdp-v1",
@@ -486,6 +671,30 @@ def main():
     p_wait.add_argument("--timeout-ms", dest="timeout_ms", type=int, default=30000,
                         help="Timeout in milliseconds (default: 30000)")
 
+    # doctor
+    sub.add_parser(
+        "doctor",
+        help="Diagnostic check (HTTP, WebSocket, eval, cache writable)",
+    )
+
+    # cdp_call
+    p_call = sub.add_parser(
+        "cdp_call",
+        help="Send a raw CDP method (escape hatch for primitives not exposed by v1/v2/v3)",
+    )
+    p_call.add_argument("method", help="CDP method, e.g. Page.captureScreenshot")
+    p_call.add_argument("--params-json", dest="params_json",
+                        help="JSON string with params object")
+    p_call.add_argument("--stdin", action="store_true",
+                        help="Read params JSON from stdin")
+
+    # error_list
+    p_err = sub.add_parser("error_list", help="List recent CDP error events from errors.jsonl")
+    p_err.add_argument("--limit", type=int, default=50, help="Max entries to show (default: 50)")
+    p_err.add_argument("--filter", help="Substring to match in category/method/error/kind")
+    p_err.add_argument("--since-seconds", dest="since_seconds", type=int,
+                       help="Only entries within last N seconds")
+
     args = parser.parse_args()
     client = CDPClient(host=args.host, port=args.port)
 
@@ -498,11 +707,14 @@ def main():
         "evaluate": cmd_evaluate,
         "navigate": cmd_navigate,
         "wait": cmd_wait,
+        "doctor": cmd_doctor,
+        "cdp_call": cmd_cdp_call,
+        "error_list": cmd_error_list,
     }
 
     try:
-        # Block headless browsers (except version for diagnostics)
-        if args.command != "version":
+        # Block headless browsers (except for diagnostic / local commands).
+        if args.command not in LOCAL_COMMANDS:
             client.require_headed()
         commands[args.command](client, args)
     except CDPError as e:

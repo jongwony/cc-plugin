@@ -11,6 +11,7 @@ v2_interact — Browser interaction: click, fill, press_key, hover, new_page, cl
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -339,6 +340,72 @@ def cmd_scroll(client, args):
         direction = "down" if args.delta_y > 0 else ("up" if args.delta_y < 0 else "")
         suffix = f" ({direction})" if direction else ""
         print(f"Scrolled at ({x:.0f}, {y:.0f}) dx={args.delta_x} dy={args.delta_y}{suffix}")
+    finally:
+        client.close()
+
+
+def cmd_upload_file(client, args):
+    """Upload file(s) to an <input type=file> element via DOM.setFileInputFiles.
+
+    Paths are expanded (~), resolved to absolute, and verified to exist.
+    Element type is pre-validated to fail fast on wrong target.
+    """
+    abs_paths = []
+    for path in args.files:
+        expanded = os.path.expanduser(path)
+        abs_path = os.path.abspath(expanded)
+        if not os.path.exists(abs_path):
+            print(f"Error: file not found: {abs_path}", file=sys.stderr)
+            sys.exit(1)
+        if not os.path.isfile(abs_path):
+            print(f"Error: not a regular file: {abs_path}", file=sys.stderr)
+            sys.exit(1)
+        abs_paths.append(abs_path)
+
+    client.connect()
+    try:
+        _ensure_dom(client)
+
+        doc = client.send("DOM.getDocument", {"depth": 1, "pierce": True})
+        root_node_id = doc.get("root", {}).get("nodeId", 0)
+        if not root_node_id:
+            raise CDPError("DOM.getDocument returned no root nodeId")
+
+        q = client.send("DOM.querySelector", {
+            "nodeId": root_node_id,
+            "selector": args.selector,
+        })
+        node_id = q.get("nodeId", 0)
+        if not node_id:
+            raise CDPError(f"No element matches selector: {args.selector!r}")
+
+        # Pre-validate element is <input type=file>; setFileInputFiles silently
+        # no-ops on other elements, which would mask user mistakes.
+        desc = client.send("DOM.describeNode", {"nodeId": node_id})
+        node = desc.get("node", {})
+        node_name = node.get("nodeName", "").lower()
+        # CDP returns attributes as a flat list: [k1, v1, k2, v2, ...]
+        attrs = node.get("attributes") or []
+        attr_map = dict(zip(attrs[::2], attrs[1::2]))
+
+        if node_name != "input":
+            raise CDPError(
+                f"Element {args.selector!r} is <{node_name}>, expected <input>. "
+                "upload_file targets <input type=\"file\"> only."
+            )
+        if attr_map.get("type", "").lower() != "file":
+            raise CDPError(
+                f"Element <input> has type={attr_map.get('type', 'text')!r}, "
+                "expected type=\"file\". upload_file targets <input type=\"file\"> only."
+            )
+
+        client.send("DOM.setFileInputFiles", {
+            "nodeId": node_id,
+            "files": abs_paths,
+        })
+
+        label = abs_paths[0] if len(abs_paths) == 1 else f"{len(abs_paths)} files"
+        print(f"Uploaded to {args.selector!r}: {label}")
     finally:
         client.close()
 
@@ -733,6 +800,15 @@ def main():
     p_scroll.add_argument("--delta-x", dest="delta_x", type=float, default=0,
                           help="Horizontal scroll delta px (positive=right, default: 0)")
 
+    # upload_file
+    p_upload = sub.add_parser(
+        "upload_file",
+        help="Upload file(s) to <input type=file> via DOM.setFileInputFiles",
+    )
+    p_upload.add_argument("--selector", "-s", required=True,
+                          help="CSS selector for <input type=file>")
+    p_upload.add_argument("files", nargs="+", help="One or more file paths (absolute or ~)")
+
     # fill
     p_fill = sub.add_parser("fill", help="Fill text into element")
     p_fill.add_argument("--selector", "-s", required=True, help="CSS selector")
@@ -785,6 +861,7 @@ def main():
     commands = {
         "click": cmd_click,
         "scroll": cmd_scroll,
+        "upload_file": cmd_upload_file,
         "fill": cmd_fill,
         "press_key": cmd_press_key,
         "hover": cmd_hover,

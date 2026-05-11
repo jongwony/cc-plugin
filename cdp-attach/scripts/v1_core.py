@@ -267,8 +267,6 @@ def cmd_evaluate(client, args):
 
 def cmd_navigate(client, args):
     """Navigate to a URL."""
-    import websocket
-
     client.connect()
     try:
         result = client.send("Page.navigate", {"url": args.url})
@@ -280,23 +278,11 @@ def cmd_navigate(client, args):
             sys.exit(1)
 
         if args.wait_for == "load":
-            # Wait for Page.loadEventFired
-            loaded = False
-            deadline = time.time() + 30
-            while time.time() < deadline:
-                try:
-                    client._ws.settimeout(1.0)
-                    raw = client._ws.recv()
-                    resp = json.loads(raw)
-                    if resp.get("method") == "Page.loadEventFired":
-                        loaded = True
-                        break
-                except websocket.WebSocketTimeoutException:
-                    continue
-                except (websocket.WebSocketConnectionClosedException, ConnectionError):
-                    break
-            if not loaded:
-                print("Warning: Page load event not received within 30s — page may not be fully loaded", file=sys.stderr)
+            if not _wait_for_load_event(client):
+                print(
+                    "Warning: Page load event not received within 30s — page may not be fully loaded",
+                    file=sys.stderr,
+                )
 
         frame_id = result.get("frameId", "")
         print(f"Navigated to: {args.url}")
@@ -305,11 +291,92 @@ def cmd_navigate(client, args):
         client.close()
 
 
+def cmd_reload(client, args):
+    """Reload the current page. --hard bypasses cache."""
+    client.connect()
+    try:
+        client.send("Page.reload", {"ignoreCache": args.hard})
+
+        if args.wait_for == "load":
+            if not _wait_for_load_event(client):
+                print(
+                    "Warning: Page load event not received within 30s",
+                    file=sys.stderr,
+                )
+
+        print(f"Reloaded{' (cache bypassed)' if args.hard else ''}")
+    finally:
+        client.close()
+
+
+def _history_nav(client, wait_for, direction, label):
+    """Shared back/forward navigation via Page.navigateToHistoryEntry."""
+    client.connect()
+    try:
+        hist = client.send("Page.getNavigationHistory")
+        entries = hist.get("entries", [])
+        current = hist.get("currentIndex", 0)
+        target = current + direction
+
+        if target < 0:
+            raise CDPError("No further history (already at first entry)")
+        if target >= len(entries):
+            raise CDPError("No further history (already at last entry)")
+
+        entry = entries[target]
+        client.send("Page.navigateToHistoryEntry", {"entryId": entry.get("id")})
+
+        if wait_for == "load":
+            if not _wait_for_load_event(client):
+                print(
+                    "Warning: Page load event not received within 30s",
+                    file=sys.stderr,
+                )
+
+        print(f"Navigated {label} to: {entry.get('url', '')}")
+    finally:
+        client.close()
+
+
+def cmd_back(client, args):
+    """Navigate back in history."""
+    _history_nav(client, args.wait_for, direction=-1, label="back")
+
+
+def cmd_forward(client, args):
+    """Navigate forward in history."""
+    _history_nav(client, args.wait_for, direction=+1, label="forward")
+
+
 _WAIT_LIFECYCLE_NAMES = {
     "load": "load",
     "domcontentloaded": "DOMContentLoaded",
     "networkidle": "networkIdle",
 }
+
+
+def _wait_for_load_event(client, timeout=30):
+    """Wait for Page.loadEventFired event. Returns True if received before timeout.
+
+    Used by navigate / reload / history navigation to provide a uniform
+    --wait-for load behavior. Does not pre-enable Page domain — relies on
+    the event firing regardless (matches existing cmd_navigate behavior).
+    """
+    import websocket
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            client._ws.settimeout(1.0)
+            raw = client._ws.recv()
+            resp = json.loads(raw)
+            if resp.get("method") == "Page.loadEventFired":
+                return True
+        except websocket.WebSocketTimeoutException:
+            continue
+        except (websocket.WebSocketConnectionClosedException, ConnectionError):
+            break
+    return False
 
 
 def _wait_poll(client, expression, label, deadline):
@@ -658,6 +725,23 @@ def main():
     p_nav.add_argument("--wait-for", choices=["load", "none"], default="load",
                        help="Wait condition (default: load)")
 
+    # reload
+    p_reload = sub.add_parser("reload", help="Reload current page")
+    p_reload.add_argument("--hard", action="store_true",
+                          help="Bypass cache (Page.reload ignoreCache=true)")
+    p_reload.add_argument("--wait-for", choices=["load", "none"], default="load",
+                          help="Wait condition (default: load)")
+
+    # back
+    p_back = sub.add_parser("back", help="Navigate back in history")
+    p_back.add_argument("--wait-for", choices=["load", "none"], default="load",
+                        help="Wait condition (default: load)")
+
+    # forward
+    p_forward = sub.add_parser("forward", help="Navigate forward in history")
+    p_forward.add_argument("--wait-for", choices=["load", "none"], default="load",
+                           help="Wait condition (default: load)")
+
     # wait
     p_wait = sub.add_parser("wait", help="Wait for a readiness condition")
     p_wait.add_argument("--selector", help="CSS selector to appear in DOM")
@@ -706,6 +790,9 @@ def main():
         "snapshot": cmd_snapshot,
         "evaluate": cmd_evaluate,
         "navigate": cmd_navigate,
+        "reload": cmd_reload,
+        "back": cmd_back,
+        "forward": cmd_forward,
         "wait": cmd_wait,
         "doctor": cmd_doctor,
         "cdp_call": cmd_cdp_call,

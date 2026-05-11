@@ -54,7 +54,7 @@ def _resolve_selector(client, selector):
     return obj
 
 
-def _dispatch_mouse(client, x, y, event_type, button="left", click_count=1):
+def _dispatch_mouse(client, x, y, event_type, button="left", click_count=1, modifiers=0):
     """Send mouse event at coordinates."""
     client.send("Input.dispatchMouseEvent", {
         "type": event_type,
@@ -62,7 +62,30 @@ def _dispatch_mouse(client, x, y, event_type, button="left", click_count=1):
         "y": y,
         "button": button,
         "clickCount": click_count,
+        "modifiers": modifiers,
     })
+
+
+def _parse_modifiers(spec):
+    """Parse comma-separated modifier names to CDP bitmask.
+
+    Returns int bitmask: 1=Alt, 2=Ctrl, 4=Shift, 8=Meta. Empty/None returns 0.
+    Unknown names are silently skipped.
+    """
+    if not spec:
+        return 0
+    bitmask = 0
+    for m in spec.split(","):
+        name = m.strip().lower()
+        if name == "alt":
+            bitmask |= 1
+        elif name == "ctrl":
+            bitmask |= 2
+        elif name == "shift":
+            bitmask |= 4
+        elif name in ("meta", "cmd"):
+            bitmask |= 8
+    return bitmask
 
 
 # ── CDP DOM/Accessibility helpers ──────────────────────────────
@@ -237,10 +260,18 @@ def _dom_search(client, query, include_shadow_dom=False, limit=20):
 
 
 def cmd_click(client, args):
-    """Click at coordinates or CSS selector."""
+    """Click at coordinates or CSS selector.
+
+    Supports button (left/right/middle), multi-click (double/triple), and modifier keys.
+    Defaults preserve original single-left-click behavior.
+    """
     if not args.selector and (args.x is None or args.y is None):
         print("Error: Provide --selector or both x y coordinates", file=sys.stderr)
         sys.exit(1)
+    if args.clicks < 1:
+        print(f"Error: --clicks must be >= 1 (got {args.clicks})", file=sys.stderr)
+        sys.exit(1)
+
     client.connect()
     try:
         if args.selector:
@@ -250,9 +281,25 @@ def cmd_click(client, args):
         else:
             x, y = args.x, args.y
 
-        _dispatch_mouse(client, x, y, "mousePressed")
-        _dispatch_mouse(client, x, y, "mouseReleased")
-        print(f"Clicked at ({x:.0f}, {y:.0f})")
+        modifiers = _parse_modifiers(args.modifiers)
+
+        # CDP convention: clickCount increments within a click sequence.
+        # Single: cc=1. Double: cc=1 then cc=2. Triple: cc=1, cc=2, cc=3.
+        for i in range(1, args.clicks + 1):
+            _dispatch_mouse(client, x, y, "mousePressed",
+                            button=args.button, click_count=i, modifiers=modifiers)
+            _dispatch_mouse(client, x, y, "mouseReleased",
+                            button=args.button, click_count=i, modifiers=modifiers)
+
+        detail = []
+        if args.button != "left":
+            detail.append(args.button)
+        if args.clicks > 1:
+            detail.append(f"x{args.clicks}")
+        if args.modifiers:
+            detail.append(f"mod={args.modifiers}")
+        suffix = f" [{' '.join(detail)}]" if detail else ""
+        print(f"Clicked at ({x:.0f}, {y:.0f}){suffix}")
     finally:
         client.close()
 
@@ -293,19 +340,7 @@ def cmd_press_key(client, args):
     """Press a keyboard key."""
     client.connect()
     try:
-        # Build modifiers bitmask: 1=Alt, 2=Ctrl, 4=Shift, 8=Meta
-        modifiers = 0
-        if args.modifiers:
-            mod_parts = [m.strip().lower() for m in args.modifiers.split(",")]
-            for m in mod_parts:
-                if m == "alt":
-                    modifiers |= 1
-                elif m == "ctrl":
-                    modifiers |= 2
-                elif m == "shift":
-                    modifiers |= 4
-                elif m in ("meta", "cmd"):
-                    modifiers |= 8
+        modifiers = _parse_modifiers(args.modifiers)
 
         key = args.key
         # Map common key names
@@ -642,6 +677,12 @@ def main():
     p_click.add_argument("x", nargs="?", type=float, help="X coordinate")
     p_click.add_argument("y", nargs="?", type=float, help="Y coordinate")
     p_click.add_argument("--selector", "-s", help="CSS selector (alternative to x,y)")
+    p_click.add_argument("--button", choices=["left", "right", "middle"], default="left",
+                         help="Mouse button (default: left)")
+    p_click.add_argument("--clicks", type=int, default=1,
+                         help="Click count: 1=single, 2=double, 3=triple (default: 1)")
+    p_click.add_argument("--modifiers", "-m",
+                         help="Comma-separated: ctrl,shift,alt,meta (e.g., 'ctrl' = new-tab click)")
 
     # fill
     p_fill = sub.add_parser("fill", help="Fill text into element")

@@ -304,6 +304,45 @@ def cmd_click(client, args):
         client.close()
 
 
+def cmd_scroll(client, args):
+    """Scroll the page (or at specific coordinates) via mouseWheel.
+
+    Coordinates default to viewport center if neither x/y nor --selector given.
+    Positive delta_y scrolls down; negative scrolls up.
+    """
+    if (args.x is None) != (args.y is None):
+        print("Error: provide both x and y, or neither", file=sys.stderr)
+        sys.exit(1)
+
+    client.connect()
+    try:
+        if args.selector:
+            info = _resolve_selector(client, args.selector)
+            x, y = info["x"], info["y"]
+        elif args.x is not None:
+            x, y = args.x, args.y
+        else:
+            # Default: viewport center
+            metrics = client.send("Page.getLayoutMetrics")
+            vp = metrics.get("layoutViewport") or metrics.get("visualViewport") or {}
+            x = vp.get("clientWidth", 800) / 2
+            y = vp.get("clientHeight", 600) / 2
+
+        client.send("Input.dispatchMouseEvent", {
+            "type": "mouseWheel",
+            "x": x,
+            "y": y,
+            "deltaX": args.delta_x,
+            "deltaY": args.delta_y,
+        })
+
+        direction = "down" if args.delta_y > 0 else ("up" if args.delta_y < 0 else "")
+        suffix = f" ({direction})" if direction else ""
+        print(f"Scrolled at ({x:.0f}, {y:.0f}) dx={args.delta_x} dy={args.delta_y}{suffix}")
+    finally:
+        client.close()
+
+
 def cmd_fill(client, args):
     """Fill text into an element."""
     client.connect()
@@ -684,6 +723,16 @@ def main():
     p_click.add_argument("--modifiers", "-m",
                          help="Comma-separated: ctrl,shift,alt,meta (e.g., 'ctrl' = new-tab click)")
 
+    # scroll
+    p_scroll = sub.add_parser("scroll", help="Scroll via mouseWheel (page or at coordinates)")
+    p_scroll.add_argument("x", nargs="?", type=float, help="X coordinate (default: viewport center)")
+    p_scroll.add_argument("y", nargs="?", type=float, help="Y coordinate (default: viewport center)")
+    p_scroll.add_argument("--selector", "-s", help="CSS selector (alternative to x,y)")
+    p_scroll.add_argument("--delta-y", dest="delta_y", type=float, default=300,
+                          help="Vertical scroll delta px (positive=down, default: 300)")
+    p_scroll.add_argument("--delta-x", dest="delta_x", type=float, default=0,
+                          help="Horizontal scroll delta px (positive=right, default: 0)")
+
     # fill
     p_fill = sub.add_parser("fill", help="Fill text into element")
     p_fill.add_argument("--selector", "-s", required=True, help="CSS selector")
@@ -735,6 +784,7 @@ def main():
 
     commands = {
         "click": cmd_click,
+        "scroll": cmd_scroll,
         "fill": cmd_fill,
         "press_key": cmd_press_key,
         "hover": cmd_hover,

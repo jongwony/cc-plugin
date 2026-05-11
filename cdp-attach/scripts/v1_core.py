@@ -204,7 +204,6 @@ def cmd_snapshot(client, args):
 
 def cmd_evaluate(client, args):
     """Evaluate JavaScript expression."""
-    # Fix 2: Resolve expression from --stdin or positional arg
     if args.stdin:
         expression = sys.stdin.read().strip()
     elif args.expression:
@@ -213,11 +212,10 @@ def cmd_evaluate(client, args):
         print("Error: Provide expression argument or use --stdin", file=sys.stderr)
         sys.exit(1)
 
-    # Fix 1: Rewrite const/let to var for re-declaration safety
     if not args.no_rewrite:
         expression = _redeclare_safe(expression)
 
-    # Fix 3: Auto-wrap await expressions in async IIFE
+    # Auto-wrap await expressions in async IIFE
     if args.await_promise and 'await ' in expression and not expression.strip().startswith('(async'):
         stripped = expression.rstrip().rstrip(';')
         if ';' not in stripped and '\n' not in stripped:
@@ -437,7 +435,6 @@ def cmd_doctor(client, args):
 
     print(f"cdp-attach doctor — host={client.host} port={client.port}")
 
-    # Step 1: HTTP /json/version
     try:
         info = client.get_version()
         browser = info.get("Browser", "?") if isinstance(info, dict) else "?"
@@ -454,7 +451,6 @@ def cmd_doctor(client, args):
     except Exception as e:
         step("Browser visible (not headless)", False, str(e))
 
-    # Step 3: /json/list non-empty
     tabs = []
     try:
         tabs = client.list_tabs(type_filter="page")
@@ -462,7 +458,6 @@ def cmd_doctor(client, args):
     except Exception as e:
         step("Tab list non-empty", False, str(e))
 
-    # Step 4: selected_target valid
     selected = client.get_selected_target()
     target_ids = {t.get("id") for t in tabs}
     if selected is None:
@@ -558,15 +553,15 @@ def cmd_cdp_call(client, args):
 
 def cmd_error_list(client, args):
     """List recent error events from errors.jsonl."""
-    if not os.path.exists(ERRORS_FILE):
-        print(f"No errors logged ({ERRORS_FILE} not found)")
-        return
-
     cutoff = time.time() - args.since_seconds if args.since_seconds else 0
     filter_str = (args.filter or "").lower()
 
-    with open(ERRORS_FILE) as f:
-        lines = f.readlines()
+    try:
+        with open(ERRORS_FILE) as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        print(f"No errors logged ({ERRORS_FILE} not found)")
+        return
 
     matching = []
     for line in lines:
@@ -590,7 +585,7 @@ def cmd_error_list(client, args):
     matching = matching[-args.limit:]
 
     if not matching:
-        print(f"No matching errors (limit={args.limit}, filter={filter_str!r})")
+        print(f"No matching errors (limit={args.limit}, filter={args.filter!r})")
         return
 
     for entry in matching:
@@ -603,6 +598,13 @@ def cmd_error_list(client, args):
         suffix = f" {'/'.join(suffix_parts)}" if suffix_parts else ""
         error = entry.get("error", "")
         print(f"[{ts_str}] {category}{suffix}: {error}")
+
+
+# Commands that bypass the headless guard:
+# - version: diagnostic/info-only
+# - error_list: reads local JSONL file, no CDP commands
+# - doctor: diagnostic, reports headless status itself
+LOCAL_COMMANDS = {"version", "error_list", "doctor"}
 
 
 def main():
@@ -695,10 +697,6 @@ def main():
 
     args = parser.parse_args()
     client = CDPClient(host=args.host, port=args.port)
-
-    # Exempt from headless guard: diagnostic / local-file commands only.
-    # Keep in sync with commands dict below.
-    LOCAL_COMMANDS = {"version", "error_list", "doctor"}
 
     commands = {
         "version": cmd_version,

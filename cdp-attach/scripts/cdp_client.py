@@ -286,6 +286,33 @@ class CDPClient:
         self._event_buffer.clear()
         return events
 
+    def _context_id_for_frame(self, frame_id, timeout=1.5):
+        """Wait for executionContextCreated event matching frame_id.
+
+        Returns context id, or None if not found within timeout. Caller is
+        responsible for calling Runtime.enable beforehand.
+        """
+        import websocket
+
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            for ev in self.drain_events():
+                if ev.get("method") != "Runtime.executionContextCreated":
+                    continue
+                ctx = ev.get("params", {}).get("context", {})
+                aux = ctx.get("auxData", {})
+                if aux.get("frameId") == frame_id:
+                    return ctx.get("id")
+            try:
+                self._ws.settimeout(0.15)
+                raw = self._ws.recv()
+                self._event_buffer.append(json.loads(raw))
+            except websocket.WebSocketTimeoutException:
+                continue
+            except Exception:
+                break
+        return None
+
     def resolve_frame_context_id(self, frame_selector):
         """Resolve a CSS selector identifying a frame owner element
         (iframe/frame/object/embed) to the executionContextId of the
@@ -298,8 +325,6 @@ class CDPClient:
         """
         if not frame_selector or frame_selector == "main":
             return None
-
-        import websocket
 
         self.send("Runtime.enable")
         self.send("DOM.enable")
@@ -324,29 +349,55 @@ class CDPClient:
                 f"Element {frame_selector!r} is not a frame owner (no frameId)"
             )
 
-        deadline = time.time() + 1.5
-        while time.time() < deadline:
-            for ev in self.drain_events():
-                if ev.get("method") != "Runtime.executionContextCreated":
-                    continue
-                ctx = ev.get("params", {}).get("context", {})
-                aux = ctx.get("auxData", {})
-                if aux.get("frameId") == frame_id:
-                    return ctx.get("id")
-            try:
-                self._ws.settimeout(0.15)
-                raw = self._ws.recv()
-                self._event_buffer.append(json.loads(raw))
-            except websocket.WebSocketTimeoutException:
-                continue
-            except Exception:
-                break
+        ctx_id = self._context_id_for_frame(frame_id)
+        if ctx_id is None:
+            raise CDPError(
+                f"No execution context found for frame {frame_id} "
+                f"(selector={frame_selector!r}). Frame may be cross-origin isolated "
+                "or not yet loaded."
+            )
+        return ctx_id
 
-        raise CDPError(
-            f"No execution context found for frame {frame_id} "
-            f"(selector={frame_selector!r}). Frame may be cross-origin isolated "
-            "or not yet loaded."
-        )
+    def resolve_frame_context_id_by_url(self, url_substring):
+        """Resolve a URL substring to a frame's executionContextId.
+
+        Walks the frame tree (Page.getFrameTree), finds the first frame whose
+        URL contains the substring, and returns its execution context ID.
+        Useful for dynamic iframe targets where CSS selectors are unstable
+        (hashed classes, dynamic IDs) but URL patterns are stable.
+        """
+        if not url_substring:
+            return None
+
+        self.send("Runtime.enable")
+        self.send("Page.enable")
+
+        tree = self.send("Page.getFrameTree")
+        frame_id = self._find_frame_by_url(tree.get("frameTree", {}), url_substring)
+        if not frame_id:
+            raise CDPError(f"No frame URL contains: {url_substring!r}")
+
+        ctx_id = self._context_id_for_frame(frame_id)
+        if ctx_id is None:
+            raise CDPError(
+                f"No execution context found for frame {frame_id} "
+                f"(url substring={url_substring!r}). Frame may be cross-origin "
+                "isolated or not yet loaded."
+            )
+        return ctx_id
+
+    def _find_frame_by_url(self, frame_tree_node, url_substring):
+        """Walk frame tree DFS; return first frameId whose URL contains substring."""
+        frame = frame_tree_node.get("frame", {})
+        url = frame.get("url", "")
+        if url_substring in url:
+            return frame.get("id")
+
+        for child in frame_tree_node.get("childFrames", []):
+            result = self._find_frame_by_url(child, url_substring)
+            if result:
+                return result
+        return None
 
     # ── State persistence ─────────────────────────────────────────
 

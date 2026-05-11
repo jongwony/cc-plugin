@@ -223,9 +223,16 @@ def cmd_evaluate(client, args):
         else:
             expression = f"(async () => {{ {expression} }})()"
 
+    if args.frame and args.frame_url:
+        print("Error: --frame and --frame-url are mutually exclusive", file=sys.stderr)
+        sys.exit(1)
+
     client.connect()
     try:
-        context_id = client.resolve_frame_context_id(args.frame)
+        if args.frame_url:
+            context_id = client.resolve_frame_context_id_by_url(args.frame_url)
+        else:
+            context_id = client.resolve_frame_context_id(args.frame)
 
         params = {
             "expression": expression,
@@ -718,6 +725,8 @@ def main():
                         help="Await promise result")
     p_eval.add_argument("--frame", default=None,
                         help="CSS selector of a frame owner element, or 'main' for top frame")
+    p_eval.add_argument("--frame-url", dest="frame_url", default=None,
+                        help="URL substring to match a frame (use when selectors are unstable)")
 
     # navigate
     p_nav = sub.add_parser("navigate", help="Navigate to URL")

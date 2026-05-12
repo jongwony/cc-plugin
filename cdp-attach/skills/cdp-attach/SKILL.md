@@ -80,9 +80,15 @@ $V1 evaluate --stdin <<< 'var x = document.title; x'  # Stdin mode
 $V1 evaluate --no-rewrite "const x = 1"       # Skip var rewriting
 $V1 navigate "https://example.com"             # Navigate
 $V1 navigate "https://example.com" --wait-for none
+$V1 reload                                     # Reload current page (wait for load)
+$V1 reload --hard                              # Bypass cache (Page.reload ignoreCache=true)
+$V1 back                                       # Navigate back (default: no wait — bfcache may skip load event)
+$V1 forward                                    # Navigate forward (default: no wait)
+$V1 back --wait-for load                       # Opt-in load wait (use when fresh load expected)
 
 $V1 evaluate "document.title" --frame "iframe.embedded"   # Evaluate inside an iframe
 $V1 evaluate --frame main "location.href"                 # Explicit top frame
+$V1 evaluate --frame-url "youtube" "location.href"        # Match frame by URL substring
 
 $V1 wait --selector "div.loaded" --timeout-ms 10000       # Element appears
 $V1 wait --text "Order complete"                          # Text appears somewhere
@@ -136,13 +142,30 @@ V2="${CLAUDE_PLUGIN_ROOT}/scripts/v2_interact.py"
 
 $V2 click 100 200                              # Click at coordinates
 $V2 click --selector "button.submit"           # Click CSS selector
+$V2 click 100 200 --button right               # Right-click (context menu)
+$V2 click 100 200 --clicks 2                   # Double-click (text selection)
+$V2 click --selector "a" --modifiers ctrl      # Ctrl+click (new tab on link)
+$V2 scroll                                     # Scroll page down 300px (viewport center)
+$V2 scroll --delta-y -500                      # Scroll up 500px
+$V2 scroll 100 400 --delta-y 200               # Scroll at specific coordinates
+$V2 scroll --selector "div.scrollable" --delta-y 100
 $V2 fill --selector "input[name=q]" "search query"
+$V2 upload_file --selector "input[type=file]" /path/to/file.pdf
+$V2 upload_file --selector "input[type=file]" /tmp/a.txt /tmp/b.txt   # multiple
 $V2 press_key Enter                            # Press key
 $V2 press_key a --modifiers ctrl               # Ctrl+A
 $V2 hover --selector "a.nav-link"
 $V2 new_page "https://example.com"             # Open new tab
 $V2 close_page                                 # Close selected tab
 ```
+
+> **Note on click variants**: `--button right` triggers contextmenu events. `--clicks 2` follows CDP convention (clickCount increments within a click sequence — single/double/triple). `--modifiers` accepts comma-separated names: `ctrl,shift,alt,meta` (or `cmd` as an alias for `meta`).
+
+> **Note on `upload_file`**: targets `<input type="file">` only — pre-validated via `DOM.describeNode` to fail fast on wrong selectors. Paths expand `~` and resolve to absolute. Multiple files via positional args (e.g., for `<input multiple>`).
+
+> **Note on `--frame-url`**: walks the frame tree with `Page.getFrameTree`, matches the first frame whose URL contains the substring. Useful when CSS selectors are unstable (hashed classes, dynamic IDs) but URL patterns are stable. Mutually exclusive with `--frame`.
+
+> **Note on cross-origin iframes (OOPIF)**: cross-origin iframes (different origin from the parent page) run in separate processes and are not visible in the parent target's `Page.getFrameTree`. Both `--frame` (CSS selector) and `--frame-url` reach **same-origin** iframes only. Cross-origin iframe debugging requires attaching to the iframe's own target via `Target.attachToTarget` (not currently exposed by v1/v2/v3).
 
 ### v2 — Element Discovery (`v2_interact.py`)
 

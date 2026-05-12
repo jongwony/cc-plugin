@@ -11,6 +11,7 @@ v2_interact — Browser interaction: click, fill, press_key, hover, new_page, cl
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -54,7 +55,7 @@ def _resolve_selector(client, selector):
     return obj
 
 
-def _dispatch_mouse(client, x, y, event_type, button="left", click_count=1):
+def _dispatch_mouse(client, x, y, event_type, button="left", click_count=1, modifiers=0):
     """Send mouse event at coordinates."""
     client.send("Input.dispatchMouseEvent", {
         "type": event_type,
@@ -62,7 +63,31 @@ def _dispatch_mouse(client, x, y, event_type, button="left", click_count=1):
         "y": y,
         "button": button,
         "clickCount": click_count,
+        "modifiers": modifiers,
     })
+
+
+def _parse_modifiers(spec):
+    """Parse comma-separated modifier names to CDP bitmask.
+
+    Per CDP spec (Input.dispatchMouseEvent / dispatchKeyEvent):
+        Alt=1, Ctrl=2, Meta/Command=4, Shift=8.
+    Empty/None returns 0. Unknown names are silently skipped.
+    """
+    if not spec:
+        return 0
+    bitmask = 0
+    for m in spec.split(","):
+        name = m.strip().lower()
+        if name == "alt":
+            bitmask |= 1
+        elif name == "ctrl":
+            bitmask |= 2
+        elif name in ("meta", "cmd"):
+            bitmask |= 4
+        elif name == "shift":
+            bitmask |= 8
+    return bitmask
 
 
 # ── CDP DOM/Accessibility helpers ──────────────────────────────
@@ -237,10 +262,18 @@ def _dom_search(client, query, include_shadow_dom=False, limit=20):
 
 
 def cmd_click(client, args):
-    """Click at coordinates or CSS selector."""
+    """Click at coordinates or CSS selector.
+
+    Supports button (left/right/middle), multi-click (double/triple), and modifier keys.
+    Defaults preserve original single-left-click behavior.
+    """
     if not args.selector and (args.x is None or args.y is None):
         print("Error: Provide --selector or both x y coordinates", file=sys.stderr)
         sys.exit(1)
+    if args.clicks < 1:
+        print(f"Error: --clicks must be >= 1 (got {args.clicks})", file=sys.stderr)
+        sys.exit(1)
+
     client.connect()
     try:
         if args.selector:
@@ -250,9 +283,123 @@ def cmd_click(client, args):
         else:
             x, y = args.x, args.y
 
-        _dispatch_mouse(client, x, y, "mousePressed")
-        _dispatch_mouse(client, x, y, "mouseReleased")
-        print(f"Clicked at ({x:.0f}, {y:.0f})")
+        modifiers = _parse_modifiers(args.modifiers)
+
+        # CDP convention: clickCount increments within a click sequence.
+        # Single: cc=1. Double: cc=1 then cc=2. Triple: cc=1, cc=2, cc=3.
+        for i in range(1, args.clicks + 1):
+            _dispatch_mouse(client, x, y, "mousePressed",
+                            button=args.button, click_count=i, modifiers=modifiers)
+            _dispatch_mouse(client, x, y, "mouseReleased",
+                            button=args.button, click_count=i, modifiers=modifiers)
+
+        detail = []
+        if args.button != "left":
+            detail.append(args.button)
+        if args.clicks > 1:
+            detail.append(f"x{args.clicks}")
+        if args.modifiers:
+            detail.append(f"mod={args.modifiers}")
+        suffix = f" [{' '.join(detail)}]" if detail else ""
+        print(f"Clicked at ({x:.0f}, {y:.0f}){suffix}")
+    finally:
+        client.close()
+
+
+def cmd_scroll(client, args):
+    """Scroll the page (or at specific coordinates) via mouseWheel.
+
+    Coordinates default to viewport center if neither x/y nor --selector given.
+    Positive delta_y scrolls down; negative scrolls up.
+    """
+    if (args.x is None) != (args.y is None):
+        print("Error: provide both x and y, or neither", file=sys.stderr)
+        sys.exit(1)
+
+    client.connect()
+    try:
+        if args.selector:
+            info = _resolve_selector(client, args.selector)
+            x, y = info["x"], info["y"]
+        elif args.x is not None:
+            x, y = args.x, args.y
+        else:
+            # Default: viewport center
+            metrics = client.send("Page.getLayoutMetrics")
+            vp = metrics.get("layoutViewport") or metrics.get("visualViewport") or {}
+            x = vp.get("clientWidth", 800) / 2
+            y = vp.get("clientHeight", 600) / 2
+
+        client.send("Input.dispatchMouseEvent", {
+            "type": "mouseWheel",
+            "x": x,
+            "y": y,
+            "deltaX": args.delta_x,
+            "deltaY": args.delta_y,
+        })
+
+        direction = "down" if args.delta_y > 0 else ("up" if args.delta_y < 0 else "")
+        suffix = f" ({direction})" if direction else ""
+        print(f"Scrolled at ({x:.0f}, {y:.0f}) dx={args.delta_x} dy={args.delta_y}{suffix}")
+    finally:
+        client.close()
+
+
+def cmd_upload_file(client, args):
+    """Upload file(s) to an <input type=file> element via DOM.setFileInputFiles.
+
+    Paths are expanded (~), resolved to absolute, and validated by attempting
+    open() — single syscall handles existence + regular-file in one shot
+    without TOCTOU between stat and use.
+    """
+    abs_paths = []
+    for path in args.files:
+        abs_path = os.path.abspath(os.path.expanduser(path))
+        try:
+            with open(abs_path, "rb"):
+                pass
+        except FileNotFoundError:
+            print(f"Error: file not found: {abs_path}", file=sys.stderr)
+            sys.exit(1)
+        except IsADirectoryError:
+            print(f"Error: not a regular file: {abs_path}", file=sys.stderr)
+            sys.exit(1)
+        except PermissionError as e:
+            print(f"Error: cannot read file: {abs_path} ({e})", file=sys.stderr)
+            sys.exit(1)
+        abs_paths.append(abs_path)
+
+    client.connect()
+    try:
+        node_id = client.query_selector_node_id(args.selector)
+
+        # Pre-validate element is <input type=file>; setFileInputFiles silently
+        # no-ops on other elements, which would mask user mistakes.
+        desc = client.send("DOM.describeNode", {"nodeId": node_id})
+        node = desc.get("node", {})
+        node_name = node.get("nodeName", "").lower()
+        # CDP returns attributes as a flat list: [k1, v1, k2, v2, ...]
+        attrs = node.get("attributes") or []
+        attr_map = dict(zip(attrs[::2], attrs[1::2]))
+
+        if node_name != "input":
+            raise CDPError(
+                f"Element {args.selector!r} is <{node_name}>, expected <input>. "
+                "upload_file targets <input type=\"file\"> only."
+            )
+        if attr_map.get("type", "").lower() != "file":
+            raise CDPError(
+                f"Element <input> has type={attr_map.get('type', 'text')!r}, "
+                "expected type=\"file\". upload_file targets <input type=\"file\"> only."
+            )
+
+        client.send("DOM.setFileInputFiles", {
+            "nodeId": node_id,
+            "files": abs_paths,
+        })
+
+        label = abs_paths[0] if len(abs_paths) == 1 else f"{len(abs_paths)} files"
+        print(f"Uploaded to {args.selector!r}: {label}")
     finally:
         client.close()
 
@@ -269,12 +416,13 @@ def cmd_fill(client, args):
         _dispatch_mouse(client, x, y, "mouseReleased")
         time.sleep(0.05)
 
-        # Select all existing text (Ctrl+A / Cmd+A)
+        # Select all existing text (Cmd+A on macOS, Ctrl+A elsewhere).
+        # CDP modifiers bitmask: Meta=4, Ctrl=2 (per Input.dispatchKeyEvent spec).
         client.send("Input.dispatchKeyEvent", {
             "type": "keyDown",
             "key": "a",
             "code": "KeyA",
-            "modifiers": 8 if sys.platform == "darwin" else 2,  # meta or ctrl
+            "modifiers": 4 if sys.platform == "darwin" else 2,  # meta or ctrl
         })
         client.send("Input.dispatchKeyEvent", {
             "type": "keyUp",
@@ -293,19 +441,7 @@ def cmd_press_key(client, args):
     """Press a keyboard key."""
     client.connect()
     try:
-        # Build modifiers bitmask: 1=Alt, 2=Ctrl, 4=Shift, 8=Meta
-        modifiers = 0
-        if args.modifiers:
-            mod_parts = [m.strip().lower() for m in args.modifiers.split(",")]
-            for m in mod_parts:
-                if m == "alt":
-                    modifiers |= 1
-                elif m == "ctrl":
-                    modifiers |= 2
-                elif m == "shift":
-                    modifiers |= 4
-                elif m in ("meta", "cmd"):
-                    modifiers |= 8
+        modifiers = _parse_modifiers(args.modifiers)
 
         key = args.key
         # Map common key names
@@ -642,6 +778,31 @@ def main():
     p_click.add_argument("x", nargs="?", type=float, help="X coordinate")
     p_click.add_argument("y", nargs="?", type=float, help="Y coordinate")
     p_click.add_argument("--selector", "-s", help="CSS selector (alternative to x,y)")
+    p_click.add_argument("--button", choices=["left", "right", "middle"], default="left",
+                         help="Mouse button (default: left)")
+    p_click.add_argument("--clicks", type=int, default=1,
+                         help="Click count: 1=single, 2=double, 3=triple (default: 1)")
+    p_click.add_argument("--modifiers", "-m",
+                         help="Comma-separated: ctrl,shift,alt,meta (e.g., 'ctrl' = new-tab click)")
+
+    # scroll
+    p_scroll = sub.add_parser("scroll", help="Scroll via mouseWheel (page or at coordinates)")
+    p_scroll.add_argument("x", nargs="?", type=float, help="X coordinate (default: viewport center)")
+    p_scroll.add_argument("y", nargs="?", type=float, help="Y coordinate (default: viewport center)")
+    p_scroll.add_argument("--selector", "-s", help="CSS selector (alternative to x,y)")
+    p_scroll.add_argument("--delta-y", dest="delta_y", type=float, default=300,
+                          help="Vertical scroll delta px (positive=down, default: 300)")
+    p_scroll.add_argument("--delta-x", dest="delta_x", type=float, default=0,
+                          help="Horizontal scroll delta px (positive=right, default: 0)")
+
+    # upload_file
+    p_upload = sub.add_parser(
+        "upload_file",
+        help="Upload file(s) to <input type=file> via DOM.setFileInputFiles",
+    )
+    p_upload.add_argument("--selector", "-s", required=True,
+                          help="CSS selector for <input type=file>")
+    p_upload.add_argument("files", nargs="+", help="One or more file paths (absolute or ~)")
 
     # fill
     p_fill = sub.add_parser("fill", help="Fill text into element")
@@ -694,6 +855,8 @@ def main():
 
     commands = {
         "click": cmd_click,
+        "scroll": cmd_scroll,
+        "upload_file": cmd_upload_file,
         "fill": cmd_fill,
         "press_key": cmd_press_key,
         "hover": cmd_hover,

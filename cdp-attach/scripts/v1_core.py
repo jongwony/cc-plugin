@@ -223,9 +223,16 @@ def cmd_evaluate(client, args):
         else:
             expression = f"(async () => {{ {expression} }})()"
 
+    if args.frame and args.frame_url:
+        print("Error: --frame and --frame-url are mutually exclusive", file=sys.stderr)
+        sys.exit(1)
+
     client.connect()
     try:
-        context_id = client.resolve_frame_context_id(args.frame)
+        if args.frame_url:
+            context_id = client.resolve_frame_context_id_by_url(args.frame_url)
+        else:
+            context_id = client.resolve_frame_context_id(args.frame)
 
         params = {
             "expression": expression,
@@ -267,10 +274,11 @@ def cmd_evaluate(client, args):
 
 def cmd_navigate(client, args):
     """Navigate to a URL."""
-    import websocket
-
     client.connect()
     try:
+        if args.wait_for == "load":
+            _enable_page_subscription(client)
+
         result = client.send("Page.navigate", {"url": args.url})
 
         # Check navigation error before entering wait loop
@@ -280,23 +288,11 @@ def cmd_navigate(client, args):
             sys.exit(1)
 
         if args.wait_for == "load":
-            # Wait for Page.loadEventFired
-            loaded = False
-            deadline = time.time() + 30
-            while time.time() < deadline:
-                try:
-                    client._ws.settimeout(1.0)
-                    raw = client._ws.recv()
-                    resp = json.loads(raw)
-                    if resp.get("method") == "Page.loadEventFired":
-                        loaded = True
-                        break
-                except websocket.WebSocketTimeoutException:
-                    continue
-                except (websocket.WebSocketConnectionClosedException, ConnectionError):
-                    break
-            if not loaded:
-                print("Warning: Page load event not received within 30s — page may not be fully loaded", file=sys.stderr)
+            if not _wait_for_load_event(client):
+                print(
+                    "Warning: Page load event not received within 30s — page may not be fully loaded",
+                    file=sys.stderr,
+                )
 
         frame_id = result.get("frameId", "")
         print(f"Navigated to: {args.url}")
@@ -305,11 +301,127 @@ def cmd_navigate(client, args):
         client.close()
 
 
+def cmd_reload(client, args):
+    """Reload the current page. --hard bypasses cache."""
+    client.connect()
+    try:
+        if args.wait_for == "load":
+            _enable_page_subscription(client)
+
+        client.send("Page.reload", {"ignoreCache": args.hard})
+
+        if args.wait_for == "load":
+            if not _wait_for_load_event(client):
+                print(
+                    "Warning: Page load event not received within 30s",
+                    file=sys.stderr,
+                )
+
+        print(f"Reloaded{' (cache bypassed)' if args.hard else ''}")
+    finally:
+        client.close()
+
+
+def _history_nav(client, wait_for, direction, label):
+    """Shared back/forward navigation via Page.navigateToHistoryEntry.
+
+    Note: bfcache restore may skip Page.loadEventFired entirely. Default
+    --wait-for is 'none' for back/forward to avoid 30s timeouts on cached
+    restores. Use 'load' explicitly only when you know the navigation
+    triggers a fresh load.
+    """
+    client.connect()
+    try:
+        if wait_for == "load":
+            _enable_page_subscription(client)
+
+        hist = client.send("Page.getNavigationHistory")
+        entries = hist.get("entries", [])
+        current = hist.get("currentIndex", 0)
+        target = current + direction
+
+        if target < 0:
+            raise CDPError("No further history (already at first entry)")
+        if target >= len(entries):
+            raise CDPError("No further history (already at last entry)")
+
+        entry = entries[target]
+        client.send("Page.navigateToHistoryEntry", {"entryId": entry.get("id")})
+
+        if wait_for == "load":
+            if not _wait_for_load_event(client):
+                print(
+                    "Warning: Page load event not received within 30s",
+                    file=sys.stderr,
+                )
+
+        print(f"Navigated {label} to: {entry.get('url', '')}")
+    finally:
+        client.close()
+
+
+def cmd_back(client, args):
+    """Navigate back in history."""
+    _history_nav(client, args.wait_for, direction=-1, label="back")
+
+
+def cmd_forward(client, args):
+    """Navigate forward in history."""
+    _history_nav(client, args.wait_for, direction=+1, label="forward")
+
+
 _WAIT_LIFECYCLE_NAMES = {
     "load": "load",
     "domcontentloaded": "DOMContentLoaded",
     "networkidle": "networkIdle",
 }
+
+
+def _wait_for_load_event(client, timeout=30):
+    """Wait for Page.loadEventFired event. Returns True if received before timeout.
+
+    Drains the client event buffer first — Page.loadEventFired often arrives
+    during the preceding navigation method's response wait (especially for
+    fast operations like reload), so checking the buffer first prevents
+    false 30s timeouts.
+
+    Caller should call _enable_page_subscription() before the navigation
+    method to ensure Page.loadEventFired is delivered.
+    """
+    for ev in client.drain_events():
+        if ev.get("method") == "Page.loadEventFired":
+            return True
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        remaining = min(deadline - time.time(), 1.0)
+        if remaining <= 0:
+            break
+        try:
+            ev = client.recv_one_event(timeout=remaining)
+        except CDPError:
+            break
+        if ev is None:
+            continue
+        if ev.get("method") == "Page.loadEventFired":
+            return True
+    return False
+
+
+def _enable_page_subscription(client):
+    """Call before a navigation method when --wait-for load is requested.
+
+    Idempotent on the CDP side. CDPError (e.g., connection drop) is logged
+    to stderr — silent swallow would mask connection issues as opaque 30s
+    timeouts in the subsequent _wait_for_load_event call.
+    """
+    try:
+        client.send("Page.enable")
+    except CDPError as e:
+        print(
+            f"Warning: Page.enable failed ({e}) — load wait may time out",
+            file=sys.stderr,
+        )
 
 
 def _wait_poll(client, expression, label, deadline):
@@ -651,12 +763,31 @@ def main():
                         help="Await promise result")
     p_eval.add_argument("--frame", default=None,
                         help="CSS selector of a frame owner element, or 'main' for top frame")
+    p_eval.add_argument("--frame-url", dest="frame_url", default=None,
+                        help="URL substring to match a frame (use when selectors are unstable)")
 
     # navigate
     p_nav = sub.add_parser("navigate", help="Navigate to URL")
     p_nav.add_argument("url", help="Target URL")
     p_nav.add_argument("--wait-for", choices=["load", "none"], default="load",
                        help="Wait condition (default: load)")
+
+    # reload
+    p_reload = sub.add_parser("reload", help="Reload current page")
+    p_reload.add_argument("--hard", action="store_true",
+                          help="Bypass cache (Page.reload ignoreCache=true)")
+    p_reload.add_argument("--wait-for", choices=["load", "none"], default="load",
+                          help="Wait condition (default: load)")
+
+    # back
+    p_back = sub.add_parser("back", help="Navigate back in history")
+    p_back.add_argument("--wait-for", choices=["load", "none"], default="none",
+                        help="Wait condition (default: none — bfcache may skip load event)")
+
+    # forward
+    p_forward = sub.add_parser("forward", help="Navigate forward in history")
+    p_forward.add_argument("--wait-for", choices=["load", "none"], default="none",
+                           help="Wait condition (default: none — bfcache may skip load event)")
 
     # wait
     p_wait = sub.add_parser("wait", help="Wait for a readiness condition")
@@ -706,6 +837,9 @@ def main():
         "snapshot": cmd_snapshot,
         "evaluate": cmd_evaluate,
         "navigate": cmd_navigate,
+        "reload": cmd_reload,
+        "back": cmd_back,
+        "forward": cmd_forward,
         "wait": cmd_wait,
         "doctor": cmd_doctor,
         "cdp_call": cmd_cdp_call,

@@ -276,6 +276,9 @@ def cmd_navigate(client, args):
     """Navigate to a URL."""
     client.connect()
     try:
+        if args.wait_for == "load":
+            _enable_page_subscription(client)
+
         result = client.send("Page.navigate", {"url": args.url})
 
         # Check navigation error before entering wait loop
@@ -302,6 +305,9 @@ def cmd_reload(client, args):
     """Reload the current page. --hard bypasses cache."""
     client.connect()
     try:
+        if args.wait_for == "load":
+            _enable_page_subscription(client)
+
         client.send("Page.reload", {"ignoreCache": args.hard})
 
         if args.wait_for == "load":
@@ -317,9 +323,18 @@ def cmd_reload(client, args):
 
 
 def _history_nav(client, wait_for, direction, label):
-    """Shared back/forward navigation via Page.navigateToHistoryEntry."""
+    """Shared back/forward navigation via Page.navigateToHistoryEntry.
+
+    Note: bfcache restore may skip Page.loadEventFired entirely. Default
+    --wait-for is 'none' for back/forward to avoid 30s timeouts on cached
+    restores. Use 'load' explicitly only when you know the navigation
+    triggers a fresh load.
+    """
     client.connect()
     try:
+        if wait_for == "load":
+            _enable_page_subscription(client)
+
         hist = client.send("Page.getNavigationHistory")
         entries = hist.get("entries", [])
         current = hist.get("currentIndex", 0)
@@ -365,11 +380,20 @@ _WAIT_LIFECYCLE_NAMES = {
 def _wait_for_load_event(client, timeout=30):
     """Wait for Page.loadEventFired event. Returns True if received before timeout.
 
-    Used by navigate / reload / history navigation to provide a uniform
-    --wait-for load behavior. Does not pre-enable Page domain — relies on
-    the event firing regardless (matches existing cmd_navigate behavior).
+    Drains the client event buffer first — Page.loadEventFired often arrives
+    during the preceding navigation method's response wait (especially for
+    fast operations like reload), so checking the buffer first prevents
+    false 30s timeouts.
+
+    Caller should call _enable_page_subscription() before the navigation
+    method to ensure Page.loadEventFired is delivered.
     """
     import websocket
+
+    # Catch events buffered during preceding send() calls
+    for ev in client.drain_events():
+        if ev.get("method") == "Page.loadEventFired":
+            return True
 
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -384,6 +408,18 @@ def _wait_for_load_event(client, timeout=30):
         except (websocket.WebSocketConnectionClosedException, ConnectionError):
             break
     return False
+
+
+def _enable_page_subscription(client):
+    """Call before a navigation method when --wait-for load is requested.
+
+    Idempotent. Ensures Page.loadEventFired events are delivered to the
+    WebSocket connection.
+    """
+    try:
+        client.send("Page.enable")
+    except Exception:
+        pass
 
 
 def _wait_poll(client, expression, label, deadline):
@@ -743,13 +779,13 @@ def main():
 
     # back
     p_back = sub.add_parser("back", help="Navigate back in history")
-    p_back.add_argument("--wait-for", choices=["load", "none"], default="load",
-                        help="Wait condition (default: load)")
+    p_back.add_argument("--wait-for", choices=["load", "none"], default="none",
+                        help="Wait condition (default: none — bfcache may skip load event)")
 
     # forward
     p_forward = sub.add_parser("forward", help="Navigate forward in history")
-    p_forward.add_argument("--wait-for", choices=["load", "none"], default="load",
-                           help="Wait condition (default: load)")
+    p_forward.add_argument("--wait-for", choices=["load", "none"], default="none",
+                           help="Wait condition (default: none — bfcache may skip load event)")
 
     # wait
     p_wait = sub.add_parser("wait", help="Wait for a readiness condition")

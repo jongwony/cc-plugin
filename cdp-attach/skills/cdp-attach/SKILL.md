@@ -82,9 +82,9 @@ $V1 navigate "https://example.com"             # Navigate
 $V1 navigate "https://example.com" --wait-for none
 $V1 reload                                     # Reload current page (wait for load)
 $V1 reload --hard                              # Bypass cache (Page.reload ignoreCache=true)
-$V1 back                                       # Navigate back in history
-$V1 forward                                    # Navigate forward in history
-$V1 back --wait-for none                       # Fire-and-forget mode
+$V1 back                                       # Navigate back (default: no wait — bfcache may skip load event)
+$V1 forward                                    # Navigate forward (default: no wait)
+$V1 back --wait-for load                       # Opt-in load wait (use when fresh load expected)
 
 $V1 evaluate "document.title" --frame "iframe.embedded"   # Evaluate inside an iframe
 $V1 evaluate --frame main "location.href"                 # Explicit top frame

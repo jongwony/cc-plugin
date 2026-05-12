@@ -348,37 +348,30 @@ def cmd_scroll(client, args):
 def cmd_upload_file(client, args):
     """Upload file(s) to an <input type=file> element via DOM.setFileInputFiles.
 
-    Paths are expanded (~), resolved to absolute, and verified to exist.
-    Element type is pre-validated to fail fast on wrong target.
+    Paths are expanded (~), resolved to absolute, and validated by attempting
+    open() — single syscall handles existence + regular-file in one shot
+    without TOCTOU between stat and use.
     """
     abs_paths = []
     for path in args.files:
-        expanded = os.path.expanduser(path)
-        abs_path = os.path.abspath(expanded)
-        if not os.path.exists(abs_path):
+        abs_path = os.path.abspath(os.path.expanduser(path))
+        try:
+            with open(abs_path, "rb"):
+                pass
+        except FileNotFoundError:
             print(f"Error: file not found: {abs_path}", file=sys.stderr)
             sys.exit(1)
-        if not os.path.isfile(abs_path):
+        except IsADirectoryError:
             print(f"Error: not a regular file: {abs_path}", file=sys.stderr)
+            sys.exit(1)
+        except PermissionError as e:
+            print(f"Error: cannot read file: {abs_path} ({e})", file=sys.stderr)
             sys.exit(1)
         abs_paths.append(abs_path)
 
     client.connect()
     try:
-        _ensure_dom(client)
-
-        doc = client.send("DOM.getDocument", {"depth": 1, "pierce": True})
-        root_node_id = doc.get("root", {}).get("nodeId", 0)
-        if not root_node_id:
-            raise CDPError("DOM.getDocument returned no root nodeId")
-
-        q = client.send("DOM.querySelector", {
-            "nodeId": root_node_id,
-            "selector": args.selector,
-        })
-        node_id = q.get("nodeId", 0)
-        if not node_id:
-            raise CDPError(f"No element matches selector: {args.selector!r}")
+        node_id = client.query_selector_node_id(args.selector)
 
         # Pre-validate element is <input type=file>; setFileInputFiles silently
         # no-ops on other elements, which would mask user mistakes.

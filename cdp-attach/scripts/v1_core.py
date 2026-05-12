@@ -388,38 +388,40 @@ def _wait_for_load_event(client, timeout=30):
     Caller should call _enable_page_subscription() before the navigation
     method to ensure Page.loadEventFired is delivered.
     """
-    import websocket
-
-    # Catch events buffered during preceding send() calls
     for ev in client.drain_events():
         if ev.get("method") == "Page.loadEventFired":
             return True
 
     deadline = time.time() + timeout
     while time.time() < deadline:
-        try:
-            client._ws.settimeout(1.0)
-            raw = client._ws.recv()
-            resp = json.loads(raw)
-            if resp.get("method") == "Page.loadEventFired":
-                return True
-        except websocket.WebSocketTimeoutException:
-            continue
-        except (websocket.WebSocketConnectionClosedException, ConnectionError):
+        remaining = min(deadline - time.time(), 1.0)
+        if remaining <= 0:
             break
+        try:
+            ev = client.recv_one_event(timeout=remaining)
+        except CDPError:
+            break
+        if ev is None:
+            continue
+        if ev.get("method") == "Page.loadEventFired":
+            return True
     return False
 
 
 def _enable_page_subscription(client):
     """Call before a navigation method when --wait-for load is requested.
 
-    Idempotent. Ensures Page.loadEventFired events are delivered to the
-    WebSocket connection.
+    Idempotent on the CDP side. CDPError (e.g., connection drop) is logged
+    to stderr — silent swallow would mask connection issues as opaque 30s
+    timeouts in the subsequent _wait_for_load_event call.
     """
     try:
         client.send("Page.enable")
-    except Exception:
-        pass
+    except CDPError as e:
+        print(
+            f"Warning: Page.enable failed ({e}) — load wait may time out",
+            file=sys.stderr,
+        )
 
 
 def _wait_poll(client, expression, label, deadline):

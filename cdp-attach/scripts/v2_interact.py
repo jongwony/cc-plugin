@@ -70,8 +70,9 @@ def _dispatch_mouse(client, x, y, event_type, button="left", click_count=1, modi
 def _parse_modifiers(spec):
     """Parse comma-separated modifier names to CDP bitmask.
 
-    Returns int bitmask: 1=Alt, 2=Ctrl, 4=Shift, 8=Meta. Empty/None returns 0.
-    Unknown names are silently skipped.
+    Per CDP spec (Input.dispatchMouseEvent / dispatchKeyEvent):
+        Alt=1, Ctrl=2, Meta/Command=4, Shift=8.
+    Empty/None returns 0. Unknown names are silently skipped.
     """
     if not spec:
         return 0
@@ -82,9 +83,9 @@ def _parse_modifiers(spec):
             bitmask |= 1
         elif name == "ctrl":
             bitmask |= 2
-        elif name == "shift":
-            bitmask |= 4
         elif name in ("meta", "cmd"):
+            bitmask |= 4
+        elif name == "shift":
             bitmask |= 8
     return bitmask
 
@@ -422,12 +423,13 @@ def cmd_fill(client, args):
         _dispatch_mouse(client, x, y, "mouseReleased")
         time.sleep(0.05)
 
-        # Select all existing text (Ctrl+A / Cmd+A)
+        # Select all existing text (Cmd+A on macOS, Ctrl+A elsewhere).
+        # CDP modifiers bitmask: Meta=4, Ctrl=2 (per Input.dispatchKeyEvent spec).
         client.send("Input.dispatchKeyEvent", {
             "type": "keyDown",
             "key": "a",
             "code": "KeyA",
-            "modifiers": 8 if sys.platform == "darwin" else 2,  # meta or ctrl
+            "modifiers": 4 if sys.platform == "darwin" else 2,  # meta or ctrl
         })
         client.send("Input.dispatchKeyEvent", {
             "type": "keyUp",

@@ -165,6 +165,8 @@ $V2 close_page                                 # Close selected tab
 
 > **Note on `--frame-url`**: walks the frame tree with `Page.getFrameTree`, matches the first frame whose URL contains the substring. Useful when CSS selectors are unstable (hashed classes, dynamic IDs) but URL patterns are stable. Mutually exclusive with `--frame`.
 
+> **Note on cross-origin iframes (OOPIF)**: cross-origin iframes (different origin from the parent page) run in separate processes and are not visible in the parent target's `Page.getFrameTree`. Both `--frame` (CSS selector) and `--frame-url` reach **same-origin** iframes only. Cross-origin iframe debugging requires attaching to the iframe's own target via `Target.attachToTarget` (not currently exposed by v1/v2/v3).
+
 ### v2 — Element Discovery (`v2_interact.py`)
 
 When CSS selectors fail (collapsed SPA panels, shadow DOM, hashed classes), use CDP DOM/Accessibility API.

@@ -1,9 +1,0 @@
-{
-  "name": "activity-workflow",
-  "description": "Orchestrates developer activity collection from GitHub and Linear, syncing to Google Calendar",
-  "version": "1.0.2",
-  "author": {
-    "name": "Jongwon Choi",
-    "url": "https://github.com/jongwony"
-  }
-}

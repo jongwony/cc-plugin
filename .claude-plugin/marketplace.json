@@ -30,6 +30,11 @@
       "description": "PDF chapter splitting"
     },
     {
+      "name": "media-download",
+      "source": "./media-download",
+      "description": "Media download via yt-dlp with QR decode and metadata extraction"
+    },
+    {
       "name": "release",
       "source": "./release",
       "description": "Automated version bump, git tag, and GitHub release creation"

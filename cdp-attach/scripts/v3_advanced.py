@@ -22,8 +22,48 @@ from cdp_client import CDPClient, CDPError
 
 CACHE_DIR = os.path.expanduser("~/.cache/cdp-attach")
 NETWORK_EVENTS = os.path.join(CACHE_DIR, "network-events.jsonl")
+NETWORK_BODIES_DIR = os.path.join(CACHE_DIR, "network-bodies")
 CONSOLE_EVENTS = os.path.join(CACHE_DIR, "console-events.jsonl")
 AUTO_TIMEOUT = 300  # 5 minutes
+
+# Network response body capture
+# - Only fetch bodies for these resource types (avoids saving every script/image)
+# - Required because Network.getResponseBody is only valid while the same CDP
+#   client session has Network.enable set; foreground sessions (e.g. cdp_call)
+#   cannot retrieve bodies for responses received before they connected.
+BODY_CAPTURE_TYPES = {"XHR", "Fetch", "EventSource"}
+BODY_MAX_BYTES = 5 * 1024 * 1024  # 5MB cap per response
+
+
+def _body_path(rid):
+    """Disk path for a captured response body, keyed by full CDP requestId."""
+    return os.path.join(NETWORK_BODIES_DIR, f"{rid}.json")
+
+
+def _save_body(rid, body, base64_encoded):
+    """Write a captured response body file. The filename carries the rid;
+    callers reading the file get just `(body, base64_encoded)` via _load_body.
+    Best-effort: write failures are swallowed so the collector keeps running.
+    """
+    try:
+        with open(_body_path(rid), "w") as bf:
+            json.dump(
+                {"base64Encoded": base64_encoded, "body": body},
+                bf,
+                ensure_ascii=False,
+            )
+    except OSError:
+        pass
+
+
+def _load_body(filename):
+    """Read a captured body file by filename. Returns (body, base64_encoded).
+    Accepts files written by _save_body (no requestId field) and legacy files
+    that included a requestId field — both work because we don't read it back.
+    """
+    with open(os.path.join(NETWORK_BODIES_DIR, filename)) as f:
+        data = json.load(f)
+    return data.get("body", ""), data.get("base64Encoded", False)
 
 
 def _kill_existing(client, process_type):
@@ -128,18 +168,162 @@ def _run_collector(client, process_type, events_file, enable_method, event_names
         os._exit(1)
 
 
+def _run_network_collector(client):
+    """Network-specific collector that also captures response bodies.
+
+    Bodies are required for debugging virtualized data grids and any
+    SPA whose authoritative data lives in XHR/Fetch responses (the DOM
+    only renders the visible window). Network.getResponseBody must be
+    invoked from the same CDP session that received the response, so the
+    fetch happens here in the collector fork.
+    """
+    import websocket
+
+    target_id = client.get_selected_target()
+    if not target_id:
+        raise CDPError("No tab selected. Use 'select' first.")
+
+    _kill_existing(client, "network")
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    os.makedirs(NETWORK_BODIES_DIR, exist_ok=True)
+
+    # Clear previous events and body files (fresh capture window)
+    open(NETWORK_EVENTS, "w").close()
+    for name in os.listdir(NETWORK_BODIES_DIR):
+        try:
+            os.unlink(os.path.join(NETWORK_BODIES_DIR, name))
+        except OSError:
+            pass
+
+    pid = os.fork()
+    if pid > 0:
+        client.save_pid("network", pid)
+        print(f"network collector started (PID {pid})")
+        print(f"Events: {NETWORK_EVENTS}")
+        print(f"Bodies: {NETWORK_BODIES_DIR}/ (XHR/Fetch, <{BODY_MAX_BYTES // (1024*1024)}MB)")
+        return
+
+    # Child — collector process
+    _shutdown = False
+
+    def _handle_sigterm(*_):
+        nonlocal _shutdown
+        _shutdown = True
+
+    error_log = os.path.join(CACHE_DIR, "network-error.log")
+    event_names = {
+        "Network.requestWillBeSent",
+        "Network.responseReceived",
+        "Network.loadingFinished",
+        "Network.loadingFailed",
+    }
+    try:
+        os.setsid()
+        signal.signal(signal.SIGTERM, _handle_sigterm)
+
+        ws = websocket.create_connection(
+            f"ws://{client.host}:{client.port}/devtools/page/{target_id}",
+            timeout=AUTO_TIMEOUT,
+            suppress_origin=True,
+        )
+
+        msg_id = 1
+        ws.send(json.dumps({"id": msg_id, "method": "Network.enable"}))
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            resp = json.loads(ws.recv())
+            if resp.get("id") == msg_id:
+                break
+
+        # Per-request tracking
+        req_type = {}      # requestId -> resource type (XHR, Fetch, ...)
+        pending_body = {}  # outgoing msg_id -> requestId (awaiting reply)
+
+        start_time = time.time()
+        with open(NETWORK_EVENTS, "a") as f:
+            while not _shutdown and time.time() - start_time < AUTO_TIMEOUT:
+                try:
+                    ws.settimeout(1.0)
+                    raw = ws.recv()
+                    data = json.loads(raw)
+                except websocket.WebSocketTimeoutException:
+                    continue
+                except (websocket.WebSocketConnectionClosedException, ConnectionError):
+                    break
+
+                # Branch 1: response to our own getResponseBody call
+                resp_id = data.get("id")
+                if resp_id is not None and resp_id in pending_body:
+                    rid = pending_body.pop(resp_id)
+                    if "result" in data:
+                        _save_body(
+                            rid,
+                            data["result"].get("body", ""),
+                            data["result"].get("base64Encoded", False),
+                        )
+                    # CDP error responses are silently dropped — body fetch is
+                    # best-effort (e.g. 204 No Content, redirects, aborted).
+                    continue
+
+                # Branch 2: CDP event we care about
+                method = data.get("method", "")
+                if method not in event_names:
+                    continue
+                params = data.get("params", {})
+
+                entry = {"t": time.time(), "method": method, "params": params}
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+                f.flush()
+
+                if method == "Network.requestWillBeSent":
+                    rt = params.get("type", "")
+                    rid = params.get("requestId", "")
+                    if rt and rid:
+                        req_type[rid] = rt
+                elif method == "Network.responseReceived":
+                    rt = params.get("type", "")
+                    rid = params.get("requestId", "")
+                    if rt and rid:
+                        # responseReceived has the final type — overwrites
+                        # any earlier value from requestWillBeSent.
+                        req_type[rid] = rt
+                elif method == "Network.loadingFinished":
+                    rid = params.get("requestId", "")
+                    size = params.get("encodedDataLength", 0) or 0
+                    rt = req_type.get(rid, "")
+                    if rt in BODY_CAPTURE_TYPES and 0 < size < BODY_MAX_BYTES:
+                        msg_id += 1
+                        pending_body[msg_id] = rid
+                        try:
+                            ws.send(json.dumps({
+                                "id": msg_id,
+                                "method": "Network.getResponseBody",
+                                "params": {"requestId": rid},
+                            }))
+                        except Exception:
+                            pending_body.pop(msg_id, None)
+                    # Type was only needed to decide body capture; drop now to
+                    # keep req_type bounded to in-flight requests instead of
+                    # growing for the collector's full AUTO_TIMEOUT lifetime.
+                    req_type.pop(rid, None)
+                elif method == "Network.loadingFailed":
+                    # Same bounding rule on the failure path.
+                    req_type.pop(params.get("requestId", ""), None)
+
+        ws.close()
+        os._exit(0)
+    except Exception as exc:
+        try:
+            with open(error_log, "a") as ef:
+                ef.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {exc}\n")
+        except Exception:
+            pass
+        os._exit(1)
+
+
 def cmd_network_start(client, args):
-    """Start network request collector."""
-    _run_collector(
-        client, "network", NETWORK_EVENTS,
-        "Network.enable",
-        {
-            "Network.requestWillBeSent",
-            "Network.responseReceived",
-            "Network.loadingFinished",
-            "Network.loadingFailed",
-        },
-    )
+    """Start network request collector (with response body capture)."""
+    _run_network_collector(client)
 
 
 def cmd_network_list(client, args):
@@ -175,26 +359,115 @@ def cmd_network_list(client, args):
                 if rid in requests:
                     requests[rid]["status"] = str(resp.get("status", "?"))
                     requests[rid]["mime"] = resp.get("mimeType", "")[:30]
+                    # responseReceived has the final type — overwrites earlier
+                    rt = params.get("type", "")
+                    if rt:
+                        requests[rid]["type"] = rt
             elif method == "Network.loadingFailed":
                 rid = params.get("requestId", "")
                 if rid in requests:
                     requests[rid]["status"] = "FAILED"
 
-    # Filter
-    items = list(requests.values())
+    # Filter — keep (rid, info) pairs so the rid stays out of info itself
+    items = list(requests.items())
     if args.filter:
         pattern = args.filter.lower()
-        items = [r for r in items if pattern in r.get("url", "").lower()]
+        items = [(rid, info) for rid, info in items if pattern in info.get("url", "").lower()]
 
     if not items:
         print("No matching requests.")
         return
 
-    print(f"{'Method':<7} {'Status':<8} {'Type':<12} URL")
-    print("-" * 80)
-    for r in items:
-        print(f"{r.get('method','?'):<7} {r.get('status','?'):<8} {r.get('type',''):<12} {r['url']}")
-    print(f"\nTotal: {len(items)} requests")
+    # Look up captured bodies (when --bodies is set)
+    captured_rids = set()
+    if args.bodies and os.path.isdir(NETWORK_BODIES_DIR):
+        captured_rids = {
+            os.path.splitext(name)[0]
+            for name in os.listdir(NETWORK_BODIES_DIR)
+            if name.endswith(".json")
+        }
+
+    if args.bodies:
+        # Show requestId (short suffix is unique enough for prefix lookup)
+        # and body availability marker.
+        print(f"{'Method':<7} {'Status':<8} {'Type':<12} {'Body':<5} {'RequestID':<20} URL")
+        print("-" * 110)
+        for rid, r in items:
+            body_mark = "✓" if rid in captured_rids else ""
+            rid_short = rid[-18:]
+            print(
+                f"{r.get('method','?'):<7} {r.get('status','?'):<8} "
+                f"{r.get('type',''):<12} {body_mark:<5} {rid_short:<20} {r['url']}"
+            )
+    else:
+        print(f"{'Method':<7} {'Status':<8} {'Type':<12} URL")
+        print("-" * 80)
+        for _, r in items:
+            print(f"{r.get('method','?'):<7} {r.get('status','?'):<8} {r.get('type',''):<12} {r['url']}")
+    print(f"\nTotal: {len(items)} requests" + (
+        f" ({len(captured_rids)} with captured bodies)" if args.bodies else ""
+    ))
+
+
+def cmd_network_body(client, args):
+    """Print a captured response body by requestId (exact or unique suffix)."""
+    if not os.path.isdir(NETWORK_BODIES_DIR):
+        print("No bodies captured. Run network_start first.", file=sys.stderr)
+        sys.exit(1)
+
+    target = args.request_id
+    files = sorted(
+        name for name in os.listdir(NETWORK_BODIES_DIR) if name.endswith(".json")
+    )
+    if not files:
+        print("No bodies captured. Run network_start first.", file=sys.stderr)
+        sys.exit(1)
+
+    # Match: exact requestId first, then suffix match (collector saves the
+    # full CDP requestId like "AB12.34" — the short tail is unique enough)
+    exact = f"{target}.json"
+    if exact in files:
+        match = exact
+    else:
+        candidates = [f for f in files if os.path.splitext(f)[0].endswith(target)]
+        if not candidates:
+            print(f"No body for requestId: {target!r}", file=sys.stderr)
+            print(f"  {len(files)} bodies in {NETWORK_BODIES_DIR}", file=sys.stderr)
+            sys.exit(1)
+        if len(candidates) > 1:
+            print(f"Ambiguous suffix {target!r} — {len(candidates)} matches:", file=sys.stderr)
+            for c in candidates[:10]:
+                print(f"  {os.path.splitext(c)[0]}", file=sys.stderr)
+            sys.exit(1)
+        match = candidates[0]
+
+    body, b64 = _load_body(match)
+
+    if args.output:
+        out_path = os.path.abspath(os.path.expanduser(args.output))
+        parent_dir = os.path.dirname(out_path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
+        if b64:
+            import base64
+            decoded = base64.b64decode(body)
+            with open(out_path, "wb") as f:
+                f.write(decoded)
+            print(f"Body saved: {out_path} ({len(decoded)} bytes, base64-decoded)")
+        else:
+            with open(out_path, "w") as f:
+                f.write(body)
+            print(f"Body saved: {out_path} ({len(body)} chars)")
+        return
+
+    if b64:
+        print(
+            f"Body is base64-encoded binary ({len(body)} chars). "
+            "Use -o <file> to save.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    sys.stdout.write(body)
 
 
 def cmd_network_stop(client, args):
@@ -703,10 +976,27 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
 
     # network
-    sub.add_parser("network_start", help="Start network collector")
+    sub.add_parser("network_start", help="Start network collector (captures XHR/Fetch bodies)")
     p_nl = sub.add_parser("network_list", help="List collected requests")
     p_nl.add_argument("--filter", help="URL pattern filter")
+    p_nl.add_argument(
+        "--bodies",
+        action="store_true",
+        help="Show requestId column and mark requests with captured bodies",
+    )
     sub.add_parser("network_stop", help="Stop network collector")
+    p_nb = sub.add_parser(
+        "network_body",
+        help="Print a captured XHR/Fetch response body by requestId",
+    )
+    p_nb.add_argument(
+        "request_id",
+        help="Full requestId or unique suffix (see `network_list --bodies`)",
+    )
+    p_nb.add_argument(
+        "--output", "-o",
+        help="Write body to file instead of stdout (required for binary)",
+    )
 
     # console
     sub.add_parser("console_start", help="Start console collector")
@@ -796,12 +1086,16 @@ def main():
 
     # Exempt from headless guard: read local files or manage local PIDs,
     # never sending CDP commands to the browser. Keep in sync with commands dict.
-    LOCAL_COMMANDS = {"network_list", "network_stop", "console_list", "console_stop"}
+    LOCAL_COMMANDS = {
+        "network_list", "network_stop", "network_body",
+        "console_list", "console_stop",
+    }
 
     commands = {
         "network_start": cmd_network_start,
         "network_list": cmd_network_list,
         "network_stop": cmd_network_stop,
+        "network_body": cmd_network_body,
         "console_start": cmd_console_start,
         "console_list": cmd_console_list,
         "console_stop": cmd_console_stop,

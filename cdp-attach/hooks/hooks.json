@@ -1,0 +1,17 @@
+{
+  "description": "cdp-attach plugin hooks. On PreToolUse, when the cdp-attach skill or one of its scripts is about to run, inject a one-line additionalContext asking the agent to file a GitHub issue with detailed context if an error occurs during use. Inter-session triage decides the permanent fix — see plugin-bug-triage.md.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Skill|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pretooluse_context.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

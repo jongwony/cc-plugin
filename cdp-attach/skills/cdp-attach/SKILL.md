@@ -199,8 +199,11 @@ $V2 scan_interactive --limit 30
 V3="${CLAUDE_PLUGIN_ROOT}/scripts/v3_advanced.py"
 
 # Network monitoring (background collector)
-$V3 network_start                              # Start collecting
+$V3 network_start                              # Start collecting (also captures XHR/Fetch bodies)
 $V3 network_list --filter "api"                # View requests
+$V3 network_list --filter "api" --bodies       # Show requestId + body availability mark
+$V3 network_body <requestId>                   # Print captured XHR/Fetch body (exact or unique suffix)
+$V3 network_body <requestId> -o /tmp/r.json    # Save body to file (required for binary)
 $V3 network_stop                               # Stop + summary
 
 # Console monitoring
@@ -297,6 +300,26 @@ When all programmatic approaches fail:
 5. v3 network_stop              → Cleanup
 ```
 
+### Virtualized Tables / Data Grids (rows missing from DOM)
+
+Modern grid libraries (MUI X DataGrid, AG Grid, TanStack Table, react-virtualized) unmount offscreen rows. DOM queries return only the visible window — `querySelectorAll('[role=row]')` may yield 10 rows for a 100-row dataset, and `snapshot` / `scan_interactive` / `find_element` all hit the same limit because they walk the live DOM/AX tree.
+
+The authoritative data lives in the XHR/Fetch response that populated the grid. `network_start` captures these bodies; retrieve them directly instead of fighting virtualization:
+
+```
+1. v1 select <tab>
+2. v3 network_start             → Start collector BEFORE the request fires
+3. v1 navigate "..."  or  v2 click "<search button>" → Trigger data fetch
+4. v3 network_list --filter <api-path> --bodies → Find requestId (✓ = body saved)
+5. v3 network_body <requestId>  → Print JSON; pipe to jq / Python for extraction
+```
+
+Body capture is constrained to XHR/Fetch/EventSource responses under 5MB. Bodies fetched before `network_start` are unrecoverable — CDP's `Network.getResponseBody` only works inside the same session that received the response, and `v1 cdp_call Network.getResponseBody` opens a fresh session whose body buffer is empty for past requests.
+
+For server-paginated grids, each pagination click triggers a new request that the collector captures automatically — iterate the UI (or increase page size) and call `network_body` per request.
+
+When the grid was already loaded before capture began (no fresh request available), fall back to scroll-and-harvest with `v2 scroll --selector "<scroller>"` + `v1 evaluate` between scrolls. This is reducible to existing primitives; no dedicated command.
+
 ## Configuration
 
 | Variable | Default | Description |
@@ -310,7 +333,9 @@ Or use `--host` / `--port` flags on any command.
 
 - Selected tab: `~/.cache/cdp-attach/state.json`
 - Network events: `~/.cache/cdp-attach/network-events.jsonl`
+- Network bodies: `~/.cache/cdp-attach/network-bodies/{requestId}.json`
 - Console events: `~/.cache/cdp-attach/console-events.jsonl`
+- Error log (diagnostic): `~/.cache/cdp-attach/errors.jsonl` (rotates at 1 MB; surfaced via `v1 error_list`)
 
 ## Error Handling
 
@@ -320,6 +345,14 @@ Or use `--host` / `--port` flags on any command.
 | Timeout waiting for response | Tab frozen/suspended | Select a different active tab |
 | WebSocket connection failed | Tab closed or navigated away | Re-select tab with `list` + `select` |
 | Element not found | Invalid CSS selector | Check selector with `evaluate` + `querySelector` |
+
+### Bug Triage
+
+When a CDP method or skill behaviour breaks (Chrome version drift, new edge case, undocumented contract), the in-session task and the permanent fix run on two tracks. Work around the bug in this session with existing primitives; the plugin's PreToolUse hook (`hooks/hooks.json` → `hooks/pretooluse_context.sh`) injects a one-line `additionalContext` reminder whenever the cdp-attach skill or one of its scripts is about to run, so the agent files a GitHub issue with detailed context if an error actually occurs during use.
+
+The injected guidance says, in effect: file at `https://github.com/jongwony/cc-plugin/issues` with the failing command, verbatim error output, environment (Chrome version, OS), and a one-line first-interpretation. Labels: `cdp-attach,triage-needed`. The agent is the issue filer (via `gh`), not the harness — this keeps the mechanism free of background daemons or per-session Python.
+
+Triage decisions (`wontfix`, redirect, patch via PR) belong to the triage session, not the session that hit the bug. See `~/.claude/rules/plugin-bug-triage.md` for the principle.
 
 ### Fallback Strategy
 

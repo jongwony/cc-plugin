@@ -68,9 +68,8 @@ skills: skill-name            # 스킬 자동 로드 (선택)
 **Multi-skill 로딩:**
 ```yaml
 skills:
-  - linear:activity
-  - github-activity:github-activity
-  - google:calendar-sync
+  - google:video-understanding
+  - codex-plus:codex
 ```
 
 **Tool restriction 패턴:**
@@ -113,10 +112,6 @@ tools: [mcp__bigquery__*, Read]                      # Read-only + MCP
   }
 }
 ```
-
-## Prerequisites
-
-- **review-ensemble**: Requires [Codex CLI](https://github.com/openai/codex) for cross-model review. Falls back to /frame-only mode when unavailable.
 
 ## 개발 워크플로우
 

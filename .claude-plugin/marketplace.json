@@ -5,14 +5,9 @@
   },
   "plugins": [
     {
-      "name": "tavily",
-      "source": "./external-plugin/tavily",
-      "description": "Deep web research agent powered by Tavily search API"
-    },
-    {
       "name": "google",
       "source": "./google",
-      "description": "Google services: Gemini CLI, Veo, video understanding, image prompts, calendar sync"
+      "description": "Google Gemini video understanding"
     },
     {
       "name": "amplitude-user-lookup",
@@ -30,24 +25,14 @@
       "description": "Enhanced OpenAI Codex CLI integration (multi-model, context classification)"
     },
     {
-      "name": "github-activity",
-      "source": "./github-activity",
-      "description": "GitHub activity reports"
-    },
-    {
       "name": "pdf-split",
       "source": "./pdf-split",
       "description": "PDF chapter splitting"
     },
     {
-      "name": "activity-workflow",
-      "source": "./activity-workflow",
-      "description": "Orchestrates activity collection and Google Calendar sync"
-    },
-    {
-      "name": "slack",
-      "source": "./slack",
-      "description": "Slack utilities: search messages, fetch threads"
+      "name": "media-download",
+      "source": "./media-download",
+      "description": "Media download via yt-dlp with QR decode and metadata extraction"
     },
     {
       "name": "release",
@@ -63,11 +48,6 @@
       "name": "caffeinate",
       "source": "./caffeinate",
       "description": "macOS sleep prevention toggle with battery and network monitoring"
-    },
-    {
-      "name": "review-ensemble",
-      "source": "./review-ensemble",
-      "description": "Multi-reviewer code review composition layer (ensemble, cross-model)"
     },
     {
       "name": "safe-uninstall",

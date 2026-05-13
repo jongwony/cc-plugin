@@ -7,28 +7,40 @@ PORT=9222
 DISPLAY_NUM=99
 CHROME=""
 
+usage() {
+  cat <<'USAGE'
+bootstrap.sh — start Xvfb + Chromium so cdp-attach can connect.
+Linux only. Start-only lifecycle. Idempotent: skips if CDP already up.
+
+Usage: bootstrap.sh [--port N] [--display N] [--chrome PATH]
+
+Options:
+  --port N      CDP debug port (default: 9222)
+  --display N   Xvfb display number (default: 99)
+  --chrome PATH Chromium binary (default: auto-detect /opt/pw-browsers/...)
+  -h, --help    Show this help
+USAGE
+}
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --port) PORT="$2"; shift 2 ;;
     --display) DISPLAY_NUM="$2"; shift 2 ;;
     --chrome) CHROME="$2"; shift 2 ;;
-    -h|--help)
-      sed -n '2,5p' "$0"
-      echo
-      echo "Usage: $0 [--port N] [--display N] [--chrome PATH]"
-      exit 0
-      ;;
-    *) echo "Unknown arg: $1" >&2; exit 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown arg: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+VERSION_URL="http://127.0.0.1:${PORT}/json/version"
 
 log() { printf '[cdp-bootstrap] %s\n' "$*" >&2; }
 die() { printf '[cdp-bootstrap] ERROR: %s\n' "$*" >&2; exit 1; }
 
 # --- Idempotency: existing CDP wins ---
-if curl -sf "http://127.0.0.1:${PORT}/json/version" >/dev/null 2>&1; then
-  log "CDP already up at http://127.0.0.1:${PORT} — no-op"
-  curl -s "http://127.0.0.1:${PORT}/json/version" | head -3 >&2 || true
+if EXISTING=$(curl -sf "$VERSION_URL" 2>/dev/null); then
+  log "CDP already up at $VERSION_URL — no-op"
+  printf '%s\n' "$EXISTING" | head -3 >&2
   exit 0
 fi
 
@@ -77,9 +89,9 @@ disown
 
 # --- Poll /json/version with 15s deadline ---
 for _ in $(seq 1 75); do
-  if curl -sf "http://127.0.0.1:${PORT}/json/version" >/dev/null 2>&1; then
-    log "✓ CDP up at http://127.0.0.1:${PORT}"
-    curl -s "http://127.0.0.1:${PORT}/json/version" | head -3 >&2
+  if VERSION=$(curl -sf "$VERSION_URL" 2>/dev/null); then
+    log "✓ CDP up at $VERSION_URL"
+    printf '%s\n' "$VERSION" | head -3 >&2
     cat >&2 <<HINT
 
 Next step:

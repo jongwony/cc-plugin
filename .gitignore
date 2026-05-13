@@ -27,5 +27,9 @@ yarn-error.log*
 *.swp
 *.swo
 
+# Python
+__pycache__/
+*.pyc
+
 # Ephemeral workspace directories
 *-workspace/

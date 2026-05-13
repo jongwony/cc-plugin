@@ -8,7 +8,7 @@ description: |
   so the existing cdp-attach skill passes its headed-browser guard. Linux-only;
   user-invoked only (does not auto-trigger from cdp-attach errors).
 user_invocable: true
-argument-hint: "[--port N] [--display N] [--chrome PATH]"
+argument-hint: "[--port N] [--display N] [--chrome PATH] [--ignore-cert-errors]"
 ---
 
 # cdp-bootstrap
@@ -34,6 +34,7 @@ Bring up a visible-to-CDP Chromium instance on a headless-Linux sandbox so the e
 bash .claude/skills/cdp-bootstrap/scripts/bootstrap.sh
 bash .claude/skills/cdp-bootstrap/scripts/bootstrap.sh --port 9333 --display 100
 bash .claude/skills/cdp-bootstrap/scripts/bootstrap.sh --chrome /opt/google/chrome/chrome
+bash .claude/skills/cdp-bootstrap/scripts/bootstrap.sh --ignore-cert-errors
 ```
 
 > This skill lives in the project-local `.claude/skills/` tree, so the project root is the natural base for invocation.
@@ -83,6 +84,7 @@ If `v1 doctor` reports 7/7 PASS, you're done. On any failure, inspect the last 5
 | `--port N` | `9222` | `--remote-debugging-port=N` |
 | `--display N` | `99` | Xvfb `:N`; skipped if the socket already exists |
 | `--chrome PATH` | auto-detected under `/opt/pw-browsers/chromium-*/chrome-linux/chrome` | Override Chromium binary |
+| `--ignore-cert-errors` | off | Pass `--ignore-certificate-errors` to Chromium. Needed in sandboxes whose CA trust store doesn't include public roots (otherwise navigation to HTTPS sites fails with `ERR_CERT_AUTHORITY_INVALID`). Do **not** use against untrusted endpoints — this is a sandbox workaround, not a general option. |
 
 ## State
 

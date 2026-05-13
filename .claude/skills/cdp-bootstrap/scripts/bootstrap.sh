@@ -6,19 +6,21 @@ set -euo pipefail
 PORT=9222
 DISPLAY_NUM=99
 CHROME=""
+IGNORE_CERT_ERRORS=0
 
 usage() {
   cat <<'USAGE'
 bootstrap.sh — start Xvfb + Chromium so cdp-attach can connect.
 Linux only. Start-only lifecycle. Idempotent: skips if CDP already up.
 
-Usage: bootstrap.sh [--port N] [--display N] [--chrome PATH]
+Usage: bootstrap.sh [--port N] [--display N] [--chrome PATH] [--ignore-cert-errors]
 
 Options:
-  --port N      CDP debug port (default: 9222)
-  --display N   Xvfb display number (default: 99)
-  --chrome PATH Chromium binary (default: auto-detect /opt/pw-browsers/...)
-  -h, --help    Show this help
+  --port N              CDP debug port (default: 9222)
+  --display N           Xvfb display number (default: 99)
+  --chrome PATH         Chromium binary (default: auto-detect /opt/pw-browsers/...)
+  --ignore-cert-errors  Launch with --ignore-certificate-errors (sandbox CA trust workaround)
+  -h, --help            Show this help
 USAGE
 }
 
@@ -27,6 +29,7 @@ while [ $# -gt 0 ]; do
     --port) PORT="$2"; shift 2 ;;
     --display) DISPLAY_NUM="$2"; shift 2 ;;
     --chrome) CHROME="$2"; shift 2 ;;
+    --ignore-cert-errors) IGNORE_CERT_ERRORS=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -74,6 +77,11 @@ else
 fi
 
 # --- Chromium ---
+CHROME_EXTRA=()
+if [ "$IGNORE_CERT_ERRORS" = "1" ]; then
+  CHROME_EXTRA+=(--ignore-certificate-errors)
+  log "Cert errors will be ignored (--ignore-cert-errors)"
+fi
 log "Starting Chromium ($CHROME) on display :${DISPLAY_NUM}, CDP port ${PORT}"
 DISPLAY=":${DISPLAY_NUM}" "$CHROME" \
   --no-sandbox \
@@ -83,6 +91,7 @@ DISPLAY=":${DISPLAY_NUM}" "$CHROME" \
   --no-first-run --no-default-browser-check \
   --disable-background-networking \
   --window-size=1280,900 \
+  "${CHROME_EXTRA[@]}" \
   about:blank \
   >/tmp/chrome-logs/chrome.log 2>&1 &
 disown

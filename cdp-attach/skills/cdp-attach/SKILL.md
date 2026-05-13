@@ -134,6 +134,14 @@ $V1 error_list --since-seconds 300                        # Last 5 minutes only
   ```bash
   $V1 evaluate --await "await fetch('/api').then(r => r.json())"
   ```
+- The single-line auto-wrap inserts a `return`. Multi-line bodies (anything containing `;` or a newline) are wrapped without `return` — write the `return` yourself:
+  ```bash
+  $V1 evaluate --await --stdin <<'JS'
+  var r = await fetch('/api');
+  var t = await r.text();
+  return t;          # required — otherwise the result is undefined
+  JS
+  ```
 
 ### v2 — Interaction (`v2_interact.py`)
 
@@ -290,6 +298,7 @@ When all programmatic approaches fail:
 - During React hydration, `find_element --name/--role` may return empty results. Wait for hydration via `v1 evaluate`, then retry.
 - `scan_interactive` makes a CDP call per element; use `--limit` to constrain (default 50).
 - nodeId is invalidated on DOM changes. For stable references, use backendNodeId.
+- **CDP setter state is session-scoped, not target-scoped.** Each v1/v2/v3 invocation opens a fresh CDP session and closes it on exit, so anything you "install" via `cdp_call` or `v3 add_init_script` is discarded when the command returns. Affected: `Security.setIgnoreCertificateErrors`, `Network.setExtraHTTPHeaders`, `Page.addScriptToEvaluateOnNewDocument` (so `v3 remove_init_script <id>` from a separate call sees "Script not found"), `Emulation.setUserAgentOverride` when not paired with the same-session navigation. Workarounds: relaunch the browser with the equivalent command-line flag (e.g. `--ignore-certificate-errors`, `--user-agent=...`), or do the install + use inside a single `cdp_call` chain (limited because `cdp_call` is one method per invocation).
 
 ### Network Debugging
 ```

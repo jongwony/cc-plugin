@@ -12,7 +12,7 @@ paths:
 | Parameter | Value |
 |-----------|-------|
 | Vendor target | Chrome / CDP (debug-port WebSocket protocol) |
-| Discovery scope | errors only — CDP method failures, WebSocket errors, `network_body` capture path |
+| Discovery scope | errors only — CDP method failures + WebSocket errors (logged to `~/.cache/cdp-attach/errors.jsonl` via `cdp_client.send()`). Body capture (`network_body`) is a separate concern, not a discovery channel |
 | Trigger timing | on-error during PreToolUse-scoped invocation; the hook injects `additionalContext` so the agent files the issue mid-turn |
 | Submitter set | agent in-session only (extensible to humans / Devin / Pryden as adoption grows) |
 | Concrete substrate | GitHub Issues + `gh` CLI in `jongwony/cc-plugin` |
@@ -32,4 +32,4 @@ paths:
 
 - **New tool bugs encountered during use**: rely on the hook to auto-file. If filing manually (different harness or disabled hook), match the title format `[cdp-attach] <category>|<method>|<code-or-kind>` so the dedupe finds it.
 - **New primitives holding a CDP-session contract** (like `Network.enable`): follow the `network_body` pattern — fork holds the session, filesystem is the synthesis substrate, foreground commands read filesystem. This is the intra-session realization of the same structure (CDP target ≈ subagent, substrate = filesystem).
-- **OOPIF / worker / service-worker absorption**: same intra-session pattern with `Target.attachToTarget(flatten:true)` + recursive `setAutoAttach`. `sessionId` is volatile (per invocation); durable handle is `targetId + type + url`.
+- **OOPIF / worker / service-worker absorption** (planned, not yet exposed in v1/v2/v3 — see `SKILL.md` note on cross-origin iframe debugging): when added, follow the same intra-session pattern with `Target.attachToTarget(flatten:true)` + recursive `setAutoAttach`. At that point `sessionId` will be volatile (per invocation), so a durable handle composed of `targetId + type + url` will be required — current code persists bare `targetId` only, via `state.json`.

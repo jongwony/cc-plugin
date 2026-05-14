@@ -1,3 +1,8 @@
+---
+paths:
+  - "cdp-attach/**"
+---
+
 # cdp-attach — Triage-Gated Vendor Harness Realization
 
 `cdp-attach` realizes the **Triage-Gated Vendor Harness** pattern for the Chrome DevTools Protocol vendor. The pattern body and its instance-parameter slots live at `~/.claude/rules/triage-gated-vendor-harness.md`; this rule inscribes CDP-specific parameter values and design notes.

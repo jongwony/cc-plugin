@@ -10,11 +10,6 @@
       "description": "Google Gemini video understanding"
     },
     {
-      "name": "amplitude-user-lookup",
-      "source": "./amplitude-user-lookup",
-      "description": "Amplitude user behavior queries"
-    },
-    {
       "name": "claude-code-internals",
       "source": "./claude-code-internals",
       "description": "Claude Code internals explorer"

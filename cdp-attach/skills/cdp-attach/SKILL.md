@@ -361,7 +361,7 @@ When a CDP method or skill behaviour breaks (Chrome version drift, new edge case
 
 The injected guidance says, in effect: file at `https://github.com/jongwony/cc-plugin/issues` with the failing command, verbatim error output, environment (Chrome version, OS), and a one-line first-interpretation. Labels: `cdp-attach,triage-needed`. The agent is the issue filer (via `gh`), not the harness — this keeps the mechanism free of background daemons or per-session Python.
 
-Triage decisions (`wontfix`, redirect, patch via PR) belong to the triage session, not the session that hit the bug. See `~/.claude/rules/plugin-bug-triage.md` for the principle.
+Triage decisions (`wontfix`, redirect, patch via PR) belong to the triage session, not the session that hit the bug. See `~/.claude/rules/triage-gated-vendor-harness.md` for the principle.
 
 ### Fallback Strategy
 

@@ -70,20 +70,24 @@ When the delegated task is image generation or image editing:
 
 2. Select sandbox mode; default to `--sandbox read-only` unless edits or network access are necessary.
 3. Craft prompt per Context Classification and Prompt Template — classify context, write to `/tmp/codex_prompt_<suffix>.txt`.
-4. Execute via `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh` with appropriate options:
-   - `-m MODEL` / `-r EFFORT` / `-s SANDBOX` / `--full-auto` / `-C DIR`
-   - **Single model**: run one Bash call as usual.
-   - **Multiple models**: issue parallel Bash tool calls (one per model) in a single response. Each call uses the same prompt, sandbox, and reasoning effort but a different `-m` value.
-5. Resume: Write new instructions to a fresh `/tmp/codex_prompt_<suffix>.txt`, then `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh --resume /tmp/codex_prompt_<suffix>.txt`. Resume applies to the last single session only. Codex tracks sessions internally — no external session ID needed.
-6. Run command(s), summarize each outcome, inform user: "Resume anytime with 'codex resume'."
+4. Delegate execution to a Bash subagent (Task tool) — never run `codex-run.sh` directly in the main session. This keeps codex's verbose banner and full output out of the main context. Give the subagent:
+   - the exact command: `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh [options] /tmp/codex_prompt_<suffix>.txt` with `-m MODEL` / `-r EFFORT` / `-s SANDBOX` / `--full-auto` / `-C DIR`, or `-S <SESSION_ID>` to resume.
+   - return contract: run the command and return ONLY (a) a concise outcome summary and (b) the session id. codex prints `session id: <uuid>` to stderr; the subagent extracts that line verbatim and returns it as `SESSION_ID: <uuid>`. The wrapper does no parsing — stderr is left unsuppressed precisely so the subagent can read the session id and any failure straight from the output.
+   - **Single model**: one subagent call.
+   - **Multiple models**: issue parallel subagent calls (one per model) in a single response — same prompt, sandbox, and effort, different `-m`. Each returns its own `SESSION_ID`.
+5. Record each returned `SESSION_ID` against its purpose/model. This {purpose → SESSION_ID} map is the only resume handle — there is no most-recent fallback.
+6. Resume: write new instructions to a fresh `/tmp/codex_prompt_<suffix>.txt`, then delegate to a Bash subagent running `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> /tmp/codex_prompt_<suffix>.txt`. Resume is always by explicit id — deterministic, never a race under parallel sessions. Model/effort/sandbox/`-C` are ignored on resume (the session keeps its original settings).
+7. Summarize each outcome to the user; for parallel work, surface which `SESSION_ID` maps to which branch. Inform the user: "Resume anytime with 'codex resume'."
 
 ### Quick Reference
+Each command below runs **inside a Bash subagent**, which returns the outcome summary plus the `session id: <uuid>` line as `SESSION_ID: <uuid>`.
+
 | Use case | Command pattern |
 | --- | --- |
 | Read-only analysis | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -m MODEL /tmp/codex_prompt_<suffix>.txt` |
 | Apply edits | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s workspace-write --full-auto /tmp/codex_prompt_<suffix>.txt` |
 | Network access | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s danger-full-access --full-auto /tmp/codex_prompt_<suffix>.txt` |
-| Resume session | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh --resume /tmp/codex_prompt_<suffix>.txt` (options like -m, -r, -s are ignored; uses last session settings) |
+| Resume a session | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> /tmp/codex_prompt_<suffix>.txt` (only resume path; deterministic, no --last) |
 | Different dir | Add `-C <DIR>` to non-resume patterns above |
 | Custom model | Add `-m gpt-5.4 -r high` to any pattern above |
 

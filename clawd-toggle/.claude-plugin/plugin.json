@@ -1,7 +1,7 @@
 {
   "name": "clawd-toggle",
   "description": "Toggle clawd-on-desk (Electron desktop pet) as a tracked background process",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

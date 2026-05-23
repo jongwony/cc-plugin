@@ -45,6 +45,11 @@
       "description": "macOS sleep prevention toggle with battery and network monitoring"
     },
     {
+      "name": "clawd-toggle",
+      "source": "./clawd-toggle",
+      "description": "Toggle clawd-on-desk (Electron desktop pet) as a tracked background process"
+    },
+    {
       "name": "safe-uninstall",
       "source": "./safe-uninstall",
       "description": "Safely identify, investigate, and remove macOS programs with risk-assessed execution"

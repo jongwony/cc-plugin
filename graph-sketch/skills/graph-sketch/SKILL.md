@@ -1,14 +1,11 @@
 ---
 name: graph-sketch
 description: |
-  This skill should be used when the user wants to SEE THE SHAPE of a graph, DAG,
-  workflow, pipeline, dependency tree, or fan-out/fan-in flow in the terminal — phrases
-  like "draw this graph", "show the workflow structure", "sketch the DAG", "visualize
-  the pipeline", "diagram these dependencies", "render this as ASCII", or when translating
-  a Workflow script's pipeline()/parallel() structure into a picture. Renders directed
-  graphs as layered box-art/ASCII with zero dependencies (bundled Python), and upgrades
-  to graph-easy when it is installed. Use it whenever someone wants a plain-text picture
-  of a multi-step or branching process, even if they never say the word "ASCII".
+  This skill should be used when the user wants a directed graph — a DAG, workflow,
+  pipeline, or dependency tree — drawn as a plain-text terminal picture: "draw this graph",
+  "sketch the DAG", "diagram these dependencies", "render as ASCII", or turning a Workflow
+  script's pipeline()/parallel() structure into a diagram (even when "ASCII" is never said).
+  Renders layered box-art, zero-dependency, upgrading to graph-easy when installed.
 ---
 
 # Graph Sketch

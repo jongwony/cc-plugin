@@ -58,6 +58,11 @@
       "name": "dallem",
       "source": "./dallem",
       "description": "Therapy reservation assistant with CDP automation and Google Calendar conflict checking"
+    },
+    {
+      "name": "graph-sketch",
+      "source": "./graph-sketch",
+      "description": "Render workflow/DAG graphs as layered ASCII box-art in the terminal"
     }
   ]
 }

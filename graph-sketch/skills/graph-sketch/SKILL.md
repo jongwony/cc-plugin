@@ -45,7 +45,7 @@ principle: a skill must work even when an optional external tool is absent).
 Feed it an edge list on stdin (or pass a file path):
 
 ```bash
-uv run ~/.claude/skills/graph-sketch/scripts/render.py <<'EOF'
+uv run ${CLAUDE_PLUGIN_ROOT}/skills/graph-sketch/scripts/render.py <<'EOF'
 diff/fate -> Category, Type, OpSem, Gap
 Category, Type, OpSem, Gap -> verify
 verify -> Synthesize -> report
@@ -136,6 +136,21 @@ than hidden:
 If a graph has cycles, the renderer still lays it out (back-edges are treated as layer-0
 contributions) but the result reads better as a tree than as a faithful cyclic graph; note
 this to the user and offer graph-easy.
+
+### Input envelope
+
+The renderer targets graphs small enough to read in a terminal — the kind you can specify
+inline — so a few input boundaries are accepted rather than engineered around:
+
+- **Labels are measured by character count, not display width.** Wide glyphs (CJK, emoji)
+  drift the boxes and connectors, because box width is `len(label) + 4`. Stick to ASCII/Latin
+  labels, or pad manually, when alignment matters.
+- **Very deep chains recurse.** Layering is computed recursively, so a single chain longer
+  than Python's recursion limit (~1000 nodes) raises `RecursionError`. Graphs that fit in a
+  terminal never approach this; for machine-scale DAGs, use graphviz.
+- **DOT wrappers must be multi-line.** `digraph foo {` and `}` are stripped only when each is
+  on its own line; a one-line `digraph G { A -> B }` is parsed literally and yields junk nodes.
+  Split the wrapper across lines, or drop it and feed the bare edges.
 
 ## Files
 

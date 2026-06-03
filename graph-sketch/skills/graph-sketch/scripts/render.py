@@ -91,6 +91,10 @@ def compute_layers(nodes, edges):
 
 def junction(up, down, left, right, ascii_mode):
     if ascii_mode:
+        if not up and not down:
+            return "-"
+        if not left and not right:
+            return "|"
         return "+"
     return {
         (1, 0, 1, 1): "┴", (1, 0, 1, 0): "┘", (1, 0, 0, 1): "└",
@@ -173,7 +177,6 @@ def render(nodes, edges, ascii_mode=False, gutter=3):
             put(drop, c, v)
 
     out = "\n".join("".join(row).rstrip() for row in grid)
-    out = "\n".join(line for line in out.split("\n"))  # keep internal blanks
     if cross:
         arrow = "-->" if ascii_mode else "⇢"
         note = "\n".join(f"  {a} {arrow} {b}" for a, b in cross)

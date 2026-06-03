@@ -25,8 +25,10 @@ Before writing the prompt file, classify available context on two orthogonal axe
 | **AI-verifiable** | Extract paths, patterns, commands as **Pointers** — codex self-verifies | Provide search hints, entry points — codex self-explores |
 | **User-specific** | Summarize intent, constraints, preferences from current session — **reference-only** | **Blocked** — no collection requests or questions |
 
+**One boundary — Reference over Copy.** Both rows are two faces of the same partition: *re-derivability by the consumer*. Codex is the consumer that cannot re-derive the parent's session context, but CAN re-derive anything reachable by its own tools under `-C DIR`. The AI-verifiable row is what codex re-derives, so pass a **reference** (path / pattern / command); the User-specific row is what it cannot, so **copy** only that into the prompt. Operational test before each item: *"Can codex re-derive this from shared substrate with its own tools?"* — yes → pass a pointer; no → copy it in.
+
 **Rules**:
-- **Pointers**: Provide file paths, grep patterns, test commands. Do not inline file contents — codex has its own tools to read and verify.
+- **Pointers**: Provide file paths, grep patterns, test commands. Do not inline file contents — codex re-derives them with its own tools, so a pointer is sufficient (copying is what you reserve for what it cannot re-derive).
 - **Session Context**: Extract only what is already known from the current conversation. Organize as intent, constraints, and preferences.
 - **No collection requests**: Never embed questions or requests for additional user-specific information in the prompt. If codex needs more context, the user will resume with it. Blocked applies only to content written into `/tmp` prompt, not to pre-prompt orchestration (e.g., `AskUserQuestion` for model selection).
 

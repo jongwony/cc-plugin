@@ -23,7 +23,7 @@ Before writing the prompt file, classify available context on two orthogonal axe
 | | Session (already available) | Exploration (needs collection) |
 |---|---|---|
 | **AI-verifiable** | Extract paths, patterns, commands as **Pointers** — codex self-verifies | Provide search hints, entry points — codex self-explores |
-| **User-specific** | Summarize intent, constraints, preferences from current session — **reference-only** | **Blocked** — no collection requests or questions |
+| **User-specific** | Summarize intent, constraints, preferences from current session — **copy-only** | **Blocked** — no collection requests or questions |
 
 **One boundary — Reference over Copy.** Both rows are two faces of the same partition: *re-derivability by the consumer*. Codex is the consumer that cannot re-derive the parent's session context, but CAN re-derive anything reachable by its own tools under `-C DIR`. The AI-verifiable row is what codex re-derives, so pass a **reference** (path / pattern / command); the User-specific row is what it cannot, so **copy** only that into the prompt. Operational test before each item: *"Can codex re-derive this from shared substrate with its own tools?"* — yes → pass a pointer; no → copy it in.
 
@@ -49,7 +49,7 @@ Structure `/tmp/codex_prompt_<suffix>.txt` with these sections:
     - constraints: [limitations, compatibility requirements]
     - preferences: [coding style, library choices, conventions]
 
-Omit empty sections. `## Pointers` enables codex to self-verify; `## Session Context` provides reference-only background without requiring follow-up.
+Omit empty sections. `## Pointers` enables codex to self-verify; `## Session Context` provides copy-only background without requiring follow-up.
 
 ## Image Generation Requests
 

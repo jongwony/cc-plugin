@@ -40,6 +40,12 @@ def _start_recording():
     if _recording:
         return
     _recording = True
+    # 이전 녹음 파일을 먼저 제거 — rec 가 새 파일을 못 쓰는 상황(장치 점유/권한 오류)
+    # 에서 직전 녹음을 stale 하게 전사·붙여넣기 하는 것을 방지.
+    try:
+        os.remove(WAV)
+    except FileNotFoundError:
+        pass
     # 16kHz mono. SIGINT 으로 종료해야 sox 가 WAV 헤더를 정상 finalize 함.
     _rec_proc = subprocess.Popen(
         ["rec", "-q", "-r", "16000", "-c", "1", WAV],

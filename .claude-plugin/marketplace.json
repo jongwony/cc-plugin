@@ -63,6 +63,11 @@
       "name": "graph-sketch",
       "source": "./graph-sketch",
       "description": "Render workflow/DAG graphs as layered ASCII box-art in the terminal"
+    },
+    {
+      "name": "voice-dictation",
+      "source": "./voice-dictation",
+      "description": "Push-to-talk voice dictation daemon (whisper.cpp) transcribing speech into the active window"
     }
   ]
 }

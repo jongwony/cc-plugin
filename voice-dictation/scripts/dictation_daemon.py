@@ -108,9 +108,12 @@ def _inject(text):
     # 기존 클립보드 보존 → 새 텍스트 복사 → Cmd+V → 잠시 후 복원
     old = subprocess.run(["pbpaste"], capture_output=True, text=True).stdout
     subprocess.run(["pbcopy"], input=text, text=True)
+    # key code 9 (물리 V 키)로 Cmd+V 합성. keystroke "v" 는 문자 'v'를 현재 입력
+    # 소스를 통해 키코드로 번역하는데, 한글 IME 활성 시 'v' 매핑이 없어 키스트로크가
+    # 드롭되어 붙여넣기가 실패함. key code 는 물리 키를 직접 지정해 입력 소스에 무관.
     subprocess.run([
         "osascript", "-e",
-        'tell application "System Events" to keystroke "v" using command down',
+        'tell application "System Events" to key code 9 using command down',
     ])
     time.sleep(0.3)
     subprocess.run(["pbcopy"], input=old, text=True)

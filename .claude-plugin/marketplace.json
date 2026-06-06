@@ -68,6 +68,11 @@
       "name": "voice-dictation",
       "source": "./voice-dictation",
       "description": "Push-to-talk voice dictation daemon (whisper.cpp) transcribing speech into the active window"
+    },
+    {
+      "name": "remote-spawn",
+      "source": "./remote-spawn",
+      "description": "Spawn a backgrounded `claude --remote-control` session in any directory (tmux-tracked), reachable from the Claude app"
     }
   ]
 }

@@ -32,9 +32,14 @@ spawn() {
   dir="$(cd "$dir" 2>/dev/null && pwd)" || { echo "ERROR: no such dir: $1" >&2; return 1; }
   [ -n "$name" ] || name="$(basename "$dir")"
   name="$(sanitize "$name")"
+  [ -n "$name" ] || { echo "ERROR: name resolves to empty (dir basename has no usable chars) — pass an explicit name" >&2; return 2; }
   local sess="rc-$name"
   if tmux has-session -t "$sess" 2>/dev/null; then
-    echo "ALREADY-RUNNING $name  (dir: $dir)  attach: tmux attach -t $sess"
+    # report the dir the session is ACTUALLY running in (not the one just asked for),
+    # and flag a basename collision so it isn't a silent no-op.
+    local rdir; rdir="$(tmux display-message -p -t "$sess" '#{session_path}' 2>/dev/null)"
+    echo "ALREADY-RUNNING $name  (running in: ${rdir:-?})  attach: tmux attach -t $sess"
+    [ "$rdir" = "$dir" ] || echo "  note: requested $dir but rc-$name already runs in ${rdir:-?} — pass an explicit name to run a second session"
     return 0
   fi
   # Detached tmux session running claude directly; when claude exits the session ends.
@@ -60,10 +65,24 @@ list() {
 kill_one() {
   local name; name="$(sanitize "$1")"
   [ -n "$name" ] || { echo "usage: rc-spawn.sh kill <name>" >&2; return 2; }
-  local sess="rc-$name" pid found=0
-  pid="$(ps -Ao pid=,command= | grep -E "remote-control --name ${name}([[:space:]]|\$)" | grep -v grep | awk '{print $1}' | head -1)"
-  if [ -n "$pid" ]; then
-    kill "$pid" 2>/dev/null && { echo "SIGTERM -> claude pid $pid ($name)"; found=1; sleep 1; }
+  local sess="rc-$name" pids pid found=0 i
+  # sanitize() allows '.', the only ERE metachar a name can carry — escape it so
+  # `kill my.proj` can't also match `--name myXproj` (a different session).
+  local rname="${name//./\\.}"
+  # SIGTERM every matching claude, not just the first: a collision or a half-finished
+  # earlier teardown can leave more than one process on the same name.
+  pids="$(ps -Ao pid=,command= | grep -E "remote-control --name ${rname}([[:space:]]|\$)" | grep -v grep | awk '{print $1}')"
+  for pid in $pids; do
+    kill "$pid" 2>/dev/null && { echo "SIGTERM -> claude pid $pid ($name)"; found=1; }
+  done
+  # claude exiting cleanly ends its own tmux session (see spawn), so wait for that
+  # instead of racing it — gives SessionEnd hooks (anamnesis) time to flush. Only
+  # hard-drop the session if it outlives the bounded wait (~15s).
+  if [ "$found" = 1 ]; then
+    for i in $(seq 1 30); do
+      tmux has-session -t "$sess" 2>/dev/null || break
+      sleep 0.5
+    done
   fi
   if tmux has-session -t "$sess" 2>/dev/null; then
     tmux kill-session -t "$sess" 2>/dev/null && { echo "dropped tmux $sess"; found=1; }

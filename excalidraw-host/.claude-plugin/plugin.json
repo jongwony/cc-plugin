@@ -1,0 +1,13 @@
+{
+  "name": "excalidraw-host",
+  "description": "Self-host the official open-source Excalidraw whiteboard by cloning the repo and running its Vite dev server (per upstream README, no Docker).",
+  "version": "0.1.0",
+  "license": "MIT",
+  "keywords": [
+    "excalidraw",
+    "whiteboard",
+    "self-host",
+    "vite",
+    "yarn"
+  ]
+}

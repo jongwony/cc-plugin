@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cdp_client import CDPClient, CDPError
+from cdp_client import CDPClient, CDPConnectionError, CDPError
 
 CACHE_DIR = os.path.expanduser("~/.cache/cdp-attach")
 NETWORK_EVENTS = os.path.join(CACHE_DIR, "network-events.jsonl")
@@ -669,11 +669,15 @@ def cmd_emulate_reset(client, args):
         try:
             client.send("Emulation.clearDeviceMetricsOverride")
             reset.append("device")
+        except CDPConnectionError:
+            raise
         except CDPError:
             pass
         try:
             client.send("Emulation.clearGeolocationOverride")
             reset.append("geolocation")
+        except CDPConnectionError:
+            raise
         except CDPError:
             pass
         try:
@@ -685,6 +689,8 @@ def cmd_emulate_reset(client, args):
                 "uploadThroughput": -1,
             })
             reset.append("offline")
+        except CDPConnectionError:
+            raise
         except CDPError:
             pass
         print(f"Emulation reset: {', '.join(reset) or 'none'}")

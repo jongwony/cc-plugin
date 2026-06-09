@@ -272,6 +272,59 @@ def cmd_evaluate(client, args):
         client.close()
 
 
+def _post_nav_probe(client, timeouts=(5, 10)):
+    """Bounded renderer-liveness probe after navigate/reload.
+
+    A reload issued while the renderer had pending/blocked cross-origin
+    fetches can leave the tab permanently unresponsive — every later CDP
+    call then burns its full 30s timeout (#47). Probing right after the
+    navigation surfaces the wedge immediately and points at recovery.
+
+    A busy renderer is not a wedged one: Runtime.evaluate queues behind
+    long main-thread tasks (heavy hydration, analytics), so the probe
+    retries with a longer timeout before declaring the tab unresponsive.
+
+    Returns True when the renderer answered.
+    """
+    reason = "no response"
+    for timeout in timeouts:
+        try:
+            result = client.send(
+                "Runtime.evaluate",
+                {"expression": "1", "returnByValue": True},
+                timeout=timeout,
+            )
+            value = result.get("result", {}).get("value")
+            if value == 1:
+                return True
+            reason = f"unexpected probe result: {value!r}"
+        except CDPError as e:
+            reason = str(e).splitlines()[0]
+    print(
+        f"Error: tab unresponsive after navigation ({reason}; "
+        f"{len(timeouts)} attempt(s), {sum(timeouts)}s total). The renderer "
+        "may be wedged — or still busy with a long task. Re-check with "
+        "`evaluate \"1\"`; if it stays silent, run 'revive' to close and "
+        "reopen this tab via the HTTP API (discards renderer state: "
+        "sessionStorage, in-memory JS).",
+        file=sys.stderr,
+    )
+    return False
+
+
+def _await_load_and_probe(client):
+    """Shared --wait-for load epilogue: load-event wait, then renderer probe.
+
+    Returns False when the renderer probe fails (caller exits non-zero).
+    """
+    if not _wait_for_load_event(client):
+        print(
+            "Warning: Page load event not received within 30s — page may not be fully loaded",
+            file=sys.stderr,
+        )
+    return _post_nav_probe(client)
+
+
 def cmd_navigate(client, args):
     """Navigate to a URL."""
     client.connect()
@@ -288,11 +341,8 @@ def cmd_navigate(client, args):
             sys.exit(1)
 
         if args.wait_for == "load":
-            if not _wait_for_load_event(client):
-                print(
-                    "Warning: Page load event not received within 30s — page may not be fully loaded",
-                    file=sys.stderr,
-                )
+            if not _await_load_and_probe(client):
+                sys.exit(1)
 
         frame_id = result.get("frameId", "")
         print(f"Navigated to: {args.url}")
@@ -311,13 +361,70 @@ def cmd_reload(client, args):
         client.send("Page.reload", {"ignoreCache": args.hard})
 
         if args.wait_for == "load":
-            if not _wait_for_load_event(client):
-                print(
-                    "Warning: Page load event not received within 30s",
-                    file=sys.stderr,
-                )
+            if not _await_load_and_probe(client):
+                sys.exit(1)
 
         print(f"Reloaded{' (cache bypassed)' if args.hard else ''}")
+    finally:
+        client.close()
+
+
+def cmd_revive(client, args):
+    """Recover a wedged tab: close it and reopen its URL via the HTTP API.
+
+    The HTTP endpoints (/json/list, /json/close, /json/new) are served by
+    the browser process, so they work even when the tab's renderer no
+    longer answers CDP WebSocket calls (#47). Renderer-local state
+    (session history, sessionStorage, in-memory JS state) is lost;
+    cookies and localStorage survive in the profile.
+    """
+    target_id = client.get_selected_target()
+    if not target_id:
+        print("Error: No tab selected. Use 'select' first.", file=sys.stderr)
+        sys.exit(1)
+
+    tabs = client.list_tabs(type_filter=None)
+    tab = next((t for t in tabs if t.get("id") == target_id), None)
+    if tab is None:
+        print(
+            f"Error: Selected target {target_id} not found in tab list. "
+            "Use 'list' + 'select' to pick a tab.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    url = args.url or tab.get("url", "")
+    if not url:
+        print("Error: Tab has no URL and no --url override given.", file=sys.stderr)
+        sys.exit(1)
+
+    # Open-then-close: if /json/new fails, the wedged tab still exists and
+    # state.json keeps pointing at a live (if unresponsive) target.
+    new_tab = client.new_tab(url)
+    new_id = new_tab.get("id")
+    if not new_id:
+        print(f"Error: /json/new returned no target id: {new_tab}", file=sys.stderr)
+        sys.exit(1)
+
+    if not client.close_tab(target_id):
+        print(
+            f"Warning: /json/close did not confirm for {target_id[:8]}... — "
+            "the wedged tab may still be open.",
+            file=sys.stderr,
+        )
+
+    client.save_state(new_id)
+    client.activate_tab(new_id)
+    print(f"Revived tab: closed {target_id[:8]}..., reopened as {new_id[:8]}...")
+    print(f"  URL: {url}")
+
+    # Confirm the fresh renderer answers before handing control back.
+    try:
+        client.connect(target_id=new_id)
+        if _post_nav_probe(client, timeouts=(10,)):
+            print("  Renderer responsive.")
+        else:
+            sys.exit(1)
     finally:
         client.close()
 
@@ -349,11 +456,8 @@ def _history_nav(client, wait_for, direction, label):
         client.send("Page.navigateToHistoryEntry", {"entryId": entry.get("id")})
 
         if wait_for == "load":
-            if not _wait_for_load_event(client):
-                print(
-                    "Warning: Page load event not received within 30s",
-                    file=sys.stderr,
-                )
+            if not _await_load_and_probe(client):
+                sys.exit(1)
 
         print(f"Navigated {label} to: {entry.get('url', '')}")
     finally:
@@ -779,6 +883,14 @@ def main():
     p_reload.add_argument("--wait-for", choices=["load", "none"], default="load",
                           help="Wait condition (default: load)")
 
+    # revive
+    p_revive = sub.add_parser(
+        "revive",
+        help="Recover a wedged tab: close + reopen its URL via the HTTP API",
+    )
+    p_revive.add_argument("--url", default=None,
+                          help="Reopen with this URL instead of the tab's current URL")
+
     # back
     p_back = sub.add_parser("back", help="Navigate back in history")
     p_back.add_argument("--wait-for", choices=["load", "none"], default="none",
@@ -838,6 +950,7 @@ def main():
         "evaluate": cmd_evaluate,
         "navigate": cmd_navigate,
         "reload": cmd_reload,
+        "revive": cmd_revive,
         "back": cmd_back,
         "forward": cmd_forward,
         "wait": cmd_wait,

@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cdp_client import CDPClient, CDPError
+from cdp_client import CDPClient, CDPConnectionError, CDPError
 
 
 def _resolve_selector(client, selector):
@@ -148,10 +148,14 @@ def _get_node_description(client, node_id=None, backend_node_id=None):
                     "returnByValue": True,
                 })
                 text = text_result.get("result", {}).get("value", "")
+        except CDPConnectionError:
+            raise
         except CDPError:
             pass
 
         return tag, text
+    except CDPConnectionError:
+        raise
     except CDPError:
         return "unknown", ""
 
@@ -177,6 +181,8 @@ def _get_node_bounds(client, node_id=None, backend_node_id=None, scroll=True,
     if scroll:
         try:
             client.send("DOM.scrollIntoViewIfNeeded", params)
+        except CDPConnectionError:
+            raise
         except CDPError:
             pass  # Non-scrollable or detached; continue
 
@@ -192,6 +198,8 @@ def _get_node_bounds(client, node_id=None, backend_node_id=None, scroll=True,
             if len(values) >= 8:
                 quad_values = values
                 break
+        except CDPConnectionError:
+            raise
         except CDPError:
             pass
 
@@ -247,11 +255,15 @@ def _dom_search(client, query, include_shadow_dom=False, limit=20):
                     "backendNodeId": node_info.get("backendNodeId"),
                     "tag": node_info.get("localName", node_info.get("nodeName", "")).lower(),
                 })
+            except CDPConnectionError:
+                raise
             except CDPError:
                 pass
 
     try:
         client.send("DOM.discardSearchResults", {"searchId": search_id})
+    except CDPConnectionError:
+        raise
     except CDPError:
         pass
 
@@ -719,6 +731,8 @@ def cmd_scan_interactive(client, args):
                 vp = layout.get("cssVisualViewport", {})
                 vw = vp.get("clientWidth", 1920)
                 vh = vp.get("clientHeight", 1080)
+            except CDPConnectionError:
+                raise
             except CDPError:
                 pass
 
@@ -744,6 +758,8 @@ def cmd_scan_interactive(client, args):
                     "x": info["x"],
                     "y": info["y"],
                 })
+            except CDPConnectionError:
+                raise
             except CDPError:
                 continue
 

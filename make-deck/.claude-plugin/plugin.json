@@ -1,0 +1,9 @@
+{
+  "name": "make-deck",
+  "description": "Generate self-contained HTML slide decks from organized notes. Progressively surfaces audience/difficulty/density/time/scope dimensions, fills a bundled layout-catalog skeleton (10 layouts, 4 narrative ZONEs, clawd mascot decorators), and outputs a single-file deck with inlined assets. Use whenever the user wants to turn notes or content into a presentation, slides, or a deck.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

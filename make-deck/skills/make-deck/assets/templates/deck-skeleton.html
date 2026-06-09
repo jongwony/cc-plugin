@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deck Skeleton — 레이아웃 카탈로그 (소스: 2026-04-20 context-efficiency deck)</title>
+
+<!-- ┌─ 템플릿 사용법 (이 주석은 새 덱 복사 후 삭제 가능) ─────────────────
+     1. 이 파일을 `../{YYYY-MM-DD-주제-deck.html}` 로 복사한 뒤 편집한다.
+        예: `cp ~/.claude/.write/templates/deck-skeleton.html ~/.claude/.write/2026-06-15-새주제-deck.html`
+     2. <title>, ZONE 안 슬라이드, talk 큐, chrome-bl 라벨을 새 주제로 채운다.
+     3. 마스코트 SVG는 `../clawd-*.svg` (flat) 에 41종 비치. 새 포즈가 필요하면
+        `~/Downloads/github/oss/clawd-on-desk/assets/svg/` 에서 flat 복사 + viewBox 정규화.
+        ※ 템플릿 위치(templates/)에서는 마스코트가 보이지 않음 — 정상. 복사 후엔 렌더됨.
+     4. 레이아웃 클래스(.lay-cover/.lay-statement/.lay-divider/.lay-split[.rev]
+        /.lay-twocol/.lay-clips/.lay-list/.lay-cue/.lay-bleed/.lay-checklist)는 그대로 두고
+        콘텐츠만 교체. 각 슬라이드 상단 주석에 "서사 기능"과 "권장 사용처" 명시.
+     5. 슬라이드 추가는 자기 ZONE의 닫는 앵커(`/ZONE: X`) 바로 앞에 insert (병렬 추가 규약).
+     6. 색상 토큰(--blue/--purple/--amber)은 :root 에서 한 번에 교체하면 전 슬라이드 톤 변경.
+     7. 4개 ZONE(오프닝 / Part1 / Part2 / Part3+마무리)은 동일 방법론의 골격 — 주제만 갈아끼움.
+        오프닝=비유 도입+외부 환기+오리엔테이션 / Part1=왜(개념·근거) / Part2=실습(직접 해보기)
+        / Part3+마무리=대화(정해지지 않은 슬라이드)+요약 체크리스트.
+     └─────────────────────────────────────────────────────────────────── -->
+
+<style>
+  /* ===== 공유 토큰 (slide-layout-archetypes.bundle.md §3) ===== */
+  :root{
+    --blue:#2563EB; --purple:#7C3AED; --amber:#F59E0B;
+    --ink:#1f2430; --muted:#8b93a3; --line:#e6e9f0; --bg:#fff; --soft:#f7f8fb;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:#11131a;
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Segoe UI",sans-serif;color:var(--ink);}
+  .deck{width:100vw;height:100vh;}
+
+  /* ===== 베이스 프레임 (뷰포트 꽉 채우기 · 패딩은 레이아웃이 소유 → divider/bleed 풀블리드) ===== */
+  .slide{display:none;width:100vw;height:100vh;background:var(--bg);
+    position:relative;overflow:hidden;}
+  .slide.active{display:block;}
+  .msg{font:700 clamp(26px,3.4vw,46px)/1.22 sans-serif;letter-spacing:-.01em;color:var(--ink);}
+  .msg .em{color:var(--blue);}
+  .sub{margin-top:14px;font:500 17px/1.5 sans-serif;color:var(--muted);}
+  .chip{display:inline-flex;align-items:center;gap:8px;margin-top:22px;
+    font:700 16px/1 sans-serif;color:#9a6200;background:#fff7e6;
+    border:1.5px solid var(--amber);padding:10px 14px;border-radius:999px;}
+  .chip .n{background:var(--amber);color:#fff;border-radius:6px;padding:3px 7px;font:700 12px/1 ui-monospace,monospace;}
+  /* 발표자 큐 (presenter cue) — 본문 흐름에서 빼서 슬라이드 최하단에 작은 글씨로 오버레이.
+     position:absolute라 DOM 어디 있든 .slide 기준 하단 중앙에 모임(청중엔 작게, 발표자 글랜스용).
+     반투명 배경으로 본문 위에서도 가독 확보 · chrome(bottom:20px)·hint(14px) 위(38px)에 안착. */
+  .talk{position:absolute;left:50%;bottom:38px;transform:translateX(-50%);z-index:4;
+    width:min(82vw,1140px);margin:0;padding:5px 16px;border:0;border-radius:8px;
+    background:rgba(255,255,255,.82);text-align:center;font:500 11px/1.35 sans-serif;color:#9aa1b1;}
+  .talk b{color:var(--muted);font-weight:700;}
+  .slide.dark .talk{background:rgba(20,24,40,.42);color:rgba(255,255,255,.8);}
+  .slide.dark .talk b{color:#fff;}
+
+  /* ===== 코너 크롬 (레이아웃 독립 · §4 공통 골격) ===== */
+  .chrome-tl{position:absolute;top:22px;left:30px;z-index:3;display:flex;align-items:center;gap:10px;}
+  .badge{font:700 13px/1 ui-monospace,monospace;color:#fff;background:var(--blue);padding:6px 10px;border-radius:7px;letter-spacing:.5px;}
+  .badge.p2{background:var(--purple);}
+  .part{font:600 13px/1 sans-serif;color:var(--muted);letter-spacing:.3px;}
+  .chrome-bl{position:absolute;bottom:20px;left:30px;z-index:3;font:600 12px/1 sans-serif;color:var(--muted);}
+  .chrome-br{position:absolute;bottom:20px;right:30px;z-index:3;font:600 12px/1 ui-monospace,monospace;color:var(--muted);}
+  .slide.dark .part,.slide.dark .chrome-bl,.slide.dark .chrome-br{color:rgba(255,255,255,.8);}
+
+  /* ===== 레이아웃 변형 (.lay-*) — 번들 §3 채택 ===== */
+  .lay-cover{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;height:100%;gap:16px;padding:64px;}
+  .lay-cover .msg{font-size:clamp(34px,4.6vw,62px);}
+
+  .lay-statement{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;height:100%;padding:64px;}
+  .lay-statement .msg{font-size:clamp(32px,4.8vw,64px);max-width:20ch;}
+
+  .lay-divider{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;height:100%;padding:64px;
+    background:linear-gradient(135deg,var(--blue),var(--purple));}
+  .lay-divider .msg{color:#fff;font-size:clamp(34px,4.6vw,62px);}
+  .lay-divider .sub{color:rgba(255,255,255,.85);}
+  .lay-divider .chip{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.55);color:#fff;}
+  .lay-divider .chip .n{background:#fff;color:var(--purple);}
+
+  .lay-split{display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:center;height:100%;padding:72px 64px;}
+  .lay-split.rev{grid-template-columns:.95fr 1.05fr;}
+  .lay-split.rev .text{order:2;} .lay-split.rev .media{order:1;}
+  .lay-split .media{height:100%;display:flex;align-items:center;justify-content:center;border-radius:14px;
+    background:var(--soft);border:1px solid var(--line);overflow:hidden;position:relative;}
+  .lay-split .media img{max-width:100%;max-height:100%;object-fit:contain;}
+  /* 세로(9:16) 쇼츠: 미디어를 9:16 프레임으로, 플레이어를 키워 양옆 검은 띠 크롭 */
+  .lay-split .media.short{aspect-ratio:9/16;height:100%;width:auto;max-width:100%;margin:0 auto;background:#000;border:0;padding:0;}
+  .lay-split .media.short iframe{position:absolute;top:0;left:50%;transform:translateX(-50%);height:100%;width:auto;aspect-ratio:16/9;}
+
+  .lay-twocol{display:flex;flex-direction:column;justify-content:center;height:100%;padding:72px 64px;gap:24px;}
+  .lay-twocol .cols{display:grid;grid-template-columns:1fr 1fr;gap:28px;}
+  .lay-twocol .col{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:26px;}
+  .lay-twocol .col h3{margin:0 0 10px;font:700 22px/1.2 sans-serif;color:var(--ink);}
+  .lay-twocol .col p{margin:0;font:500 15px/1.5 sans-serif;color:var(--muted);}
+
+  /* 헤드라인 클립 콜라주 (환기 — 외부 인용·기사 카드 6개) */
+  .lay-clips{display:flex;flex-direction:column;justify-content:center;height:100%;padding:52px 60px;gap:16px;}
+  .lay-clips .head .msg{font-size:clamp(26px,3vw,38px);}
+  .lay-clips .head .sub{margin-top:8px;}
+  .lay-clips .clips{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;}
+  .lay-clips .clip{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:13px 15px;
+    display:flex;flex-direction:column;gap:5px;}
+  .lay-clips .clip .src{font:800 11px/1 sans-serif;color:var(--blue);letter-spacing:.4px;text-transform:uppercase;}
+  .lay-clips .clip .hl{font:700 14.5px/1.32 sans-serif;color:var(--ink);}
+  .lay-clips .clip .gl{font:500 12px/1.4 sans-serif;color:var(--muted);}
+  .lay-clips .clip.accent{background:#fff7e6;border-color:var(--amber);}
+  .lay-clips .clip.accent .src{color:#9a6200;}
+
+  .lay-list{display:flex;flex-direction:column;justify-content:center;height:100%;padding:72px 64px;gap:16px;}
+  .lay-list ul{margin:0;padding:0;list-style:none;display:grid;gap:12px;}
+  .lay-list li{font:600 22px/1.35 sans-serif;padding-left:28px;position:relative;color:var(--ink);}
+  .lay-list li span{font-weight:500;color:var(--muted);font-size:16px;}
+  .lay-list li::before{content:"";position:absolute;left:0;top:.5em;width:10px;height:10px;border-radius:3px;background:var(--blue);}
+
+  .lay-cue{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:64px;}
+  .lay-cue .quote{max-width:24ch;text-align:center;font:700 clamp(26px,3.4vw,46px)/1.32 sans-serif;color:var(--ink);
+    padding:38px 44px;border-radius:18px;background:var(--soft);border:1px solid var(--line);position:relative;}
+  .lay-cue .quote::before{content:"\201C";position:absolute;left:20px;top:2px;font-size:64px;color:var(--blue);opacity:.35;}
+  .lay-cue .attr{margin-top:16px;font:600 15px/1.4 sans-serif;color:var(--muted);}
+
+  .lay-bleed{height:100%;position:relative;overflow:hidden;}
+  .lay-bleed img{width:100%;height:100%;object-fit:cover;display:block;}
+  .lay-bleed .overlay{position:absolute;left:0;bottom:0;width:100%;padding:48px 64px;background:linear-gradient(transparent,rgba(20,24,40,.8));}
+  .lay-bleed .overlay .msg{color:#fff;}
+
+  .lay-checklist{display:flex;flex-direction:column;justify-content:center;height:100%;padding:72px 64px;gap:24px;}
+  .lay-checklist .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 30px;}
+  .lay-checklist .it{display:flex;gap:12px;align-items:flex-start;font:600 19px/1.35 sans-serif;color:var(--ink);}
+  .lay-checklist .it .k{flex:0 0 28px;height:28px;border-radius:8px;background:var(--blue);color:#fff;
+    display:flex;align-items:center;justify-content:center;font:700 14px/1 ui-monospace,monospace;}
+  .lay-checklist .it.accent .k{background:var(--amber);}
+
+  .ribbon{position:absolute;top:12px;right:-34px;transform:rotate(38deg);background:var(--amber);color:#fff;
+    font:700 11px/1 sans-serif;padding:6px 40px;letter-spacing:.5px;z-index:2;}
+  .hint{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);color:#5a6172;font:500 12px/1 sans-serif;letter-spacing:.3px;}
+
+  /* ===== 마스코트 데코레이터 (clawd-on-desk · 레이아웃 독립 · 코너 액센트) =====
+     작게·은은하게 · pointer-events 없음(클릭 네비 통과) · 코너 크롬과 비충돌(top-right) */
+  /* 전 포즈 동일 viewBox(-15 -25 45 45) → 단일 규칙으로 전 슬라이드 동일 위치 정렬.
+     viewBox에 말풍선/점프용 빈 공간이 넓어 몸통은 박스 중앙·하단(빈 공간 투명 → 코너에 바짝). */
+  .deco{position:absolute;top:2px;right:45px;width:165px;height:165px;z-index:2;
+    pointer-events:none;filter:drop-shadow(0 3px 6px rgba(20,24,40,.16));}
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+  <!-- ┌─ 마스코트 데코레이터 규약 (clawd-on-desk) ──────────────────────────────
+       슬라이드를 추가할 때마다 <section class="slide"> 안, chrome-tl 바로 다음에
+       마스코트 1개를 함께 넣는다. 빠뜨리지 말 것 — 덱 전반 일관 배치가 의도.
+
+         <object class="deco" type="image/svg+xml" data="clawd-<pose>.svg"
+                 aria-hidden="true" tabindex="-1"></object>
+
+       · 위치·크기: 위 <style>의 .deco 단일 규칙이 전 슬라이드를 지배(현재 튜닝값 right:45px).
+         개별 슬라이드만 옮기려면 그 object에 보조 클래스(.deco.move-xx)를 더해 덮어쓴다.
+       · 포즈 선택: 슬라이드 내용·감정에 맞춰 고른다. 전체 41종 라이브러리는
+         ~/Downloads/github/oss/clawd-on-desk/assets/svg/ 참고.
+       · 새 포즈를 쓰면 해당 SVG를 이 폴더(.write/)에 플랫 복사하고
+         viewBox를 "-15 -25 45 45"로 맞출 것(about-hero는 정규화 완료). 안 맞추면 위치가 어긋남.
+       · ⚠ 권위(source of truth)는 각 슬라이드의 인라인 <object data="clawd-*.svg">.
+         아래는 이 템플릿의 기본 포즈 배정(중립 포즈 위주). 새 덱에서 자유 교체.
+       └───────────────────────────────────────────────────────────────────── -->
+
+  <!-- ┌─ 병렬 추가 규약 (ZONE) ──────────────────────────────────────────────
+       새 슬라이드는 자기 존의 "<!-- ══ /ZONE: X ══ -->" 바로 앞에 insert한다.
+       존 경계 앵커는 존마다 유일 → 다른 존끼리는 동시에 추가해도 충돌하지 않는다.
+       "누가 어느 존"의 오너십은 이 파일이 아니라 Task(owner 필드)로 관리 → 파일 무경합 claim.
+       한 존 내부는 한 오너가 직렬 진행. S번호는 콘텐츠 라벨일 뿐 삽입 키가 아니다(위치와 무관).
+       └──────────────────────────────────────────────────────────────────── -->
+
+  <!-- ══════ ZONE: 오프닝 (소개·오리엔테이션) ══════ -->
+
+  <!-- ─────────────────────────────────────────────────────────────────────
+       [LAYOUT 1/10] lay-cover · 산 약속 (표지)
+       · 서사 기능: 제목 + 부제로 "오늘 무엇을 약속하는가"를 한 화면에. 발표 시작점.
+       · 권장 사용처: 표지, 클로징 cover(있다면)
+       · 변형: <span style="color:var(--amber)">…</span> 으로 핵심어 강조 / chip 추가로 일정·장소 표시
+       ───────────────────────────────────────────────────────────────────── -->
+  <section class="slide">
+    <div class="chrome-tl"><span class="badge">표지</span></div>
+    <object class="deco" type="image/svg+xml" data="clawd-about-hero.svg" aria-hidden="true" tabindex="-1"></object>
+    <div class="lay-cover">
+      <div class="msg">{{발표 제목 — <span style="color:var(--amber)">핵심어</span>는 앰버로 강조}}<br>{{서브 라인}}</div>
+      <div class="sub">{{일시 · 장소 · 행사명}}</div>
+    </div>
+    <div class="chrome-bl">{{슬라이드 한 줄 라벨 — 예: "산 약속으로 오픈"}}</div><div class="chrome-br count"></div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────────────────
+       [LAYOUT 2/10] lay-statement · 한 줄 명제
+       · 서사 기능: 한 슬라이드 = 한 문장. 비유 도입·핵심 주장·전환 다리에 사용.
+       · 권장 사용처: 여는 이야기(비유), 본론 진입 명제, Part 사이 다리(예: Part1→2)
+       · 변형: chip으로 액션 번호 부여 / .em 인라인 강조 / sub로 부연 설명
+       ───────────────────────────────────────────────────────────────────── -->
+  <section class="slide">
+    <div class="chrome-tl"><span class="part">여는 이야기</span></div>
+    <object class="deco" type="image/svg+xml" data="clawd-mini-enter.svg" aria-hidden="true" tabindex="-1"></object>
+    <div class="lay-statement">
+      <div class="msg">{{비유 한 줄 — <span class="em">핵심어</span>는 블루 강조}}</div>
+      <div class="sub" style="margin-top:12px;">{{비유 풀어 쓰기 1문장}}</div>
+      <div class="sub" style="margin-top:10px;font-size:21px;font-weight:700;color:var(--ink);">{{비유→주제 매핑 한 줄}}</div>
+      <div class="sub" style="margin-top:8px;">{{오늘 할 일 한 줄}}</div>
+      <div class="talk"><b>말하기</b> · {{발표자 노트 — 어디까지 풀고, 다음 슬라이드로 어떻게 받을지}}</div>
+    </div>
+    <div class="chrome-bl">{{슬라이드 라벨 — 예: "오늘 한 줄"}}</div><div class="chrome-br count"></div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────────────────
+       [LAYOUT 3/10] lay-clips · 헤드라인 콜라주 (외부 인용 카드 6개)
+       · 서사 기능: 외부 기사·발언으로 "실태"를 한 화면에 누적. 환기·문제 정의.
+       · 권장 사용처: 여는 환기(비유→실태 증거), Part1 도입(시장 실태 카드)
+       · 변형: 6번째 카드에 .accent (앰버) — "공통 진단"·요약 카드로 사용
+       · 출처 형식: src(매체명·대문자) / hl(헤드라인) / gl(부연·숫자)
+       ───────────────────────────────────────────────────────────────────── -->
+  <section class="slide">
+    <div class="chrome-tl"><span class="part">여는 환기</span></div>
+    <object class="deco" type="image/svg+xml" data="clawd-working-juggling.svg" aria-hidden="true" tabindex="-1"></object>
+    <div class="lay-clips">
+      <div class="head">
+        <div class="msg">{{환기 헤드라인 — <span class="em">한 줄로</span>}}</div>
+        <div class="sub">{{실태를 짚는 부연 1줄}}</div>
+      </div>
+      <div class="clips">
+        <div class="clip"><div class="src">{{매체 1}}</div><div class="hl">{{헤드라인 1}}</div><div class="gl">{{부연·수치 1}}</div></div>
+        <div class="clip"><div class="src">{{매체 2}}</div><div class="hl">{{헤드라인 2}}</div><div class="gl">{{부연·수치 2}}</div></div>
+        <div class="clip"><div class="src">{{매체 3}}</div><div class="hl">{{헤드라인 3}}</div><div class="gl">{{부연·수치 3}}</div></div>
+        <div class="clip"><div class="src">{{매체 4}}</div><div class="hl">{{헤드라인 4}}</div><div class="gl">{{부연·수치 4}}</div></div>
+        <div class="clip"><div class="src">{{매체 5}}</div><div class="hl">{{헤드라인 5}}</div><div class="gl">{{부연·수치 5}}</div></div>
+        <div class="clip accent"><div class="src">공통 진단</div><div class="hl">{{여섯 카드를 묶는 한 줄}}</div><div class="gl">{{한 줄 의미}}</div></div>
+      </div>
+      <div class="talk"><b>말하기</b> · {{카드 빠르게 훑고 다음 장으로 받는 멘트}}</div>
+    </div>
+    <div class="chrome-bl">{{슬라이드 라벨 — 예: "지금 벌어지는 일"}}</div><div class="chrome-br count"></div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────────────────
+       [LAYOUT 4/10] lay-cue · 청중 활동 큐 (인용 박스)
+       · 서사 기능: 청중에게 "지금 이걸 떠올려 두세요" — 강의 흐름에 액션 큐 삽입.
+       · 권장 사용처: 들어가기 전(실습 prep), Part 3 대화 진입(질문 던지기)
+       · 변형: quote 한 줄/두 줄 / attr에 부연 설명 또는 다음 단계 안내
+       ───────────────────────────────────────────────────────────────────── -->
+  <section class="slide">
+    <div class="chrome-tl"><span class="part">들어가기 전에</span></div>
+    <object class="deco" type="image/svg+xml" data="clawd-idle-bubble.svg" aria-hidden="true" tabindex="-1"></object>
+    <div class="lay-cue">
+      <div class="quote">{{청중 활동 큐 — <b>핵심어</b>는 굵게}}</div>
+      <div class="attr">{{큐의 맥락·다음 단계 안내}}</div>
+    </div>
+    <div class="chrome-bl">{{슬라이드 라벨 — 예: "각자 한 편"}}</div><div class="chrome-br count"></div>
+  </section>
+
+  <!-- ══════ /ZONE: 오프닝 ══════ -->
+
+  <!-- ══════ ZONE: Part1 (왜) ══════ -->
+
+  <!-- ─────────────────────────────────────────────────────────────────────
+       [LAYOUT 5/10] lay-split · 텍스트 + 미디어 (좌:우 ≈ 1.05:0.95)
+       · 서사 기능: 비유 그림/실측 이미지/영상 + 그것을 푸는 텍스트. 본론 카드의 주력.
+       · 권장 사용처: 본론 환기(영상 .media.short), 비유 카드(이미지+해설), 실습 프롬프트
+       · 변형: .media에 <img> 대신 텍스트 카드(프롬프트 박스) 가능 — S9-S11 idiom
+       · .media.short — 9:16 유튜브 쇼츠 (iframe 자동 16:9 크롭)
+       ───────────────────────────────────────────────────────────────────── -->
+  <section class="slide">
+    <div class="chrome-tl"><span class="badge">S1</span><span class="part">Part 1 · 왜</span></div>
+    <object class="deco" type="image/svg+xml" data="clawd-working-thinking.svg" aria-hidden="true" tabindex="-1"></object>
+    <div class="lay-split">
+      <div class="text">
+        <div class="msg">{{한 줄 명제 — <span class="em">핵심어</span> 강조}}</div>
+        <div class="sub">{{비유/근거를 한 문장으로}}</div>
+        <div class="chip"><span class="n">1</span> {{이 슬라이드의 액션 한 줄}}</div>
+        <div class="talk"><b>말하기</b> · {{발표자 노트}}</div>
+      </div>
+      <div class="media">
+        <img src="{{이미지 파일명.png}}" alt="{{대체 텍스트}}">
+        <!-- 변형: 텍스트 카드를 .media 안에 넣으려면 (S9-S11 idiom):
+          <div style="text-align:left;padding:30px 34px;">
+            <div style="color:var(--purple);font-weight:800;font-size:13px;letter-spacing:.3px;margin-bottom:12px;">{{카드 라벨}}</div>
+            <div style="font:700 clamp(19px,2.1vw,29px)/1.42 sans-serif;color:var(--ink);">{{카드 본문}}</div>
+          </div>
+          영상(쇼츠): <div class="media short"><iframe src="..." allowfullscreen></iframe></div> -->
+      </div>
+    </div>
+    <div class="chrome-bl">{{슬라이드 라벨}}</div><div class="chrome-br count"></div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────────────────
+       [LAYOUT 6/10] lay-split.rev · 미디어 + 텍스트 (좌:우 ≈ 0.95:1.05, 미디어 좌측)
+       · 서사 기능: lay-split과 동일하나 시선 방향 변경 — 좌우 교차로 단조로움 방지.
+       · 권장 사용처: 연속된 split 카드 사이 교대(S2 → S3.rev → S4 → S6.rev 패턴)
+       ───────────────────────────────────────────────────────────────────── -->
+  <section class="slide">
+    <div class="chrome-tl"><span class="badge">S2</span><span class="part">Part 1 · 왜</span></div>
+    <object class="deco" type="image/svg+xml" data="clawd-working-ultrathink.svg" aria-hidden="true" tabindex="-1"></object>
+    <div class="lay-split rev">
+      <div class="text">
+        <div class="msg">{{한 줄 명제 — <span class="em">핵심어</span> 강조}}</div>
+        <div class="sub">{{비유/근거}}</div>
+        <div class="chip"><span class="n">2</span> {{액션 한 줄}}</div>
+        <div class="talk"><b>말하기</b> · {{발표자 노트}}</div>
+      </div>
+      <div class="media"><img src="{{이미지 파일명.png}}" alt="{{대체 텍스트}}"></div>
+    </div>
+    <div class="chrome-bl">{{슬라이드 라벨}}</div><div class="chrome-br count"></div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────────────────
+       [LAYOUT 7/10] lay-list · 항목 리스트 (블루 사각 불릿)
+       · 서사 기능: 개념을 3-4개 핵심 항목으로 분해. 정의·원칙·체크포인트.
+       · 권장 사용처: 개념 정의(점진공개·핵심 원칙), 액션 항목, 명령어 카탈로그
+       · 변형: li 안 <span>으로 부연 설명 추가 / 항목 사이 grid gap 조정
+       ───────────────────────────────────────────────────────────────────── -->
+  <section class="slide">
+    <div class="chrome-tl"><span class="badge">S3</span><span class="part">Part 1 · 개념</span></div>
+    <object class="deco" type="image/svg+xml" data="clawd-idle-reading.svg" aria-hidden="true" tabindex="-1"></object>
+    <div class="lay-list">
+      <div class="msg">{{개념명}} <span class="em">({{영문/부연}})</span></div>
+      <ul>
+        <li>{{핵심 항목 1}} <span>({{부연·예시}})</span></li>
+        <li>{{핵심 항목 2}} <span>({{부연·예시}})</span></li>
+        <li>{{핵심 항목 3}} <span>({{부연·예시}})</span></li>
+      </ul>
+      <div class="talk"><b>말하기</b> · {{발표자 노트}}</div>
+    </div>
+    <div class="chrome-bl">{{슬라이드 라벨}}</div><div class="chrome-br count"></div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────────────────
+       [LAYOUT 8/10] lay-twocol · 두 카드 나란히
+       · 서사 기능: 대조(✗/✓), 두 가지 씨앗, 비교 표. 두 옵션의 우열·트레이드오프.
+       · 권장 사용처: 비교(잘못된 방식 vs 권장 방식), 닫는 씨앗(다음으로 가져갈 것 2개)
+       · 변형: col 내부 h3+p 단순 카드 / 복잡한 인포그래픽(다이어그램·박스 스택) 가능
+       ───────────────────────────────────────────────────────────────────── -->
+  <section class="slide">
+    <div class="chrome-tl"><span class="badge">S4</span><span class="part">Part 1 · 비교</span></div>
+    <object class="deco" type="image/svg+xml" data="clawd-working-juggling.svg" aria-hidden="true" tabindex="-1"></object>
+    <div class="lay-twocol">
+      <div class="msg">{{비교의 한 줄 제목}}</div>
+      <div class="cols">
+        <div class="col"><h3>{{왼쪽 카드 제목}}</h3><p>{{왼쪽 카드 본문 — 단점·문제·"이렇게는 X"}}</p></div>
+        <div class="col"><h3>{{오른쪽 카드 제목}}</h3><p>{{오른쪽 카드 본문 — 장점·해결·"이렇게는 ✓"}}</p></div>
+      </div>
+      <div class="talk"><b>말하기</b> · {{발표자 노트 — 어느 쪽이 왜 나은지}}</div>
+    </div>
+    <div class="chrome-bl">{{슬라이드 라벨}}</div><div class="chrome-br count"></div>
+  </section>
+
+  <!-- ══════ /ZONE: Part1 ══════ -->
+
+  <!-- ══════ ZONE: Part2 (실습) ══════ -->
+
+  <!-- ─────────────────────────────────────────────────────────────────────
+       [LAYOUT 9/10] lay-divider · 강의→실습 전환 (블루↔퍼플 그라데이션)
+       · 서사 기능: 큰 챕터 전환. 색 변화로 모드 전환을 시각적으로 표식.
+       · 권장 사용처: Part1→Part2 사이, Part2→Part3 사이
+       · 변형: slide.dark 클래스로 talk 큐도 다크 변형 / chip 색상 자동 반전
+       ───────────────────────────────────────────────────────────────────── -->
+  <section class="slide dark">
+    <div class="chrome-tl"><span class="badge p2">S5</span><span class="part">Part 2 · 실습</span></div>
+    <object class="deco" type="image/svg+xml" data="clawd-working-typing.svg" aria-hidden="true" tabindex="-1"></object>
+    <div class="lay-divider">
+      <div class="msg">{{전환 한 줄 — 예: "이제, 직접 해봅니다"}}</div>
+      <div class="sub">{{앞 챕터→다음 챕터 다리 한 줄}}</div>
+      <div class="talk"><b>말하기</b> · {{모드 전환 멘트}}</div>
+    </div>
+    <div class="chrome-bl">{{슬라이드 라벨 — 예: "강의 → 실습"}}</div><div class="chrome-br count"></div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────────────────
+       [LAYOUT 10/10] lay-bleed · 풀블리드 이미지 (오버레이 텍스트)
+       · 서사 기능: 한 화면을 이미지가 통째로 차지. 강한 감정·기념 컷·환경 사진.
+       · 권장 사용처: 강한 시각 임팩트 슬라이드(키노트), 챕터 표지 변형
+       · 주의: 소스 덱(2026-04-20)에는 CSS만 정의되어 있고 미사용 — 새 덱에서 시도 가능
+       · 변형: overlay 없는 풀이미지 / overlay msg만 / msg+sub 둘 다
+       ───────────────────────────────────────────────────────────────────── -->
+  <section class="slide">
+    <div class="chrome-tl"><span class="badge p2">S6</span><span class="part">Part 2 · 시각 임팩트</span></div>
+    <object class="deco" type="image/svg+xml" data="clawd-headphones-groove.svg" aria-hidden="true" tabindex="-1"></object>
+    <div class="lay-bleed">
+      <img src="{{풀블리드 이미지.jpg}}" alt="{{대체 텍스트}}">
+      <div class="overlay">
+        <div class="msg">{{오버레이 메시지 — 흰색 자동}}</div>
+        <div class="sub" style="color:rgba(255,255,255,.85);">{{부연 — 흰 톤}}</div>
+      </div>
+    </div>
+    <div class="chrome-bl">{{슬라이드 라벨}}</div><div class="chrome-br count"></div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────────────────
+       lay-split 변형 · 실습 프롬프트 카드 (S9-S11 idiom 재현용)
+       · .media 안을 <img> 대신 보라색 라벨 + 굵은 본문 카드로 교체.
+       · 청중이 그대로 따라 칠 수 있는 "이렇게 말해보세요" 슬라이드.
+       ───────────────────────────────────────────────────────────────────── -->
+  <section class="slide">
+    <div class="chrome-tl"><span class="badge p2">실습</span><span class="part">Part 2 · 실습 X</span></div>
+    <object class="deco" type="image/svg+xml" data="clawd-react-double.svg" aria-hidden="true" tabindex="-1"></object>
+    <div class="lay-split">
+      <div class="media">
+        <div style="text-align:left;padding:30px 34px;">
+          <div style="color:var(--purple);font-weight:800;font-size:13px;letter-spacing:.3px;margin-bottom:12px;">이렇게 말해보세요</div>
+          <div style="font:700 clamp(19px,2.1vw,29px)/1.42 sans-serif;color:var(--ink);">{{청중이 그대로 칠 프롬프트 문장 — 두 줄 정도}}</div>
+        </div>
+      </div>
+      <div class="text">
+        <div class="msg" style="font-size:clamp(24px,2.7vw,38px);">{{이 프롬프트가 무엇을 하는지 — <span class="em">한 줄</span>}}</div>
+        <div class="sub">{{왜 이게 통하는지·발견점}}</div>
+        <div class="sub" style="margin-top:10px;">{{① 단계 → ② 단계 → ③ 단계}}</div>
+        <div class="talk"><b>말하기</b> · {{discovery-first — 명령어 이름 노출 안하고 결핍부터}}</div>
+      </div>
+    </div>
+    <div class="chrome-bl">{{슬라이드 라벨}}</div><div class="chrome-br count"></div>
+  </section>
+
+  <!-- ══════ /ZONE: Part2 ══════ -->
+
+  <!-- ══════ ZONE: Part3+마무리 ══════ -->
+
+  <!-- ─────────────────────────────────────────────────────────────────────
+       lay-cue 재사용 · 대화 진입 (질문 던지기)
+       · 청중 활동 큐와 동일 레이아웃이지만 클로징 맥락에서 사용.
+       · 정해진 슬라이드가 아닌 대화 단계의 시작.
+       ───────────────────────────────────────────────────────────────────── -->
+  <section class="slide">
+    <div class="chrome-tl"><span class="part">Part 3 · 대화</span></div>
+    <object class="deco" type="image/svg+xml" data="clawd-react-double.svg" aria-hidden="true" tabindex="-1"></object>
+    <div class="lay-cue">
+      <div class="quote">{{청중에게 던지는 질문 — <b>핵심어</b> 굵게}}<br>{{필요시 두 번째 질문}}</div>
+      <div class="attr">여기서부턴 정해진 슬라이드가 아닙니다 — 여러분 질문 + 제 워크플로</div>
+    </div>
+    <div class="chrome-bl">💬 대화 시작 — 정해진 슬라이드 아님</div><div class="chrome-br count"></div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────────────────
+       lay-checklist · 마무리 요약 (액션 N개 그리드 2열)
+       · 서사 기능: 발표 전체 액션을 한 화면에. "그래서 이걸 하자" — 가져갈 것.
+       · 권장 사용처: 마지막 슬라이드 (혹은 마지막 직전)
+       · 변형: it.accent (앰버 키) 로 핵심 액션 한두 개 강조 / 키는 1-N 번호
+       ───────────────────────────────────────────────────────────────────── -->
+  <section class="slide">
+    <div class="chrome-tl"><span class="badge">S마무리</span><span class="part">마무리</span></div>
+    <object class="deco" type="image/svg+xml" data="clawd-mini-happy.svg" aria-hidden="true" tabindex="-1"></object>
+    <div class="lay-checklist">
+      <div class="msg">{{주제}} — <span class="em">그래서 이걸 하자</span></div>
+      <div class="grid">
+        <div class="it"><span class="k">1</span><span>{{액션 1}}</span></div>
+        <div class="it accent"><span class="k">2</span><span>{{액션 2 — 앰버 강조}}</span></div>
+        <div class="it"><span class="k">3</span><span>{{액션 3}}</span></div>
+        <div class="it"><span class="k">4</span><span>{{액션 4}}</span></div>
+        <div class="it"><span class="k">5</span><span>{{액션 5}}</span></div>
+        <div class="it"><span class="k">6</span><span>{{액션 6}}</span></div>
+      </div>
+    </div>
+    <div class="chrome-bl">{{한 줄 본질 — 예: "재작업을 줄이는 것"}}</div><div class="chrome-br count"></div>
+  </section>
+
+  <!-- ══════ /ZONE: Part3+마무리 ══════ -->
+
+</div>
+<div class="hint">← → 이동 · 슬롯 <span class="slot-total">–</span>개 · 템플릿 골격 · 10종 레이아웃</div>
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  document.querySelectorAll('.slot-total').forEach(e=>e.textContent=slides.length);
+  let i=0;
+  function show(n){
+    i=Math.max(0,Math.min(slides.length-1,n));
+    slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+    document.querySelectorAll('.count').forEach(c=>c.textContent=(i+1)+' / '+slides.length);
+  }
+  addEventListener('keydown',e=>{
+    if(e.key==='ArrowRight'||e.key==='PageDown'||e.key===' ')show(i+1);
+    else if(e.key==='ArrowLeft'||e.key==='PageUp')show(i-1);
+    else if(e.key==='Home')show(0); else if(e.key==='End')show(slides.length-1);
+  });
+  document.getElementById('deck').addEventListener('click',e=>show(e.clientX>innerWidth/2?i+1:i-1));
+  show(0);
+</script>
+</body>
+</html>

@@ -257,11 +257,21 @@ class CDPClient:
                     "error": f"{type(e).__name__}: {e}",
                     "kind": "ws_error",
                 })
-                raise
+                # The command was already sent — losing the response channel
+                # does not mean the browser did not execute it (#50).
+                raise CDPError(
+                    f"WebSocket error during {method}: {type(e).__name__}: {e}\n"
+                    "Outcome unknown — the command was sent and may have "
+                    "executed. Verify the side effect (re-read the resource) "
+                    "before treating this as a failure or retrying a "
+                    "mutating action."
+                ) from e
 
         timeout_msg = (
             f"Timeout waiting for response to {method} ({timeout}s). "
-            "Tab may be frozen or suspended."
+            "Tab may be frozen or suspended. Outcome unknown — the command "
+            "was sent and may have executed; verify the side effect before "
+            "treating this as a failure or retrying a mutating action."
         )
         _log_error("send", {
             "method": method,

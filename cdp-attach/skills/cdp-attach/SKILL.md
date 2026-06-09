@@ -82,6 +82,8 @@ $V1 navigate "https://example.com"             # Navigate
 $V1 navigate "https://example.com" --wait-for none
 $V1 reload                                     # Reload current page (wait for load)
 $V1 reload --hard                              # Bypass cache (Page.reload ignoreCache=true)
+$V1 revive                                     # Close + reopen a wedged tab via HTTP API
+$V1 revive --url "https://example.com"         # Reopen with a different URL
 $V1 back                                       # Navigate back (default: no wait — bfcache may skip load event)
 $V1 forward                                    # Navigate forward (default: no wait)
 $V1 back --wait-for load                       # Opt-in load wait (use when fresh load expected)
@@ -351,9 +353,14 @@ Or use `--host` / `--port` flags on any command.
 | Error | Cause | Resolution |
 |-------|-------|------------|
 | CDP HTTP endpoint unreachable | Browser not running with `--remote-debugging-port` | Start browser with CDP enabled |
-| Timeout waiting for response | Tab frozen/suspended | Select a different active tab |
+| Timeout waiting for response | Tab frozen/suspended | `v1 revive` (close + reopen via HTTP API), or select a different tab |
+| Tab unresponsive after navigate/reload | Renderer wedged (e.g., reload with pending blocked fetches) | `v1 revive` — WebSocket re-attach won't help; the HTTP endpoints still work |
 | WebSocket connection failed | Tab closed or navigated away | Re-select tab with `list` + `select` |
 | Element not found | Invalid CSS selector | Check selector with `evaluate` + `querySelector` |
+
+`navigate` and `reload` (with the default `--wait-for load`) run a bounded renderer probe after the load wait and exit with the `revive` hint when the tab is wedged, instead of letting every subsequent call burn its full 30s timeout.
+
+**Uncertain outcomes on mutating actions**: a timeout or WebSocket error *after* a command was sent does not prove the action failed — the browser (or the server behind the page) may have committed it before the response channel was lost. The same applies to harness-level errors (e.g., `API Error: Unable to connect to API`), which are not CDP failures at all. Before reporting failure on a save/submit/delete, verify the side effect (re-read the resource); if verification is impossible, report "outcome unknown — verify" rather than "failed".
 
 ### Bug Triage
 
@@ -370,6 +377,7 @@ Tab attachment and screenshot capture are inherently flaky. When a CDP operation
 | Symptom | 1st fallback (stay in CDP) | 2nd fallback (leave CDP) |
 |---------|---------------------------|--------------------------|
 | Tab attachment fails | `v1 list` → re-select a different tab index | Ask user to manually navigate, then retry |
+| Tab wedged (every call times out) | `v1 revive` — close + reopen the tab via HTTP API (renderer-immune) | Ask user to close/reopen the tab manually |
 | Screenshot capture times out | `v1 evaluate "document.title"` to extract DOM text directly | Ask user to capture screenshot manually |
 | DOM navigation unreliable (react-select, dynamic SPAs) | `v2 scan_interactive` or `v2 find_element --name/--role` to discover elements via CDP DOM/Accessibility API | Vision fallback: screenshot → Read → click coordinates |
 | HTTP/TLS inspection needed | `v1 evaluate` with `fetch()` to inspect responses | `curl` / `openssl s_client` as CLI alternative |

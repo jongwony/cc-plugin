@@ -78,6 +78,11 @@
       "name": "excalidraw-host",
       "source": "./excalidraw-host",
       "description": "Self-host the official open-source Excalidraw whiteboard (clone + Vite dev server, no Docker)"
+    },
+    {
+      "name": "make-deck",
+      "source": "./make-deck",
+      "description": "Generate self-contained HTML slide decks from organized notes (progressive dimension elicitation, bundled layout-catalog skeleton, mascot decorators)"
     }
   ]
 }

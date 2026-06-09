@@ -45,7 +45,7 @@ yarn start --port 3000                                # Vite dev server -> http:
 ## Usage
 
 - Natural language: "run a local Excalidraw server" / "self-host Excalidraw on port 3030".
-- Slash command: `/excalidraw-up [port]`.
+- Slash command: `/excalidraw-host` (the skill is invocable directly by name).
 
 ## How to install
 
@@ -66,7 +66,7 @@ cp -R skills/excalidraw-host ~/.claude/skills/
 ### Option B — install as a Claude Code plugin / marketplace
 
 Add this plugin directory to your Claude Code plugin configuration (it follows the
-standard layout: `.claude-plugin/plugin.json`, `skills/`, `commands/`). For example,
+standard layout: `.claude-plugin/plugin.json`, `skills/`). For example,
 point a local marketplace entry / `enabledPlugins` at this directory, or use the
 plugin install flow:
 
@@ -85,8 +85,6 @@ excalidraw-host/
 │   └── plugin.json                       # plugin manifest (name, description, version)
 ├── skills/
 │   └── excalidraw-host/
-│       └── SKILL.md                      # the skill (full self-host process)
-├── commands/
-│   └── excalidraw-up.md                  # /excalidraw-up [port] slash command
+│       └── SKILL.md                      # the skill (full self-host process; /excalidraw-host)
 └── README.md
 ```

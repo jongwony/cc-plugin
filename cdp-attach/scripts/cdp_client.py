@@ -22,8 +22,9 @@ import json
 import os
 import tempfile
 import time
-import urllib.request
 import urllib.error
+import urllib.parse
+import urllib.request
 
 # State file location
 STATE_DIR = os.path.expanduser("~/.cache/cdp-attach")
@@ -57,6 +58,14 @@ def _log_error(category, payload):
 
 class CDPError(Exception):
     """CDP protocol or connection error."""
+    pass
+
+
+class CDPConnectionError(CDPError):
+    """Transport-level failure (WebSocket send/recv), as opposed to a CDP
+    method error. Best-effort handlers that swallow CDPError for individual
+    method failures must re-raise this — a dead connection cannot recover
+    by continuing to the next call."""
     pass
 
 
@@ -143,6 +152,11 @@ class CDPClient:
 
     def new_tab(self, url=""):
         """Open a new tab. Chrome 115+ requires PUT for /json/new."""
+        if url:
+            # Escape characters that are illegal in an HTTP request-target
+            # (space, non-ASCII). '%' stays safe so already-encoded URLs are
+            # not double-encoded; Chrome unescapes the query before use.
+            url = urllib.parse.quote(url, safe="%/:?#[]@!$&'()*+,;=~.-_")
         path = f"/json/new?{url}" if url else "/json/new"
         full_url = f"{self._base_url}{path}"
         try:
@@ -219,7 +233,20 @@ class CDPClient:
         if params:
             payload["params"] = params
 
-        self._ws.send(json.dumps(payload))
+        try:
+            self._ws.send(json.dumps(payload))
+        except Exception as e:
+            _log_error("send", {
+                "method": method,
+                "params": params or {},
+                "error": f"{type(e).__name__}: {e}",
+                "kind": "ws_send_error",
+            })
+            raise CDPConnectionError(
+                f"WebSocket send failed for {method}: {type(e).__name__}: {e}\n"
+                "The command was NOT sent — the connection was already dead. "
+                "Re-select the tab ('list' + 'select') or run 'revive'."
+            ) from e
 
         deadline = time.time() + timeout
         while time.time() < deadline:
@@ -259,7 +286,7 @@ class CDPClient:
                 })
                 # The command was already sent — losing the response channel
                 # does not mean the browser did not execute it (#50).
-                raise CDPError(
+                raise CDPConnectionError(
                     f"WebSocket error during {method}: {type(e).__name__}: {e}\n"
                     "Outcome unknown — the command was sent and may have "
                     "executed. Verify the side effect (re-read the resource) "
@@ -315,7 +342,7 @@ class CDPClient:
         except websocket.WebSocketTimeoutException:
             return None
         except (websocket.WebSocketConnectionClosedException, ConnectionError) as e:
-            raise CDPError(f"WebSocket closed during recv: {e}")
+            raise CDPConnectionError(f"WebSocket closed during recv: {e}")
 
     def query_selector_node_id(self, selector):
         """Resolve a CSS selector to a DOM nodeId.

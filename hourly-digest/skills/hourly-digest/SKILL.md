@@ -39,8 +39,8 @@ ToolSearch("select:mcp__claude_ai_Slack__slack_search_public_and_private,mcp__cl
 
 1. Compute today's date via Bash: `date '+%Y-%m-%d'` (Slack `after:` excludes the given date; use `on:` to include it)
 2. Use `slack_search_public_and_private` with query `on:{date}` to find today's messages, then filter results to the past hour by message timestamp
-3. Group results by channel
-4. Per channel: `[#channel-name](https://{workspace}.slack.com/archives/{channel_id}) (N): key topics discussed`
+3. Group results by topic — cluster messages about the same subject together, even when they span multiple channels
+4. Per topic: `**Topic** (N): key points — [#channel-name](https://{workspace}.slack.com/archives/{channel_id})`
 5. For notable messages with threads, link to the thread: `[thread](https://{workspace}.slack.com/archives/{channel_id}/p{timestamp_no_dot})`
 6. If no messages found, state that there are none
 
@@ -50,8 +50,8 @@ Construct Slack links from search result metadata: channel ID for channel links,
 
 1. Use `gmail_search_messages` with query `newer_than:1h`
 2. If search results already include sender and subject, use them directly. Only call `gmail_read_message` for items missing these details (avoid N+1 reads)
-3. Group by sender or thread
-4. Per item: `From: sender -- ["Subject"](https://mail.google.com/mail/u/0/#inbox/{messageId}) (N)`
+3. Group by topic — cluster related subjects and threads together
+4. Per topic: `**Topic** (N): From: sender -- ["Subject"](https://mail.google.com/mail/u/0/#inbox/{messageId})`
 5. If no emails found, state that there are none
 
 Construct Gmail links from the messageId returned by search results.
@@ -65,12 +65,12 @@ Each source gets its own `###` subheader. Example structure:
 ## Hourly Digest (HH:MM-HH:MM KST)
 
 ### Slack
-- [#channel-a](https://workspace.slack.com/archives/C0123) (3): deployment discussion, auth service [hotfix thread](https://workspace.slack.com/archives/C0123/p1234567890)
-- [#channel-b](https://workspace.slack.com/archives/C0456) (1): standup reminder
+- **Auth service hotfix** (3): deployment discussion and rollout decision — [#channel-a](https://workspace.slack.com/archives/C0123), [hotfix thread](https://workspace.slack.com/archives/C0123/p1234567890)
+- **Standup** (1): reminder — [#channel-b](https://workspace.slack.com/archives/C0456)
 
 ### Gmail
-- From: sender@example.com -- ["Subject line"](https://mail.google.com/mail/u/0/#inbox/msg123) (1)
-- From: another@example.com -- ["Thread topic"](https://mail.google.com/mail/u/0/#inbox/msg456) (2)
+- **Billing renewal** (1): From: sender@example.com -- ["Subject line"](https://mail.google.com/mail/u/0/#inbox/msg123)
+- **Project kickoff** (2): From: another@example.com -- ["Thread topic"](https://mail.google.com/mail/u/0/#inbox/msg456)
 ```
 
 When a section has no results, use a single line indicating nothing new.

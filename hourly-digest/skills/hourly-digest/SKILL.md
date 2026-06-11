@@ -33,16 +33,18 @@ Parse `ARGUMENTS` for an optional subcommand:
 
 Run each requested section independently. On failure, report `[ERROR] Source: {message}` and continue to the next section.
 
-Load all needed MCP tools upfront in a single call before starting any section:
+Load the MCP tools for the requested sections upfront in a single ToolSearch call — only the tools the requested sections need, so a missing connector can only fail its own section:
 
 ```
-ToolSearch("select:mcp__claude_ai_Slack__slack_search_public_and_private,mcp__claude_ai_Gmail__gmail_search_messages,mcp__claude_ai_Gmail__gmail_read_message")
+Slack section:  ToolSearch("select:mcp__claude_ai_Slack__slack_search_public_and_private")
+Gmail section:  ToolSearch("select:mcp__claude_ai_Gmail__gmail_search_messages,mcp__claude_ai_Gmail__gmail_read_message")
+Both sections:  one ToolSearch call selecting all three tools
 ```
 
 ### 1. Slack Hourly Digest (past hour)
 
-1. Compute today's date via Bash: `date '+%Y-%m-%d'` (Slack `after:` excludes the given date; use `on:` to include it)
-2. Use `slack_search_public_and_private` with query `on:{date}` to find today's messages. During the first hour of the day (00:00-00:59), also run a second query with `on:{yesterday}` so the window spanning midnight is covered. Filter combined results to the past hour by message timestamp
+1. Compute today's date and the Unix timestamp of one hour ago via Bash: `date '+%Y-%m-%d'` and `date -v-1H +%s` (Slack query `after:` excludes the given date; use `on:` to include it)
+2. Use `slack_search_public_and_private` with query `on:{date}` plus parameters `after={unix_ts_one_hour_ago}`, `sort="timestamp"`, `sort_dir="desc"` — the `after` parameter windows results server-side, so result-count truncation cannot drop in-window messages; paginate with `cursor` while a full page (20 results) comes back. During the first hour of the day (00:00-00:59), also run a second query with `on:{yesterday}` and the same `after` timestamp so the window spanning midnight is covered
 3. Group results by topic — cluster messages about the same subject together, even when they span multiple channels
 4. Per topic: `**Topic** (N): key points — [#channel-name](https://{workspace}.slack.com/archives/{channel_id})`
 5. For notable messages with threads, link to the thread: `[thread](https://{workspace}.slack.com/archives/{channel_id}/p{timestamp_no_dot})`
@@ -55,17 +57,17 @@ Construct Slack links from search result metadata: channel ID for channel links,
 1. Use `gmail_search_messages` with query `newer_than:1d`
 2. If search results already include sender and subject, use them directly. Only call `gmail_read_message` for items missing these details (avoid N+1 reads)
 3. Group by topic — cluster related subjects and threads together
-4. Per topic: `**Topic** (N): key points — ["Subject"](https://mail.google.com/mail/u/0/#inbox/{messageId}) from sender`, listing a link for every message in the topic (do not collapse to a single link when N > 1)
+4. Per topic: `**Topic** (N): key points — ["Subject"](https://mail.google.com/mail/u/0/#all/{messageId}) from sender`, listing a link for every message in the topic (do not collapse to a single link when N > 1)
 5. If no emails found, state that there are none
 
-Construct Gmail links from the messageId returned by search results.
+Construct Gmail links from the messageId returned by search results. Use the `#all/` (All Mail) view in link URLs — `#inbox/` breaks for archived, sent, or labeled-out messages that the search still returns.
 
 ## Output Format
 
 Each section gets its own header carrying its own time window:
 
 - Slack: `## Slack Hourly Digest (HH:MM-HH:MM KST)`
-- Gmail: `## Gmail Daily Digest (YYYY-MM-DD)`
+- Gmail: `## Gmail Daily Digest (past 24h, as of YYYY-MM-DD HH:MM KST)` — `newer_than:1d` is a rolling 24-hour window, not a calendar day
 
 Example structure:
 
@@ -74,9 +76,9 @@ Example structure:
 - **Auth service hotfix** (3): deployment discussion and rollout decision — [#channel-a](https://workspace.slack.com/archives/C0123), [hotfix thread](https://workspace.slack.com/archives/C0123/p1234567890)
 - **Standup** (1): reminder — [#channel-b](https://workspace.slack.com/archives/C0456)
 
-## Gmail Daily Digest (2026-06-12)
-- **Billing renewal** (1): ["Subject line"](https://mail.google.com/mail/u/0/#inbox/msg123) from sender@example.com
-- **Project kickoff** (2): ["Thread topic"](https://mail.google.com/mail/u/0/#inbox/msg456) from another@example.com, ["Re: Thread topic"](https://mail.google.com/mail/u/0/#inbox/msg789) from third@example.com
+## Gmail Daily Digest (past 24h, as of 2026-06-12 15:00 KST)
+- **Billing renewal** (1): ["Subject line"](https://mail.google.com/mail/u/0/#all/msg123) from sender@example.com
+- **Project kickoff** (2): ["Thread topic"](https://mail.google.com/mail/u/0/#all/msg456) from another@example.com, ["Re: Thread topic"](https://mail.google.com/mail/u/0/#all/msg789) from third@example.com
 ```
 
 When a section has no results, use a single line indicating nothing new.

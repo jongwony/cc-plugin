@@ -9,7 +9,7 @@ description: |
   via /loop 1h /hourly-digest:hourly-digest slack and
   /loop 1d /hourly-digest:hourly-digest gmail.
   Distinct from per-channel Slack digest or single-source summaries.
-  For GitHub/Linear activity sync, use /loop 1h /github-activity separately.
+  GitHub/Linear activity sync is out of scope for this skill.
 argument-hint: "[slack|gmail]"
 ---
 
@@ -44,7 +44,7 @@ Both sections:  one ToolSearch call selecting all three tools
 ### 1. Slack Hourly Digest (past hour)
 
 1. Compute today's date and the Unix timestamp of one hour ago via Bash: `date '+%Y-%m-%d'` and `date -v-1H +%s` (Slack query `after:` excludes the given date; use `on:` to include it)
-2. Use `slack_search_public_and_private` with query `on:{date}` plus parameters `after={unix_ts_one_hour_ago}`, `sort="timestamp"`, `sort_dir="desc"` — the `after` parameter windows results server-side, so result-count truncation cannot drop in-window messages; paginate with `cursor` while a full page (20 results) comes back. During the first hour of the day (00:00-00:59), also run a second query with `on:{yesterday}` and the same `after` timestamp so the window spanning midnight is covered
+2. Use `slack_search_public_and_private` with query `on:{date}` plus parameters `after={unix_ts_one_hour_ago}`, `sort="timestamp"`, `sort_dir="desc"` — the `after` parameter windows results server-side, so result-count truncation cannot drop in-window messages; paginate by passing the returned `cursor` until the response no longer returns one (a partial page can still carry a next cursor). During the first hour of the day (00:00-00:59), also run a second query with `on:{yesterday}` and the same `after` timestamp so the window spanning midnight is covered
 3. Group results by topic — cluster messages about the same subject together, even when they span multiple channels
 4. Per topic: `**Topic** (N): key points — [#channel-name](https://{workspace}.slack.com/archives/{channel_id})`
 5. For notable messages with threads, link to the thread: `[thread](https://{workspace}.slack.com/archives/{channel_id}/p{timestamp_no_dot})`
@@ -54,7 +54,7 @@ Construct Slack links from search result metadata: channel ID for channel links,
 
 ### 2. Gmail Daily Digest (past day)
 
-1. Use `gmail_search_messages` with query `newer_than:1d`
+1. Use `gmail_search_messages` with query `newer_than:1d`; if the response indicates more results (next-page token or cursor), keep fetching until exhausted — a busy 24h window can exceed the first page
 2. If search results already include sender and subject, use them directly. Only call `gmail_read_message` for items missing these details (avoid N+1 reads)
 3. Group by topic — cluster related subjects and threads together
 4. Per topic: `**Topic** (N): key points — ["Subject"](https://mail.google.com/mail/u/0/#all/{messageId}) from sender`, listing a link for every message in the topic (do not collapse to a single link when N > 1)

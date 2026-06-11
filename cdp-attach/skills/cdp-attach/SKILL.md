@@ -13,7 +13,7 @@ argument-hint: "<operation> [args...]"
 
 # CDP Attach
 
-Attach to a running Chrome DevTools Protocol instance. Immune to frozen-tab timeouts.
+Attach to a running Chrome DevTools Protocol instance. Command-level timeouts are bounded, and frozen (hidden) tabs have a documented helper-tab routing workaround.
 
 ## Prerequisites
 
@@ -311,6 +311,52 @@ When all programmatic approaches fail:
 5. v3 network_stop              → Cleanup
 ```
 
+### Mutating API Calls via Page Session (CSRF)
+
+A `fetch` issued via `v1 evaluate --await` with `credentials: 'include'` may return **403 Forbidden** on mutating endpoints (PUT/POST/DELETE) even though the cookie session is valid — many sites additionally require a CSRF token header on state-changing requests. The token lives in the page DOM (common locations: `<meta name="csrf-token">`, hidden inputs — verified example: Datadog stores it in the `_current_user_json` hidden input as `csrf_token`).
+
+```
+1. v1 evaluate "..."            → Locate + extract the CSRF token from page DOM
+                                  (synchronous read; no --await needed)
+2. v1 evaluate --await --stdin  → Retry the fetch with the token attached as the
+                                  appropriate header (e.g. X-CSRF-Token)
+3. Verify the response status / side effect
+```
+
+```bash
+# Example (Datadog): extract token, then retry the mutating call
+$V1 evaluate "JSON.parse(document.querySelector('input[name=_current_user_json]').value).csrf_token"
+$V1 evaluate --await --stdin <<'JS'
+var r = await fetch('/api/v1/resource', {
+  method: 'PUT',
+  credentials: 'include',
+  headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': '<token>' },
+  body: JSON.stringify({ ... })
+});
+return r.status;
+JS
+```
+
+> **Note**: the token's DOM location and header name are site-specific — inspect a successful mutating request via `v3 network_start` + `network_list` to learn what the site's own frontend sends. If the tab holding the session is lifecycle-frozen (fetch hangs instead of returning 403), combine this with helper-tab routing below: read the token from the frozen tab synchronously, then issue the fetch from a fresh same-origin tab.
+
+### Frozen (Hidden) Tab — Network Calls Suspended
+
+Chromium freezes hidden/backgrounded tabs (observed in Dia browser, Chrome 149): fetch/XHR/timers are suspended, so `evaluate --await` network calls hang silently — the promise never settles — while synchronous main-thread JS still executes (DOM reads work). Verified non-recoveries: `Page.bringToFront` does not unfreeze the renderer, and `Page.setWebLifecycleState` is ineffective (the setter state is session-scoped — consistent with the "CDP setter state is session-scoped" Known Limitation above).
+
+**Recognition test**: synchronous `v1 evaluate "1"` returns instantly, but a short `--await` fetch hangs. (Contrast with a wedged renderer, where even the synchronous evaluate times out — see Error Handling.)
+
+**Workaround — helper-tab routing** (reducible to existing primitives; no dedicated command, same rationale as the virtualized-tables fallback):
+
+```
+1. v1 evaluate "..."            → (if needed) read same-origin DOM state from the
+                                  frozen tab synchronously first (e.g. a CSRF token)
+2. v2 new_page <same-origin-url> → Fresh tabs start unfrozen; cookies are shared
+3. v1 evaluate --await "..."    → Run the fetch/XHR from the helper tab
+4. v2 close_page                → Close the helper tab when done
+```
+
+> **Note**: `v1 revive` also works (the reopened tab starts unfrozen) but discards renderer state unnecessarily — a frozen tab is not wedged; prefer helper-tab routing.
+
 ### Virtualized Tables / Data Grids (rows missing from DOM)
 
 Modern grid libraries (MUI X DataGrid, AG Grid, TanStack Table, react-virtualized) unmount offscreen rows. DOM queries return only the visible window — `querySelectorAll('[role=row]')` may yield 10 rows for a 100-row dataset, and `snapshot` / `scan_interactive` / `find_element` all hit the same limit because they walk the live DOM/AX tree.
@@ -353,7 +399,8 @@ Or use `--host` / `--port` flags on any command.
 | Error | Cause | Resolution |
 |-------|-------|------------|
 | CDP HTTP endpoint unreachable | Browser not running with `--remote-debugging-port` | Start browser with CDP enabled |
-| Timeout waiting for response | Tab frozen/suspended — or just slow | Mutating action? Verify the side effect first (outcome unknown). Then confirm the wedge with `v1 evaluate "1"` before `v1 revive` (revive discards renderer state), or select a different tab |
+| Timeout waiting for response | Wedged renderer, lifecycle-frozen hidden tab, or just slow | Mutating action? Verify the side effect first (outcome unknown). Then discriminate with `v1 evaluate "1"`: if even that times out → wedged renderer → `v1 revive` (discards renderer state); if it returns instantly but `--await` network calls hang → lifecycle-frozen tab → helper-tab routing (see "Frozen (Hidden) Tab" workflow), not `revive` |
+| 403 Forbidden on mutating fetch via evaluate | Site requires a CSRF token header in addition to session cookies | Extract the token from page DOM and retry with the header — see "Mutating API Calls via Page Session (CSRF)" workflow |
 | Tab unresponsive after navigate/reload | Renderer wedged (e.g., reload with pending blocked fetches) | `v1 revive` — WebSocket re-attach won't help; the HTTP endpoints still work |
 | WebSocket send failed (command NOT sent) | Connection already dead before the call | Safe to re-select (`list` + `select`) and retry — nothing was executed |
 | WebSocket connection failed | Tab closed or navigated away | Re-select tab with `list` + `select` |

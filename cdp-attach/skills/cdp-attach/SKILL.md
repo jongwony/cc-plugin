@@ -331,17 +331,17 @@ var r = await fetch('/api/v1/resource', {
   method: 'PUT',
   credentials: 'include',
   headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': '<token>' },
-  body: JSON.stringify({ ... })
+  body: JSON.stringify({ /* payload */ })
 });
 return r.status;
 JS
 ```
 
-> **Note**: the token's DOM location and header name are site-specific — inspect a successful mutating request via `v3 network_start` + `network_list` to learn what the site's own frontend sends. If the tab holding the session is lifecycle-frozen (fetch hangs instead of returning 403), combine this with helper-tab routing below: read the token from the frozen tab synchronously, then issue the fetch from a fresh same-origin tab.
+> **Note**: the token's DOM location and header name are site-specific — capture a successful mutating request with `v3 network_start`, locate it via `network_list --filter <api-path>`, then read its request headers from `~/.cache/cdp-attach/network-events.jsonl` (the `Network.requestWillBeSent` entries carry the JS-set request headers — `X-CSRF-Token` and the like appear there, though browser-added headers arrive only via `Network.requestWillBeSentExtraInfo`, which the collector does not record; `network_list` itself prints only method/status/type/URL). If the tab holding the session is lifecycle-frozen (fetch hangs instead of returning 403), combine this with helper-tab routing below: read the token from the frozen tab synchronously, then issue the fetch from a fresh same-origin tab.
 
 ### Frozen (Hidden) Tab — Network Calls Suspended
 
-Chromium freezes hidden/backgrounded tabs (observed in Dia browser, Chrome 149): fetch/XHR/timers are suspended, so `evaluate --await` network calls hang silently — the promise never settles — while synchronous main-thread JS still executes (DOM reads work). Verified non-recoveries: `Page.bringToFront` does not unfreeze the renderer, and `Page.setWebLifecycleState` is ineffective (the setter state is session-scoped — consistent with the "CDP setter state is session-scoped" Known Limitation above).
+Chromium freezes hidden/backgrounded tabs (observed in Dia browser, Chrome 149): fetch/XHR/timers are suspended, so `evaluate --await` network calls hang silently — the promise never settles — while synchronous main-thread JS still executes (DOM reads work). Verified non-recoveries: `Page.bringToFront` does not unfreeze the renderer, and `Page.setWebLifecycleState "active"` does not stick — Chromium implements it as a one-shot transition (the same `SetPageFrozen` call the browser's own freezing policy uses), not a persistent override: the tab remains hidden, so the freezing policy simply re-freezes it at its next decision point (verified in Chromium source: `page_handler.cc` `SetWebLifecycleState`, `freezing_policy.cc`).
 
 **Recognition test**: synchronous `v1 evaluate "1"` returns instantly, but a short `--await` fetch hangs. (Contrast with a wedged renderer, where even the synchronous evaluate times out — see Error Handling.)
 

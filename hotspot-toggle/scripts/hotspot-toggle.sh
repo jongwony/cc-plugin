@@ -10,6 +10,14 @@ set -u
 HOTSPOT_SSID="Jongwony"
 WIFI_IF="en0"
 
+# HOTSPOT_SSID is interpolated into the AppleScript heredoc below; these characters
+# would break or alter the generated script.
+case "$HOTSPOT_SSID" in
+  *'"'* | *'\'* | *'$'* | *'`'*)
+    echo "FAIL: HOTSPOT_SSID contains characters unsafe for script interpolation (\" \\ \$ \`)." >&2
+    exit 64 ;;
+esac
+
 gateway() { route -n get default 2>/dev/null | awk '/gateway/{print $2}'; }
 
 on_hotspot() {
@@ -77,6 +85,10 @@ leg_hotspot() {
     echo "Already on hotspot (gateway $(gateway))."
     return 0
   fi
+  if ! ax_preflight; then
+    echo "FAIL: Accessibility permission missing for this process chain (System Settings > Privacy & Security > Accessibility)." >&2
+    exit 2
+  fi
   echo "Connecting to hotspot ${HOTSPOT_SSID} via Control Center..."
   if ! connect_hotspot; then
     echo "FAIL: Control Center automation failed (UI structure may have changed after a macOS update)." >&2
@@ -93,16 +105,23 @@ leg_hotspot() {
 
 leg_wifi() {
   echo "Power-cycling Wi-Fi to rejoin the strongest known network..."
-  networksetup -setairportpower "$WIFI_IF" off
+  if ! networksetup -setairportpower "$WIFI_IF" off; then
+    echo "FAIL: could not power off Wi-Fi interface ${WIFI_IF} (is WIFI_IF correct?)." >&2
+    return 1
+  fi
   sleep 2
-  networksetup -setairportpower "$WIFI_IF" on
-  local t=0
+  if ! networksetup -setairportpower "$WIFI_IF" on; then
+    echo "FAIL: could not power on Wi-Fi interface ${WIFI_IF}." >&2
+    return 1
+  fi
+  local t=0 ip
   while [ $t -lt 25 ]; do
-    if [ -n "$(gateway)" ]; then
+    ip="$(ipconfig getifaddr "$WIFI_IF" 2>/dev/null)"
+    if [ -n "$ip" ]; then
       if on_hotspot; then
-        echo "NOTE: rejoined the hotspot — it may be the only known network in range (gateway $(gateway))."
+        echo "NOTE: back on the hotspot — the hotspot does not auto-rejoin here, so this reflects a manual connect (gateway $(gateway))."
       else
-        echo "OK: rejoined known network (gateway $(gateway), ip $(ipconfig getifaddr "$WIFI_IF" 2>/dev/null))."
+        echo "OK: rejoined known network (gateway $(gateway), ip $ip)."
       fi
       return 0
     fi
@@ -111,11 +130,6 @@ leg_wifi() {
   echo "FAIL: no network joined within 25s." >&2
   return 1
 }
-
-if ! ax_preflight; then
-  echo "FAIL: Accessibility permission missing for this process chain (System Settings > Privacy & Security > Accessibility)." >&2
-  exit 2
-fi
 
 MODE="${1:-toggle}"
 case "$MODE" in

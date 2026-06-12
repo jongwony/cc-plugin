@@ -1,6 +1,9 @@
 ---
 name: hotspot-toggle
-description: Toggle the Mac's Wi-Fi between the iPhone Personal Hotspot and known networks. Use when the user says "핫스팟", "hotspot", asks to switch to or from the iPhone hotspot, or wants to hand off the Mac's network before moving.
+description: |
+  This skill should be used when the user says "핫스팟", "hotspot", asks to switch to or
+  from the iPhone hotspot, or wants to hand off the Mac's network before moving.
+  Toggles the Mac's Wi-Fi between the iPhone Personal Hotspot and known networks.
 ---
 
 # Hotspot Toggle
@@ -21,6 +24,9 @@ Notes:
   because SSID reads are location-permission-gated on this macOS.
 - Report the script's stdout/stderr outcome to the user. Exit 2 means Accessibility
   permission is missing — relay the script's guidance.
+- If `wifi` mode ends back on the hotspot, that is intentional (the hotspot does not
+  auto-rejoin on this machine, so it was connected manually): the script prints a NOTE
+  and exits 0.
 - The network blips for a few seconds during either leg; warn the user when they are
   conversing over this machine's connection (e.g., Telegram bridge).
 - Machine-specific constants (`HOTSPOT_SSID="Jongwony"`, `WIFI_IF="en0"`) live at the

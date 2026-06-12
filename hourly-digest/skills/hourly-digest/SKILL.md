@@ -11,6 +11,8 @@ description: |
   Distinct from per-channel Slack digest or single-source summaries.
   GitHub/Linear activity sync is out of scope for this skill.
 argument-hint: "[slack|gmail]"
+context: fork
+agent: general-purpose
 ---
 
 # Hourly Digest

@@ -1,30 +1,20 @@
 #!/bin/bash
-# hotspot-toggle.sh — toggle Mac Wi-Fi between iPhone Personal Hotspot and known networks.
-# Wake path verified on macOS 26.5.1 (2026-06-12): Control Center > Wi-Fi detail >
-# wifi-network-<SSID> AXPress wakes Instant Hotspot; direct `networksetup -setairportnetwork`
-# fails (-3900) because the hotspot SSID is not broadcast while off.
-# Requires Accessibility permission for the process chain running osascript (granted to tmux).
-# Usage: hotspot-toggle.sh [toggle|hotspot|wifi]   (default: toggle)
-# Env:   HOTSPOT_SSID      hotspot network name (default: Jongwony)
-#        WIFI_IF           Wi-Fi interface (default: auto-detected from hardware ports)
+# hotspot-toggle.sh — deterministic legs for the hotspot-toggle skill.
+# The Control Center connect step (waking Instant Hotspot) is instruction-driven:
+# the skill composes and runs osascript per references/control-center-ax-path.md,
+# because direct `networksetup -setairportnetwork` fails (-3900) while the hotspot
+# SSID is not broadcast. This script keeps only the deterministic parts.
+# Usage: hotspot-toggle.sh [status|preflight|wait-hotspot|wifi]   (default: status)
+# Env:   WIFI_IF           Wi-Fi interface (default: auto-detected from hardware ports)
 #        HOTSPOT_GATEWAYS  space-separated glob patterns matching the hotspot's gateway
 #                          (default covers Apple's standard iPhone hotspot NAT addresses;
 #                          override for e.g. Android hotspots)
 # -f: HOTSPOT_GATEWAYS holds glob patterns that must not expand against the filesystem.
 set -uf
 
-HOTSPOT_SSID="${HOTSPOT_SSID:-Jongwony}"
 WIFI_IF="${WIFI_IF:-$(networksetup -listallhardwareports 2>/dev/null | awk '/^Hardware Port: (Wi-Fi|AirPort)/{getline; print $2; exit}')}"
 : "${WIFI_IF:=en0}"
 HOTSPOT_GATEWAYS="${HOTSPOT_GATEWAYS:-192.0.0.1 172.20.10.*}"
-
-# HOTSPOT_SSID is interpolated into the AppleScript heredoc below; these characters
-# would break or alter the generated script.
-case "$HOTSPOT_SSID" in
-  *'"'* | *'\'* | *'$'* | *'`'*)
-    echo "FAIL: HOTSPOT_SSID contains characters unsafe for script interpolation (\" \\ \$ \`)." >&2
-    exit 64 ;;
-esac
 
 gateway() { route -n get default 2>/dev/null | awk '/gateway/{print $2}'; }
 
@@ -44,69 +34,7 @@ ax_preflight() {
   osascript -e 'tell application "System Events" to count menu bar items of menu bar 1 of process "ControlCenter"' >/dev/null 2>&1
 }
 
-connect_hotspot() {
-  osascript <<EOF
-tell application "System Events"
-  tell process "ControlCenter"
-    set ccItem to missing value
-    repeat with i from 1 to count of menu bar items of menu bar 1
-      try
-        if (value of attribute "AXIdentifier" of menu bar item i of menu bar 1) is "com.apple.menuextra.controlcenter" then
-          set ccItem to menu bar item i of menu bar 1
-          exit repeat
-        end if
-      end try
-    end repeat
-    if ccItem is missing value then error "Control Center menu bar item not found"
-    click ccItem
-    delay 1.2
-    set wifiModule to missing value
-    repeat with el in UI elements of group 1 of window 1
-      try
-        if (value of attribute "AXIdentifier" of el) is "controlcenter-wifi" then
-          set wifiModule to el
-          exit repeat
-        end if
-      end try
-    end repeat
-    if wifiModule is missing value then error "Wi-Fi module not found in Control Center"
-    set p to position of wifiModule
-    set s to size of wifiModule
-    click at {(item 1 of p) + (item 1 of s) - 20, (item 2 of p) + ((item 2 of s) div 2)}
-    delay 1.5
-    set sa to scroll area 1 of group 1 of window 1
-    set target to missing value
-    repeat with el in UI elements of sa
-      try
-        if (value of attribute "AXIdentifier" of el) is "wifi-network-${HOTSPOT_SSID}" then
-          set target to el
-          exit repeat
-        end if
-      end try
-    end repeat
-    if target is missing value then error "hotspot entry wifi-network-${HOTSPOT_SSID} not visible"
-    perform action "AXPress" of target
-    delay 0.5
-  end tell
-  key code 53
-end tell
-EOF
-}
-
-leg_hotspot() {
-  if on_hotspot; then
-    echo "Already on hotspot (gateway $(gateway))."
-    return 0
-  fi
-  if ! ax_preflight; then
-    echo "FAIL: Accessibility permission missing for this process chain (System Settings > Privacy & Security > Accessibility)." >&2
-    exit 2
-  fi
-  echo "Connecting to hotspot ${HOTSPOT_SSID} via Control Center..."
-  if ! connect_hotspot; then
-    echo "FAIL: Control Center automation failed (UI structure may have changed after a macOS update)." >&2
-    return 1
-  fi
+wait_hotspot() {
   local t=0
   while [ $t -lt 25 ]; do
     on_hotspot && { echo "OK: connected to hotspot (gateway $(gateway))."; return 0; }
@@ -144,10 +72,24 @@ leg_wifi() {
   return 1
 }
 
-MODE="${1:-toggle}"
+MODE="${1:-status}"
 case "$MODE" in
-  hotspot) leg_hotspot ;;
-  wifi)    leg_wifi ;;
-  toggle)  if on_hotspot; then leg_wifi; else leg_hotspot; fi ;;
-  *) echo "Usage: $0 [toggle|hotspot|wifi]" >&2; exit 64 ;;
+  status)
+    if on_hotspot; then
+      echo "hotspot (gateway $(gateway))"
+    elif [ -n "$(gateway)" ]; then
+      echo "wifi (gateway $(gateway), ip $(ipconfig getifaddr "$WIFI_IF" 2>/dev/null))"
+    else
+      echo "none"
+    fi ;;
+  preflight)
+    if ax_preflight; then
+      echo "OK: Accessibility permission present."
+    else
+      echo "FAIL: Accessibility permission missing for this process chain (System Settings > Privacy & Security > Accessibility)." >&2
+      exit 2
+    fi ;;
+  wait-hotspot) wait_hotspot ;;
+  wifi)         leg_wifi ;;
+  *) echo "Usage: $0 [status|preflight|wait-hotspot|wifi]" >&2; exit 64 ;;
 esac

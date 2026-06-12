@@ -1,9 +1,70 @@
-# Control Center AX Path — Discovery Procedure
+# Control Center AX Path — Verified Script + Discovery Procedure
 
-How the automation path in `scripts/hotspot-toggle.sh` was derived, recorded so the
-path can be re-derived when a macOS update changes the Control Center UI.
-Provenance: reconstructed from the script structure and its header notes; the path
-itself is verified on macOS 26.5.1 (2026-06-12).
+The Control Center connect step is instruction-driven: the skill composes and runs
+the verified script below, and when a macOS update breaks it, re-derives the path
+with the discovery procedure that follows. The deterministic legs (state detection,
+wifi return, preflight, join polling) live in `scripts/hotspot-toggle.sh`.
+Provenance: the discovery procedure is reconstructed from the original script
+structure and its header notes; the path itself is verified on macOS 26.5.1
+(2026-06-12).
+
+## Verified connect script (macOS 26.5.1)
+
+Substitute `__HOTSPOT_SSID__` with the hotspot's network name (env `HOTSPOT_SSID`,
+default `Jongwony`); escape `"` and `\` if the SSID contains them, since it lands
+inside an AppleScript string literal.
+
+```bash
+osascript <<'EOF'
+tell application "System Events"
+  tell process "ControlCenter"
+    set ccItem to missing value
+    repeat with i from 1 to count of menu bar items of menu bar 1
+      try
+        if (value of attribute "AXIdentifier" of menu bar item i of menu bar 1) is "com.apple.menuextra.controlcenter" then
+          set ccItem to menu bar item i of menu bar 1
+          exit repeat
+        end if
+      end try
+    end repeat
+    if ccItem is missing value then error "Control Center menu bar item not found"
+    click ccItem
+    delay 1.2
+    set wifiModule to missing value
+    repeat with el in UI elements of group 1 of window 1
+      try
+        if (value of attribute "AXIdentifier" of el) is "controlcenter-wifi" then
+          set wifiModule to el
+          exit repeat
+        end if
+      end try
+    end repeat
+    if wifiModule is missing value then error "Wi-Fi module not found in Control Center"
+    set p to position of wifiModule
+    set s to size of wifiModule
+    click at {(item 1 of p) + (item 1 of s) - 20, (item 2 of p) + ((item 2 of s) div 2)}
+    delay 1.5
+    set sa to scroll area 1 of group 1 of window 1
+    set target to missing value
+    repeat with el in UI elements of sa
+      try
+        if (value of attribute "AXIdentifier" of el) is "wifi-network-__HOTSPOT_SSID__" then
+          set target to el
+          exit repeat
+        end if
+      end try
+    end repeat
+    if target is missing value then error "hotspot entry wifi-network-__HOTSPOT_SSID__ not visible"
+    perform action "AXPress" of target
+    delay 0.5
+  end tell
+  key code 53
+end tell
+EOF
+```
+
+After it succeeds, confirm the join with
+`bash "${CLAUDE_PLUGIN_ROOT}/scripts/hotspot-toggle.sh" wait-hotspot`.
 
 ## Why UI automation at all
 
@@ -66,4 +127,5 @@ settles returns partial trees.
   ```
 
 - Re-verify the chevron offset (hop 3) — layout changes move the clickable zone.
-- Update the verified-version line in the script header after re-verification.
+- After re-verification, update this document: the verified connect script above and
+  the macOS version in its heading and the provenance note.

@@ -24,12 +24,12 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/hotspot-toggle.sh" <mode>   # status|preflig
 3. **Join the iPhone hotspot** (hotspot leg):
    a. Run `preflight`. Exit 2 means Accessibility permission is missing — relay the
       script's guidance and stop.
-   b. Perform the Control Center connect: run the verified osascript recorded in
-      `references/control-center-ax-path.md`, substituting the hotspot SSID
-      (env `HOTSPOT_SSID`, default `Jongwony`; escape `"` and `\` when composing the
-      AppleScript string). If it errors, the macOS UI likely changed after an update —
-      re-derive the path with the discovery procedure in the same document, run the
-      corrected script, and update the document with what changed.
+   b. Perform the Control Center connect: compose an osascript from the formal
+      procedure in `references/control-center-ax-path.md` (hops + current known
+      values), substituting the hotspot SSID (env `HOTSPOT_SSID`, default `Jongwony`;
+      escape `"` and `\`), and run it. If a hop fails, the macOS UI likely changed
+      after an update — re-derive that hop per the same document and update its
+      known-values table.
    c. Run `wait-hotspot` to confirm the join within 25s.
 
 ## Notes
@@ -51,6 +51,6 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/hotspot-toggle.sh" <mode>   # status|preflig
 
 - Accessibility permission must be granted to the process chain running osascript
   (System Settings > Privacy & Security > Accessibility) — `preflight` checks this.
-- The verified connect script is pinned to a macOS version; after an update breaks it,
-  the discovery procedure in `references/control-center-ax-path.md` is the recovery
-  path.
+- The connect procedure's recorded values are pinned to a verified macOS version;
+  after an update breaks a hop, re-derivation per
+  `references/control-center-ax-path.md` is the recovery path.

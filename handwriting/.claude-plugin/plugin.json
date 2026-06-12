@@ -1,0 +1,9 @@
+{
+  "name": "handwriting",
+  "description": "Apple Notes handwriting reader — scans Apple Pencil drawings via NoteStore.sqlite and reads them multimodally",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

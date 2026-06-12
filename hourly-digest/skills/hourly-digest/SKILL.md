@@ -21,24 +21,23 @@ The cadences differ by source constraint: Gmail's `newer_than:` search operator 
 
 ## Argument Parsing
 
-Parse `ARGUMENTS` for an optional subcommand:
+Each invocation runs exactly one section. Parse `ARGUMENTS` for the subcommand:
 
 | Input | Behavior |
 |-------|----------|
-| (empty) | Run both sections: Slack (past hour), Gmail (past day) |
-| `slack` | Slack hourly digest only |
-| `gmail` | Gmail daily digest only |
+| (empty) | Ask the user which section to run (`slack` or `gmail`) — do not run both |
+| `slack` | Slack hourly digest |
+| `gmail` | Gmail daily digest |
 
 ## Execution
 
-Run each requested section independently. On failure, report `[ERROR] Source: {message}` and continue to the next section.
+Run the requested section. On failure, report `[ERROR] Source: {message}`.
 
-Load the MCP tools for the requested sections upfront in a single ToolSearch call — only the tools the requested sections need, so a missing connector can only fail its own section:
+Load the MCP tools for the requested section upfront in a single ToolSearch call — only the tools that section needs, so a missing connector fails fast:
 
 ```
 Slack section:  ToolSearch("select:mcp__claude_ai_Slack__slack_search_public_and_private")
 Gmail section:  ToolSearch("select:mcp__claude_ai_Gmail__gmail_search_messages,mcp__claude_ai_Gmail__gmail_read_message")
-Both sections:  one ToolSearch call selecting all three tools
 ```
 
 ### 1. Slack Hourly Digest (past hour)
@@ -64,12 +63,12 @@ Construct Gmail links from the messageId returned by search results. Use the `#a
 
 ## Output Format
 
-Each section gets its own header carrying its own time window:
+Each invocation emits one section, with a header carrying its own time window:
 
 - Slack: `## Slack Hourly Digest (HH:MM-HH:MM KST)`
 - Gmail: `## Gmail Daily Digest (past 24h, as of YYYY-MM-DD HH:MM KST)` — `newer_than:1d` is a rolling 24-hour window, not a calendar day
 
-Example structure:
+Example structure (one per section — a single invocation emits only its own):
 
 ```
 ## Slack Hourly Digest (14:00-15:00 KST)
@@ -81,8 +80,7 @@ Example structure:
 - **Project kickoff** (2): ["Thread topic"](https://mail.google.com/mail/u/0/#all/msg456) from another@example.com, ["Re: Thread topic"](https://mail.google.com/mail/u/0/#all/msg789) from third@example.com
 ```
 
-When a section has no results, use a single line indicating nothing new.
-When running a single section via subcommand, omit the other section entirely.
+When the section has no results, use a single line indicating nothing new.
 
 ## Cron Usage
 

@@ -88,6 +88,11 @@
       "name": "hourly-digest",
       "source": "./hourly-digest",
       "description": "Consolidated hourly Slack and Gmail digest with /loop scheduling"
+    },
+    {
+      "name": "handwriting",
+      "source": "./handwriting",
+      "description": "Apple Notes handwriting reader — scan Apple Pencil drawings via NoteStore.sqlite and read them multimodally"
     }
   ]
 }

@@ -24,10 +24,20 @@ Notes:
   because SSID reads are location-permission-gated on this macOS.
 - Report the script's stdout/stderr outcome to the user. Exit 2 means Accessibility
   permission is missing — relay the script's guidance.
-- If `wifi` mode ends back on the hotspot, that is intentional (the hotspot does not
-  auto-rejoin on this machine, so it was connected manually): the script prints a NOTE
-  and exits 0.
+- If `wifi` mode ends back on the hotspot, the script prints a NOTE and exits 0. On
+  this machine that is intentional (the hotspot does not auto-rejoin, so it was
+  connected manually); on a machine where the hotspot auto-joins, the same outcome can
+  also mean an automatic rejoin.
 - The network blips for a few seconds during either leg; warn the user when they are
   conversing over this machine's connection (e.g., Telegram bridge).
-- Machine-specific constants (`HOTSPOT_SSID="Jongwony"`, `WIFI_IF="en0"`) live at the
-  top of the script.
+- Machine-specific values are environment-overridable: `HOTSPOT_SSID` (default
+  `Jongwony`), `WIFI_IF` (auto-detected from the hardware port list; override only if
+  detection fails), `HOTSPOT_GATEWAYS` (space-separated glob patterns; the default
+  covers iPhone hotspots — override for e.g. Android hotspots).
+
+Portability preconditions (not satisfied by installing the plugin):
+- Accessibility permission must be granted to the process chain running osascript
+  (System Settings > Privacy & Security > Accessibility) — exit 2 reports its absence.
+- The Control Center automation path is pinned to a verified macOS version (see the
+  script header). If it breaks after a macOS update, re-derive it with the recorded
+  discovery procedure in `references/control-center-ax-path.md`.

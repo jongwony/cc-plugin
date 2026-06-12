@@ -5,10 +5,18 @@
 # fails (-3900) because the hotspot SSID is not broadcast while off.
 # Requires Accessibility permission for the process chain running osascript (granted to tmux).
 # Usage: hotspot-toggle.sh [toggle|hotspot|wifi]   (default: toggle)
-set -u
+# Env:   HOTSPOT_SSID      hotspot network name (default: Jongwony)
+#        WIFI_IF           Wi-Fi interface (default: auto-detected from hardware ports)
+#        HOTSPOT_GATEWAYS  space-separated glob patterns matching the hotspot's gateway
+#                          (default covers Apple's standard iPhone hotspot NAT addresses;
+#                          override for e.g. Android hotspots)
+# -f: HOTSPOT_GATEWAYS holds glob patterns that must not expand against the filesystem.
+set -uf
 
-HOTSPOT_SSID="Jongwony"
-WIFI_IF="en0"
+HOTSPOT_SSID="${HOTSPOT_SSID:-Jongwony}"
+WIFI_IF="${WIFI_IF:-$(networksetup -listallhardwareports 2>/dev/null | awk '/^Hardware Port: (Wi-Fi|AirPort)/{getline; print $2; exit}')}"
+: "${WIFI_IF:=en0}"
+HOTSPOT_GATEWAYS="${HOTSPOT_GATEWAYS:-192.0.0.1 172.20.10.*}"
 
 # HOTSPOT_SSID is interpolated into the AppleScript heredoc below; these characters
 # would break or alter the generated script.
@@ -21,10 +29,15 @@ esac
 gateway() { route -n get default 2>/dev/null | awk '/gateway/{print $2}'; }
 
 on_hotspot() {
-  case "$(gateway)" in
-    192.0.0.1|172.20.10.*) return 0 ;;
-    *) return 1 ;;
-  esac
+  local gw pat
+  gw="$(gateway)"
+  [ -n "$gw" ] || return 1
+  for pat in $HOTSPOT_GATEWAYS; do
+    case "$gw" in
+      $pat) return 0 ;;
+    esac
+  done
+  return 1
 }
 
 ax_preflight() {

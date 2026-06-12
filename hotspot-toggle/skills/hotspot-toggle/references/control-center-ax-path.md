@@ -17,8 +17,10 @@ Instant Hotspot — hence AX automation of that picker, and no non-UI alternativ
 
 ## Composition contract
 
-- Compose a single `osascript` run executing the hops below in order, inside
-  `tell application "System Events"` / `tell process "ControlCenter"`.
+- Compose a single `osascript` run executing the hops below in order, all inside
+  `tell application "System Events"`: hops 1-4 additionally nested inside
+  `tell process "ControlCenter"`; hop 5 at the System Events level, outside the
+  process block.
 - Locate every element by enumerating its container and matching `AXIdentifier` —
   never by localized title. Wrap per-element attribute reads in `try` (some elements
   lack the attribute).

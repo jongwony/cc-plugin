@@ -45,19 +45,28 @@ spawn() {
     [ "$rdir" = "$dir" ] || echo "  note: requested $dir but rc-$name already runs in ${rdir:-?} — pass an explicit name to run a second session"
     return 0
   fi
+  # Fresh session id, minted only once we're actually spawning (below the
+  # idempotency guard, so the ALREADY-RUNNING path stays untouched). Claude Code
+  # validates --session-id as a UUID and stores the session file lowercase, but
+  # uuidgen emits uppercase — lowercase it; bail if it comes back empty.
+  local sid; sid="$(uuidgen | tr 'A-Z' 'a-z')"
+  [ -n "$sid" ] || { echo "ERROR: failed to generate a session id (is uuidgen available?)" >&2; return 1; }
   # Build the claude command. name is sanitized to [A-Za-z0-9._-] so it needs no
   # quoting; an optional prompt is arbitrary text, so single-quote it for the
   # `sh -c` that tmux runs. Escape embedded ' as '\'' via bash expansion (no sed).
-  local cmd="claude --remote-control --name $name"
+  local cmd="claude --remote-control --name $name --session-id $sid"
   if [ -n "$prompt" ]; then
     # Escape each ' as '\'' in a standalone assignment (embedding the expansion
     # inside the double-quoted cmd "...'${p//.../...}'..." mangles the backslashes).
+    # '--' ends option parsing so an arbitrary prompt can't be misread as a flag
+    # or as the `--remote-control [name]` optional positional.
     local esc=${prompt//\'/\'\\\'\'}
-    cmd="$cmd '$esc'"
+    cmd="$cmd -- '$esc'"
   fi
   # Detached tmux session running claude directly; when claude exits the session ends.
   tmux new-session -d -s "$sess" -x 220 -y 55 -c "$dir" "$cmd"
   echo "STARTED $name  (dir: $dir)"
+  echo "SESSION $sid"
   [ -n "$prompt" ] && echo "  -> initial prompt queued (auto-submits once the session is ready)"
   echo "  -> now reachable in the Claude app (claude.ai/code + mobile)"
   echo "  -> attach: tmux attach -t $sess   |   kill: rc-spawn.sh kill $name"

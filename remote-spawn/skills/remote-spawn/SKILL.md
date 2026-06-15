@@ -20,7 +20,8 @@ Run the script and report the result concisely:
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-spawn.sh" spawn <dir> [name]
 
 # Spawn WITH an initial prompt — auto-submitted as the session's first message.
-# To pass a prompt you must also pass a name (it is the 3rd positional arg).
+# To pass a prompt you must also pass a name (it is the 3rd positional arg). The
+# prompt is passed to claude after a `--` separator (claude --remote-control ... -- "<prompt>").
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-spawn.sh" spawn <dir> <name> "<prompt>"
 
 # List running sessions
@@ -31,7 +32,9 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-spawn.sh" kill <name>
 ```
 
 - `STARTED <name>` → a remote-control session is now live in `<dir>` and appears in
-  the Claude app. Relay the attach/kill hints from the output.
+  the Claude app. The accompanying `SESSION <uuid>` line is the new session's id
+  (a lowercased UUID, passed to claude as `--session-id`). Relay the attach/kill
+  hints from the output.
 - `ALREADY-RUNNING <name>` → idempotent; a session for that name already exists.
 - `NOT-FOUND <name>` → nothing matched on kill.
 

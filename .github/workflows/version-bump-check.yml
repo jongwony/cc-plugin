@@ -1,0 +1,17 @@
+name: version-bump-check
+
+# Real (non-bypassable) enforcement gate: runs on every PR regardless of whether
+# a contributor activated the local pre-commit hook. Same logic as the hook,
+# in range mode (compares the PR head against its base).
+on:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so the PR base commit is reachable
+      - name: Check per-plugin version bumps
+        run: bash .githooks/check-version-bump.sh --base "${{ github.event.pull_request.base.sha }}"

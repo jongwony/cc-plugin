@@ -128,6 +128,15 @@ tools: [mcp__bigquery__*, Read]                      # Read-only + MCP
 `{plugin}/.claude-plugin/plugin.json`의 `version` 수정.
 marketplace.json은 source 경로만 관리 (버전 미포함).
 
+**Bump-on-change 규칙**: 플러그인의 의미 있는 파일이 변경되면 같은 change-set에서 해당 `{plugin}/.claude-plugin/plugin.json`의 `version` **값이 실제로 바뀌어야** 한다 (줄 재배치/재포맷만으로는 불충족). 최상위 비의미 파일(`.claude-plugin/` 메타, 플러그인 루트의 `README.md`/`README_ko.md`/`LICENSE`/`.gitignore`/`.gitattributes`)만 바뀐 경우는 예외 — 단 하위 디렉터리의 동명 파일은 콘텐츠로 간주. 의미 파일 삭제(`git rm`)도 변경에 포함. 신규 플러그인은 최초 버전 설정으로 충족.
+
+**자동 검사 (2계층)**: 규칙 로직의 SSOT는 `.githooks/check-version-bump.sh` (node/jq 의존성 없는 순수 bash, epistemic-protocols `checkVersionStaleness` 포팅). 두 진입점이 같은 스크립트를 호출해 드리프트가 없다:
+- **pre-commit 훅** (`.githooks/pre-commit`) — staged(index) vs HEAD 비교, 위반 시 커밋 차단. **로컬·best-effort**: `core.hooksPath`는 클론에 전파되지 않으므로 클론마다 1회 활성화해야 하고, 미설정 또는 `git commit --no-verify` 시 우회된다.
+  ```bash
+  git config core.hooksPath .githooks   # 클론당 1회
+  ```
+- **CI** (`.github/workflows/version-bump-check.yml`) — PR마다 base와 HEAD를 비교(range 모드). 로컬 설정과 무관하게 항상 실행되는 **실제 게이트**(우회 불가).
+
 ### 파일 이동
 
 ```bash

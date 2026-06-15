@@ -15,6 +15,12 @@ bash scripts/rc-spawn.sh kill foo                     # SIGTERM + drop tmux sess
 One tmux session per name (`rc-<name>`), idempotent. The session lives until its claude
 exits (no auto-restart by design).
 
+On a fresh spawn the script generates the new session's id (a lowercased UUID, passed
+to claude as `--session-id`) and prints it as a `SESSION <uuid>` line right after
+`STARTED`. An initial prompt, when given, is passed after a `--` end-of-options separator
+(`claude --remote-control --name <name> --session-id <uuid> -- "<prompt>"`) so an
+arbitrary prompt can never be misparsed as a flag.
+
 ## Why tmux + ps/SIGTERM
 - **tmux, not nohup/launchd** — `claude --remote-control` is an interactive TUI that wants
   a PTY, and a tmux server launched from your terminal inherits its TCC grant, so sessions

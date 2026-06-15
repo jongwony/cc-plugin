@@ -92,6 +92,7 @@ Each command below runs **inside a Bash subagent**, which returns the outcome su
 | Resume a session | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> /tmp/codex_prompt_<suffix>.txt` (only resume path; deterministic, no --last) |
 | Different dir | Add `-C <DIR>` to non-resume patterns above |
 | Custom model | Add `-m gpt-5.4 -r high` to any pattern above |
+| Capture answer to file | Add `-o <FILE>` to write codex's final message to FILE (deterministic) |
 
 ## Following Up
 After `codex` completes, use `AskUserQuestion` to confirm next steps. Restate model/reasoning/sandbox when proposing actions.

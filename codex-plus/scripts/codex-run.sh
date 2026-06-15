@@ -15,6 +15,7 @@ SANDBOX="$DEFAULT_SANDBOX"
 FULL_AUTO=false
 SESSION_ID=""
 CWD=""
+OUTPUT_FILE=""
 
 usage() {
   cat <<'USAGE'
@@ -27,6 +28,9 @@ Options:
   -C, --cwd DIR          Working directory for codex
   -S, --session-id ID    Resume a specific session by UUID (deterministic;
                          the only resume path — there is no --last fallback)
+  -o, --output-last-message FILE
+                         Also write codex's final message to FILE (deterministic
+                         capture, decoupled from stdout banner noise)
   --full-auto            Enable full auto mode
   -h, --help             Show this help
 
@@ -52,6 +56,7 @@ while [[ $# -gt 0 ]]; do
     -s|--sandbox) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; SANDBOX="$2"; shift 2 ;;
     -C|--cwd) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; CWD="$2"; shift 2 ;;
     -S|--session-id) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; SESSION_ID="$2"; shift 2 ;;
+    -o|--output-last-message) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; OUTPUT_FILE="$2"; shift 2 ;;
     --full-auto) FULL_AUTO=true; shift ;;
     -h|--help) usage 0 ;;
     -*) echo "Unknown option: $1" >&2; usage 1 ;;
@@ -72,6 +77,7 @@ fi
 
 # Build codex argv. Resume iff a session id was given.
 CODEX_ARGS=(exec --skip-git-repo-check)
+[[ -n "$OUTPUT_FILE" ]] && CODEX_ARGS+=(--output-last-message "$OUTPUT_FILE")
 if [[ -n "$SESSION_ID" ]]; then
   # Warn if non-default options are passed with resume (they are ignored —
   # the session keeps its original settings).

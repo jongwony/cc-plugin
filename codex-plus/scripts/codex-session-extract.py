@@ -10,7 +10,6 @@ Usage:
 
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -19,23 +18,16 @@ SESSIONS_DIR = Path.home() / ".codex" / "sessions"
 
 def find_sessions(partial_uuid: str) -> list[Path]:
     """Find session files matching a partial UUID."""
-    result = subprocess.run(
-        ["find", str(SESSIONS_DIR), "-name", f"*{partial_uuid}*", "-type", "f"],
-        capture_output=True,
-        text=True,
-    )
-    paths = [Path(p) for p in result.stdout.strip().splitlines() if p]
-    return sorted(paths)
+    if not SESSIONS_DIR.is_dir():
+        return []
+    return sorted(p for p in SESSIONS_DIR.rglob(f"*{partial_uuid}*") if p.is_file())
 
 
 def recent_sessions(n: int = 5) -> list[Path]:
     """Return the N most recently modified session files."""
-    result = subprocess.run(
-        ["find", str(SESSIONS_DIR), "-name", "*.jsonl", "-type", "f"],
-        capture_output=True,
-        text=True,
-    )
-    paths = [Path(p) for p in result.stdout.strip().splitlines() if p]
+    if not SESSIONS_DIR.is_dir():
+        return []
+    paths = [p for p in SESSIONS_DIR.rglob("*.jsonl") if p.is_file()]
     return sorted(paths, key=lambda p: p.stat().st_mtime, reverse=True)[:n]
 
 
@@ -69,8 +61,6 @@ def parse_session(path: Path, include_reasoning: bool = False) -> dict:
                 sub_type = payload.get("type", "")
                 if sub_type == "agent_message":
                     messages.append(payload.get("message", ""))
-                elif sub_type == "agent_reasoning":
-                    reasoning.append(payload.get("text", ""))
                 elif sub_type == "token_count":
                     info = payload.get("info")
                     if info:
@@ -86,13 +76,34 @@ def parse_session(path: Path, include_reasoning: bool = False) -> dict:
                         elif isinstance(c, str):
                             user_prompts.append(c)
                 item_type = payload.get("type")
-                if item_type == "function_call":
+                if item_type in ("function_call", "custom_tool_call"):
+                    # function_call carries `arguments`; custom_tool_call (e.g.
+                    # apply_patch) carries `input`. Both expose an explicit name.
                     function_calls.append(
                         {
-                            "name": payload.get("name", ""),
-                            "arguments": payload.get("arguments", ""),
+                            "name": payload.get("name", item_type),
+                            "arguments": payload.get("arguments")
+                            or payload.get("input", ""),
                         }
                     )
+                elif item_type in (
+                    "web_search_call",
+                    "tool_search_call",
+                    "image_generation_call",
+                ):
+                    # Codex 0.139.0 tool activity with no explicit name field;
+                    # record the call type so the summary reflects it.
+                    function_calls.append({"name": item_type, "arguments": ""})
+                elif item_type == "reasoning":
+                    # Codex 0.139.0 moved reasoning from event_msg(agent_reasoning)
+                    # to response_item(type=reasoning). Plaintext (when present) is in
+                    # summary[].text; encrypted_content is opaque and is often the only
+                    # payload, so this may legitimately yield nothing.
+                    for part in payload.get("summary", []):
+                        if isinstance(part, dict) and part.get("text"):
+                            reasoning.append(part["text"])
+                        elif isinstance(part, str):
+                            reasoning.append(part)
 
             elif event_type == "turn_context":
                 turns.append(payload)
@@ -125,7 +136,8 @@ def format_meta(meta: dict | None) -> str:
         lines.append(
             f"- **Git**: `{git.get('branch', '?')}` @ `{git.get('commit_hash', '?')[:12]}`"
         )
-    instructions = meta.get("instructions", "")
+    _bi = meta.get("base_instructions", "") or meta.get("instructions", "")
+    instructions = _bi.get("text", "") if isinstance(_bi, dict) else _bi
     if instructions:
         preview = instructions[:200].replace("\n", " ")
         if len(instructions) > 200:
@@ -191,7 +203,7 @@ def format_summary(data: dict) -> str:
             lines.append(f"**Block {i}:** {preview}\n")
 
     if data["function_calls"]:
-        lines.append("### Function Calls")
+        lines.append("### Tool Calls")
         lines.append(f"Total: {len(data['function_calls'])} calls")
         for fc in data["function_calls"][:10]:
             lines.append(f"- `{fc['name']}`")

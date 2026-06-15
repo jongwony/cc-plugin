@@ -37,28 +37,43 @@ for h in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD; do
   fi
 done
 
-# Blob-ref prefixes per mode. ":" is the staged index.
+# Resolve the comparison baseline per mode. ":" is the staged index.
+# In range mode the changed-file set uses three-dot (merge-base) semantics, so the
+# version VALUE must be read from that SAME merge-base — not the base tip, which
+# drifts when the base branch advances after the PR forked. A base that can't be
+# resolved fails CLOSED (the gate must never pass on an unknown baseline).
 if [ -n "$base" ]; then
-  old_prefix="$base:"; new_prefix="HEAD:"
+  mb=$(git merge-base "$base" HEAD 2>/dev/null) || {
+    echo "check-version-bump: cannot resolve a merge-base for '$base' — failing closed" >&2
+    exit 2
+  }
+  old_prefix="$mb:"; new_prefix="HEAD:"
 else
   old_prefix="HEAD:"; new_prefix=":"
 fi
 
 # Changed files, NUL-delimited so paths with spaces/newlines/non-ASCII survive
-# intact (-z already disables path quoting; core.quotePath=false is belt-and-braces).
+# intact. Routed through a temp file (NOT a process substitution) so a git
+# failure is visible to `set -e` and fails CLOSED — a swallowed producer error
+# must never let the gate pass silently.
+tmp=$(mktemp) || { echo "check-version-bump: mktemp failed" >&2; exit 2; }
+trap 'rm -f "$tmp"' EXIT
+if [ -n "$base" ]; then
+  git -c core.quotePath=false diff --name-only -z --diff-filter=ACMRD "$mb..HEAD" > "$tmp" \
+    || { echo "check-version-bump: git diff failed (range mode) — failing closed" >&2; exit 2; }
+else
+  git -c core.quotePath=false diff --cached --name-only -z --diff-filter=ACMRD > "$tmp" \
+    || { echo "check-version-bump: git diff failed — failing closed" >&2; exit 2; }
+fi
 changed=()
 while IFS= read -r -d '' f; do
   changed+=("$f")
-done < <(
-  if [ -n "$base" ]; then
-    git -c core.quotePath=false diff --name-only -z --diff-filter=ACMRD "$base...HEAD"
-  else
-    git -c core.quotePath=false diff --cached --name-only -z --diff-filter=ACMRD
-  fi
-)
+done < "$tmp"
 [ "${#changed[@]}" -eq 0 ] && exit 0
 
-# Discover plugin dirs (any dir holding .claude-plugin/plugin.json).
+# Discover plugin dirs (any dir holding .claude-plugin/plugin.json) from the work
+# tree at HEAD. A whole-plugin deletion is intentionally not flagged: the dir is
+# gone, so there is no surviving plugin.json whose version could be bumped.
 plugins=()
 while IFS= read -r -d '' pj; do
   plugins+=("${pj#./}")
@@ -67,10 +82,12 @@ done < <(find . \( -name node_modules -o -name .git \) -prune -o \
 [ "${#plugins[@]}" -eq 0 ] && exit 0
 
 # Extract the "version" value from plugin.json content on stdin (empty if absent).
+# Anchored to line start so a "version" substring inside another value can't match;
+# assumes the conventional pretty-printed plugin.json with one top-level version key.
 # sed reads all of stdin (no early-exit reader) so the upstream `git show` never
 # gets SIGPIPE — keeps the pipeline well-behaved under `set -o pipefail`.
 extract_version() {
-  sed -nE 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p'
+  sed -nE 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p'
 }
 
 violations=0

@@ -18,7 +18,7 @@ Each JSONL file contains:
 - `session_meta`: id, cwd, model_provider, cli_version, base_instructions, git info
 - `event_msg` (agent_message): final agent output
 - `response_item` (type=reasoning): reasoning blocks — plaintext in `summary[].text`; `encrypted_content` is opaque
-- `response_item`: user prompts, function calls
+- `response_item`: user prompts, tool calls (function/custom/search/image)
 - `turn_context`: per-turn metadata (model, effort, sandbox)
 
 ## Workflow
@@ -59,10 +59,10 @@ grep -rl "keyword" ~/.codex/sessions/ --include="*.jsonl" | head -10
 ### 3. Present Results
 
 Summarize the extracted context:
-- Session metadata (model, cwd, git branch, instructions)
+- Session metadata (model_provider, cwd, git branch, instructions)
 - User prompts that initiated the session
 - Agent output (final messages)
-- Function calls summary
+- Tool calls summary
 - Token usage stats
 
 ### 4. Follow-up Options

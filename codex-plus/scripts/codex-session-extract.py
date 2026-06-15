@@ -76,13 +76,24 @@ def parse_session(path: Path, include_reasoning: bool = False) -> dict:
                         elif isinstance(c, str):
                             user_prompts.append(c)
                 item_type = payload.get("type")
-                if item_type == "function_call":
+                if item_type in ("function_call", "custom_tool_call"):
+                    # function_call carries `arguments`; custom_tool_call (e.g.
+                    # apply_patch) carries `input`. Both expose an explicit name.
                     function_calls.append(
                         {
-                            "name": payload.get("name", ""),
-                            "arguments": payload.get("arguments", ""),
+                            "name": payload.get("name", item_type),
+                            "arguments": payload.get("arguments")
+                            or payload.get("input", ""),
                         }
                     )
+                elif item_type in (
+                    "web_search_call",
+                    "tool_search_call",
+                    "image_generation_call",
+                ):
+                    # Codex 0.139.0 tool activity with no explicit name field;
+                    # record the call type so the summary reflects it.
+                    function_calls.append({"name": item_type, "arguments": ""})
                 elif item_type == "reasoning":
                     # Codex 0.139.0 moved reasoning from event_msg(agent_reasoning)
                     # to response_item(type=reasoning). Plaintext (when present) is in
@@ -192,7 +203,7 @@ def format_summary(data: dict) -> str:
             lines.append(f"**Block {i}:** {preview}\n")
 
     if data["function_calls"]:
-        lines.append("### Function Calls")
+        lines.append("### Tool Calls")
         lines.append(f"Total: {len(data['function_calls'])} calls")
         for fc in data["function_calls"][:10]:
             lines.append(f"- `{fc['name']}`")

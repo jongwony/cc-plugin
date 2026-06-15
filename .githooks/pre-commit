@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# Pre-commit: enforce per-plugin version bumps.
+#
+# Port of epistemic-protocols' checkVersionStaleness (verify/static-checks.js),
+# adapted to a no-node repo: pure bash, installed via `git config core.hooksPath .githooks`.
+#
+# Rule (see CLAUDE.md "버전 업데이트"): when a plugin's semantic files are staged,
+# its {plugin}/.claude-plugin/plugin.json "version" must be bumped in the same commit.
+# Non-semantic files (.claude-plugin/ meta, README*, LICENSE, .gitignore, .gitattributes)
+# do not require a bump. A newly-added plugin.json counts as its version being set.
+#
+# Bypass once with: git commit --no-verify
+set -euo pipefail
+
+# 0. git repo guard
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+# 1. skip during conflict states (staged diff is unreliable then)
+for h in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD; do
+  if [ -e ".git/$h" ]; then
+    echo "→ version-bump check: $h present — skipping"
+    exit 0
+  fi
+done
+
+# 2. staged files (added/copied/modified/renamed)
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$staged" ] && exit 0
+
+# 3. discover plugin dirs (any dir containing .claude-plugin/plugin.json)
+plugin_jsons=$(find . \( -name node_modules -o -name .git \) -prune -o \
+  -name plugin.json -path '*/.claude-plugin/plugin.json' -print 2>/dev/null | sed 's|^\./||')
+[ -z "$plugin_jsons" ] && exit 0
+
+all_dirs=""
+for pj in $plugin_jsons; do
+  all_dirs="$all_dirs ${pj%/.claude-plugin/plugin.json}"
+done
+
+# non-semantic files that do not warrant a version bump
+is_ignored() {
+  case "$1" in
+    README.md|README_ko.md|LICENSE|.gitignore|.gitattributes) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+violations=0
+for pj in $plugin_jsons; do
+  pdir=${pj%/.claude-plugin/plugin.json}
+  meta_prefix="$pdir/.claude-plugin/"
+
+  # count semantic, staged changes belonging to this plugin
+  content_changes=0
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    case "$f" in "$pdir"/*) ;; *) continue ;; esac          # under this plugin
+    case "$f" in "$meta_prefix"*) continue ;; esac          # skip .claude-plugin/ meta
+    is_ignored "$(basename "$f")" && continue               # skip non-semantic files
+
+    # skip files that belong to a deeper, nested plugin dir
+    nested=0
+    for other in $all_dirs; do
+      [ "$other" = "$pdir" ] && continue
+      case "$other/" in
+        "$pdir"/*) case "$f" in "$other"/*) nested=1; break ;; esac ;;
+      esac
+    done
+    [ "$nested" -eq 1 ] && continue
+
+    content_changes=$((content_changes + 1))
+  done <<EOF
+$staged
+EOF
+
+  [ "$content_changes" -eq 0 ] && continue
+
+  # version bumped? staged plugin.json diff must add a "version": line
+  if git diff --cached -- "$pj" | grep -qE '^\+[[:space:]]*"version"[[:space:]]*:'; then
+    continue
+  fi
+
+  echo "✗ plugin \"$pdir\": $content_changes semantic file(s) staged, but no version bump in $pj"
+  violations=$((violations + 1))
+done
+
+if [ "$violations" -gt 0 ]; then
+  echo ""
+  echo "Bump the \"version\" in each plugin's .claude-plugin/plugin.json (see CLAUDE.md 버전 업데이트)."
+  echo "Bypass once with: git commit --no-verify"
+  exit 1
+fi
+exit 0

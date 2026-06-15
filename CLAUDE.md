@@ -128,6 +128,16 @@ tools: [mcp__bigquery__*, Read]                      # Read-only + MCP
 `{plugin}/.claude-plugin/plugin.json`의 `version` 수정.
 marketplace.json은 source 경로만 관리 (버전 미포함).
 
+**Bump-on-change 규칙**: 플러그인의 의미 있는 파일이 변경되면 같은 커밋에서 해당 `{plugin}/.claude-plugin/plugin.json`의 `version`도 bump한다. 의미 없는 파일(`.claude-plugin/` 메타, `README.md`/`README_ko.md`/`LICENSE`/`.gitignore`/`.gitattributes`)만 바뀐 경우는 예외. 신규 플러그인은 최초 버전 설정으로 충족.
+
+**자동 검사 (pre-commit 훅)**: `.githooks/pre-commit`이 staged 변경을 검사해 위 규칙 위반 시 커밋을 차단한다 (epistemic-protocols `static-checks.js`의 `checkVersionStaleness` 포팅, node 의존성 없는 순수 bash). 클론 후 최초 1회 활성화:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+긴급 우회는 `git commit --no-verify`.
+
 ### 파일 이동
 
 ```bash

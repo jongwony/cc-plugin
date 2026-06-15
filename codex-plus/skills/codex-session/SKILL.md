@@ -15,7 +15,7 @@ Retrieve context from Codex CLI session history stored at `~/.codex/sessions/`.
 ```
 
 Each JSONL file contains:
-- `session_meta`: id, cwd, model, cli_version, base_instructions, git info
+- `session_meta`: id, cwd, model_provider, cli_version, base_instructions, git info
 - `event_msg` (agent_message): final agent output
 - `response_item` (type=reasoning): reasoning blocks — plaintext in `summary[].text`; `encrypted_content` is opaque
 - `response_item`: user prompts, function calls

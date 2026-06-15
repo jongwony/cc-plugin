@@ -4,7 +4,10 @@
 # Claude app (claude.ai/code + mobile). No Telegram, no bridge.
 #
 # Subcommands:
-#   spawn <dir> [name]   start a remote-control session in <dir> (idempotent)
+#   spawn <dir> [name] [prompt]   start a remote-control session in <dir> (idempotent);
+#                                 [prompt], if given, is auto-submitted as the first
+#                                 message (passed positionally to claude). To pass a
+#                                 prompt you must also pass a name.
 #   list                 list running rc-* sessions and their dirs
 #   kill  <name>         SIGTERM the claude session, then drop its tmux session
 #
@@ -27,8 +30,8 @@ unset TMUX  # target the tmux daemon, not a nested client, if invoked from insid
 sanitize() { printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '-' | sed 's/--*/-/g; s/^-//; s/-$//'; }
 
 spawn() {
-  local dir="$1" name="$2"
-  [ -n "$dir" ] || { echo "usage: rc-spawn.sh spawn <dir> [name]" >&2; return 2; }
+  local dir="$1" name="$2" prompt="$3"
+  [ -n "$dir" ] || { echo "usage: rc-spawn.sh spawn <dir> [name] [prompt]" >&2; return 2; }
   dir="$(cd "$dir" 2>/dev/null && pwd)" || { echo "ERROR: no such dir: $1" >&2; return 1; }
   [ -n "$name" ] || name="$(basename "$dir")"
   name="$(sanitize "$name")"
@@ -42,13 +45,25 @@ spawn() {
     [ "$rdir" = "$dir" ] || echo "  note: requested $dir but rc-$name already runs in ${rdir:-?} — pass an explicit name to run a second session"
     return 0
   fi
+  # Build the claude command. name is sanitized to [A-Za-z0-9._-] so it needs no
+  # quoting; an optional prompt is arbitrary text, so single-quote it for the
+  # `sh -c` that tmux runs. Escape embedded ' as '\'' via bash expansion (no sed).
+  local cmd="claude --remote-control --name $name"
+  if [ -n "$prompt" ]; then
+    # Escape each ' as '\'' in a standalone assignment (embedding the expansion
+    # inside the double-quoted cmd "...'${p//.../...}'..." mangles the backslashes).
+    local esc=${prompt//\'/\'\\\'\'}
+    cmd="$cmd '$esc'"
+  fi
   # Detached tmux session running claude directly; when claude exits the session ends.
-  tmux new-session -d -s "$sess" -x 220 -y 55 -c "$dir" "claude --remote-control --name $name"
+  tmux new-session -d -s "$sess" -x 220 -y 55 -c "$dir" "$cmd"
   echo "STARTED $name  (dir: $dir)"
+  [ -n "$prompt" ] && echo "  -> initial prompt queued (auto-submits once the session is ready)"
   echo "  -> now reachable in the Claude app (claude.ai/code + mobile)"
   echo "  -> attach: tmux attach -t $sess   |   kill: rc-spawn.sh kill $name"
-  echo "  note: first launch in a never-opened dir may show a one-time folder-trust"
-  echo "        prompt inside the session — attach once, press Enter, detach (Ctrl-b d)."
+  echo "  note: first launch in a never-opened dir shows a one-time folder-trust prompt"
+  echo "        inside the session (any queued prompt waits behind it) — attach once,"
+  echo "        press Enter, detach (Ctrl-b d); the prompt then submits."
 }
 
 list() {
@@ -92,8 +107,8 @@ kill_one() {
 }
 
 case "${1:-}" in
-  spawn) spawn "${2:-}" "${3:-}";;
+  spawn) spawn "${2:-}" "${3:-}" "${4:-}";;
   list)  list;;
   kill)  kill_one "${2:-}";;
-  *) echo "usage: rc-spawn.sh {spawn <dir> [name] | list | kill <name>}" >&2; exit 2;;
+  *) echo "usage: rc-spawn.sh {spawn <dir> [name] [prompt] | list | kill <name>}" >&2; exit 2;;
 esac

@@ -19,6 +19,10 @@ Run the script and report the result concisely:
 # Spawn in a directory (name defaults to the dir's basename)
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-spawn.sh" spawn <dir> [name]
 
+# Spawn WITH an initial prompt — auto-submitted as the session's first message.
+# To pass a prompt you must also pass a name (it is the 3rd positional arg).
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-spawn.sh" spawn <dir> <name> "<prompt>"
+
 # List running sessions
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-spawn.sh" list
 
@@ -35,7 +39,8 @@ Notes to pass on when relevant:
 - The session lives until its claude exits (no auto-restart by design).
 - First launch in a directory Claude has never opened may show a one-time
   folder-trust prompt **inside** the tmux session — `tmux attach -t rc-<name>`,
-  press Enter, then detach with `Ctrl-b d`.
+  press Enter, then detach with `Ctrl-b d`. **A queued initial prompt waits
+  behind this trust gate** and submits only after trust is confirmed.
 - tmux is used (not nohup/launchd) so sessions work under TCC-protected dirs
   (`~/Downloads`, `~/Documents`, `~/Desktop`); kill uses `ps`+SIGTERM so SessionEnd
   hooks (e.g. anamnesis memory) flush before exit.

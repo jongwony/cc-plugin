@@ -26,6 +26,11 @@ export TMUX_TMPDIR="${TMUX_TMPDIR:-$HOME/.tmux-sockets}"
 mkdir -p "$TMUX_TMPDIR"
 unset TMUX  # target the tmux daemon, not a nested client, if invoked from inside tmux
 
+# Copy-paste hint prefix. The user's interactive shell does NOT inherit the
+# relocated TMUX_TMPDIR above, so a bare `tmux attach`/`tmux ls` targets the
+# default socket and fails ("no server running"). Printed hints carry the socket.
+ATTACH_ENV="TMUX_TMPDIR=$TMUX_TMPDIR"
+
 # Reduce a path/name to a tmux- and shell-safe token: [A-Za-z0-9._-], no runs of '-'.
 sanitize() { printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '-' | sed 's/--*/-/g; s/^-//; s/-$//'; }
 
@@ -41,7 +46,7 @@ spawn() {
     # report the dir the session is ACTUALLY running in (not the one just asked for),
     # and flag a basename collision so it isn't a silent no-op.
     local rdir; rdir="$(tmux display-message -p -t "$sess" '#{session_path}' 2>/dev/null)"
-    echo "ALREADY-RUNNING $name  (running in: ${rdir:-?})  attach: tmux attach -t $sess"
+    echo "ALREADY-RUNNING $name  (running in: ${rdir:-?})  attach: $ATTACH_ENV tmux attach -t $sess"
     [ "$rdir" = "$dir" ] || echo "  note: requested $dir but rc-$name already runs in ${rdir:-?} — pass an explicit name to run a second session"
     return 0
   fi
@@ -69,7 +74,7 @@ spawn() {
   echo "SESSION $sid"
   [ -n "$prompt" ] && echo "  -> initial prompt queued (auto-submits once the session is ready)"
   echo "  -> now reachable in the Claude app (claude.ai/code + mobile)"
-  echo "  -> attach: tmux attach -t $sess   |   kill: rc-spawn.sh kill $name"
+  echo "  -> attach: $ATTACH_ENV tmux attach -t $sess   |   kill: rc-spawn.sh kill $name"
   echo "  note: first launch in a never-opened dir shows a one-time folder-trust prompt"
   echo "        inside the session (any queued prompt waits behind it) — attach once,"
   echo "        press Enter, detach (Ctrl-b d); the prompt then submits."
@@ -81,6 +86,7 @@ list() {
         | awk -F'\t' '$1 ~ /^rc-/ {printf "  %-22s %s\n", substr($1,4), $2}')"
   if [ -n "$out" ]; then
     echo "running remote-control sessions:"; printf '%s\n' "$out"
+    echo "  attach: $ATTACH_ENV tmux attach -t rc-<name>   |   ls: $ATTACH_ENV tmux ls"
   else
     echo "(no rc-* sessions running)"
   fi

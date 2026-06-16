@@ -41,7 +41,7 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-spawn.sh" kill <name>
 Notes to pass on when relevant:
 - The session lives until its claude exits (no auto-restart by design).
 - First launch in a directory Claude has never opened may show a one-time
-  folder-trust prompt **inside** the tmux session — `tmux attach -t rc-<name>`,
+  folder-trust prompt **inside** the tmux session — `TMUX_TMPDIR=~/.tmux-sockets tmux attach -t rc-<name>`,
   press Enter, then detach with `Ctrl-b d`. **A queued initial prompt waits
   behind this trust gate** and submits only after trust is confirmed.
 - tmux is used (not nohup/launchd) so sessions work under TCC-protected dirs

@@ -30,6 +30,14 @@ LANG = "auto"          # ko / en / auto
 PROMPT = "whisper, hotkey, active window, transcription, paste, 데몬, 핫키, 단축키, 음성 전사"
 TRIGGER = keyboard.Key.alt_r   # 오른쪽 Option
 MIN_SEC = 0.3          # 이보다 짧은 녹음은 오발화로 간주, 무시
+# rec 녹음 포맷 — _wav_duration 의 크기→길이 산출이 이 값에 의존하므로
+# 아래 rec 호출 인자와 반드시 일치해야 한다.
+SAMPLE_RATE = 16000
+CHANNELS = 1
+SAMPLE_BYTES = 2       # rec 기본 s16(16-bit signed) WAV
+WAV_HEADER_BYTES = 44  # 표준 WAV 헤더 크기
+WHISPER_MIN_TIMEOUT = 20.0    # 전사 타임아웃 하한(초)
+WHISPER_TIMEOUT_FACTOR = 4.0  # 실제 오디오 길이 대비 타임아웃 배수
 WAV = os.path.join(tempfile.gettempdir(), "voice_dictation.wav")
 LOCK = os.path.join(tempfile.gettempdir(), "voice_dictation.lock")
 
@@ -51,7 +59,7 @@ def _start_recording():
         pass
     # 16kHz mono. SIGINT 으로 종료해야 sox 가 WAV 헤더를 정상 finalize 함.
     _rec_proc = subprocess.Popen(
-        ["rec", "-q", "-r", "16000", "-c", "1", WAV],
+        ["rec", "-q", "-r", str(SAMPLE_RATE), "-c", str(CHANNELS), WAV],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -76,9 +84,10 @@ def _stop_and_transcribe():
         print(f"  (무시: {dur:.2f}s)", flush=True)
         return
 
-    print(f"  전사 중… ({dur:.1f}s)", flush=True)
+    timeout = max(WHISPER_MIN_TIMEOUT, dur * WHISPER_TIMEOUT_FACTOR)
+    print(f"  전사 중… ({dur:.1f}s, 타임아웃 {timeout:.0f}s)", flush=True)
     t0 = time.time()
-    text = _transcribe(WAV)
+    text = _transcribe(WAV, timeout)
     dt = time.time() - t0
     if not text:
         print("  (빈 결과)", flush=True)
@@ -88,22 +97,36 @@ def _stop_and_transcribe():
 
 
 def _wav_duration(path):
+    """녹음 길이(초)를 파일 크기에서 직접 산출 — 헤더 손상에 면역.
+
+    이전 구현은 ffprobe 로 WAV 헤더의 duration 을 읽었는데, rec(sox) 가
+    SIGINT 종료 시 헤더를 finalize 하지 못하면(간헐적) 헤더에 sentinel
+    거대값이 남아 실제 수 초짜리 녹음이 수 시간으로 잘못 읽혔다. 그 값이
+    MIN_SEC '너무 짧으면 무시' 가드를 통과해 whisper 가 폭주했다. 데몬은
+    고정 포맷(SAMPLE_RATE/CHANNELS/SAMPLE_BYTES)으로만 녹음하므로, 디스크에
+    실제로 쓰인 바이트 수가 길이의 신뢰 가능한 근거다.
+    """
     try:
-        out = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=nw=1:nk=1", path],
-            capture_output=True, text=True,
-        ).stdout.strip()
-        return float(out)
-    except Exception:
+        size = os.path.getsize(path)
+    except OSError:
         return 0.0
+    data_bytes = max(0, size - WAV_HEADER_BYTES)
+    return data_bytes / (SAMPLE_RATE * CHANNELS * SAMPLE_BYTES)
 
 
-def _transcribe(path):
+def _transcribe(path, timeout):
     cmd = [WHISPER_CLI, "-m", MODEL, "-f", path, "-l", LANG, "-nt", "-np"]
     if PROMPT:
         cmd += ["--prompt", PROMPT]
-    out = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        out = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        # 손상 WAV 등으로 전사가 무한정 길어지는 폭주를 차단 — run() 은
+        # 타임아웃 시 자식 프로세스를 종료(kill)한다.
+        print(f"  (전사 타임아웃 {timeout:.0f}s 초과 — 중단)", flush=True)
+        return ""
     return " ".join(out.stdout.split()).strip()
 
 

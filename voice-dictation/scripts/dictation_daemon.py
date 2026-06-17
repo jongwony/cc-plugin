@@ -14,6 +14,7 @@
 
 중지: Ctrl+C
 """
+import fcntl
 import os
 import signal
 import subprocess
@@ -30,9 +31,11 @@ PROMPT = "whisper, hotkey, active window, transcription, paste, 데몬, 핫키, 
 TRIGGER = keyboard.Key.alt_r   # 오른쪽 Option
 MIN_SEC = 0.3          # 이보다 짧은 녹음은 오발화로 간주, 무시
 WAV = os.path.join(tempfile.gettempdir(), "voice_dictation.wav")
+LOCK = os.path.join(tempfile.gettempdir(), "voice_dictation.lock")
 
 _rec_proc = None
 _recording = False
+_lock_fp = None        # 단일 인스턴스 락 fd — 프로세스 수명 동안 열어 둬 락 유지
 
 
 def _start_recording():
@@ -129,7 +132,23 @@ def _on_release(key):
         _stop_and_transcribe()
 
 
+def _acquire_singleton_lock():
+    """단일 인스턴스 보장 — 이미 다른 데몬이 락을 쥐고 있으면 즉시 종료.
+
+    advisory flock 은 프로세스 종료/크래시 시 OS 가 자동 해제하므로 stale PID
+    파일 문제가 없다. 락 fd 를 전역에 보관해 프로세스 수명 동안 락을 유지하며,
+    런처·플러그인 버전·시그니처와 무관하게 중복 기동 자체를 차단한다.
+    """
+    global _lock_fp
+    _lock_fp = open(LOCK, "w")
+    try:
+        fcntl.flock(_lock_fp.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        raise SystemExit("이미 실행 중인 voice-dictation 데몬이 있습니다 — 중복 기동 취소.")
+
+
 def main():
+    _acquire_singleton_lock()
     if not os.path.exists(MODEL):
         raise SystemExit(f"모델 없음: {MODEL}")
     print("voice-dictation 프로토타입 — 오른쪽 Option(⌥) 홀드로 받아쓰기. 중지: Ctrl+C")

@@ -2,7 +2,7 @@
 name: voice-dictation
 description: >
   This skill should be used when the user asks to "start dictation", "stop dictation",
-  "toggle voice dictation", "받아쓰기 켜기", "받아쓰기 꺼기", "음성 받아쓰기 토글",
+  "toggle voice dictation", "받아쓰기 켜", "받아쓰기 꺼", "음성 받아쓰기 토글",
   or mentions starting/stopping push-to-talk voice dictation.
   Toggles the push-to-talk whisper.cpp dictation daemon as a tracked background process.
 ---

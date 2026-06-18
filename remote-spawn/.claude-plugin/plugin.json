@@ -1,9 +1,0 @@
-{
-  "name": "remote-spawn",
-  "description": "Spawn a backgrounded `claude --remote-control` session in a git worktree via Claude Code's native background-fleet recipe, reachable from the Claude app",
-  "version": "2.0.0",
-  "author": {
-    "name": "Jongwon Choi",
-    "url": "https://github.com/jongwony"
-  }
-}

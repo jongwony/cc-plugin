@@ -1,154 +1,82 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code when working in this repository.
 
-## 프로젝트 개요
+## Northstar
 
-Claude Code용 플러그인 마켓플레이스. 스킬(skills), 에이전트(agents), MCP 통합을 제공하는 다양한 플러그인들을 포함합니다.
+This repository is an **Extended Mind** — a space that extends my present
+understanding. The only constant is that understanding; skills are provisional
+artifacts, born and dying along the hermeneutic circle. When anything conflicts,
+one measure decides: **fidelity to present understanding outranks artifact
+continuity.**
 
-## 아키텍처
+From that single measure:
 
-### 계층 구조
+- **Solve at the root, not the margin** (fundamental first) — but *fundamental ≠
+  maximal*. Remove the root cost (a deferred assumption, a legacy shim) at the
+  source, keeping the change surface minimal. A patch that looks small but defers
+  a cost is not minimal: measure "minimal" by lifetime cost, not diff size.
+- **The only constituency is the present self.** External compatibility, legacy,
+  and future-proofing are by-products, not targets — preserve only what serves
+  the present understanding.
+- **Change is metabolism.** Skills are re-derived, not preserved; an artifact
+  earns its place by serving the current understanding with the least drag.
 
-```
-.claude-plugin/marketplace.json     # 마켓플레이스: 플러그인 목록 + source 경로
-{plugin}/.claude-plugin/plugin.json # 플러그인: name, version, description
-{plugin}/skills/{name}/SKILL.md     # 스킬: 사용자가 /name으로 호출
-{plugin}/agents/{name}.md           # 에이전트: Task tool로 자동 위임
-{plugin}/.mcp.json                  # MCP: 외부 도구 통합 (선택)
-external-plugin/{name}/             # 서드파티 통합용 별도 디렉토리
-```
+## Architecture
 
-### 스킬 구조
+A plugin marketplace, layered by rate of change — slower layers underneath,
+faster ones composed on top (code > procedure > data):
 
-```yaml
-# skills/{name}/SKILL.md
----
-name: skill-name
-description: |  # 3인칭 + 트리거 문구
-  This skill should be used when user asks to "trigger phrase 1", "trigger phrase 2".
-  Provides [capability].
----
-# 상세 프롬프트 (명령형/부정사 형태로 작성)
-```
+- `.claude-plugin/marketplace.json` — plugin list + source paths (no versions)
+- `{plugin}/.claude-plugin/plugin.json` — name, version, description
+- `{plugin}/skills/{name}/SKILL.md` — user-invoked via `/name`
+- `{plugin}/agents/{name}.md` — auto-delegated via the Task tool
+- `{plugin}/.mcp.json` — external-tool integration (optional)
+- `external-plugin/{name}/` — third-party integrations, kept separate
 
-`references/` 폴더에 API 문서, 예제 배치. `scripts/` 폴더에 헬퍼 스크립트(bash/python) 배치.
+Put API docs and examples in `references/`, helper scripts in `scripts/`.
+Frontmatter shapes (skill/agent YAML, multi-skill loading, tool restriction, MCP
+HTTP/Command forms) are re-derivable from existing siblings — read a neighbor to
+see the current shape.
 
-### Python Script Convention
+## Conventions
 
-Python scripts MUST use **PEP 723 inline script metadata + uv**:
+- **Python = PEP 723 + uv.** Inline script metadata (`# /// script … ///`);
+  invoke via `uv run scripts/x.py` (sidesteps the `python` vs `python3`
+  ambiguity). Declare `dependencies = []` even when empty.
+- **Agent vs Skill.** Agent = how to behave (principles, boundaries, error
+  philosophy). Skill = what to do (workflow, procedures, commands). A
+  `skills:`-loaded skill is the single home for its workflow; the agent adds only
+  behavior it does not carry.
+- **Gap tracking (Syneidesis).** Mark unverified assumptions/procedures with a
+  `[Gap:Type]` prefix in TodoWrite — `Procedural`, `Assumption`, `Consideration`.
+- **Importing external-tool capability — 3 tests, all required.** (1)
+  *Irreducibility*: not reproducible from existing primitives (ergonomic wrappers
+  stay inside scripts). (2) *Environment neutrality*: a protocol-level capability
+  (e.g. CDP) that works without the originating tool installed. (3) *SSOT
+  respect*: authoritative state (browser cookies/`localStorage`/…) is reached
+  through its authoritative path — the source owns get/set/clear rather than a
+  mirror.
 
-```python
-#!/usr/bin/env uv run --quiet --script
-# /// script
-# requires-python = ">=3.8"
-# dependencies = ["package-name>=1.0"]  # empty list if none
-# ///
-```
+## Versioning
 
-- Invoke via `uv run scripts/script_name.py` (never `python`/`python3` directly)
-- Prevents macOS compatibility issues with `python` vs `python3` binary
-- Always include `dependencies = []` even when no external packages are needed
+Edit `version` in `{plugin}/.claude-plugin/plugin.json`; `marketplace.json`
+carries source paths only.
 
-### 에이전트 구조
+**Bump-on-change.** When a plugin's meaningful files change in a change-set, that
+plugin's `version` must actually change (re-ordering/reformatting alone does not
+count). Exception: top-level non-meaningful files only — `.claude-plugin/`
+metadata and plugin-root `README*`/`LICENSE`/`.gitignore`/`.gitattributes`; a
+same-named file in a subdirectory counts as content. A `git rm` of a meaningful
+file counts. A new plugin satisfies it via its initial version.
 
-```yaml
-# agents/{name}.md
----
-name: agent-name
-description: 에이전트 설명  # ≤15 words (메인 컨텍스트 상주)
-tools: [Bash, Read, mcp__*]  # 허용 도구 (선택, 생략 시 전체)
-color: cyan                   # UI 색상 (선택)
-model: haiku                  # sonnet(기본) 또는 haiku
-skills: skill-name            # 스킬 자동 로드 (선택)
----
-# 프롬프트 지시사항 (원칙/경계만, 워크플로우는 스킬에서 제공)
-```
+Logic SSOT: `.githooks/check-version-bump.sh` (pure bash). Two entry points call
+it — the local pre-commit hook (`git config core.hooksPath .githooks`, once per
+clone; best-effort, bypassable) and CI
+(`.github/workflows/version-bump-check.yml`, the real gate; range mode; not
+bypassable).
 
-**Multi-skill 로딩:**
-```yaml
-skills:
-  - google:video-understanding
-  - codex-plus:codex
-```
+## Workflow
 
-**Tool restriction 패턴:**
-```yaml
-tools: [Read, Write, mcp__plugin_linear_linear__*]  # 특정 MCP만
-tools: [mcp__bigquery__*, Read]                      # Read-only + MCP
-```
-
-**Agent-Skill Separation Principle:**
-- Agent = "how to behave" (principles, boundaries, error philosophy)
-- Skill = "what to do" (workflow, procedures, commands)
-- When `skills:` loads a skill, avoid duplicating skill content in agent
-
-**Gap Tracking Convention (Syneidesis):**
-- Use `[Gap:Type]` prefix in TodoWrite
-- Types: `[Gap:Procedural]`, `[Gap:Assumption]`, `[Gap:Consideration]`
-- Explicitly track unverified assumptions/procedures
-
-### MCP 설정
-
-```json
-// HTTP (원격 API)
-{
-  "mcpServers": {
-    "tavily": {
-      "type": "http",
-      "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=${TAVILY_API_KEY}"
-    }
-  }
-}
-
-// Command (로컬 도구)
-{
-  "mcpServers": {
-    "bigquery": {
-      "command": "${HOME}/.gemini/extensions/bigquery/toolbox",
-      "args": ["--stdio"],
-      "env": {"BIGQUERY_PROJECT": "${GOOGLE_CLOUD_PROJECT}"}
-    }
-  }
-}
-```
-
-## 개발 워크플로우
-
-### 테스트
-
-```bash
-# Claude Code에서 실행
-/plugin marketplace add https://github.com/jongwony/cc-plugin
-/plugin install {plugin-name}
-```
-
-### 버전 업데이트
-
-`{plugin}/.claude-plugin/plugin.json`의 `version` 수정.
-marketplace.json은 source 경로만 관리 (버전 미포함).
-
-**Bump-on-change 규칙**: 플러그인의 의미 있는 파일이 변경되면 같은 change-set에서 해당 `{plugin}/.claude-plugin/plugin.json`의 `version` **값이 실제로 바뀌어야** 한다 (줄 재배치/재포맷만으로는 불충족). 최상위 비의미 파일(`.claude-plugin/` 메타, 플러그인 루트의 `README.md`/`README_ko.md`/`LICENSE`/`.gitignore`/`.gitattributes`)만 바뀐 경우는 예외 — 단 하위 디렉터리의 동명 파일은 콘텐츠로 간주. 의미 파일 삭제(`git rm`)도 변경에 포함. 신규 플러그인은 최초 버전 설정으로 충족.
-
-**자동 검사 (2계층)**: 규칙 로직의 SSOT는 `.githooks/check-version-bump.sh` (node/jq 의존성 없는 순수 bash, epistemic-protocols `checkVersionStaleness` 포팅). 두 진입점이 같은 스크립트를 호출해 드리프트가 없다:
-- **pre-commit 훅** (`.githooks/pre-commit`) — staged(index) vs HEAD 비교, 위반 시 커밋 차단. **로컬·best-effort**: `core.hooksPath`는 클론에 전파되지 않으므로 클론마다 1회 활성화해야 하고, 미설정 또는 `git commit --no-verify` 시 우회된다.
-  ```bash
-  git config core.hooksPath .githooks   # 클론당 1회
-  ```
-- **CI** (`.github/workflows/version-bump-check.yml`) — PR마다 base와 HEAD를 비교(range 모드). 로컬 설정과 무관하게 항상 실행되는 **실제 게이트**(우회 불가).
-
-### 파일 이동
-
-```bash
-git mv old-path.md new-path.md  # 히스토리 보존
-```
-
-### 스킬 확장 원칙 (외부 도구 수입)
-
-외부 도구(cmux, Playwright, Puppeteer 등) 기능을 기존 스킬에 import 할 때 3 test 통과 필요:
-
-1. **Irreducibility** — 기존 primitive(`evaluate`, `find_element`, `screenshot` 등)로 재현 불가능할 때만 import. Ergonomic wrapper 는 스크립트 내부 개선으로 처리.
-2. **Environment neutrality** — 도구 특정 IPC/runtime 이 아닌 프로토콜 레벨(CDP 등) 능력이어야 함. 원 도구 미설치 환경에서도 동작해야 한다.
-3. **SSOT respect** — 권위 소스(브라우저의 쿠키/`localStorage`/`sessionStorage` 등)가 보유한 상태는 권위 경로로 접근, 전용 `set`/`get`/`clear` 미러링 명령을 추가하지 않는다.
-
-적용 사례: `cdp-attach` 에 cmux 기능 7 종 수입 — 자세한 채택/제외 결정은 PR 히스토리 참조.
+Test inside Claude Code: `/plugin marketplace add <repo>`, then `/plugin install
+{plugin}`.

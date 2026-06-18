@@ -20,7 +20,7 @@ from pathlib import Path
 
 # Import shared client from same directory
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cdp_client import CDPClient, CDPError, ERRORS_FILE, STATE_DIR
+from cdp_client import CDPClient, CDPError, ERRORS_FILE, STATE_DIR, cdp_lock
 
 
 _TOP_LEVEL_CONST_LET_RE = re.compile(r'(?m)^(\s*)(const|let)\b')
@@ -960,10 +960,16 @@ def main():
     }
 
     try:
-        # Block headless browsers (except for diagnostic / local commands).
-        if args.command not in LOCAL_COMMANDS:
-            client.require_headed()
-        commands[args.command](client, args)
+        # doctor is exempt from the global lock: diagnostics must remain
+        # runnable during contention. All other commands serialize CDP access.
+        if args.command == "doctor":
+            commands[args.command](client, args)
+        else:
+            with cdp_lock(client.host, client.port):
+                # Block headless browsers (except for diagnostic / local commands).
+                if args.command not in LOCAL_COMMANDS:
+                    client.require_headed()
+                commands[args.command](client, args)
     except CDPError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

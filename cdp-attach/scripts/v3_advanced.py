@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cdp_client import CDPClient, CDPConnectionError, CDPError
+from cdp_client import CDPClient, CDPConnectionError, CDPError, cdp_lock
 
 CACHE_DIR = os.path.expanduser("~/.cache/cdp-attach")
 NETWORK_EVENTS = os.path.join(CACHE_DIR, "network-events.jsonl")
@@ -1118,11 +1118,25 @@ def main():
         "dialog": cmd_dialog,
     }
 
+    # Daemon-spawning commands fork() a long-lived collector that holds the
+    # CDP session itself. They must NOT run under cdp_lock: the forked child
+    # would never release it (permanent deadlock), and flock is shared across
+    # fork. The daemon runs UNLOCKED by design (it only observes events). Their
+    # foreground parent does no synchronous browser I/O worth serializing.
+    DAEMON_COMMANDS = {"network_start", "console_start"}
+
     try:
-        # Block headless browsers (except local-only commands)
-        if args.command not in LOCAL_COMMANDS:
+        if args.command in DAEMON_COMMANDS:
+            # Block headless browsers (these are not local-only commands).
             client.require_headed()
-        commands[args.command](client, args)
+            commands[args.command](client, args)
+        else:
+            # Serialize all foreground CDP access machine-wide (per host:port).
+            with cdp_lock(client.host, client.port):
+                # Block headless browsers (except local-only commands)
+                if args.command not in LOCAL_COMMANDS:
+                    client.require_headed()
+                commands[args.command](client, args)
     except CDPError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

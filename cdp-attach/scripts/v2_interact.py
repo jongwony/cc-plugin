@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cdp_client import CDPClient, CDPConnectionError, CDPError
+from cdp_client import CDPClient, CDPConnectionError, CDPError, cdp_lock
 
 
 def _resolve_selector(client, selector):
@@ -884,8 +884,11 @@ def main():
     }
 
     try:
-        client.require_headed()  # Block headless browsers
-        commands[args.command](client, args)
+        # Serialize all CDP access machine-wide (per host:port) so concurrent
+        # sessions/subagents never drive the same browser simultaneously.
+        with cdp_lock(client.host, client.port):
+            client.require_headed()  # Block headless browsers
+            commands[args.command](client, args)
     except CDPError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

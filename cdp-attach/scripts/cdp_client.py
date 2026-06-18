@@ -17,6 +17,7 @@ Import via sys.path manipulation in v1/v2/v3 scripts:
     from cdp_client import CDPClient
 """
 
+import contextlib
 import fcntl
 import json
 import os
@@ -547,3 +548,70 @@ class CDPClient:
             state.get("pids", {}).pop(process_type, None)
 
         self._locked_state_update(_update)
+
+
+@contextlib.contextmanager
+def cdp_lock(host=None, port=None):
+    """Global single-access semaphore for CDP browser access.
+
+    Serializes all CDP operations across concurrent sessions/subagents via an
+    exclusive flock on a per-(host,port) lock file in STATE_DIR. Kernel-enforced
+    and auto-released on process death (no stale-lock bookkeeping needed).
+
+    Blocks up to CDP_ATTACH_LOCK_TIMEOUT seconds (default 10) trying to acquire,
+    then fails fast with CDPError. Disabled entirely when CDP_ATTACH_NO_LOCK=1.
+    The flock is the mutual-exclusion mechanism; the JSON owner record written
+    into the lock file is informational (attribution / error messages) only.
+    """
+    if os.environ.get("CDP_ATTACH_NO_LOCK") == "1":
+        yield
+        return
+    h = host or os.environ.get("CDP_HOST", "127.0.0.1")
+    p = int(port or os.environ.get("CDP_PORT", "9222"))
+    os.makedirs(STATE_DIR, exist_ok=True)
+    lock_path = os.path.join(STATE_DIR, f"cdp-{h}-{p}.lock")
+    timeout = float(os.environ.get("CDP_ATTACH_LOCK_TIMEOUT", "10"))
+    # "a+" => create-if-absent, do NOT truncate a current holder's record
+    lock_f = open(lock_path, "a+")
+    deadline = time.time() + timeout
+    acquired = False
+    while time.time() < deadline:
+        try:
+            fcntl.flock(lock_f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            acquired = True
+            break
+        except (BlockingIOError, OSError):
+            time.sleep(0.1)
+    if not acquired:
+        # best-effort read of the current owner for a helpful message
+        holder = ""
+        try:
+            lock_f.seek(0)
+            holder = lock_f.read().strip()
+        except Exception:
+            pass
+        lock_f.close()
+        raise CDPError(
+            f"CDP busy: another session holds the lock on {h}:{p} after waiting "
+            f"{timeout:.0f}s. Holder: {holder or 'unknown'}. Retry shortly, raise "
+            f"CDP_ATTACH_LOCK_TIMEOUT, or set CDP_ATTACH_NO_LOCK=1 to bypass."
+        )
+    try:
+        try:
+            lock_f.seek(0)
+            lock_f.truncate()
+            lock_f.write(json.dumps({
+                "session_id": os.environ.get("CLAUDE_CODE_SESSION_ID"),
+                "pid": os.getpid(),
+                "acquired_at": time.time(),
+            }))
+            lock_f.flush()
+        except Exception:
+            pass  # owner record is best-effort; never block the caller
+        yield
+    finally:
+        try:
+            fcntl.flock(lock_f, fcntl.LOCK_UN)
+        except Exception:
+            pass
+        lock_f.close()

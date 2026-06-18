@@ -1,45 +1,28 @@
 #!/usr/bin/env bash
-# Spawn / list / kill backgrounded `claude --remote-control` sessions reachable
-# from the Claude app (claude.ai/code + mobile). A thin wrapper over Claude Code's
-# native background-fleet recipe — one session per git worktree. No tmux, no bridge.
+# Spawn / list / kill backgrounded `claude --remote-control` sessions, reachable
+# from the Claude app. A thin wrapper over Claude Code's native background-fleet
+# recipe — one session per git worktree. No tmux, no bridge.
 #
-# Subcommands:
-#   spawn <dir> [name] [prompt]   start a background remote-control session for
-#                                 <dir>'s repo in a fresh worktree (idempotent).
-#                                 name defaults to <dir>'s basename; [prompt], if
-#                                 given, is the session's first task message. To
-#                                 pass a prompt you must also pass a name.
-#   list                 list running worktree-backed background sessions
-#   kill  <name>         stop the session gracefully, delete it, prune its branch
+#   spawn <dir> [name] [prompt]  start a bg remote-control session for <dir>'s repo
+#                                in a fresh worktree (idempotent). name defaults to
+#                                <dir>'s basename; prompt (also needs a name) is the
+#                                session's first message.
+#   list                         list running worktree-backed bg sessions
+#   kill  <name>                 stop gracefully, delete session + worktree, prune branch
 #
-# MECHANISM (Claude Code >= 2.1.x)
-#   spawn = claude --bg --remote-control --worktree <name> -- "<prompt>"
-#     --bg              background (headless) session; returns immediately
-#     --remote-control  makes it app-reachable (claude.ai/code + mobile)
-#     --worktree <name> creates a git worktree at <repo>/.claude/worktrees/<name>
-#                       on branch worktree-<name>, and runs the session there
-#   list  = claude agents --json  (filtered to worktree-backed background sessions)
-#   kill  = claude stop <id>      graceful SessionEnd -> hooks flush (e.g. anamnesis)
-#           claude rm   <id>      drops the session AND its worktree dir
-#           git branch -D worktree-<name>   (rm leaves the branch behind)
+# Native commands (Claude Code >= 2.1.x; --bg and the fleet verbs are undocumented):
+#   spawn -> claude --bg --remote-control --worktree <name> -- "<prompt>"
+#            worktree at <repo>/.claude/worktrees/<name>, branch worktree-<name>
+#   list  -> claude agents --json     (filtered to worktree-backed bg sessions)
+#   kill  -> claude stop <id>         (graceful SessionEnd -> hooks flush, e.g. anamnesis)
+#            claude rm <id>           (drops session + worktree dir; keeps the branch)
+#            git branch -D worktree-<name>
 #
-# WHY no tmux: the native daemon already owns a TCC grant, so background sessions
-# run under TCC-protected dirs (~/Downloads, ~/Documents, ~/Desktop) with no
-# "Operation not permitted" — the original reason this script used tmux is gone.
-#
-# WHY address by native id (not pkill/ps): sessions are tracked by the daemon and
-# addressed by their short id from `claude agents`, so the old macOS KERN_PROCARGS
-# pkill workaround no longer applies. `claude stop` is the graceful path (SIGTERM
-# equivalent): it routes through SessionEnd so memory hooks flush before exit.
-#
-# CAVEATS
-# - --bg and the fleet verbs (stop/rm/logs/attach/respawn) are an undocumented
-#   fast-path; this script assumes Claude Code >= 2.1.x.
-# - Native worktrees always land under the repo's .claude/worktrees/<name>,
-#   regardless of where <dir> sits inside the tree.
-# - <dir> must be inside a git repo (--worktree needs one).
-# - The session lives until it exits or is killed (no auto-restart by design;
-#   the daemon only re-adopts RUNNING sessions across restarts).
+# Lessons that still apply:
+# - No tmux: the native daemon owns the TCC grant, so sessions run under protected
+#   dirs (~/Downloads, ~/Documents) without "Operation not permitted".
+# - Address sessions by their native id from `claude agents`, not pkill/ps.
+# - <dir> must be inside a git repo; a stopped session does NOT auto-restart.
 
 set -uo pipefail
 

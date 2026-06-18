@@ -19,6 +19,7 @@ import glob
 import os
 import queue
 import signal
+import struct
 import subprocess
 import tempfile
 import threading
@@ -33,13 +34,13 @@ LANG = "auto"          # ko / en / auto
 PROMPT = "whisper, hotkey, active window, transcription, paste, 데몬, 핫키, 단축키, 음성 전사"
 TRIGGER = keyboard.Key.alt_r   # 오른쪽 Option
 MIN_SEC = 0.3          # 이보다 짧은 녹음은 오발화로 간주, 무시
-# rec 녹음 포맷 — _wav_duration 의 크기→길이 산출이 이 값에 의존하므로
-# 아래 rec 호출에서 -b/-e 로 명시 고정한다(sox 기본값에 의존하지 않음: 기본은
-# 장치 정밀도를 따라 32-bit/EXTENSIBLE 가 나올 수 있어 크기→길이 산식이 깨진다).
+# rec 녹음 포맷 — whisper 친화적인 컴팩트 s16 PCM 으로 고정한다. _wav_duration
+# 은 더 이상 이 값에 의존하지 않고(WAV `fmt ` 청크에서 실제 포맷을 읽음) 포맷이
+# 드리프트해도 길이가 조용히 틀어지지 않으므로, 아래 -b/-e 고정은 정확성의
+# 근거가 아니라 파일 크기 절감용 best-effort 다(미반영돼도 길이는 정확).
 SAMPLE_RATE = 16000
 CHANNELS = 1
-SAMPLE_BYTES = 2       # rec -b 16 -e signed-integer 로 고정한 s16(16-bit signed)
-WAV_HEADER_BYTES = 44  # 고정 s16 PCM 의 정규 WAV 헤더 크기
+SAMPLE_BYTES = 2       # rec -b 16 -e signed-integer 선호 포맷 s16(16-bit signed)
 # 전사 타임아웃 하한 — whisper-cli 는 매 호출 fresh 프로세스라 모델 콜드 로드 +
 # Metal 셰이더 컴파일(첫 호출 수십 초 가능) 비용을 짧은 발화에서도 흡수해야 한다.
 WHISPER_MIN_TIMEOUT = 40.0
@@ -65,9 +66,9 @@ def _start_recording():
         os.remove(WAV)
     except FileNotFoundError:
         pass
-    # 16kHz mono s16. -b/-e 로 포맷을 고정해 _wav_duration 의 크기→길이 산식
-    # (SAMPLE_BYTES/WAV_HEADER_BYTES)이 항상 성립하게 한다. SIGINT 으로 종료해야
-    # sox 가 WAV 헤더를 정상 finalize 함.
+    # 16kHz mono s16. -b/-e 로 컴팩트 s16 을 선호 포맷으로 요청한다(정확성용은
+    # 아님 — _wav_duration 은 파일의 `fmt ` 청크에서 실제 포맷을 읽으므로 이 요청이
+    # 미반영돼도 길이는 정확). SIGINT 으로 종료해야 sox 가 WAV 헤더를 정상 finalize 함.
     _rec_proc = subprocess.Popen(
         ["rec", "-q", "-b", str(SAMPLE_BYTES * 8), "-e", "signed-integer",
          "-r", str(SAMPLE_RATE), "-c", str(CHANNELS), WAV],
@@ -92,7 +93,7 @@ def _stop_and_transcribe():
         _rec_proc = None
 
     # 오발화(짧은 brush)는 스냅샷·스레드를 만들기 전에 리스너 스레드에서 바로 거른다
-    # — 무의미한 워커가 쌓이지 않게. _wav_duration 은 getsize 뿐이라 즉시 반환된다.
+    # — 무의미한 워커가 쌓이지 않게. _wav_duration 은 헤더 청크만 읽어 즉시 반환된다.
     dur = _wav_duration(WAV)
     if dur < MIN_SEC:
         print(f"  (무시: {dur:.2f}s)", flush=True)
@@ -138,22 +139,82 @@ def _transcribe_worker():
                 pass
 
 
+def _read_wav_format(path):
+    """WAV `fmt ` 청크에서 (nSamplesPerSec, bytes_per_frame, header_len) 산출.
+
+    파싱 실패 시 None. `fmt ` 청크는 sox 가 녹음 *시작* 시점에 기록하므로,
+    SIGINT 중단이 파일 끝의 data 청크 size 필드를 손상시켜도 온전하다(과거
+    ffprobe 경로가 깨진 이유가 바로 그 끝부분 size/duration 필드를 믿었기
+    때문). 여기서는 손상될 수 있는 data 청크 size 는 읽지 않고, 데이터가
+    시작되는 오프셋(header_len)과 실제 포맷만 얻는다 — 길이는 호출부에서
+    파일 크기 기준으로 계산한다.
+
+    stdlib `wave` 대신 직접 파싱: `wave` 는 WAVE_FORMAT_EXTENSIBLE 헤더나
+    손상된 data size 에서 예외를 던질 수 있는 반면, 여기 필요한 필드(포맷,
+    data 오프셋)만 읽는 최소 파서는 그런 입력에도 견고하고 의존성도 없다.
+    """
+    try:
+        with open(path, "rb") as f:
+            riff = f.read(12)
+            if len(riff) < 12 or riff[0:4] != b"RIFF" or riff[8:12] != b"WAVE":
+                return None
+            sample_rate = n_channels = bits_per_sample = header_len = None
+            while True:
+                chunk_hdr = f.read(8)
+                if len(chunk_hdr) < 8:
+                    break
+                chunk_id, chunk_size = struct.unpack("<4sI", chunk_hdr)
+                if chunk_id == b"fmt ":
+                    fmt = f.read(chunk_size)
+                    if len(fmt) < 16:
+                        return None
+                    # 오프셋 2: nChannels(H), 4: nSamplesPerSec(I), 14: wBitsPerSample(H).
+                    # EXTENSIBLE(0xFFFE) 도 이 세 필드 위치는 동일하다.
+                    n_channels, sample_rate = struct.unpack("<HI", fmt[2:8])
+                    bits_per_sample = struct.unpack("<H", fmt[14:16])[0]
+                    if chunk_size & 1:   # 워드 정렬 패딩 바이트
+                        f.read(1)
+                elif chunk_id == b"data":
+                    # 오디오 바이트가 시작되는 오프셋. data 청크 size(손상 가능)는
+                    # 읽지 않고 여기서 멈춘다 — 손상된 size 로 전진하지 않게.
+                    header_len = f.tell()
+                    break
+                else:
+                    f.seek(chunk_size + (chunk_size & 1), 1)
+            if (sample_rate is None or n_channels is None
+                    or bits_per_sample is None or header_len is None):
+                return None
+            bytes_per_frame = (bits_per_sample // 8) * n_channels
+            if sample_rate <= 0 or bytes_per_frame <= 0:
+                return None
+            return sample_rate, bytes_per_frame, header_len
+    except OSError:
+        return None
+
+
 def _wav_duration(path):
-    """녹음 길이(초)를 파일 크기에서 직접 산출 — 헤더 손상에 면역.
+    """녹음 길이(초)를 파일 크기 + 실제 포맷에서 산출 — 헤더 손상에 면역.
 
     이전 구현은 ffprobe 로 WAV 헤더의 duration 을 읽었는데, rec(sox) 가
     SIGINT 종료 시 헤더를 finalize 하지 못하면(간헐적) 헤더에 sentinel
     거대값이 남아 실제 수 초짜리 녹음이 수 시간으로 잘못 읽혔다. 그 값이
-    MIN_SEC '너무 짧으면 무시' 가드를 통과해 whisper 가 폭주했다. 데몬은
-    고정 포맷(SAMPLE_RATE/CHANNELS/SAMPLE_BYTES)으로만 녹음하므로, 디스크에
-    실제로 쓰인 바이트 수가 길이의 신뢰 가능한 근거다.
+    MIN_SEC '너무 짧으면 무시' 가드를 통과해 whisper 가 폭주했다.
+
+    길이는 디스크에 실제로 쓰인 바이트 수에서 산출한다(손상되는 끝부분 size
+    필드가 아님). 바이트→길이 변환에 필요한 포맷(샘플레이트·프레임 바이트)과
+    헤더 길이는 시작 시점에 기록돼 온전한 `fmt ` 청크에서 읽으므로, rec 포맷
+    고정이 미반영돼도(예: 장치 기본 32-bit/EXTENSIBLE) 길이가 틀어지지 않는다.
     """
+    fmt = _read_wav_format(path)
+    if fmt is None:
+        return 0.0
+    sample_rate, bytes_per_frame, header_len = fmt
     try:
         size = os.path.getsize(path)
     except OSError:
         return 0.0
-    data_bytes = max(0, size - WAV_HEADER_BYTES)
-    return data_bytes / (SAMPLE_RATE * CHANNELS * SAMPLE_BYTES)
+    data_bytes = max(0, size - header_len)
+    return data_bytes / (sample_rate * bytes_per_frame)
 
 
 def _transcribe(path, timeout):

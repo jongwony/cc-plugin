@@ -15,7 +15,7 @@ Push-to-talk voice dictation for Claude Code, powered by whisper.cpp.
 데몬 실행 전 다음 CLI가 PATH에 있어야 합니다:
 
 - `whisper-cli` (brew `whisper-cpp`) — 전사
-- `rec` (brew `sox`) — 녹음 (`-b 16 -e signed-integer -r 16000 -c 1` 고정 s16 출력; 녹음 길이는 파일 크기에서 직접 산출하므로 ffprobe 불필요)
+- `rec` (brew `sox`) — 녹음 (`-b 16 -e signed-integer -r 16000 -c 1` 컴팩트 s16 선호; 녹음 길이는 WAV `fmt ` 청크의 실제 포맷으로 파일 크기에서 산출하므로 ffprobe 불필요, 포맷 미반영에도 정확)
 - `uv` — 데몬 실행
 
 ## Permissions (macOS, one-time)

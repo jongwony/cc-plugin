@@ -15,10 +15,13 @@
 중지: Ctrl+C
 """
 import fcntl
+import glob
 import os
+import queue
 import signal
 import subprocess
 import tempfile
+import threading
 import time
 
 from pynput import keyboard
@@ -31,12 +34,15 @@ PROMPT = "whisper, hotkey, active window, transcription, paste, 데몬, 핫키, 
 TRIGGER = keyboard.Key.alt_r   # 오른쪽 Option
 MIN_SEC = 0.3          # 이보다 짧은 녹음은 오발화로 간주, 무시
 # rec 녹음 포맷 — _wav_duration 의 크기→길이 산출이 이 값에 의존하므로
-# 아래 rec 호출 인자와 반드시 일치해야 한다.
+# 아래 rec 호출에서 -b/-e 로 명시 고정한다(sox 기본값에 의존하지 않음: 기본은
+# 장치 정밀도를 따라 32-bit/EXTENSIBLE 가 나올 수 있어 크기→길이 산식이 깨진다).
 SAMPLE_RATE = 16000
 CHANNELS = 1
-SAMPLE_BYTES = 2       # rec 기본 s16(16-bit signed) WAV
-WAV_HEADER_BYTES = 44  # 표준 WAV 헤더 크기
-WHISPER_MIN_TIMEOUT = 20.0    # 전사 타임아웃 하한(초)
+SAMPLE_BYTES = 2       # rec -b 16 -e signed-integer 로 고정한 s16(16-bit signed)
+WAV_HEADER_BYTES = 44  # 고정 s16 PCM 의 정규 WAV 헤더 크기
+# 전사 타임아웃 하한 — whisper-cli 는 매 호출 fresh 프로세스라 모델 콜드 로드 +
+# Metal 셰이더 컴파일(첫 호출 수십 초 가능) 비용을 짧은 발화에서도 흡수해야 한다.
+WHISPER_MIN_TIMEOUT = 40.0
 WHISPER_TIMEOUT_FACTOR = 4.0  # 실제 오디오 길이 대비 타임아웃 배수
 WAV = os.path.join(tempfile.gettempdir(), "voice_dictation.wav")
 LOCK = os.path.join(tempfile.gettempdir(), "voice_dictation.lock")
@@ -44,6 +50,8 @@ LOCK = os.path.join(tempfile.gettempdir(), "voice_dictation.lock")
 _rec_proc = None
 _recording = False
 _lock_fp = None        # 단일 인스턴스 락 fd — 프로세스 수명 동안 열어 둬 락 유지
+_transcribe_q = queue.Queue()  # (snapshot, dur) FIFO 큐 — 단일 consumer 워커가 순서대로 전사
+_wav_seq = 0           # WAV 스냅샷 고유 카운터(리스너 단일 스레드에서만 증가)
 
 
 def _start_recording():
@@ -57,9 +65,12 @@ def _start_recording():
         os.remove(WAV)
     except FileNotFoundError:
         pass
-    # 16kHz mono. SIGINT 으로 종료해야 sox 가 WAV 헤더를 정상 finalize 함.
+    # 16kHz mono s16. -b/-e 로 포맷을 고정해 _wav_duration 의 크기→길이 산식
+    # (SAMPLE_BYTES/WAV_HEADER_BYTES)이 항상 성립하게 한다. SIGINT 으로 종료해야
+    # sox 가 WAV 헤더를 정상 finalize 함.
     _rec_proc = subprocess.Popen(
-        ["rec", "-q", "-r", str(SAMPLE_RATE), "-c", str(CHANNELS), WAV],
+        ["rec", "-q", "-b", str(SAMPLE_BYTES * 8), "-e", "signed-integer",
+         "-r", str(SAMPLE_RATE), "-c", str(CHANNELS), WAV],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -67,7 +78,7 @@ def _start_recording():
 
 
 def _stop_and_transcribe():
-    global _rec_proc, _recording
+    global _rec_proc, _recording, _wav_seq
     if not _recording:
         return
     _recording = False
@@ -77,23 +88,54 @@ def _stop_and_transcribe():
             _rec_proc.wait(timeout=2)
         except subprocess.TimeoutExpired:
             _rec_proc.kill()
+            _rec_proc.wait()   # SIGKILL 후 reap — 미종료 writer 의 파일을 전사하지 않게
         _rec_proc = None
 
+    # 오발화(짧은 brush)는 스냅샷·스레드를 만들기 전에 리스너 스레드에서 바로 거른다
+    # — 무의미한 워커가 쌓이지 않게. _wav_duration 은 getsize 뿐이라 즉시 반환된다.
     dur = _wav_duration(WAV)
     if dur < MIN_SEC:
         print(f"  (무시: {dur:.2f}s)", flush=True)
         return
 
-    timeout = max(WHISPER_MIN_TIMEOUT, dur * WHISPER_TIMEOUT_FACTOR)
-    print(f"  전사 중… ({dur:.1f}s, 타임아웃 {timeout:.0f}s)", flush=True)
-    t0 = time.time()
-    text = _transcribe(WAV, timeout)
-    dt = time.time() - t0
-    if not text:
-        print("  (빈 결과)", flush=True)
+    # WAV 를 고유 스냅샷으로 옮긴 뒤 전사를 FIFO 큐에 넣는다. 두 가지를 동시에
+    # 해결한다: (1) pynput 리스너 콜백 스레드를 즉시 풀어, 전사(최대 timeout 초)
+    # 동안 다음 키 입력·녹음이 막히거나 macOS 이벤트 탭이 비활성화되지 않게 한다.
+    # (2) 다음 녹음이 같은 WAV 경로를 덮어써 전사 중인 파일을 훼손하는 race 를 막는다.
+    _wav_seq += 1
+    snapshot = f"{WAV}.{_wav_seq}"
+    try:
+        os.replace(WAV, snapshot)
+    except OSError:
+        # rec 가 파일을 못 만든 경우(장치 점유/권한 오류 등) — 조용히 종료
         return
-    print(f"  ⤷ ({dt:.1f}s) {text}", flush=True)
-    _inject(text)
+    _transcribe_q.put((snapshot, dur))
+
+
+def _transcribe_worker():
+    # 단일 consumer 워커(데몬). 큐에서 순서대로(FIFO) 꺼내 한 번에 하나씩 전사·주입
+    # 하므로 발화 순서가 보존되고, 워커 스레드는 프로세스 전체에 정확히 하나만 존재한다.
+    # 한 전사의 예외가 워커(=전체 파이프라인)를 죽이지 않도록 폭넓게 잡아 로깅만 한다.
+    while True:
+        path, dur = _transcribe_q.get()
+        try:
+            timeout = max(WHISPER_MIN_TIMEOUT, dur * WHISPER_TIMEOUT_FACTOR)
+            print(f"  전사 중… ({dur:.1f}s, 타임아웃 {timeout:.0f}s)", flush=True)
+            t0 = time.time()
+            text = _transcribe(path, timeout)
+            dt = time.time() - t0
+            if not text:
+                print("  (빈 결과)", flush=True)
+                continue
+            print(f"  ⤷ ({dt:.1f}s) {text}", flush=True)
+            _inject(text)
+        except Exception as exc:
+            print(f"  (전사 오류 — 건너뜀: {exc})", flush=True)
+        finally:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
 
 
 def _wav_duration(path):
@@ -172,11 +214,19 @@ def _acquire_singleton_lock():
 
 def main():
     _acquire_singleton_lock()
+    # 이전 비정상 종료(전사 중 프로세스 kill)로 남은 전사 스냅샷 정리. 단일 인스턴스
+    # 락 획득 후이므로 다른 인스턴스의 진행 중 스냅샷을 건드리지 않는다.
+    for stale in glob.glob(f"{WAV}.*"):
+        try:
+            os.remove(stale)
+        except OSError:
+            pass
     if not os.path.exists(MODEL):
         raise SystemExit(f"모델 없음: {MODEL}")
     print("voice-dictation 프로토타입 — 오른쪽 Option(⌥) 홀드로 받아쓰기. 중지: Ctrl+C")
     print(f"  모델: {os.path.basename(MODEL)} | 언어: {LANG}")
     print("  (첫 전사는 모델 콜드 로드로 다소 느릴 수 있음)")
+    threading.Thread(target=_transcribe_worker, daemon=True).start()
     with keyboard.Listener(on_press=_on_press, on_release=_on_release) as listener:
         listener.join()
 

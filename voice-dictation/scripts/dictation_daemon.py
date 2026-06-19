@@ -233,6 +233,37 @@ def _transcribe(path, timeout):
     return " ".join(out.stdout.split()).strip()
 
 
+def _warmup():
+    """첫 발화의 콜드 스타트(모델 페이지캐시 적재 + Metal 파이프라인 컴파일,
+    수십 초까지 가능)를 데몬 기동 시점으로 옮긴다. 마이크를 쓰지 않고 sox -n 으로
+    0.5s 저음량 톤 WAV 를 합성해 _transcribe 와 동일 경로로 한 번 돌려 모델·Metal
+    캐시를 예열한다. 이후 매 fresh whisper-cli 프로세스가 그 캐시를 재사용하므로
+    사용자의 첫 발화가 곧장 정상 속도로 응답한다 — 콜드 콜이 끝날 때까지 후속
+    발화가 단일 워커 큐에 쌓였다가 한꺼번에 밀려드는 현상이 사라진다. 워밍업은
+    best-effort: 실패해도 데몬 동작에 영향이 없으므로 조용히 넘어간다."""
+    warm_wav = os.path.join(tempfile.gettempdir(), "voice_dictation_warmup.wav")
+    try:
+        # sox -n: 장치(마이크) 없이 합성 입력. rec 와 동일한 16kHz mono s16 포맷의
+        # 짧은 톤 — 인코더/디코더 경로를 거쳐 Metal 파이프라인을 데운다.
+        subprocess.run(
+            ["sox", "-n", "-q", "-b", str(SAMPLE_BYTES * 8), "-e", "signed-integer",
+             "-r", str(SAMPLE_RATE), "-c", str(CHANNELS), warm_wav,
+             "synth", "0.5", "sine", "440", "vol", "0.02"],
+            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        print("  워밍업 중… (모델·Metal 캐시 예열, 첫 발화 지연 제거)", flush=True)
+        t0 = time.time()
+        _transcribe(warm_wav, WHISPER_MIN_TIMEOUT)
+        print(f"  준비 완료 ({time.time() - t0:.1f}s)", flush=True)
+    except Exception as exc:
+        print(f"  (워밍업 건너뜀: {exc})", flush=True)
+    finally:
+        try:
+            os.remove(warm_wav)
+        except OSError:
+            pass
+
+
 def _inject(text):
     # 기존 클립보드 보존 → 새 텍스트 복사 → Cmd+V → 잠시 후 복원
     old = subprocess.run(["pbpaste"], capture_output=True, text=True).stdout
@@ -286,8 +317,10 @@ def main():
         raise SystemExit(f"모델 없음: {MODEL}")
     print("voice-dictation 프로토타입 — 오른쪽 Option(⌥) 홀드로 받아쓰기. 중지: Ctrl+C")
     print(f"  모델: {os.path.basename(MODEL)} | 언어: {LANG}")
-    print("  (첫 전사는 모델 콜드 로드로 다소 느릴 수 있음)")
+    print("  (기동 직후 백그라운드 워밍업으로 첫 발화 지연을 제거합니다)")
     threading.Thread(target=_transcribe_worker, daemon=True).start()
+    # 콜드 스타트 비용을 백그라운드 기동 시점으로 흡수 — 키 리스너는 즉시 활성.
+    threading.Thread(target=_warmup, daemon=True).start()
     with keyboard.Listener(on_press=_on_press, on_release=_on_release) as listener:
         listener.join()
 

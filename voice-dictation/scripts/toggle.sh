@@ -20,8 +20,13 @@ if pgrep -f "$SIG" >/dev/null 2>&1; then
   pkill -KILL -f "$SIG" 2>/dev/null
   # The daemon spawns `rec` as a child writing voice_dictation.wav; that child's
   # argv carries the WAV path, not $SIG, so reap it explicitly — otherwise it
-  # keeps holding the mic if the daemon is toggled off mid-recording.
-  pkill -f "voice_dictation.wav" 2>/dev/null
+  # keeps holding the mic if the daemon is toggled off mid-recording. Send SIGINT
+  # (not SIGTERM/KILL) first so sox closes the CoreAudio input device cleanly and
+  # releases the mic — an abruptly killed recorder leaves the orange mic indicator
+  # stuck on. SIGKILL only as a fallback for a straggler that ignored SIGINT.
+  pkill -INT -f "voice_dictation.wav" 2>/dev/null
+  sleep 0.3
+  pkill -KILL -f "voice_dictation.wav" 2>/dev/null
   echo "STOPPED"
 else
   if [[ ! -f "$DAEMON" ]]; then

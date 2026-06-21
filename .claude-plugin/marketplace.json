@@ -70,6 +70,11 @@
       "description": "Push-to-talk voice dictation daemon (whisper.cpp) transcribing speech into the active window"
     },
     {
+      "name": "remote-spawn",
+      "source": "./remote-spawn",
+      "description": "Spawn a backgrounded `claude --remote-control` session in any directory (tmux-tracked), reachable from the Claude app"
+    },
+    {
       "name": "excalidraw-host",
       "source": "./excalidraw-host",
       "description": "Self-host the official open-source Excalidraw whiteboard (clone + Vite dev server, no Docker)"

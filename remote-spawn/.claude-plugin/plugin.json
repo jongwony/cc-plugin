@@ -1,0 +1,9 @@
+{
+  "name": "remote-spawn",
+  "description": "Spawn a backgrounded `claude --remote-control` session in any directory (tmux-tracked), reachable from the Claude app",
+  "version": "3.0.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

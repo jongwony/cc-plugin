@@ -1,0 +1,9 @@
+{
+  "name": "srs",
+  "description": "Personal SRS card generator — draft cards from your notes and push them into Anki via AnkiConnect",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

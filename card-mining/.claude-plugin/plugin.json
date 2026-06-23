@@ -1,0 +1,9 @@
+{
+  "name": "card-mining",
+  "description": "Mine Anki flashcards from your cross-project Claude session archive by composing the epistemic protocols (/ascend /inquire /induce /elicit), a resumable run sidecar, and the srs Anki-push tool",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

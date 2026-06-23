@@ -103,6 +103,11 @@
       "name": "srs",
       "source": "./srs",
       "description": "Personal SRS card generator — draft cards from your notes and push them into Anki via AnkiConnect"
+    },
+    {
+      "name": "card-mining",
+      "source": "./card-mining",
+      "description": "Mine Anki flashcards from your cross-project Claude session archive — a user-attended Span composing the epistemic protocols, a resumable run sidecar, and the srs Anki-push tool"
     }
   ]
 }

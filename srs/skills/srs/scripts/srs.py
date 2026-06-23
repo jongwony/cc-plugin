@@ -3,16 +3,25 @@
 # requires-python = ">=3.9"
 # dependencies = []
 # ///
-"""Personal spaced-repetition (SRS) card store + SM-2-style grade/schedule engine.
+"""Personal SRS card generator + Anki push (via AnkiConnect).
 
-Standard library only. State lives in ~/.claude/srs/cards.json (override the
-directory with the SRS_DATA_DIR env var, e.g. for tests). A card is a dict:
+Anki owns review, scheduling, and visualization; this tool owns capture and
+provenance. Flashcards drafted from your Extended Mind (notes, decks, Claude
+sessions) are staged in a ledger at ~/.claude/srs/cards.json, then pushed into
+Anki through the AnkiConnect addon (HTTP, localhost:8765). The ledger records
+what has been pushed so re-running (e.g. from /loop) never double-sends.
 
-    id, front, back, source_refs (list[str]), due (YYYY-MM-DD),
-    interval_days (number), ease (number), reps (int), lapses (int),
-    last_reviewed (YYYY-MM-DD or null)
+Overrides: SRS_DATA_DIR (store dir); ANKICONNECT_URL (default
+http://127.0.0.1:8765).
 
-Subcommands: due | grade <id> <again|hard|good|easy> | add | review
+A staged card:
+    id, front, back, source_refs (list[str]), tags (list[str]), deck (str),
+    added (YYYY-MM-DD), pushed (YYYY-MM-DD or null), anki_note_id (int or null)
+
+`source_refs` is provenance back into the Extended Mind (e.g. "note-123#p2",
+"deck.html#slide-3"); on push each becomes an Anki tag `src::<ref>`.
+
+Subcommands: add | list | push
 """
 from __future__ import annotations
 
@@ -20,25 +29,17 @@ import argparse
 import json
 import os
 import sys
-from datetime import date, timedelta
+import urllib.error
+import urllib.request
+from datetime import date
 from pathlib import Path
 
-EASE_FLOOR = 1.3
-GRADES = ("again", "hard", "good", "easy")
-
-# New-card defaults. interval_days starts at 0; the `reps == 0` guards in
-# apply_grade give a first review an absolute interval so 0 is never multiplied.
-DEFAULTS = {
-    "source_refs": [],
-    "interval_days": 0,
-    "ease": 2.5,
-    "reps": 0,
-    "lapses": 0,
-    "last_reviewed": None,
-}
+DEFAULT_DECK = "Extended Mind"
+DEFAULT_MODEL = "Basic"
+ANKICONNECT_URL = os.environ.get("ANKICONNECT_URL", "http://127.0.0.1:8765")
 
 
-# --- state file -----------------------------------------------------------
+# --- staging ledger ------------------------------------------------------
 
 def data_dir() -> Path:
     return Path(os.environ.get("SRS_DATA_DIR", str(Path.home() / ".claude" / "srs")))
@@ -78,99 +79,59 @@ def find_card(cards: list, card_id: str):
     return None
 
 
-# --- scheduling -----------------------------------------------------------
-
-def apply_grade(card: dict, grade: str) -> dict:
-    """Apply an SM-2-style update to `card` in place and return it.
-
-    `reps` is read BEFORE it is updated so the first-review guards work off the
-    pre-update repetition count.
-    """
-    reps = int(card.get("reps", DEFAULTS["reps"]))
-    ease = float(card.get("ease", DEFAULTS["ease"]))
-    interval = float(card.get("interval_days", DEFAULTS["interval_days"]))
-    lapses = int(card.get("lapses", DEFAULTS["lapses"]))
-
-    if grade == "again":
-        interval = 1
-        ease -= 0.2
-        lapses += 1
-        reps = 0  # a lapse restarts the ladder
-    elif grade == "hard":
-        interval = 1 if reps == 0 else interval * 1.2
-        ease -= 0.15
-        reps += 1
-    elif grade == "good":
-        if reps == 0:
-            interval = 1
-        elif reps == 1:
-            interval = 3
-        else:
-            interval = interval * ease
-        reps += 1
-    elif grade == "easy":
-        interval = 3 if reps == 0 else interval * (ease + 0.15) * 1.3
-        ease += 0.15
-        reps += 1
-    else:
-        raise ValueError(f"unknown grade {grade!r}; expected one of {GRADES}")
-
-    ease = max(ease, EASE_FLOOR)
-    today = date.today()
-    card["interval_days"] = interval
-    card["ease"] = ease
-    card["reps"] = reps
-    card["lapses"] = lapses
-    card["last_reviewed"] = today.isoformat()
-    card["due"] = (today + timedelta(days=round(interval))).isoformat()
-    return card
+def ref_to_tag(ref: str) -> str:
+    # Anki tags are space-separated, so a single tag cannot contain spaces.
+    return "src::" + "_".join(ref.split())
 
 
-# --- subcommands ----------------------------------------------------------
+# --- AnkiConnect (stdlib urllib; protocol-level, no Anki SDK) -------------
 
-def cmd_due(_args) -> int:
-    today = today_str()
-    cards = load_cards()
-    due = [c for c in cards if c.get("due", today) <= today]
-    due.sort(key=lambda c: (c.get("due", ""), str(c.get("id", ""))))
-    json.dump(due, sys.stdout, ensure_ascii=False, indent=2)
-    sys.stdout.write("\n")
-    return 0
-
-
-def cmd_grade(args) -> int:
-    grade = args.grade.lower()
-    if grade not in GRADES:
-        print(f"[ERROR] grade must be one of {', '.join(GRADES)}", file=sys.stderr)
-        return 2
-    cards = load_cards()
-    card = find_card(cards, args.id)
-    if card is None:
-        print(f"[ERROR] no card with id {args.id!r}", file=sys.stderr)
-        return 1
-    apply_grade(card, grade)
-    save_cards(cards)
-    print(
-        f"{args.id}: {grade} -> due {card['due']} "
-        f"(interval {round(card['interval_days'])}d, ease {card['ease']:.2f}, "
-        f"reps {card['reps']}, lapses {card['lapses']})"
+def anki_invoke(action: str, **params):
+    """POST one AnkiConnect action and return its result, or raise RuntimeError
+    on an AnkiConnect-level error / malformed response. Connection failures
+    surface as urllib.error.URLError for the caller to translate."""
+    body = json.dumps({"action": action, "version": 6, "params": params}).encode("utf-8")
+    req = urllib.request.Request(
+        ANKICONNECT_URL, data=body, headers={"Content-Type": "application/json"}
     )
-    return 0
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        try:
+            data = json.loads(resp.read().decode("utf-8"))
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"non-JSON response from {ANKICONNECT_URL}: {exc}") from exc
+    if not isinstance(data, dict) or set(data.keys()) != {"result", "error"}:
+        raise RuntimeError(f"unexpected AnkiConnect response: {data!r}")
+    if data["error"] is not None:
+        raise RuntimeError(data["error"])
+    return data["result"]
 
+
+def card_to_note(card: dict) -> dict:
+    tags = list(card.get("tags", []) or [])
+    tags += [ref_to_tag(r) for r in (card.get("source_refs") or [])]
+    return {
+        "deckName": card.get("deck") or DEFAULT_DECK,
+        "modelName": DEFAULT_MODEL,
+        "fields": {"Front": card.get("front", ""), "Back": card.get("back", "")},
+        "tags": tags,
+        "options": {"allowDuplicate": False, "duplicateScope": "deck"},
+    }
+
+
+# --- subcommands ---------------------------------------------------------
 
 def _new_card(fields: dict) -> dict:
-    card = dict(DEFAULTS)
-    card["source_refs"] = list(fields.get("source_refs", []) or [])
-    card["id"] = fields["id"]
-    card["front"] = fields.get("front", "")
-    card["back"] = fields.get("back", "")
-    # carry through any explicitly-provided scheduling fields, else default
-    for key in ("interval_days", "ease", "reps", "lapses", "last_reviewed"):
-        if key in fields and fields[key] is not None:
-            card[key] = fields[key]
-    # a fresh card is due today unless the caller pins a date
-    card["due"] = fields.get("due") or today_str()
-    return card
+    return {
+        "id": fields["id"],
+        "front": fields.get("front", ""),
+        "back": fields.get("back", ""),
+        "source_refs": list(fields.get("source_refs") or []),
+        "tags": list(fields.get("tags") or []),
+        "deck": fields.get("deck") or DEFAULT_DECK,
+        "added": today_str(),
+        "pushed": None,
+        "anki_note_id": None,
+    }
 
 
 def cmd_add(args) -> int:
@@ -180,11 +141,11 @@ def cmd_add(args) -> int:
             "front": args.front or "",
             "back": args.back or "",
             "source_refs": args.source_ref or [],
+            "tags": args.tag or [],
         }
-        if args.due:
-            fields["due"] = args.due
+        if args.deck:
+            fields["deck"] = args.deck
     else:
-        # no --id flag: read a JSON object from stdin
         raw = sys.stdin.read()
         if not raw.strip():
             print("[ERROR] add: provide --id ... or pipe a JSON object on stdin", file=sys.stderr)
@@ -196,117 +157,104 @@ def cmd_add(args) -> int:
 
     cards = load_cards()
     if find_card(cards, fields["id"]) is not None:
-        print(f"card {fields['id']!r} already exists, skipping", file=sys.stderr)
+        print(f"card {fields['id']!r} already staged, skipping", file=sys.stderr)
         return 0
     card = _new_card(fields)
     cards.append(card)
     save_cards(cards)
-    print(f"added {card['id']} (due {card['due']})")
+    print(f"staged {card['id']} (deck '{card['deck']}', not yet pushed)")
     return 0
 
 
-def _read_grade(prompt: str):
-    """Read a grade from stdin. Accepts full words, first letters, 1-4,
-    plus s(kip)/q(uit). Returns a grade string, 'skip', 'quit', or None on EOF.
-    """
-    aliases = {
-        "1": "again", "a": "again", "again": "again",
-        "2": "hard", "h": "hard", "hard": "hard",
-        "3": "good", "g": "good", "good": "good",
-        "4": "easy", "e": "easy", "easy": "easy",
-        "s": "skip", "skip": "skip",
-        "q": "quit", "quit": "quit",
-    }
-    while True:
-        try:
-            raw = input(prompt)
-        except EOFError:
-            return None
-        choice = aliases.get(raw.strip().lower())
-        if choice is not None:
-            return choice
-        print("  enter: 1/again  2/hard  3/good  4/easy  s/skip  q/quit")
-
-
-def cmd_review(_args) -> int:
-    today = today_str()
+def cmd_list(args) -> int:
     cards = load_cards()
-    due = [c for c in cards if c.get("due", today) <= today]
-    due.sort(key=lambda c: (c.get("due", ""), str(c.get("id", ""))))
-    if not due:
-        print("No cards due. ✨")
+    if args.unpushed:
+        cards = [c for c in cards if not c.get("pushed")]
+    json.dump(cards, sys.stdout, ensure_ascii=False, indent=2)
+    sys.stdout.write("\n")
+    return 0
+
+
+def cmd_push(args) -> int:
+    cards = load_cards()
+    pending = [c for c in cards if args.all or not c.get("pushed")]
+    if not pending:
+        print("Nothing to push. ✨")
         return 0
 
-    print(f"{len(due)} card(s) due.\n")
-    reviewed = 0
-    for idx, card in enumerate(due, 1):
-        print(f"[{idx}/{len(due)}] {card.get('id', '?')}")
-        print(f"  Q: {card.get('front', '')}")
-        try:
-            input("  (press Enter to reveal)")
-        except EOFError:
-            print("\n(input closed) stopping.")
-            break
-        print(f"  A: {card.get('back', '')}")
-        if card.get("source_refs"):
-            print(f"  refs: {', '.join(card['source_refs'])}")
+    notes = [card_to_note(c) for c in pending]
+    decks = sorted({n["deckName"] for n in notes})
 
-        grade = _read_grade("  grade [1/2/3/4 | a/h/g/e | s/q]: ")
-        if grade is None:
-            print("\n(input closed) stopping.")
-            break
-        if grade == "quit":
-            print("stopping.")
-            break
-        if grade == "skip":
-            print("  skipped.\n")
-            continue
+    if args.dry_run:
+        print(f"# dry-run: would push {len(pending)} card(s) to {ANKICONNECT_URL}")
+        print(f"# ensure decks exist: {decks}")
+        json.dump({"action": "addNotes", "notes": notes}, sys.stdout, ensure_ascii=False, indent=2)
+        sys.stdout.write("\n")
+        return 0
 
-        apply_grade(card, grade)
-        save_cards(cards)  # persist after each grade so a mid-session quit keeps progress
-        reviewed += 1
+    try:
+        for deck in decks:
+            anki_invoke("createDeck", deck=deck)  # idempotent
+        results = anki_invoke("addNotes", notes=notes)
+    except urllib.error.URLError as exc:
         print(
-            f"  -> {grade}: next due {card['due']} "
-            f"(interval {round(card['interval_days'])}d)\n"
+            f"[ERROR] cannot reach AnkiConnect at {ANKICONNECT_URL}: {exc.reason}\n"
+            f"        Is Anki running with the AnkiConnect addon installed? (open -a Anki)",
+            file=sys.stderr,
         )
+        return 1
+    except RuntimeError as exc:
+        print(f"[ERROR] AnkiConnect: {exc}", file=sys.stderr)
+        return 1
 
-    print(f"\nReviewed {reviewed} card(s).")
-    return 0
+    # addNotes returns a parallel list: a note id on success, null when Anki
+    # rejected the note (most commonly a duplicate within the deck).
+    pushed = failed = 0
+    for card, note_id in zip(pending, results):
+        if note_id is not None:
+            card["pushed"] = today_str()
+            card["anki_note_id"] = note_id
+            pushed += 1
+        else:
+            failed += 1
+            print(f"  ! {card['id']}: rejected by Anki (likely a duplicate)", file=sys.stderr)
+    save_cards(cards)
+
+    summary = f"pushed {pushed} card(s) to Anki"
+    if failed:
+        summary += f", {failed} rejected"
+    print(summary + f" (decks: {', '.join(decks)})")
+    return 0 if failed == 0 else 1
 
 
-# --- entry point ----------------------------------------------------------
+# --- entry point ---------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="srs", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("due", help="print cards due today or earlier, as JSON")
-
-    p_grade = sub.add_parser("grade", help="apply a grade to a card and reschedule it")
-    p_grade.add_argument("id")
-    p_grade.add_argument("grade", help="again | hard | good | easy")
-
-    p_add = sub.add_parser("add", help="append a card (--id ... or JSON on stdin)")
+    p_add = sub.add_parser("add", help="stage a card (--id ... or JSON on stdin)")
     p_add.add_argument("--id")
     p_add.add_argument("--front")
     p_add.add_argument("--back")
     p_add.add_argument("--source-ref", action="append", dest="source_ref",
-                       help="provenance ref; repeat for multiple")
-    p_add.add_argument("--due", help="override the initial due date (YYYY-MM-DD)")
+                       help="provenance ref; repeat for multiple (→ Anki tag src::<ref>)")
+    p_add.add_argument("--tag", action="append", dest="tag", help="extra Anki tag; repeat")
+    p_add.add_argument("--deck", help=f"target Anki deck (default '{DEFAULT_DECK}')")
 
-    sub.add_parser("review", help="interactive review loop over due cards")
+    p_list = sub.add_parser("list", help="list staged cards as JSON")
+    p_list.add_argument("--unpushed", action="store_true", help="only cards not yet pushed")
+
+    p_push = sub.add_parser("push", help="push staged cards into Anki via AnkiConnect")
+    p_push.add_argument("--all", action="store_true", help="re-push every card, not just un-pushed")
+    p_push.add_argument("--dry-run", action="store_true",
+                        help="print the AnkiConnect payload without sending")
     return parser
 
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
-    handlers = {
-        "due": cmd_due,
-        "grade": cmd_grade,
-        "add": cmd_add,
-        "review": cmd_review,
-    }
-    return handlers[args.cmd](args)
+    return {"add": cmd_add, "list": cmd_list, "push": cmd_push}[args.cmd](args)
 
 
 if __name__ == "__main__":

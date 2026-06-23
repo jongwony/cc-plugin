@@ -102,7 +102,7 @@
     {
       "name": "srs",
       "source": "./srs",
-      "description": "Personal spaced-repetition (SRS) card store + review"
+      "description": "Personal SRS card generator — draft cards from your notes and push them into Anki via AnkiConnect"
     }
   ]
 }

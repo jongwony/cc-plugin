@@ -34,6 +34,10 @@ ATTACH_ENV="TMUX_TMPDIR=$TMUX_TMPDIR"
 # Reduce a path/name to a tmux- and shell-safe token: [A-Za-z0-9._-], no runs of '-'.
 sanitize() { printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '-' | sed 's/--*/-/g; s/^-//; s/-$//'; }
 
+# Preflight a required binary: fail with an actionable error if it is not on PATH,
+# instead of letting a later command fail mid-flight (or, worse, printing success).
+need() { command -v "$1" >/dev/null 2>&1 || { echo "ERROR: '$1' not found on PATH (required by rc-spawn)" >&2; return 127; }; }
+
 spawn() {
   local dir="$1" name="$2" prompt="$3"
   [ -n "$dir" ] || { echo "usage: rc-spawn.sh spawn <dir> [name] [prompt]" >&2; return 2; }
@@ -41,6 +45,10 @@ spawn() {
   [ -n "$name" ] || name="$(basename "$dir")"
   name="$(sanitize "$name")"
   [ -n "$name" ] || { echo "ERROR: name resolves to empty (dir basename has no usable chars) — pass an explicit name" >&2; return 2; }
+  # Preflight AFTER arg validation (a usage error still exits 2, not 127), before any
+  # work: tmux runs the session, claude runs inside it — missing either fails loudly here.
+  need tmux || return 127
+  need claude || return 127
   local sess="rc-$name"
   if tmux has-session -t "$sess" 2>/dev/null; then
     # report the dir the session is ACTUALLY running in (not the one just asked for),
@@ -48,6 +56,9 @@ spawn() {
     local rdir; rdir="$(tmux display-message -p -t "$sess" '#{session_path}' 2>/dev/null)"
     echo "ALREADY-RUNNING $name  (running in: ${rdir:-?})  attach: $ATTACH_ENV tmux attach -t $sess"
     [ "$rdir" = "$dir" ] || echo "  note: requested $dir but rc-$name already runs in ${rdir:-?} — pass an explicit name to run a second session"
+    # A prompt can't be injected into a live session from here — warn instead of
+    # silently dropping it, so the caller doesn't believe it was queued.
+    [ -n "$prompt" ] && echo "  warning: prompt NOT delivered — rc-$name is already running; attach and send it, or kill + re-spawn" >&2
     return 0
   fi
   # Fresh session id, minted only once we're actually spawning (below the
@@ -69,7 +80,13 @@ spawn() {
     cmd="$cmd -- '$esc'"
   fi
   # Detached tmux session running claude directly; when claude exits the session ends.
-  tmux new-session -d -s "$sess" -x 220 -y 55 -c "$dir" "$cmd"
+  # Guard the launch: if new-session fails (server can't start, geometry rejected, a
+  # racing same-name spawn won), do NOT print STARTED — the caller relays STARTED as a
+  # live, reachable session, so a false success sends them chasing one that never was.
+  if ! tmux new-session -d -s "$sess" -x 220 -y 55 -c "$dir" "$cmd"; then
+    echo "ERROR: failed to launch tmux session $sess (tmux server unavailable, or '$sess' already taken)" >&2
+    return 1
+  fi
   echo "STARTED $name  (dir: $dir)"
   echo "SESSION $sid"
   [ -n "$prompt" ] && echo "  -> initial prompt queued (auto-submits once the session is ready)"
@@ -81,6 +98,7 @@ spawn() {
 }
 
 list() {
+  need tmux || return 127
   local out
   out="$(tmux list-sessions -F '#{session_name}'$'\t''#{session_path}' 2>/dev/null \
         | awk -F'\t' '$1 ~ /^rc-/ {printf "  %-22s %s\n", substr($1,4), $2}')"
@@ -95,6 +113,7 @@ list() {
 kill_one() {
   local name; name="$(sanitize "$1")"
   [ -n "$name" ] || { echo "usage: rc-spawn.sh kill <name>" >&2; return 2; }
+  need tmux || return 127
   local sess="rc-$name" pids pid found=0 i
   # sanitize() allows '.', the only ERE metachar a name can carry — escape it so
   # `kill my.proj` can't also match `--name myXproj` (a different session).
@@ -105,13 +124,23 @@ kill_one() {
   for pid in $pids; do
     kill "$pid" 2>/dev/null && { echo "SIGTERM -> claude pid $pid ($name)"; found=1; }
   done
+  # ps can momentarily fail to read a live claude's arg string (KERN_PROCARGS, see
+  # header), so an empty match does NOT prove the process is gone. If the session is
+  # still live, SIGTERM the pane's process directly — the hard kill-session below would
+  # otherwise cut off SessionEnd hooks (anamnesis) on a process that was merely unreadable.
+  if [ "$found" = 0 ] && tmux has-session -t "$sess" 2>/dev/null; then
+    pid="$(tmux list-panes -t "$sess" -F '#{pane_pid}' 2>/dev/null | head -1)"
+    [ -n "$pid" ] && kill "$pid" 2>/dev/null && { echo "SIGTERM -> tmux pane pid $pid ($name)"; found=1; }
+  fi
   # claude exiting cleanly ends its own tmux session (see spawn), so wait for that
-  # instead of racing it — gives SessionEnd hooks (anamnesis) time to flush. Only
-  # hard-drop the session if it outlives the bounded wait (~15s).
-  if [ "$found" = 1 ]; then
-    for i in $(seq 1 30); do
+  # instead of racing it — gives SessionEnd hooks (anamnesis) time to flush. Gate the
+  # wait on the session still being live, not on `found`, so a live-but-ps-unreadable
+  # session still gets its grace period. Poll at 0.1s so a clean exit returns promptly;
+  # 150 ticks keep the ~15s ceiling before the hard drop below.
+  if tmux has-session -t "$sess" 2>/dev/null; then
+    for i in $(seq 1 150); do
       tmux has-session -t "$sess" 2>/dev/null || break
-      sleep 0.5
+      sleep 0.1
     done
   fi
   if tmux has-session -t "$sess" 2>/dev/null; then

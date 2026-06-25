@@ -22,7 +22,7 @@
 # silently matches nothing. `ps -o command` does see it. SIGTERM (not -9) lets
 # SessionEnd hooks (e.g. anamnesis memory write) flush before exit.
 
-RC_SOCK="${TMUX_TMPDIR:-$HOME/.tmux-sockets}/tmux-$(id -u)/default"
+RC_SOCK="$HOME/.tmux-sockets/tmux-$(id -u)/default"
 mkdir -p "$(dirname "$RC_SOCK")"
 
 # Reduce a path/name to a tmux- and shell-safe token: [A-Za-z0-9._-], no runs of '-'.

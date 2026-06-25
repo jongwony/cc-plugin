@@ -22,14 +22,8 @@
 # silently matches nothing. `ps -o command` does see it. SIGTERM (not -9) lets
 # SessionEnd hooks (e.g. anamnesis memory write) flush before exit.
 
-export TMUX_TMPDIR="${TMUX_TMPDIR:-$HOME/.tmux-sockets}"
-mkdir -p "$TMUX_TMPDIR"
-unset TMUX  # target the tmux daemon, not a nested client, if invoked from inside tmux
-
-# Copy-paste hint prefix. The user's interactive shell does NOT inherit the
-# relocated TMUX_TMPDIR above, so a bare `tmux attach`/`tmux ls` targets the
-# default socket and fails ("no server running"). Printed hints carry the socket.
-ATTACH_ENV="TMUX_TMPDIR=$TMUX_TMPDIR"
+RC_SOCK="${TMUX_TMPDIR:-$HOME/.tmux-sockets}/tmux-$(id -u)/default"
+mkdir -p "$(dirname "$RC_SOCK")"
 
 # Reduce a path/name to a tmux- and shell-safe token: [A-Za-z0-9._-], no runs of '-'.
 sanitize() { printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '-' | sed 's/--*/-/g; s/^-//; s/-$//'; }
@@ -50,11 +44,11 @@ spawn() {
   need tmux || return 127
   need claude || return 127
   local sess="rc-$name"
-  if tmux has-session -t "$sess" 2>/dev/null; then
+  if tmux -S "$RC_SOCK" has-session -t "$sess" 2>/dev/null; then
     # report the dir the session is ACTUALLY running in (not the one just asked for),
     # and flag a basename collision so it isn't a silent no-op.
-    local rdir; rdir="$(tmux display-message -p -t "$sess" '#{session_path}' 2>/dev/null)"
-    echo "ALREADY-RUNNING $name  (running in: ${rdir:-?})  attach: $ATTACH_ENV tmux attach -t $sess"
+    local rdir; rdir="$(tmux -S "$RC_SOCK" display-message -p -t "$sess" '#{session_path}' 2>/dev/null)"
+    echo "ALREADY-RUNNING $name  (running in: ${rdir:-?})  attach: tmux -S \"$RC_SOCK\" attach -t $sess"
     [ "$rdir" = "$dir" ] || echo "  note: requested $dir but rc-$name already runs in ${rdir:-?} — pass an explicit name to run a second session"
     # A prompt can't be injected into a live session from here — warn instead of
     # silently dropping it, so the caller doesn't believe it was queued.
@@ -83,7 +77,7 @@ spawn() {
   # Guard the launch: if new-session fails (server can't start, geometry rejected, a
   # racing same-name spawn won), do NOT print STARTED — the caller relays STARTED as a
   # live, reachable session, so a false success sends them chasing one that never was.
-  if ! tmux new-session -d -s "$sess" -x 220 -y 55 -c "$dir" "$cmd"; then
+  if ! tmux -S "$RC_SOCK" new-session -d -s "$sess" -x 220 -y 55 -c "$dir" "$cmd"; then
     echo "ERROR: failed to launch tmux session $sess (tmux server unavailable, or '$sess' already taken)" >&2
     return 1
   fi
@@ -91,7 +85,7 @@ spawn() {
   echo "SESSION $sid"
   [ -n "$prompt" ] && echo "  -> initial prompt queued (auto-submits once the session is ready)"
   echo "  -> now reachable in the Claude app (claude.ai/code + mobile)"
-  echo "  -> attach: $ATTACH_ENV tmux attach -t $sess   |   kill: rc-spawn.sh kill $name"
+  echo "  -> attach: tmux -S \"$RC_SOCK\" attach -t $sess   |   kill: rc-spawn.sh kill $name"
   echo "  note: first launch in a never-opened dir shows a one-time folder-trust prompt"
   echo "        inside the session (any queued prompt waits behind it) — attach once,"
   echo "        press Enter, detach (Ctrl-b d); the prompt then submits."
@@ -100,11 +94,11 @@ spawn() {
 list() {
   need tmux || return 127
   local out
-  out="$(tmux list-sessions -F '#{session_name}'$'\t''#{session_path}' 2>/dev/null \
+  out="$(tmux -S "$RC_SOCK" list-sessions -F '#{session_name}'$'\t''#{session_path}' 2>/dev/null \
         | awk -F'\t' '$1 ~ /^rc-/ {printf "  %-22s %s\n", substr($1,4), $2}')"
   if [ -n "$out" ]; then
     echo "running remote-control sessions:"; printf '%s\n' "$out"
-    echo "  attach: $ATTACH_ENV tmux attach -t rc-<name>   |   ls: $ATTACH_ENV tmux ls"
+    echo "  attach: tmux -S \"$RC_SOCK\" attach -t rc-<name>   |   ls: tmux -S \"$RC_SOCK\" ls"
   else
     echo "(no rc-* sessions running)"
   fi
@@ -128,8 +122,8 @@ kill_one() {
   # header), so an empty match does NOT prove the process is gone. If the session is
   # still live, SIGTERM the pane's process directly — the hard kill-session below would
   # otherwise cut off SessionEnd hooks (anamnesis) on a process that was merely unreadable.
-  if [ "$found" = 0 ] && tmux has-session -t "$sess" 2>/dev/null; then
-    pid="$(tmux list-panes -t "$sess" -F '#{pane_pid}' 2>/dev/null | head -1)"
+  if [ "$found" = 0 ] && tmux -S "$RC_SOCK" has-session -t "$sess" 2>/dev/null; then
+    pid="$(tmux -S "$RC_SOCK" list-panes -t "$sess" -F '#{pane_pid}' 2>/dev/null | head -1)"
     [ -n "$pid" ] && kill "$pid" 2>/dev/null && { echo "SIGTERM -> tmux pane pid $pid ($name)"; found=1; }
   fi
   # claude exiting cleanly ends its own tmux session (see spawn), so wait for that
@@ -137,14 +131,14 @@ kill_one() {
   # wait on the session still being live, not on `found`, so a live-but-ps-unreadable
   # session still gets its grace period. Poll at 0.1s so a clean exit returns promptly;
   # 150 ticks keep the ~15s ceiling before the hard drop below.
-  if tmux has-session -t "$sess" 2>/dev/null; then
+  if tmux -S "$RC_SOCK" has-session -t "$sess" 2>/dev/null; then
     for i in $(seq 1 150); do
-      tmux has-session -t "$sess" 2>/dev/null || break
+      tmux -S "$RC_SOCK" has-session -t "$sess" 2>/dev/null || break
       sleep 0.1
     done
   fi
-  if tmux has-session -t "$sess" 2>/dev/null; then
-    tmux kill-session -t "$sess" 2>/dev/null && { echo "dropped tmux $sess"; found=1; }
+  if tmux -S "$RC_SOCK" has-session -t "$sess" 2>/dev/null; then
+    tmux -S "$RC_SOCK" kill-session -t "$sess" 2>/dev/null && { echo "dropped tmux $sess"; found=1; }
   fi
   [ "$found" = 0 ] && echo "NOT-FOUND $name"
   return 0

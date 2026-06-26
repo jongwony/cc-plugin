@@ -37,6 +37,7 @@ Flags:
     --keep-work        keep the intermediate media/work directory
 """
 import argparse
+import html
 import importlib.util
 import shutil
 import sys
@@ -153,6 +154,14 @@ def main():
             if args.output
             else Path.home() / "manim-output" / f"{scene_name}{EXT[fmt]}"
         )
+        # Keep the container extension honest: the bytes are always EXT[fmt] (e.g.
+        # --transparent forces webm), so a mismatched --output suffix would mislabel
+        # the file and break the served <video>/<img> MIME type.
+        if out_path.suffix.lower() != EXT[fmt]:
+            corrected = out_path.with_suffix(EXT[fmt])
+            if args.output:
+                print(f"Note: output suffix '{out_path.suffix}' != {fmt}; writing '{corrected.name}'.", file=sys.stderr)
+            out_path = corrected
 
         overrides = {
             "format": fmt,
@@ -181,10 +190,13 @@ def main():
         if not args.keep_work:
             shutil.rmtree(work_dir, ignore_errors=True)
 
+    # Escape the path into the HTML attribute — a path may legally contain " & < >,
+    # which would break the snippet's markup when pasted.
+    src = html.escape(str(out_path), quote=True)
     if fmt == "gif":
-        snippet = f'<img src="{out_path}" alt="{scene_name}" loading="lazy">'
+        snippet = f'<img src="{src}" alt="{html.escape(scene_name)}" loading="lazy">'
     else:
-        snippet = f'<video autoplay muted loop playsinline src="{out_path}"></video>'
+        snippet = f'<video autoplay muted loop playsinline src="{src}"></video>'
 
     print(f"\nMANIM_OUTPUT_PATH={out_path}")
     print("\nEmbed snippet (swap src for your served URL when hosting):")

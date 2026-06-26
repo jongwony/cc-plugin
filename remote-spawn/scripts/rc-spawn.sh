@@ -8,6 +8,10 @@
 #                                 [prompt], if given, is auto-submitted as the first
 #                                 message (passed positionally to claude). To pass a
 #                                 prompt you must also pass a name.
+#   resume <dir> <name> <session-id>   relaunch an EXISTING (stopped) session by its
+#                                 session-id — `claude --remote-control --resume <id>`,
+#                                 no new id minted. For the occupancy-aware continuation
+#                                 policy's resume branch (under-knob, related follow-up).
 #   list                 list running rc-* sessions and their dirs
 #   kill  <name>         SIGTERM the claude session, then drop its tmux session
 #
@@ -97,6 +101,47 @@ spawn() {
   echo "        press Enter, detach (Ctrl-b d); the prompt then submits."
 }
 
+# Relaunch an EXISTING (stopped) session by its session-id — no new id minted. Used by
+# the occupancy-aware worker-continuation policy's RESUME branch (a related follow-up
+# whose old session is under the distill knob): cheapest, lossless continuation.
+resume() {
+  local dir="$1" name="$2" sid="$3"
+  [ -n "$dir" ] && [ -n "$name" ] && [ -n "$sid" ] || { echo "usage: rc-spawn.sh resume <dir> <name> <session-id>" >&2; return 2; }
+  dir="$(cd "$dir" 2>/dev/null && pwd)" || { echo "ERROR: no such dir: $1" >&2; return 1; }
+  name="$(sanitize "$name")"
+  [ -n "$name" ] || { echo "ERROR: name resolves to empty (pass an explicit name)" >&2; return 2; }
+  # Claude stores the session file lowercase; the occupancy cache may carry any case.
+  sid="$(printf '%s' "$sid" | tr 'A-Z' 'a-z')"
+  need tmux || return 127
+  need claude || return 127
+  local sess="rc-$name"
+  # resume targets a STOPPED session (its on-disk session file). A live rc-<name> cannot
+  # be resumed — that would double-process the same session file — so report instead of
+  # clobbering it. (The policy reaches resume only for a worker whose process has ended.)
+  if tmux has-session -t "$sess" 2>/dev/null; then
+    local rdir; rdir="$(tmux display-message -p -t "$sess" '#{session_path}' 2>/dev/null)"
+    echo "ALREADY-RUNNING $name  (running in: ${rdir:-?})  attach: $ATTACH_ENV tmux attach -t $sess"
+    echo "  note: resume targets a STOPPED session — rc-$name is live; kill it first to re-resume" >&2
+    return 0
+  fi
+  # User-confirmed composition: the `--remote-control` FLAG composes with `--resume <id>`
+  # (the `claude remote-control` SUBCOMMAND would reject channel flags). `--name` is
+  # deliberately OMITTED — only `--remote-control --resume` is confirmed to compose, and
+  # a resume restores the session's stored name anyway. The tmux session is still
+  # `rc-<name>`, so liveness (isWorkerSessionAlive) and `list` keep working; `kill <name>`
+  # falls back to its tmux-pane path (its ps-grep on `--name` won't match a resumed proc).
+  # sid is a UUID (safe chars); no quoting needed.
+  local cmd="claude --remote-control --resume $sid"
+  if ! tmux new-session -d -s "$sess" -x 220 -y 55 -c "$dir" "$cmd"; then
+    echo "ERROR: failed to launch tmux session $sess (tmux server unavailable, or '$sess' already taken)" >&2
+    return 1
+  fi
+  echo "RESUMED $name  (dir: $dir)"
+  echo "SESSION $sid"
+  echo "  -> resuming session $sid in the Claude app (claude.ai/code + mobile)"
+  echo "  -> attach: $ATTACH_ENV tmux attach -t $sess   |   kill: rc-spawn.sh kill $name"
+}
+
 list() {
   need tmux || return 127
   local out
@@ -151,8 +196,9 @@ kill_one() {
 }
 
 case "${1:-}" in
-  spawn) spawn "${2:-}" "${3:-}" "${4:-}";;
-  list)  list;;
-  kill)  kill_one "${2:-}";;
-  *) echo "usage: rc-spawn.sh {spawn <dir> [name] [prompt] | list | kill <name>}" >&2; exit 2;;
+  spawn)  spawn "${2:-}" "${3:-}" "${4:-}";;
+  resume) resume "${2:-}" "${3:-}" "${4:-}";;
+  list)   list;;
+  kill)   kill_one "${2:-}";;
+  *) echo "usage: rc-spawn.sh {spawn <dir> [name] [prompt] | resume <dir> <name> <session-id> | list | kill <name>}" >&2; exit 2;;
 esac

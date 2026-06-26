@@ -98,6 +98,11 @@
       "name": "hotspot-toggle",
       "source": "./hotspot-toggle",
       "description": "Mac Wi-Fi toggle between iPhone Personal Hotspot and known networks via Control Center automation"
+    },
+    {
+      "name": "manim",
+      "source": "./manim",
+      "description": "Render short headless Manim animations (math / parametric / 3D / equations) to browser-embeddable mp4/webm/gif with a ready-to-paste embed snippet"
     }
   ]
 }

@@ -112,6 +112,13 @@ resume() {
   [ -n "$name" ] || { echo "ERROR: name resolves to empty (pass an explicit name)" >&2; return 2; }
   # Claude stores the session file lowercase; the occupancy cache may carry any case.
   sid="$(printf '%s' "$sid" | tr 'A-Z' 'a-z')"
+  # Re-establish the safe-chars invariant BEFORE sid reaches the `sh -c` command string
+  # below. spawn()'s sid is uuidgen output (safe by construction); resume()'s sid is
+  # caller-supplied (occupancy cache / CLI arg), so an unvalidated sid carrying whitespace
+  # or shell metachars would be word-split / injected when tmux runs the command via sh -c.
+  if [[ ! "$sid" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+    echo "ERROR: session-id is not a valid UUID: $sid" >&2; return 2
+  fi
   need tmux || return 127
   need claude || return 127
   local sess="rc-$name"
@@ -121,7 +128,11 @@ resume() {
   if tmux has-session -t "$sess" 2>/dev/null; then
     local rdir; rdir="$(tmux display-message -p -t "$sess" '#{session_path}' 2>/dev/null)"
     echo "ALREADY-RUNNING $name  (running in: ${rdir:-?})  attach: $ATTACH_ENV tmux attach -t $sess"
-    echo "  note: resume targets a STOPPED session — rc-$name is live; kill it first to re-resume" >&2
+    # Mirror spawn()'s dir-mismatch guard: if the live rc-<name> is in a different dir than
+    # requested, it is likely an UNRELATED session, not the resume target — flag it so the
+    # "kill it first" advice below can't lead to killing the wrong session's in-flight work.
+    [ "$rdir" = "$dir" ] || echo "  note: requested $dir but rc-$name is live in ${rdir:-?} — likely a DIFFERENT session than the one you meant to resume; verify before killing"
+    echo "  note: resume targets a STOPPED session — rc-$name is live; kill it first to re-resume"
     return 0
   fi
   # User-confirmed composition: the `--remote-control` FLAG composes with `--resume <id>`
@@ -130,7 +141,7 @@ resume() {
   # a resume restores the session's stored name anyway. The tmux session is still
   # `rc-<name>`, so liveness (isWorkerSessionAlive) and `list` keep working; `kill <name>`
   # falls back to its tmux-pane path (its ps-grep on `--name` won't match a resumed proc).
-  # sid is a UUID (safe chars); no quoting needed.
+  # sid is validated as a UUID above (safe chars); no quoting needed.
   local cmd="claude --remote-control --resume $sid"
   if ! tmux new-session -d -s "$sess" -x 220 -y 55 -c "$dir" "$cmd"; then
     echo "ERROR: failed to launch tmux session $sess (tmux server unavailable, or '$sess' already taken)" >&2

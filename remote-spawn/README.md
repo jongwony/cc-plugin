@@ -8,6 +8,7 @@ dictation.
 ```bash
 bash scripts/rc-spawn.sh spawn ~/projects/foo        # -> rc-foo, now in the app
 bash scripts/rc-spawn.sh spawn ~/projects/foo api    # custom name -> rc-api
+bash scripts/rc-spawn.sh resume ~/projects/foo foo <uuid>  # relaunch a STOPPED session by id
 bash scripts/rc-spawn.sh list                        # running rc-* sessions + dirs
 bash scripts/rc-spawn.sh kill foo                     # SIGTERM + drop tmux session
 ```

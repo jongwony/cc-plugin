@@ -24,6 +24,11 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-spawn.sh" spawn <dir> [name]
 # prompt is passed to claude after a `--` separator (claude --remote-control ... -- "<prompt>").
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-spawn.sh" spawn <dir> <name> "<prompt>"
 
+# Resume an EXISTING (stopped) session by its session-id — relaunches it under the
+# SAME id (no new id minted). Targets a session whose claude process has ended; a
+# still-live rc-<name> is reported (not clobbered). All three args are required.
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-spawn.sh" resume <dir> <name> <session-id>
+
 # List running sessions
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-spawn.sh" list
 
@@ -35,7 +40,12 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-spawn.sh" kill <name>
   the Claude app. The accompanying `SESSION <uuid>` line is the new session's id
   (a lowercased UUID, passed to claude as `--session-id`). Relay the attach/kill
   hints from the output.
-- `ALREADY-RUNNING <name>` → idempotent; a session for that name already exists.
+- `RESUMED <name>` → an existing session (the passed `<session-id>`) was relaunched
+  under the same id and is live again in the Claude app; the `SESSION <uuid>` line
+  echoes the resumed id. Relay the attach/kill hints as with `STARTED`.
+- `ALREADY-RUNNING <name>` → idempotent; a session for that name already exists. On
+  `resume` this means rc-`<name>` is still live (resume targets a *stopped* session),
+  so it was reported, not relaunched — kill it first to re-resume.
 - `NOT-FOUND <name>` → nothing matched on kill.
 
 Notes to pass on when relevant:

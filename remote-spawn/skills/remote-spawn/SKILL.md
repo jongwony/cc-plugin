@@ -24,8 +24,8 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-spawn.sh" spawn <dir> [name]
 # prompt is passed to claude after a `--` separator (claude --remote-control ... -- "<prompt>").
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-spawn.sh" spawn <dir> <name> "<prompt>"
 
-# Resume a STOPPED session by its id (relaunched under the same id; a live rc-<name> is reported, not clobbered).
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-spawn.sh" resume <dir> <name> <session-id>
+# Resume a STOPPED session by id or name/search term (a live rc-<name> is reported, not clobbered).
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-spawn.sh" resume <dir> <name> <session-id|search-term>
 
 # List running sessions
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-spawn.sh" list
@@ -38,7 +38,7 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-spawn.sh" kill <name>
   the Claude app. The accompanying `SESSION <uuid>` line is the new session's id
   (a lowercased UUID, passed to claude as `--session-id`). Relay the attach/kill
   hints from the output.
-- `RESUMED <name>` → an existing session was relaunched under its id; relay attach/kill hints as with `STARTED`.
+- `RESUMED <name>` → an existing session was relaunched; relay attach/kill hints as with `STARTED`.
 - `ALREADY-RUNNING <name>` → a session for that name already exists (on `resume`: it's still live, so not relaunched).
 - `NOT-FOUND <name>` → nothing matched on kill.
 

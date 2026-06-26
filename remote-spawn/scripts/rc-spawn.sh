@@ -8,10 +8,10 @@
 #                                 [prompt], if given, is auto-submitted as the first
 #                                 message (passed positionally to claude). To pass a
 #                                 prompt you must also pass a name.
-#   resume <dir> <name> <session-id>   relaunch an EXISTING (stopped) session by its
-#                                 session-id — `claude --remote-control --resume <id>`,
-#                                 no new id minted. For the occupancy-aware continuation
-#                                 policy's resume branch (under-knob, related follow-up).
+#   resume <dir> <name> <session-id|search-term>   relaunch an EXISTING (stopped) session by a
+#                                 session-id or name/search term — `claude --remote-control
+#                                 --resume <value>`, no new id minted. For the occupancy-aware
+#                                 continuation policy's resume branch (under-knob, related follow-up).
 #   list                 list running rc-* sessions and their dirs
 #   kill  <name>         SIGTERM the claude session, then drop its tmux session
 #
@@ -101,17 +101,15 @@ spawn() {
   echo "        press Enter, detach (Ctrl-b d); the prompt then submits."
 }
 
-# Relaunch an EXISTING (stopped) session by its session-id — no new id minted. Used by
+# Relaunch an EXISTING (stopped) session by a session-id or name/search term — no new id minted. Used by
 # the occupancy-aware worker-continuation policy's RESUME branch (a related follow-up
 # whose old session is under the distill knob): cheapest, lossless continuation.
 resume() {
   local dir="$1" name="$2" sid="$3"
-  [ -n "$dir" ] && [ -n "$name" ] && [ -n "$sid" ] || { echo "usage: rc-spawn.sh resume <dir> <name> <session-id>" >&2; return 2; }
+  [ -n "$dir" ] && [ -n "$name" ] && [ -n "$sid" ] || { echo "usage: rc-spawn.sh resume <dir> <name> <session-id|search-term>" >&2; return 2; }
   dir="$(cd "$dir" 2>/dev/null && pwd)" || { echo "ERROR: no such dir: $1" >&2; return 1; }
   name="$(sanitize "$name")"
   [ -n "$name" ] || { echo "ERROR: name resolves to empty (pass an explicit name)" >&2; return 2; }
-  # Claude stores the session file lowercase; the occupancy cache may carry any case.
-  sid="$(printf '%s' "$sid" | tr 'A-Z' 'a-z')"
   need tmux || return 127
   need claude || return 127
   local sess="rc-$name"
@@ -202,5 +200,5 @@ case "${1:-}" in
   resume) resume "${2:-}" "${3:-}" "${4:-}";;
   list)   list;;
   kill)   kill_one "${2:-}";;
-  *) echo "usage: rc-spawn.sh {spawn <dir> [name] [prompt] | resume <dir> <name> <session-id> | list | kill <name>}" >&2; exit 2;;
+  *) echo "usage: rc-spawn.sh {spawn <dir> [name] [prompt] | resume <dir> <name> <session-id|search-term> | list | kill <name>}" >&2; exit 2;;
 esac

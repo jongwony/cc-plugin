@@ -72,12 +72,16 @@ def _start_recording():
         os.remove(WAV)
     except FileNotFoundError:
         pass
-    # 16kHz mono s16. -b/-e 로 컴팩트 s16 을 선호 포맷으로 요청한다(정확성용은
-    # 아님 — _wav_duration 은 파일의 `fmt ` 청크에서 실제 포맷을 읽으므로 이 요청이
-    # 미반영돼도 길이는 정확). SIGINT 으로 종료해야 sox 가 WAV 헤더를 정상 finalize 함.
+    # mono s16, 장치 네이티브 샘플레이트로 캡처 — -r 을 강제하지 *않는다*.
+    # AirPods 등 블루투스(HFP) 입력의 네이티브는 24kHz인데 -r 16000 을 강제하면
+    # SoX coreaudio 경로의 리샘플이 스트림을 잡음으로 손상시킨다(같은 AirPods를
+    # 네이티브 레이트로 받는 정상 앱에선 깨끗). whisper-cli 가 임의 입력 레이트를
+    # 내부에서 16kHz 로 리샘플하므로 네이티브 캡처를 그대로 넘기면 된다. -b/-e 는
+    # 컴팩트 s16 선호 요청일 뿐(정확성용 아님 — _wav_duration 이 `fmt ` 청크에서
+    # 실제 포맷을 읽음). SIGINT 으로 종료해야 sox 가 WAV 헤더를 정상 finalize 함.
     _rec_proc = subprocess.Popen(
         ["rec", "-q", "-b", str(SAMPLE_BYTES * 8), "-e", "signed-integer",
-         "-r", str(SAMPLE_RATE), "-c", str(CHANNELS), WAV],
+         "-c", str(CHANNELS), WAV],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )

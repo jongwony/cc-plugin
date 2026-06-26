@@ -1,9 +1,0 @@
-{
-  "name": "hotspot-toggle",
-  "description": "Mac Wi-Fi toggle between iPhone Personal Hotspot and known networks via Control Center automation",
-  "version": "1.0.0",
-  "author": {
-    "name": "Jongwon Choi",
-    "url": "https://github.com/jongwony"
-  }
-}

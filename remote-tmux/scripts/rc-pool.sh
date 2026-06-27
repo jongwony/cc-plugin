@@ -67,7 +67,11 @@ PY
   if tmux has-session -t "$sess" 2>/dev/null; then
     echo "ALREADY-RUNNING $name  attach: $ATTACH_ENV tmux attach -t $sess"; return 0
   fi
-  if ! tmux new-session -d -s "$sess" -x 220 -y 55 -c "$dir" "bash '$SELF' _run '$dir' '$name' '$cap'"; then
+  # Build the pane command with printf %q so a SELF or dir path containing spaces or quotes
+  # can't break tmux's shell parse or inject syntax before _run. name is sanitized and cap is
+  # numeric, but quote them uniformly. tmux runs this string via its shell, re-entering _run.
+  local cmd; cmd="$(printf 'bash %q _run %q %q %q' "$SELF" "$dir" "$name" "$cap")"
+  if ! tmux new-session -d -s "$sess" -x 220 -y 55 -c "$dir" "$cmd"; then
     echo "ERROR: failed to launch tmux session $sess" >&2; return 1
   fi
   echo "STARTED-POOL $name  (dir: $dir, capacity: $cap, spawn: worktree, self-restarting)"
@@ -101,6 +105,14 @@ down() {
   # preceded by `-`, not whitespace). Both tools default the name to the project basename, so
   # the un-anchored pattern would cross-match rc-<name> and SIGTERM the wrong process.
   pid="$(ps -Ao pid,command | grep -E "[[:space:]]remote-control --name ${rname}([[:space:]]|\$)" | grep -v grep | awk '{print $1}' | head -1)"
+  # Fallback when the ps|grep misses (argv momentarily unreadable, or the rendered command
+  # shape differs from the anchor): take the pane's shell and its claude child so the graceful
+  # SIGTERM still runs before the hard kill-session below. The pane runs `bash … _run`, so the
+  # claude host is its child — signal the child, falling back to the pane shell itself.
+  if [ -z "$pid" ]; then
+    local ppid; ppid="$(tmux list-panes -t "$sess" -F '#{pane_pid}' 2>/dev/null | head -1)"
+    if [ -n "$ppid" ]; then pid="$(pgrep -P "$ppid" 2>/dev/null | head -1)"; [ -n "$pid" ] || pid="$ppid"; fi
+  fi
   if [ -n "$pid" ]; then
     kill -TERM "$pid" 2>/dev/null && echo "SIGTERM -> pool host pid $pid ($name)"
     for _ in $(seq 1 50); do ps -p "$pid" >/dev/null 2>&1 || break; sleep 0.1; done
@@ -122,6 +134,7 @@ toggle() {
 status() {
   local name; name="$(resolve_name "$1")"
   [ -n "$name" ] || { echo "usage: rc-pool.sh status <name|dir>" >&2; return 2; }
+  need tmux || return 127
   local sess="rcpool-$name"
   if tmux has-session -t "$sess" 2>/dev/null; then
     echo "RUNNING $name  attach: $ATTACH_ENV tmux attach -t $sess"

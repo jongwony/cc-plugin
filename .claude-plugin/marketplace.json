@@ -88,6 +88,11 @@
       "name": "handwriting",
       "source": "./handwriting",
       "description": "Apple Notes handwriting reader — scan Apple Pencil drawings via NoteStore.sqlite and read them multimodally"
+    },
+    {
+      "name": "manim",
+      "source": "./manim",
+      "description": "Render short headless Manim animations (math / parametric / 3D / equations) to browser-embeddable mp4/webm/gif with a ready-to-paste embed snippet"
     }
   ]
 }

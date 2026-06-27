@@ -1,0 +1,9 @@
+{
+  "name": "manim",
+  "description": "Render short headless Manim animations (math / parametric / 3D / equations) to browser-embeddable mp4/webm/gif, returning the file path and a ready-to-paste embed snippet",
+  "version": "0.1.1",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

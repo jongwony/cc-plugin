@@ -21,10 +21,10 @@
 # (~/Downloads, ~/Documents, ~/Desktop) where launchd/nohup gets
 # "Operation not permitted". (Lesson carried over from the martin supervisor.)
 #
-# WHY ps+SIGTERM on kill (not pkill): on macOS pkill/pgrep can't read claude's
-# full arg string (KERN_PROCARGS), so `pkill -f "remote-control --name X"`
-# silently matches nothing. `ps -o command` does see it. SIGTERM (not -9) lets
-# SessionEnd hooks (e.g. anamnesis memory write) flush before exit.
+# WHY pane-scoped SIGTERM on kill: kill resolves the target through the session's own
+# tmux pane (`list-panes -F '#{pane_pid}'`), not a global `ps`/`pkill` match — so rc-spawn
+# and rc-pool only ever stop their own sessions even when both share a name. SIGTERM (not
+# -9) lets SessionEnd hooks (e.g. anamnesis memory write) flush before exit.
 
 export TMUX_TMPDIR="${TMUX_TMPDIR:-$HOME/.tmux-sockets}"
 mkdir -p "$TMUX_TMPDIR"

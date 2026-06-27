@@ -6,7 +6,8 @@ description: >
   `claude --remote-control` session whose scope exceeds one context lifecycle).
   Trigger when the user asks to "write a Span Runbook", "author a runbook for this
   worker", "make this span resumable/observable", "Span Runbook 작성", "이 작업
-  재개 가능하게 런북으로", or when scoping long-horizon work that must stay observable
+  재개 가능하게 런북으로", "set up a project of issues as Spans", "own an abstraction
+  graph across sessions", or when scoping long-horizon work that must stay observable
   and resumable across session boundaries. Not for sub-Span work that fits one context
   lifecycle — that is a subagent and needs no runbook.
 ---
@@ -78,3 +79,51 @@ A run resumes by reading its TaskList pointer → sidecar → following `source_
 re-derive context, then continuing from the last checkpoint capsule. It harvests by
 writing its output capsule and harvest pointer back to the sidecar. The Runbook names
 where these live (the path convention); each run fills them.
+
+## Project shape: issues, Spans, and the subagent boundary
+
+A Runbook is authored per issue, inside a larger shape: one **project → many issues → one
+Span per issue → bounded subagents inside a Span**. The project is what is owned over time
+(see *Owning the moving graph across sessions*); each issue is one tractable piece of it,
+carried by one Span; inside a Span, subagents do the bounded interior work of a stage.
+
+The boundary between what a Span owns and what its subagents own reapplies the criterion
+that separates a Span from a subagent in the first place — **context-lifecycle fit**:
+
+- A **subagent** owns only work that completes inside one context lifecycle and returns its
+  result to the Span. It holds no resume contract and no durable state of its own, and it
+  does not gate out — on meeting a gate-out trigger it surfaces the fork to its Span, which
+  applies the gate-out policy.
+- A **Span** owns the cross-stage contract: stage sequencing, checkpointing, gate-out
+  authority, the durable state surfaces, and the resume/harvest contract.
+- Work that *exceeds* one context lifecycle never becomes a nested sub-Span (Spans do not
+  nest); it is re-scoped across the Span's own stages, or handed to the next Span in the
+  chain.
+
+### Initializing a project
+
+Set up a project→issues→Spans structure with a fixed sequence:
+
+1. **Name the project** — the abstraction (graph) to own across sessions.
+2. **Decompose into issues** — each issue is one part of that graph to revise, sized to a
+   Span's horizon (exceeds one context lifecycle; smaller pieces are plain subagent tasks).
+3. **Scaffold one Span per issue** — author its Runbook from the template, create its run
+   sidecar, and register its TaskList pointer.
+4. **Fix the chain order** — when issues are sequential, declare the linear hand-off order
+   (chain, never nest).
+
+## Owning the moving graph across sessions
+
+A project's abstraction does not resolve in one session. It is built up from instances
+(`/induce`) and tested back down against concrete cases (`/ground`); grounding's
+adjustments feed back into induction, so the abstraction keeps *moving*. The trace of that
+movement — how the abstraction was induced and grounded over time — is the graph the
+project owns.
+
+The Runbook is how that graph is owned across session boundaries. Each issue→Span revises
+one part of it; the resume/harvest contract is the durable carrier that records the revised
+state and carries it forward, so the next run — or the next Span in the chain — resumes from
+the harvested graph rather than re-deriving it. "Schemas in, state out" at the scale of one
+run becomes "own the moving graph" at the scale of a project: the slow layer holds the
+contract, and the moving graph lives in the fast layer the resume/harvest contract carries
+between sessions.

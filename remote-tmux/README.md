@@ -1,9 +1,17 @@
-# remote-spawn
+# remote-tmux
+
+A tmux-tracked `claude remote-control` toolkit, reachable from the Claude app
+(claude.ai/code + mobile). No Telegram, no bridge — the running session *is* the aperture;
+voice input comes from the app's own dictation. It ships two skills:
+
+- **`remote-spawn`** — spawn one fixed `claude --remote-control` session per directory (below).
+- **`rc-pool`** — keep a self-restarting `--spawn worktree --capacity N` pool host alive per
+  project (see the `rc-pool` section at the end).
+
+## remote-spawn — spawn one session
 
 Spawn a backgrounded `claude --remote-control` session in **any directory**, tracked as a
-tmux session and reachable from the Claude app (claude.ai/code + mobile). No Telegram, no
-bridge — the running session *is* the aperture; voice input comes from the app's own
-dictation.
+tmux session and reachable from the Claude app.
 
 ```bash
 bash scripts/rc-spawn.sh spawn ~/projects/foo        # -> rc-foo, now in the app
@@ -33,3 +41,22 @@ arbitrary prompt can never be misparsed as a flag.
 
 First launch in a never-opened directory may show a one-time folder-trust prompt inside the
 session — `tmux attach -t rc-<name>`, press Enter, detach with `Ctrl-b d`.
+
+## rc-pool — keep a pool host alive
+
+The `rc-pool` skill keeps a **self-restarting, project-singleton** keep-alive for a `claude
+remote-control --spawn worktree --capacity N` pool host — one host per project, hosting a
+pool of on-demand, worktree-isolated sessions in the app. Sibling of `remote-spawn` (which
+spawns one fixed session per dir).
+
+```bash
+bash scripts/rc-pool.sh toggle <project-dir> [name] [capacity]   # up if down, down if up
+bash scripts/rc-pool.sh up     <project-dir> [name] [capacity]   # default capacity 5
+bash scripts/rc-pool.sh down   <name|dir>                        # graceful SIGTERM + drop
+bash scripts/rc-pool.sh status <name|dir>
+```
+
+The host re-execs this script from disk each cycle (on-disk edits take effect on restart)
+and runs in a tmux pane for the live PTY. The `remote-control` subcommand hard-errors on an
+untrusted workspace, so trust the project once (`claude` in the dir, accept the dialog)
+before `up`.

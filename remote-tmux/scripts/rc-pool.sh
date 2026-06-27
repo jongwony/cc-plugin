@@ -26,6 +26,13 @@ mkdir -p "$TMUX_TMPDIR"
 unset TMUX
 ATTACH_ENV="TMUX_TMPDIR=$TMUX_TMPDIR"
 
+# Canonicalize this script's own path BEFORE any cwd change: `up` launches the tmux pane with
+# `-c "$dir"` and `_run` does `cd "$dir"`, so a relative $0 (e.g. the documented
+# `bash scripts/rc-pool.sh up <dir>`) would no longer resolve once the cwd flips to <dir> — the
+# pane's re-exec would fail and exit instantly while `up` had already printed STARTED-POOL.
+# Resolve to an absolute path once, here, while cwd is still the invocation dir.
+SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+
 sanitize() { printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '-' | sed 's/--*/-/g; s/^-//; s/-$//'; }
 need() { command -v "$1" >/dev/null 2>&1 || { echo "ERROR: '$1' not found on PATH (required by rc-pool)" >&2; return 127; }; }
 
@@ -44,6 +51,7 @@ up() {
   name="$(sanitize "$name")"
   [ -n "$name" ] || { echo "ERROR: name resolves to empty — pass an explicit name" >&2; return 2; }
   case "$cap" in *[!0-9]*|'') echo "ERROR: capacity must be a positive integer: $cap" >&2; return 2;; esac
+  [ "$cap" -ge 1 ] 2>/dev/null || { echo "ERROR: capacity must be a positive integer (>= 1): $cap" >&2; return 2; }
   need tmux || return 127
   need claude || return 127
   git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
@@ -59,7 +67,7 @@ PY
   if tmux has-session -t "$sess" 2>/dev/null; then
     echo "ALREADY-RUNNING $name  attach: $ATTACH_ENV tmux attach -t $sess"; return 0
   fi
-  if ! tmux new-session -d -s "$sess" -x 220 -y 55 -c "$dir" "bash '$0' _run '$dir' '$name' '$cap'"; then
+  if ! tmux new-session -d -s "$sess" -x 220 -y 55 -c "$dir" "bash '$SELF' _run '$dir' '$name' '$cap'"; then
     echo "ERROR: failed to launch tmux session $sess" >&2; return 1
   fi
   echo "STARTED-POOL $name  (dir: $dir, capacity: $cap, spawn: worktree, self-restarting)"
@@ -75,7 +83,7 @@ _run() {
   claude remote-control --name "$name" --spawn worktree --capacity "$cap"
   echo "[$(date '+%F %T')] rcpool-$name host exited (code $?) — reloading from disk in 3s" >> "$log"
   sleep 3
-  exec bash "$0" _run "$dir" "$name" "$cap"
+  exec bash "$SELF" _run "$dir" "$name" "$cap"
 }
 
 down() {
@@ -87,7 +95,12 @@ down() {
   # Graceful: SIGTERM the host first (children flush, no orphans), then drop the session
   # inside the loop's 3s pre-re-exec window so it can't relaunch behind us.
   local rname="${name//./\\.}" pid
-  pid="$(ps -Ao pid,command | grep -E "remote-control --name ${rname}([[:space:]]|\$)" | grep -v grep | awk '{print $1}' | head -1)"
+  # Anchor on whitespace before the `remote-control` SUBCOMMAND so this matches only the pool
+  # host (`claude remote-control --name …`) and NOT a coexisting rc-spawn session sharing the
+  # same name (`claude --remote-control --name …` — the FLAG form, where `remote-control` is
+  # preceded by `-`, not whitespace). Both tools default the name to the project basename, so
+  # the un-anchored pattern would cross-match rc-<name> and SIGTERM the wrong process.
+  pid="$(ps -Ao pid,command | grep -E "[[:space:]]remote-control --name ${rname}([[:space:]]|\$)" | grep -v grep | awk '{print $1}' | head -1)"
   if [ -n "$pid" ]; then
     kill -TERM "$pid" 2>/dev/null && echo "SIGTERM -> pool host pid $pid ($name)"
     for _ in $(seq 1 50); do ps -p "$pid" >/dev/null 2>&1 || break; sleep 0.1; done

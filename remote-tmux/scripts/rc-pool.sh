@@ -96,24 +96,16 @@ down() {
   need tmux || return 127
   local sess="rcpool-$name"
   if ! tmux has-session -t "$sess" 2>/dev/null; then echo "NOT-RUNNING $name"; return 0; fi
-  # Graceful: SIGTERM the host first (children flush, no orphans), then drop the session
-  # inside the loop's 3s pre-re-exec window so it can't relaunch behind us.
-  local rname="${name//./\\.}" pid
-  # Anchor on whitespace before the `remote-control` SUBCOMMAND so this matches only the pool
-  # host (`claude remote-control --name …`) and NOT a coexisting rc-spawn session sharing the
-  # same name (`claude --remote-control --name …` — the FLAG form, where `remote-control` is
-  # preceded by `-`, not whitespace). Both tools default the name to the project basename, so
-  # the un-anchored pattern would cross-match rc-<name> and SIGTERM the wrong process.
-  pid="$(ps -Ao pid,command | grep -E "[[:space:]]remote-control --name ${rname}([[:space:]]|\$)" | grep -v grep | awk '{print $1}' | head -1)"
-  # Fallback when the ps|grep misses (argv momentarily unreadable, or the rendered command
-  # shape differs from the anchor): take the pane's shell and its claude child so the graceful
-  # SIGTERM still runs before the hard kill-session below. The pane runs `bash … _run`, so the
-  # claude host is its child — signal the child, falling back to the pane shell itself.
-  if [ -z "$pid" ]; then
-    local ppid; ppid="$(tmux list-panes -t "$sess" -F '#{pane_pid}' 2>/dev/null | head -1)"
-    if [ -n "$ppid" ]; then pid="$(pgrep -P "$ppid" 2>/dev/null | head -1)"; [ -n "$pid" ] || pid="$ppid"; fi
-  fi
-  if [ -n "$pid" ]; then
+  # Graceful: SIGTERM the host first (children flush, no orphans), then drop the session inside
+  # the loop's 3s pre-re-exec window so it can't relaunch behind us. Resolve the target ONLY
+  # through THIS session's own tmux pane — never a global `ps | grep`, which would also match a
+  # coexisting rc-spawn `rc-<name>` that shares this name. Each tool touches only its own
+  # sessions, so the two are independent by construction. The pane runs `bash … _run`, so the
+  # claude host is its child: signal the child (pgrep -P), falling back to the pane shell.
+  local ppid pid
+  ppid="$(tmux list-panes -t "$sess" -F '#{pane_pid}' 2>/dev/null | head -1)"
+  if [ -n "$ppid" ]; then
+    pid="$(pgrep -P "$ppid" 2>/dev/null | head -1)"; [ -n "$pid" ] || pid="$ppid"
     kill -TERM "$pid" 2>/dev/null && echo "SIGTERM -> pool host pid $pid ($name)"
     for _ in $(seq 1 50); do ps -p "$pid" >/dev/null 2>&1 || break; sleep 0.1; done
   fi

@@ -65,9 +65,9 @@
       "description": "Push-to-talk voice dictation daemon (whisper.cpp) transcribing speech into the active window"
     },
     {
-      "name": "remote-spawn",
-      "source": "./remote-spawn",
-      "description": "Spawn a backgrounded `claude --remote-control` session in any directory (tmux-tracked), reachable from the Claude app"
+      "name": "remote-tmux",
+      "source": "./remote-tmux",
+      "description": "tmux-tracked `claude remote-control` toolkit: spawn one-off sessions or keep a self-restarting --spawn-worktree pool host alive per project, reachable from the Claude app"
     },
     {
       "name": "excalidraw-host",

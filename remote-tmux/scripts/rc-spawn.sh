@@ -21,10 +21,10 @@
 # (~/Downloads, ~/Documents, ~/Desktop) where launchd/nohup gets
 # "Operation not permitted". (Lesson carried over from the martin supervisor.)
 #
-# WHY ps+SIGTERM on kill (not pkill): on macOS pkill/pgrep can't read claude's
-# full arg string (KERN_PROCARGS), so `pkill -f "remote-control --name X"`
-# silently matches nothing. `ps -o command` does see it. SIGTERM (not -9) lets
-# SessionEnd hooks (e.g. anamnesis memory write) flush before exit.
+# WHY pane-scoped SIGTERM on kill: kill resolves the target through the session's own
+# tmux pane (`list-panes -F '#{pane_pid}'`), not a global `ps`/`pkill` match — so rc-spawn
+# and rc-pool only ever stop their own sessions even when both share a name. SIGTERM (not
+# -9) lets SessionEnd hooks (e.g. anamnesis memory write) flush before exit.
 
 export TMUX_TMPDIR="${TMUX_TMPDIR:-$HOME/.tmux-sockets}"
 mkdir -p "$TMUX_TMPDIR"
@@ -159,23 +159,18 @@ kill_one() {
   local name; name="$(sanitize "$1")"
   [ -n "$name" ] || { echo "usage: rc-spawn.sh kill <name>" >&2; return 2; }
   need tmux || return 127
-  local sess="rc-$name" pids pid found=0 i
-  # sanitize() allows '.', the only ERE metachar a name can carry — escape it so
-  # `kill my.proj` can't also match `--name myXproj` (a different session).
-  local rname="${name//./\\.}"
-  # SIGTERM every matching claude, not just the first: a collision or a half-finished
-  # earlier teardown can leave more than one process on the same name.
-  pids="$(ps -Ao pid=,command= | grep -E "remote-control --name ${rname}([[:space:]]|\$)" | grep -v grep | awk '{print $1}')"
-  for pid in $pids; do
-    kill "$pid" 2>/dev/null && { echo "SIGTERM -> claude pid $pid ($name)"; found=1; }
-  done
-  # ps can momentarily fail to read a live claude's arg string (KERN_PROCARGS, see
-  # header), so an empty match does NOT prove the process is gone. If the session is
-  # still live, SIGTERM the pane's process directly — the hard kill-session below would
-  # otherwise cut off SessionEnd hooks (anamnesis) on a process that was merely unreadable.
-  if [ "$found" = 0 ] && tmux has-session -t "$sess" 2>/dev/null; then
+  local sess="rc-$name" pid found=0 i
+  # Resolve the target ONLY through THIS session's own tmux pane — never a global `ps | grep`,
+  # which would also match a coexisting rc-pool `rcpool-<name>` host that shares this name
+  # (`claude remote-control --name …`, the subcommand form). Scoping the kill to the pane keeps
+  # rc-spawn and rc-pool independent by construction. The pane runs claude directly (see spawn /
+  # resume), so the pane's process IS the claude host — SIGTERM it. The hard kill-session below
+  # plus the wait still cover every live session (a clean exit ends the session on its own).
+  # (Tradeoff: this drops the old global sweep of same-name claudes orphaned OUTSIDE the pane —
+  # a rare half-finished-teardown edge — in exchange for tool independence.)
+  if tmux has-session -t "$sess" 2>/dev/null; then
     pid="$(tmux list-panes -t "$sess" -F '#{pane_pid}' 2>/dev/null | head -1)"
-    [ -n "$pid" ] && kill "$pid" 2>/dev/null && { echo "SIGTERM -> tmux pane pid $pid ($name)"; found=1; }
+    [ -n "$pid" ] && kill "$pid" 2>/dev/null && { echo "SIGTERM -> claude pid $pid ($name)"; found=1; }
   fi
   # claude exiting cleanly ends its own tmux session (see spawn), so wait for that
   # instead of racing it — gives SessionEnd hooks (anamnesis) time to flush. Gate the

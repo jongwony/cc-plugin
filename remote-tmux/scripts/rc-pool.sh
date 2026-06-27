@@ -101,11 +101,18 @@ down() {
   # through THIS session's own tmux pane — never a global `ps | grep`, which would also match a
   # coexisting rc-spawn `rc-<name>` that shares this name. Each tool touches only its own
   # sessions, so the two are independent by construction. The pane runs `bash … _run`, so the
-  # claude host is its child: signal the child (pgrep -P), falling back to the pane shell.
-  local ppid pid
+  # claude host is its child — but during the 3s restart window the child is `sleep 3`, not
+  # claude; signaling that would only let _run re-exec a throwaway host. So pick the child
+  # actually running remote-control; if none is live (restart window or already exited), signal
+  # the pane shell itself so the loop stops without relaunching, before the hard kill-session.
+  local ppid pid c
   ppid="$(tmux list-panes -t "$sess" -F '#{pane_pid}' 2>/dev/null | head -1)"
   if [ -n "$ppid" ]; then
-    pid="$(pgrep -P "$ppid" 2>/dev/null | head -1)"; [ -n "$pid" ] || pid="$ppid"
+    pid=""
+    for c in $(pgrep -P "$ppid" 2>/dev/null); do
+      case "$(ps -p "$c" -o command= 2>/dev/null)" in *remote-control*) pid="$c"; break;; esac
+    done
+    [ -n "$pid" ] || pid="$ppid"
     kill -TERM "$pid" 2>/dev/null && echo "SIGTERM -> pool host pid $pid ($name)"
     for _ in $(seq 1 50); do ps -p "$pid" >/dev/null 2>&1 || break; sleep 0.1; done
   fi

@@ -49,5 +49,6 @@ Notes to pass on when relevant:
   press Enter, then detach with `Ctrl-b d`. **A queued initial prompt waits
   behind this trust gate** and submits only after trust is confirmed.
 - tmux is used (not nohup/launchd) so sessions work under TCC-protected dirs
-  (`~/Downloads`, `~/Documents`, `~/Desktop`); kill uses `ps`+SIGTERM so SessionEnd
-  hooks (e.g. anamnesis memory) flush before exit.
+  (`~/Downloads`, `~/Documents`, `~/Desktop`); kill SIGTERMs the session's own tmux
+  pane process (not a global `ps` match) so SessionEnd hooks (e.g. anamnesis memory)
+  flush before exit.

@@ -30,14 +30,15 @@ to claude as `--session-id`) and prints it as a `SESSION <uuid>` line right afte
 (`claude --remote-control --name <name> --session-id <uuid> -- "<prompt>"`) so an
 arbitrary prompt can never be misparsed as a flag.
 
-## Why tmux + ps/SIGTERM
+## Why tmux + pane-scoped SIGTERM
 - **tmux, not nohup/launchd** — `claude --remote-control` is an interactive TUI that wants
   a PTY, and a tmux server launched from your terminal inherits its TCC grant, so sessions
   work under TCC-protected dirs (`~/Downloads`, `~/Documents`, `~/Desktop`) where launchd
   gets `Operation not permitted`.
-- **`ps` + SIGTERM on kill, not `pkill`** — on macOS `pkill -f` can't read claude's full
-  arg string and silently no-ops; `ps -o command` sees it. SIGTERM (not `-9`) lets
-  SessionEnd hooks (e.g. anamnesis memory) flush before exit.
+- **pane-scoped SIGTERM on kill, not a global `ps`/`pkill`** — kill resolves the target
+  through the session's own tmux pane (`list-panes -F '#{pane_pid}'`), so `rc-spawn` and
+  `rc-pool` only ever stop their own sessions even when both share a name. SIGTERM (not `-9`)
+  lets SessionEnd hooks (e.g. anamnesis memory) flush before exit.
 
 First launch in a never-opened directory may show a one-time folder-trust prompt inside the
 session — `tmux attach -t rc-<name>`, press Enter, detach with `Ctrl-b d`.

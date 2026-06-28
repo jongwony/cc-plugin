@@ -29,6 +29,9 @@ from pynput import keyboard
 
 # ── 설정 (벤치마크로 검증된 기본값) ──
 MODEL = os.path.expanduser("~/whisper-models/ggml-large-v3-turbo-q5_0.bin")
+# Silero VAD 모델 — 있으면 _transcribe 가 --vad 로 무음/잡음을 whisper 입력 전에 게이팅한다
+# (없으면 자동 생략). 받기: huggingface ggml-org/whisper-vad → ggml-silero-v5.1.2.bin
+VAD_MODEL = os.path.expanduser("~/whisper-models/ggml-silero-v5.1.2.bin")
 WHISPER_CLI = "whisper-cli"
 LANG = "auto"          # ko / en / auto
 # initial prompt — 명령문이 아니라 '원하는 출력 스타일의 샘플 문장'. whisper 의 --prompt 는
@@ -232,6 +235,10 @@ def _transcribe(path, timeout):
     # (단발 push-to-talk 라 직전-윈도우 문맥 조건화는 무관 — 이 빌드엔 --no-context 도 없음.)
     cmd = [WHISPER_CLI, "-m", MODEL, "-f", path, "-l", LANG, "-nt", "-np",
            "-sns", "-nth", "0.4"]
+    # VAD: 무음/잡음을 whisper 앞단에서 게이팅 — bleed 의 사전·구조적 방어(임계는 사후 방어).
+    # 모델이 있을 때만 켠다(없으면 자동 생략). -vp 100 은 onset 클리핑 방지 여유.
+    if os.path.exists(VAD_MODEL):
+        cmd += ["--vad", "--vad-model", VAD_MODEL, "-vp", "100"]
     if PROMPT:
         cmd += ["--prompt", PROMPT]
     try:

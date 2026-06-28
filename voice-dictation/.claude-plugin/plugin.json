@@ -1,7 +1,7 @@
 {
   "name": "voice-dictation",
   "description": "Push-to-talk voice dictation daemon — whisper.cpp transcription pasted into the active window",
-  "version": "1.0.10",
+  "version": "1.1.1",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

@@ -36,7 +36,7 @@ LANG = "auto"          # ko / en / auto
 # 섞이고 영어는 Latin·숫자는 아라비아로 적힌 짧은 샘플 하나로 code-switching 표기를 편향한다.
 # (정적이라 단순; 무음/불명료 입력의 bleed 는 디코더 임계(아래 _transcribe)로 막는다.
 #  자주 쓰는 영어 용어로 다듬어도 됨.)
-PROMPT = "오늘 standup에서 API 배포 일정을 review했고 version 2를 release했습니다."
+PROMPT = "오늘 회의에서 project 일정을 확인했고 3시에 다시 meeting을 했습니다."
 TRIGGER = keyboard.Key.alt_r   # 오른쪽 Option
 MIN_SEC = 0.3          # 이보다 짧은 녹음은 오발화로 간주, 무시
 # rec 녹음 포맷 — whisper 친화적인 컴팩트 s16 PCM 으로 고정한다. _wav_duration

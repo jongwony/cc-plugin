@@ -130,6 +130,8 @@ def _stop_and_transcribe():
 def _save_debug_sample(wav_path, text, dur):
     """디버그 모드: 전사된 WAV 와 전사 텍스트를 KEEP_DIR 에 타임스탬프로 보존.
     프로덕션은 스냅샷을 지우지만(분석 불가), 디버그는 보존해 음질/전사를 사후 분석한다."""
+    if KEEP_DIR is None:   # 호출부가 보장하지만 — 타입 좁힘 + 방어
+        return
     ts = time.strftime("%Y%m%d_%H%M%S")
     base = os.path.join(KEEP_DIR, f"dict_{ts}_{_wav_seq}")
     fmt = _read_wav_format(wav_path)

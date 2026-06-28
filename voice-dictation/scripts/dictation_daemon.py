@@ -31,17 +31,12 @@ from pynput import keyboard
 MODEL = os.path.expanduser("~/whisper-models/ggml-large-v3-turbo-q5_0.bin")
 WHISPER_CLI = "whisper-cli"
 LANG = "auto"          # ko / en / auto
-# initial prompt 는 동적으로 구성한다(정적 명령문 X). whisper 의 --prompt 는 '지시'가 아니라
-# '직전 문맥'이라 모델은 프롬프트의 스타일을 이어쓴다(OpenAI). 사용자 본인의 최근 전사를
-# 프롬프트로 넣으면 = 실제 어휘·표기 스타일(영문 표기·아라비아 숫자)이 그대로 편향되고
-# 어휘에 자동 적응한다. 무음/불명료 입력의 bleed 는 디코더 임계(아래 _transcribe)로 막는다.
-RECENT_LOG = os.path.expanduser("~/.cache/voice-dictation/recent.txt")  # 영속 롤링 로그
-RECENT_N = 8           # 프롬프트에 넣을 최근 전사 개수 (whisper.cpp 가 224토큰 초과분 자동 절단)
-RECENT_KEEP = 50       # 로그 파일 보존 상한(줄)
-# cold start(로그 빈 상태) 폴백 — 첫 발화를 올바른 스타일(영문 표기·아라비아 숫자)로 부트스트랩.
-# 명령문이 아니라 '원하는 출력 스타일의 샘플 문장'이라 whisper 가 그 스타일을 이어쓴다.
-# 실제 전사가 쌓이면 자연히 밀려난다(런1만 영향). 자주 쓰는 영어 용어로 다듬어도 됨.
-SEED_PROMPT = "오늘 standup에서 API 배포 일정을 review했고 version 2를 release했습니다."
+# initial prompt — 명령문이 아니라 '원하는 출력 스타일의 샘플 문장'. whisper 의 --prompt 는
+# '지시'가 아니라 '직전 문맥'이라 모델은 프롬프트의 스타일을 이어쓴다(OpenAI). 한국어+영어가
+# 섞이고 영어는 Latin·숫자는 아라비아로 적힌 짧은 샘플 하나로 code-switching 표기를 편향한다.
+# (정적이라 단순; 무음/불명료 입력의 bleed 는 디코더 임계(아래 _transcribe)로 막는다.
+#  자주 쓰는 영어 용어로 다듬어도 됨.)
+PROMPT = "오늘 standup에서 API 배포 일정을 review했고 version 2를 release했습니다."
 TRIGGER = keyboard.Key.alt_r   # 오른쪽 Option
 MIN_SEC = 0.3          # 이보다 짧은 녹음은 오발화로 간주, 무시
 # rec 녹음 포맷 — whisper 친화적인 컴팩트 s16 PCM 으로 고정한다. _wav_duration
@@ -144,7 +139,6 @@ def _transcribe_worker():
                 continue
             print(f"  ⤷ ({dt:.1f}s) {text}", flush=True)
             _inject(text)
-            _log_transcript(text)   # 동적 프롬프트용 롤링 로그에 기록
         except Exception as exc:
             print(f"  (전사 오류 — 건너뜀: {exc})", flush=True)
         finally:
@@ -232,44 +226,14 @@ def _wav_duration(path):
     return data_bytes / (sample_rate * bytes_per_frame)
 
 
-def _recent_prompt():
-    """동적 initial prompt: 최근 전사 RECENT_N 개를 직전-문맥으로 제공해 사용자 본인의
-    어휘·표기 스타일(영문 표기·아라비아 숫자)을 편향한다. 로그가 비면(cold start)
-    SEED_PROMPT 로 첫 발화를 올바른 스타일로 부트스트랩한다(이후 실제 전사가 밀어냄)."""
-    try:
-        with open(RECENT_LOG, encoding="utf-8") as fh:
-            lines = [ln.strip() for ln in fh if ln.strip()]
-    except OSError:
-        lines = []
-    return " ".join(lines[-RECENT_N:]) if lines else SEED_PROMPT
-
-
-def _log_transcript(text):
-    """주입된 좋은 전사를 롤링 로그에 append 하고 최근 RECENT_KEEP 줄로 자른다.
-    다음 발화의 _recent_prompt 가 이를 직전-문맥으로 쓴다(자기적응 루프)."""
-    try:
-        os.makedirs(os.path.dirname(RECENT_LOG), exist_ok=True)
-        lines = []
-        if os.path.exists(RECENT_LOG):
-            with open(RECENT_LOG, encoding="utf-8") as fh:
-                lines = [ln.rstrip("\n") for ln in fh if ln.strip()]
-        lines.append(text)
-        with open(RECENT_LOG, "w", encoding="utf-8") as fh:
-            fh.write("\n".join(lines[-RECENT_KEEP:]) + "\n")
-    except OSError:
-        pass
-
-
 def _transcribe(path, timeout):
     # bleed 가드: -sns(비음성 토큰 억제) + -nth 0.4(무음 임계 0.6→0.4 강화). entropy(-et 2.40)·
-    # logprob(-lpt -1.00)·temperature fallback 은 기본값으로 이미 on(-nf 미전달). 프롬프트는
-    # _recent_prompt 로 매번 동적 구성. (단발 push-to-talk 라 직전-윈도우 문맥 조건화는 무관 —
-    # 이 whisper-cli 빌드엔 --no-context 플래그도 없음.)
+    # logprob(-lpt -1.00)·temperature fallback 은 기본값으로 이미 on(-nf 미전달).
+    # (단발 push-to-talk 라 직전-윈도우 문맥 조건화는 무관 — 이 빌드엔 --no-context 도 없음.)
     cmd = [WHISPER_CLI, "-m", MODEL, "-f", path, "-l", LANG, "-nt", "-np",
            "-sns", "-nth", "0.4"]
-    prompt = _recent_prompt()
-    if prompt:
-        cmd += ["--prompt", prompt]
+    if PROMPT:
+        cmd += ["--prompt", PROMPT]
     try:
         out = subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout,

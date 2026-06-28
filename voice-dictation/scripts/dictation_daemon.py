@@ -18,6 +18,7 @@ import fcntl
 import glob
 import os
 import queue
+import re
 import signal
 import struct
 import subprocess
@@ -38,6 +39,9 @@ LANG = "auto"          # ko / en / auto
 # 편향한다. 언어 선택은 LANG=auto 가 발화별로 담당하고(한/영 어느 쪽으로 말하든),
 # 이 프롬프트는 표기 스타일만 기울인다. 문법 교정·재작성은 이 층위로 불가(LLM 몫).
 PROMPT = "한국어와 English가 섞인 받아쓰기. 영어 단어는 영문으로, 숫자는 아라비아 숫자로 적습니다."
+# 무음/불명료 입력에 whisper 가 위 PROMPT 를 그대로 되뱉는 prompt-bleed 환각을 거르는 임계.
+# 출력 단어 중 PROMPT 어휘집합과 겹치는 비율이 이 값 이상이면 '새 내용 없는 메아리'로 보고 버린다.
+PROMPT_BLEED_THRESHOLD = 0.8
 TRIGGER = keyboard.Key.alt_r   # 오른쪽 Option
 MIN_SEC = 0.3          # 이보다 짧은 녹음은 오발화로 간주, 무시
 # rec 녹음 포맷 — whisper 친화적인 컴팩트 s16 PCM 으로 고정한다. _wav_duration
@@ -227,6 +231,22 @@ def _wav_duration(path):
     return data_bytes / (sample_rate * bytes_per_frame)
 
 
+def _looks_like_prompt_bleed(text):
+    """whisper 가 무음/불명료 입력에 --prompt 를 되뱉는 환각(prompt-bleed) 감지.
+    출력 단어의 대부분이 PROMPT 어휘에서 온, 새 내용 없는 메아리면 True.
+    실제 발화는 PROMPT 어휘와 거의 안 겹치므로(마진 넓음) 오탐 위험이 낮다."""
+    if not PROMPT:
+        return False
+    words = re.findall(r"[0-9A-Za-z가-힣]+", text.lower())
+    if len(words) < 3:                       # 짧은 정상 발화 오탐 방지 — 거르지 않음
+        return False
+    prompt_words = set(re.findall(r"[0-9A-Za-z가-힣]+", PROMPT.lower()))
+    if not prompt_words:
+        return False
+    overlap = sum(w in prompt_words for w in words) / len(words)
+    return overlap >= PROMPT_BLEED_THRESHOLD
+
+
 def _transcribe(path, timeout):
     cmd = [WHISPER_CLI, "-m", MODEL, "-f", path, "-l", LANG, "-nt", "-np"]
     if PROMPT:
@@ -240,7 +260,11 @@ def _transcribe(path, timeout):
         # 타임아웃 시 자식 프로세스를 종료(kill)한다.
         print(f"  (전사 타임아웃 {timeout:.0f}s 초과 — 중단)", flush=True)
         return ""
-    return " ".join(out.stdout.split()).strip()
+    text = " ".join(out.stdout.split()).strip()
+    if _looks_like_prompt_bleed(text):
+        print("  (prompt-bleed 환각 감지 — 주입 생략)", flush=True)
+        return ""
+    return text
 
 
 def _warmup():

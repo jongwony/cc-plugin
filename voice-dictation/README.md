@@ -28,19 +28,8 @@ Push-to-talk voice dictation for Claude Code, powered by whisper.cpp.
 
 ## Model
 
-전사 모델 파일이 다음 경로에 있어야 합니다:
+모델 파일이 다음 경로에 있어야 합니다:
 
 ```
 ~/whisper-models/ggml-large-v3-turbo-q5_0.bin
-```
-
-### VAD 모델 (선택, 권장)
-
-무음/잡음을 whisper 입력 *전에* 게이팅해 prompt-bleed·환각을 줄입니다 (디코더 임계는 사후
-방어, VAD는 사전·구조적 방어). 있으면 자동 사용, 없으면 자동 생략(데몬은 그대로 동작).
-같은 디렉터리에 받으세요:
-
-```
-curl -L -o ~/whisper-models/ggml-silero-v5.1.2.bin \
-  https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin
 ```

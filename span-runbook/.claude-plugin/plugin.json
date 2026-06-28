@@ -1,7 +1,7 @@
 {
   "name": "span-runbook",
   "description": "Author and run Span Runbooks — reusable, resumable stage contracts for backgrounded remote-spawn workers: schemas-in/state-out, gate-out policy, template, the project→issue→Span→subagent boundary, and owning a moving abstraction graph across sessions",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

@@ -87,15 +87,17 @@ Span per issue → bounded subagents inside a Span**. The project is what is own
 (see *Owning the moving graph across sessions*); each issue is one tractable piece of it,
 carried by one Span; inside a Span, subagents do the bounded interior work of a stage.
 
-The boundary between what a Span owns and what its subagents own reapplies the criterion
-that separates a Span from a subagent in the first place — **context-lifecycle fit**:
+A **subagent is a proper subset of its Span**: all of its work is contained in the Span, and
+the Span strictly exceeds it. The boundary is read off that containment, sized by the same
+**context-lifecycle fit** that separates a Span from a subagent in the first place:
 
 - A **subagent** owns only work that completes inside one context lifecycle and returns its
-  result to the Span. It holds no resume contract and no durable state of its own, and it
-  does not gate out — on meeting a gate-out trigger it surfaces the fork to its Span, which
-  applies the gate-out policy.
-- A **Span** owns the cross-stage contract: stage sequencing, checkpointing, gate-out
-  authority, the durable state surfaces, and the resume/harvest contract.
+  result to the Span. It carries **no resume state of its own** and no durable substrate, and
+  it does not gate out — on meeting a gate-out trigger it surfaces the fork up to its Span,
+  which applies the gate-out policy.
+- A **Span** owns everything the subagent does not: the cross-stage contract — stage
+  sequencing, checkpointing, gate-out authority, the durable state surfaces, and the
+  resume/harvest contract. That surplus is what makes the subset *proper*.
 - Work that *exceeds* one context lifecycle never becomes a nested sub-Span (Spans do not
   nest); it is re-scoped across the Span's own stages, or handed to the next Span in the
   chain.

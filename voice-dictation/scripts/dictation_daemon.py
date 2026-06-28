@@ -31,13 +31,12 @@ from pynput import keyboard
 MODEL = os.path.expanduser("~/whisper-models/ggml-large-v3-turbo-q5_0.bin")
 WHISPER_CLI = "whisper-cli"
 LANG = "auto"          # ko / en / auto
-# whisper 의 initial prompt — '명령'이 아니라 '편향'(soft bias, 약 224 토큰 상한).
-# 특정 용어를 나열하면 그 단어가 실제 발화에 없어도 출력에 끼어드는(hallucination)
-# 위험이 있어, 어휘 예시는 비운다. 대신 프롬프트 자체를 한국어+영문 혼합 스크립트로
-# 둬, 특정 어휘를 가리키지 않고 code-switching(영어 단어는 영문, 숫자는 아라비아 표기)을 구조적으로
-# 편향한다. 언어 선택은 LANG=auto 가 발화별로 담당하고(한/영 어느 쪽으로 말하든),
-# 이 프롬프트는 표기 스타일만 기울인다. 문법 교정·재작성은 이 층위로 불가(LLM 몫).
-PROMPT = "한국어와 English가 섞인 받아쓰기. 영어 단어는 영문으로, 숫자는 아라비아 숫자로 적습니다."
+# initial prompt 는 비운다. 내용 있는 프롬프트(어휘·표기 지시)는 무음/불명료 입력에서
+# 그 내용이 그대로 출력에 새는 prompt-bleed 환각의 발생원이었고('영어 단어는 …',
+# '아라비아 숫자 …' 가 빈 발화에 그대로 찍힘), 한국어 위주 프롬프트가 오히려 영어 단어를
+# 한글 음차 쪽으로 편향시킬 소지도 있었다. 표기 스타일(영문 표기·아라비아 숫자)은
+# whisper 네이티브 code-switching 에 맡기고, 필요하면 누출 가드와 함께 다시 도입한다.
+PROMPT = ""            # 빈 프롬프트 = --prompt 미전달 (_transcribe 의 `if PROMPT:` 가드)
 TRIGGER = keyboard.Key.alt_r   # 오른쪽 Option
 MIN_SEC = 0.3          # 이보다 짧은 녹음은 오발화로 간주, 무시
 # rec 녹음 포맷 — whisper 친화적인 컴팩트 s16 PCM 으로 고정한다. _wav_duration

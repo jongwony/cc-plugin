@@ -38,6 +38,10 @@ LANG = "auto"          # ko / en / auto
 RECENT_LOG = os.path.expanduser("~/.cache/voice-dictation/recent.txt")  # 영속 롤링 로그
 RECENT_N = 8           # 프롬프트에 넣을 최근 전사 개수 (whisper.cpp 가 224토큰 초과분 자동 절단)
 RECENT_KEEP = 50       # 로그 파일 보존 상한(줄)
+# cold start(로그 빈 상태) 폴백 — 첫 발화를 올바른 스타일(영문 표기·아라비아 숫자)로 부트스트랩.
+# 명령문이 아니라 '원하는 출력 스타일의 샘플 문장'이라 whisper 가 그 스타일을 이어쓴다.
+# 실제 전사가 쌓이면 자연히 밀려난다(런1만 영향). 자주 쓰는 영어 용어로 다듬어도 됨.
+SEED_PROMPT = "오늘 standup에서 API 배포 일정을 review했고 version 2를 release했습니다."
 TRIGGER = keyboard.Key.alt_r   # 오른쪽 Option
 MIN_SEC = 0.3          # 이보다 짧은 녹음은 오발화로 간주, 무시
 # rec 녹음 포맷 — whisper 친화적인 컴팩트 s16 PCM 으로 고정한다. _wav_duration
@@ -230,13 +234,14 @@ def _wav_duration(path):
 
 def _recent_prompt():
     """동적 initial prompt: 최근 전사 RECENT_N 개를 직전-문맥으로 제공해 사용자 본인의
-    어휘·표기 스타일(영문 표기·아라비아 숫자)을 편향한다. 로그 없으면 빈 문자열."""
+    어휘·표기 스타일(영문 표기·아라비아 숫자)을 편향한다. 로그가 비면(cold start)
+    SEED_PROMPT 로 첫 발화를 올바른 스타일로 부트스트랩한다(이후 실제 전사가 밀어냄)."""
     try:
         with open(RECENT_LOG, encoding="utf-8") as fh:
             lines = [ln.strip() for ln in fh if ln.strip()]
     except OSError:
-        return ""
-    return " ".join(lines[-RECENT_N:])
+        lines = []
+    return " ".join(lines[-RECENT_N:]) if lines else SEED_PROMPT
 
 
 def _log_transcript(text):

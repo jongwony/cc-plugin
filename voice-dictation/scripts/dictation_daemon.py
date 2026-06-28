@@ -14,10 +14,12 @@
 
 중지: Ctrl+C
 """
+import argparse
 import fcntl
 import glob
 import os
 import queue
+import shutil
 import signal
 import struct
 import subprocess
@@ -53,6 +55,8 @@ WHISPER_MIN_TIMEOUT = 40.0
 WHISPER_TIMEOUT_FACTOR = 4.0  # 실제 오디오 길이 대비 타임아웃 배수
 WAV = os.path.join(tempfile.gettempdir(), "voice_dictation.wav")
 LOCK = os.path.join(tempfile.gettempdir(), "voice_dictation.lock")
+DEBUG = False
+KEEP_DIR = None
 
 _rec_proc = None
 _recording = False
@@ -123,6 +127,22 @@ def _stop_and_transcribe():
     _transcribe_q.put((snapshot, dur))
 
 
+def _save_debug_sample(wav_path, text, dur):
+    """디버그 모드: 전사된 WAV 와 전사 텍스트를 KEEP_DIR 에 타임스탬프로 보존.
+    프로덕션은 스냅샷을 지우지만(분석 불가), 디버그는 보존해 음질/전사를 사후 분석한다."""
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    base = os.path.join(KEEP_DIR, f"dict_{ts}_{_wav_seq}")
+    fmt = _read_wav_format(wav_path)
+    rate = fmt[0] if fmt else 0
+    try:
+        shutil.copy(wav_path, base + ".wav")
+        with open(base + ".txt", "w") as f:
+            f.write(text or "")
+        print(f"  [debug] saved {base}.wav ({rate} Hz, {dur:.1f}s) -> {text!r}", flush=True)
+    except OSError as exc:
+        print(f"  [debug] save failed: {exc}", flush=True)
+
+
 def _transcribe_worker():
     # 단일 consumer 워커(데몬). 큐에서 순서대로(FIFO) 꺼내 한 번에 하나씩 전사·주입
     # 하므로 발화 순서가 보존되고, 워커 스레드는 프로세스 전체에 정확히 하나만 존재한다.
@@ -135,11 +155,14 @@ def _transcribe_worker():
             t0 = time.time()
             text = _transcribe(path, timeout)
             dt = time.time() - t0
+            if DEBUG and KEEP_DIR:
+                _save_debug_sample(path, text, dur)
             if not text:
                 print("  (빈 결과)", flush=True)
                 continue
             print(f"  ⤷ ({dt:.1f}s) {text}", flush=True)
-            _inject(text)
+            if not DEBUG:
+                _inject(text)
         except Exception as exc:
             print(f"  (전사 오류 — 건너뜀: {exc})", flush=True)
         finally:
@@ -315,6 +338,18 @@ def _acquire_singleton_lock():
 
 
 def main():
+    global DEBUG, KEEP_DIR, WAV, LOCK, TRIGGER
+    parser = argparse.ArgumentParser(description="voice-dictation 데몬 (push-to-talk 받아쓰기)")
+    parser.add_argument("--debug", action="store_true",
+                        help="디버그 하네스: 오른쪽 Command(⌘) 트리거, WAV+전사를 ~/voice-dictation-debug 에 보존, 붙여넣기 생략 (프로덕션 데몬과 공존)")
+    args = parser.parse_args()
+    if args.debug:
+        DEBUG = True
+        WAV = os.path.join(tempfile.gettempdir(), "voice_dictation_debug.wav")
+        LOCK = os.path.join(tempfile.gettempdir(), "voice_dictation_debug.lock")
+        TRIGGER = keyboard.Key.cmd_r
+        KEEP_DIR = os.path.expanduser("~/voice-dictation-debug")
+        os.makedirs(KEEP_DIR, exist_ok=True)
     _acquire_singleton_lock()
     # 이전 비정상 종료(전사 중 프로세스 kill)로 남은 전사 스냅샷 정리. 단일 인스턴스
     # 락 획득 후이므로 다른 인스턴스의 진행 중 스냅샷을 건드리지 않는다.
@@ -325,8 +360,11 @@ def main():
             pass
     if not os.path.exists(MODEL):
         raise SystemExit(f"모델 없음: {MODEL}")
-    print("voice-dictation 프로토타입 — 오른쪽 Option(⌥) 홀드로 받아쓰기. 중지: Ctrl+C")
+    _key_name = "오른쪽 Command(⌘)" if DEBUG else "오른쪽 Option(⌥)"
+    print(f"voice-dictation {'[DEBUG] ' if DEBUG else ''}프로토타입 — {_key_name} 홀드로 받아쓰기. 중지: Ctrl+C")
     print(f"  모델: {os.path.basename(MODEL)} | 언어: {LANG}")
+    if DEBUG:
+        print(f"  [debug] WAV+전사 보존: {KEEP_DIR} | 붙여넣기 생략", flush=True)
     print("  (기동 직후 백그라운드 워밍업으로 첫 발화 지연을 제거합니다)")
     threading.Thread(target=_transcribe_worker, daemon=True).start()
     # 콜드 스타트 비용을 백그라운드 기동 시점으로 흡수 — 키 리스너는 즉시 활성.

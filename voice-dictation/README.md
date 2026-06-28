@@ -33,3 +33,20 @@ Push-to-talk voice dictation for Claude Code, powered by whisper.cpp.
 ```
 ~/whisper-models/ggml-large-v3-turbo-q5_0.bin
 ```
+
+## 디버그 하네스 (--debug)
+
+마이크/받아쓰기 음질(AirPods vs 내장 마이크)을 점검하려면 디버그 하네스를 띄웁니다:
+
+```
+uv run scripts/dictation_daemon.py --debug
+# 또는
+python3 scripts/dictation_daemon.py --debug
+```
+
+프로덕션 데몬과 **공존**하는 두 번째 인스턴스입니다(락·WAV 경로가 분리됨).
+
+- 트리거: **오른쪽 Command(⌘)** 홀드 (프로덕션의 Right Option ⌥ 과 충돌하지 않음)
+- 녹음한 WAV 와 전사 텍스트를 `~/voice-dictation-debug/dict_<timestamp>_<seq>.wav` + `.txt` 로 **보존** (프로덕션은 스냅샷을 지워 분석 불가)
+- 각 샘플의 샘플레이트를 로그로 남깁니다 — **24000 Hz = AirPods(HFP), 48000 Hz = 내장 마이크**
+- 붙여넣기(Cmd+V)는 **생략** (분석 전용)

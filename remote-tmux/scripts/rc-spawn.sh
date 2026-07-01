@@ -42,6 +42,36 @@ sanitize() { printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '-' | sed 's/--*/-/g; s/^-/
 # instead of letting a later command fail mid-flight (or, worse, printing success).
 need() { command -v "$1" >/dev/null 2>&1 || { echo "ERROR: '$1' not found on PATH (required by rc-spawn)" >&2; return 127; }; }
 
+# Compute a launch-command PREFIX (printed to stdout) that makes a spawned claude
+# inherit the target dir's direnv env — its .envrc creds. A detached tmux session
+# runs the launch through a non-interactive `sh -c`, which NEVER fires direnv's
+# shell hook, so an .envrc is silently ignored unless we wrap the launch in
+# `direnv exec <dir>` explicitly. direnv walks UP from <dir> to the nearest .envrc,
+# so a worktree nested under its main repo (the `.claude/worktrees/<name>` layout)
+# finds the main repo's already-allowed .envrc for free — no symlink, no `direnv
+# allow`, nothing created or trusted, so direnv's review gate is never bypassed.
+# Wrap ONLY when an already-allowed .envrc actually loads (DIRENV_DIR gets set);
+# otherwise print an EMPTY prefix — the original bare `claude` launch, unchanged.
+# This is the true fail-open: a blocked/unallowed .envrc, or none in the tree,
+# falls back to bare rather than failing or pointlessly wrapping the launch. (A
+# worktree created OUTSIDE its main repo tree finds no .envrc by upward walk and
+# gets the bare launch.) Diagnostics go to stderr so only the prefix lands on
+# stdout (this runs in a command sub).
+direnv_launcher() {
+  local dir="$1"
+  command -v direnv >/dev/null 2>&1 || return 0
+  # `direnv exec <dir> <cmd>` loads the nearest .envrc found by walking up from
+  # <dir>; DIRENV_DIR is set in <cmd>'s env iff an ALLOWED .envrc actually loaded.
+  # A blocked/unallowed .envrc errors (non-zero) and none-in-tree leaves DIRENV_DIR
+  # empty — both fall through to the bare launch. We never `direnv allow` anything,
+  # so no unreviewed content is ever auto-trusted.
+  direnv exec "$dir" sh -c '[ -n "$DIRENV_DIR" ]' >/dev/null 2>&1 || return 0
+  # Single-quote dir the same way spawn() quotes the prompt: POSIX-safe for the
+  # `sh -c` tmux runs, and safe against spaces / word-splitting.
+  local edir=${dir//\'/\'\\\'\'}
+  printf "direnv exec '%s' " "$edir"
+}
+
 spawn() {
   local dir="$1" name="$2" prompt="$3"
   [ -n "$dir" ] || { echo "usage: rc-spawn.sh spawn <dir> [name] [prompt]" >&2; return 2; }
@@ -74,7 +104,11 @@ spawn() {
   # Build the claude command. name is sanitized to [A-Za-z0-9._-] so it needs no
   # quoting; an optional prompt is arbitrary text, so single-quote it for the
   # `sh -c` that tmux runs. Escape embedded ' as '\'' via bash expansion (no sed).
-  local cmd="claude --remote-control --name $name --session-id $sid"
+  # direnv-aware launch prefix — empty unless an already-allowed .envrc loads for
+  # $dir (a nested worktree finds the main repo's via direnv's upward walk; see
+  # direnv_launcher).
+  local dpfx; dpfx="$(direnv_launcher "$dir")"
+  local cmd="${dpfx}claude --remote-control --name $name --session-id $sid"
   if [ -n "$prompt" ]; then
     # Escape each ' as '\'' in a standalone assignment (embedding the expansion
     # inside the double-quoted cmd "...'${p//.../...}'..." mangles the backslashes).

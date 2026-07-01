@@ -8,6 +8,7 @@ description: |
   or mentions CDP. Attaches to a running CDP instance for browser automation.
 user_invocable: true
 context: fork
+model: sonnet
 argument-hint: "<operation> [args...]"
 ---
 

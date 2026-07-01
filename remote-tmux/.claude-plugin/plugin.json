@@ -1,7 +1,7 @@
 {
   "name": "remote-tmux",
   "description": "tmux-tracked `claude remote-control` toolkit: spawn one-off sessions (remote-spawn skill) or keep a self-restarting --spawn-worktree pool host alive per project (rc-pool skill), reachable from the Claude app",
-  "version": "4.1.1",
+  "version": "4.1.2",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

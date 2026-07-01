@@ -49,25 +49,40 @@ need() { command -v "$1" >/dev/null 2>&1 || { echo "ERROR: '$1' not found on PAT
 # `direnv exec <dir>` explicitly. A linked git worktree usually has NO .envrc of
 # its own: repos gitignore .envrc, so `git worktree add` never materializes it —
 # borrow the MAIN worktree's via a symlink (the same .gitignore keeps the link
-# uncommitted) and `direnv allow` it. Fail-open: any missing piece (direnv absent,
-# no reachable .envrc, allow fails) prints an EMPTY prefix, i.e. the original bare
-# `claude` launch — behavior unchanged for repos without an .envrc. Diagnostics go
-# to stderr so only the prefix lands on stdout (this runs in a command sub).
+# uncommitted). Trust is PROPAGATED, never fabricated: we only `direnv allow` the
+# worktree copy when the main worktree's .envrc is ALREADY allowed by the user, so
+# direnv's review gate is never bypassed (an unreviewed .envrc is never
+# auto-trusted). Fail-open: unless the target's .envrc is present AND already
+# loads, print an EMPTY prefix — the original bare `claude` launch, unchanged.
+# Diagnostics go to stderr so only the prefix lands on stdout (this runs in a
+# command sub).
 direnv_launcher() {
   local dir="$1"
   command -v direnv >/dev/null 2>&1 || return 0
-  # Linked worktree missing its own .envrc: symlink the main worktree's one in.
+  # Linked worktree missing its own .envrc: borrow the main worktree's — but ONLY
+  # by propagating trust the user already granted. `direnv exec <main> true`
+  # succeeds iff main's .envrc is already allowed; only then symlink it in and
+  # `direnv allow` the (identical, already-trusted) worktree copy. This keeps
+  # direnv's review gate intact — an unreviewed .envrc is never auto-trusted.
   if [ ! -e "$dir/.envrc" ] && git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     local common main_wt
     common="$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
     main_wt="$(dirname "$common" 2>/dev/null)"   # <main>/.git -> <main>
-    if [ -n "$common" ] && [ "$main_wt" != "$dir" ] && [ -f "$main_wt/.envrc" ]; then
-      ln -s "$main_wt/.envrc" "$dir/.envrc" 2>/dev/null \
-        && echo "  linked .envrc <- $main_wt/.envrc (worktree had none)" >&2
+    if [ -n "$common" ] && [ "$main_wt" != "$dir" ] && [ -f "$main_wt/.envrc" ] \
+       && direnv exec "$main_wt" true >/dev/null 2>&1; then   # main already allowed?
+      if ln -s "$main_wt/.envrc" "$dir/.envrc" 2>/dev/null; then
+        echo "  linked .envrc <- $main_wt/.envrc (worktree had none)" >&2
+        direnv allow "$dir" >/dev/null 2>&1 || true  # propagate the already-trusted content
+      fi
     fi
   fi
-  [ -e "$dir/.envrc" ] || return 0             # nothing reachable -> bare launch
-  direnv allow "$dir" >/dev/null 2>&1 || true  # idempotent; exec refuses a blocked .envrc
+  # Wrap ONLY when the target's .envrc is present AND actually loads — already
+  # allowed (direct case) or just trust-propagated (worktree case). This behavioral
+  # gate never auto-trusts unreviewed content and is the true fail-open: a missing /
+  # blocked / unallowed .envrc -> empty prefix -> the original bare `claude` launch.
+  # (The probe loads an already-trusted, typically static .envrc once — negligible
+  # next to the launch's own load.)
+  [ -e "$dir/.envrc" ] && direnv exec "$dir" true >/dev/null 2>&1 || return 0
   # Single-quote dir the same way spawn() quotes the prompt: POSIX-safe for the
   # `sh -c` tmux runs, and safe against spaces / word-splitting.
   local edir=${dir//\'/\'\\\'\'}

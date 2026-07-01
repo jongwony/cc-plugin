@@ -42,6 +42,38 @@ sanitize() { printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '-' | sed 's/--*/-/g; s/^-/
 # instead of letting a later command fail mid-flight (or, worse, printing success).
 need() { command -v "$1" >/dev/null 2>&1 || { echo "ERROR: '$1' not found on PATH (required by rc-spawn)" >&2; return 127; }; }
 
+# Compute a launch-command PREFIX (printed to stdout) that makes a spawned claude
+# inherit the target dir's direnv env — its .envrc creds. A detached tmux session
+# runs the launch through a non-interactive `sh -c`, which NEVER fires direnv's
+# shell hook, so an .envrc is silently ignored unless we wrap the launch in
+# `direnv exec <dir>` explicitly. A linked git worktree usually has NO .envrc of
+# its own: repos gitignore .envrc, so `git worktree add` never materializes it —
+# borrow the MAIN worktree's via a symlink (the same .gitignore keeps the link
+# uncommitted) and `direnv allow` it. Fail-open: any missing piece (direnv absent,
+# no reachable .envrc, allow fails) prints an EMPTY prefix, i.e. the original bare
+# `claude` launch — behavior unchanged for repos without an .envrc. Diagnostics go
+# to stderr so only the prefix lands on stdout (this runs in a command sub).
+direnv_launcher() {
+  local dir="$1"
+  command -v direnv >/dev/null 2>&1 || return 0
+  # Linked worktree missing its own .envrc: symlink the main worktree's one in.
+  if [ ! -e "$dir/.envrc" ] && git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    local common main_wt
+    common="$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
+    main_wt="$(dirname "$common" 2>/dev/null)"   # <main>/.git -> <main>
+    if [ -n "$common" ] && [ "$main_wt" != "$dir" ] && [ -f "$main_wt/.envrc" ]; then
+      ln -s "$main_wt/.envrc" "$dir/.envrc" 2>/dev/null \
+        && echo "  linked .envrc <- $main_wt/.envrc (worktree had none)" >&2
+    fi
+  fi
+  [ -e "$dir/.envrc" ] || return 0             # nothing reachable -> bare launch
+  direnv allow "$dir" >/dev/null 2>&1 || true  # idempotent; exec refuses a blocked .envrc
+  # Single-quote dir the same way spawn() quotes the prompt: POSIX-safe for the
+  # `sh -c` tmux runs, and safe against spaces / word-splitting.
+  local edir=${dir//\'/\'\\\'\'}
+  printf "direnv exec '%s' " "$edir"
+}
+
 spawn() {
   local dir="$1" name="$2" prompt="$3"
   [ -n "$dir" ] || { echo "usage: rc-spawn.sh spawn <dir> [name] [prompt]" >&2; return 2; }
@@ -74,7 +106,11 @@ spawn() {
   # Build the claude command. name is sanitized to [A-Za-z0-9._-] so it needs no
   # quoting; an optional prompt is arbitrary text, so single-quote it for the
   # `sh -c` that tmux runs. Escape embedded ' as '\'' via bash expansion (no sed).
-  local cmd="claude --remote-control --name $name --session-id $sid"
+  # direnv-aware launch prefix (empty when there's nothing to load — see
+  # direnv_launcher). For a linked worktree this also symlinks the main worktree's
+  # .envrc in first, so the wrap has something to load.
+  local dpfx; dpfx="$(direnv_launcher "$dir")"
+  local cmd="${dpfx}claude --remote-control --name $name --session-id $sid"
   if [ -n "$prompt" ]; then
     # Escape each ' as '\'' in a standalone assignment (embedding the expansion
     # inside the double-quoted cmd "...'${p//.../...}'..." mangles the backslashes).

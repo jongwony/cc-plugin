@@ -3,6 +3,7 @@ name: video-understanding
 description: |
   This skill should be used when the user asks to "analyze video", "summarize video", "extract video transcript", "understand video content", "video to text", "describe video", "ask questions about video", or "what happens in this video". Analyzes videos using Google Gemini API with local file upload or YouTube URL input.
 context: fork
+model: sonnet
 ---
 
 # Video Understanding with Gemini

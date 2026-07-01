@@ -3,6 +3,7 @@ name: pdf-split
 description: |
   This skill should be used when the user asks to "split PDF by chapters", "divide book into chapters", "extract chapters from PDF", or "break PDF into sections". Splits PDF documents based on table of contents or text patterns using pypdf.
 context: fork
+model: sonnet
 ---
 
 # PDF Chapter Splitting

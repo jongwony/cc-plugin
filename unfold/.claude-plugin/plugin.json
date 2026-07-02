@@ -1,7 +1,7 @@
 {
   "name": "unfold",
   "description": "Linear loop moment router — unfold the whole picture, next unblocked actions, runbook invariants, decision log, and roadmap from Linear; write only structure and decisions, never state",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

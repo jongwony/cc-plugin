@@ -11,7 +11,7 @@ description: |
   왔지" / "roadmap" (roadmap). Reads auto-derived state from Linear via MCP;
   writes ONLY structure and decisions (never status). Invoked as
   /unfold [moment] [project].
-version: 0.1.0
+version: 0.1.1
 ---
 
 # Unfold — Linear Loop Moment Router
@@ -34,7 +34,11 @@ and structure deltas.
   or live-system facts (deploy/image existence) in Linear. Status flows from
   PR events; live facts are read from their source (CI, registry, ArgoCD)
   at need. Hand-mirrored state drifts, and stale state read back as "the
-  whole picture" pollutes downstream judgment.
+  whole picture" pollutes downstream judgment. Sole exception: the initial
+  state of a backfilled issue — one created for work finished before the
+  issue existed — is set once at creation, because no PR event will ever
+  fire for it; this is a one-time creation fact, not ongoing mirroring,
+  and automation owns the state from then on.
 
 ## Invocation
 
@@ -86,7 +90,7 @@ moment. Summary:
 | `deploy` | runbook document | — | ordering invariants section only |
 | `decide` | the target issue | `save_comment` | one-line decision log (draft → confirm → write) |
 | `close` | this session's work | `save_issue` / `save_document` | structure-delta checklist → minimal writes |
-| `roadmap` | initiative, member projects, milestones | optional `save_comment` | gate timeline + open path decisions |
+| `roadmap` | initiative, member projects, milestones | — (path decisions route to `decide`) | gate timeline + open path decisions |
 
 ## Output discipline
 

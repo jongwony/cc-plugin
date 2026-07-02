@@ -69,7 +69,10 @@ Checklist the session against the structure in Linear; write only deltas:
 
 1. **New workstream emerged?** → `save_issue` (team, project, milestone,
    `blockedBy`/`blocks` edges, PR links as `links`). State: let automation
-   own it — set only the initial state when backfilling already-done work.
+   own it. Backfill exception (mirrors the SKILL.md core rule): an issue
+   created for work finished before it existed gets its state set once at
+   creation — no PR event will ever fire for it; a one-time creation fact,
+   not ongoing state mirroring.
 2. **Dependency changed?** → `save_issue` on the existing issue with
    `blockedBy`/`removeBlockedBy` etc.
 3. **Runbook stale?** (order/invariant changed this session) →

@@ -106,3 +106,9 @@ moment. Summary:
 - **`references/moments.md`** — per-moment procedures: MCP call sequences,
   the unblocked-derivation algorithm, decision-comment and structure-delta
   templates, roadmap aggregation.
+- **`references/catalog.md`** — the design record behind the moments: the
+  cognitive-job → representation-form → Linear-realization mapping table,
+  the span-coupled habit loop, pinned views, and the prototype evidence.
+  Consult when the utterance names a Linear view or representation need
+  rather than a clear moment, or when deciding which form a readout should
+  take.

@@ -1,6 +1,6 @@
 # Known Claude Code Features
 
-Last updated: 2026-03 (v2.1.76)
+Last updated: 2026-07 (v2.1.198)
 
 ## Table of Contents
 1. [Slash Commands](#slash-commands)
@@ -13,6 +13,7 @@ Last updated: 2026-03 (v2.1.76)
 8. [Skill & Plugin System](#skill--plugin-system)
 9. [Context Display Behavior](#context-display-behavior)
 10. [MCP Elicitation](#mcp-elicitation)
+11. [Bundled dataviz Skill](#bundled-dataviz-skill-v21198)
 
 ---
 
@@ -444,6 +445,52 @@ Both hooks support `matcherMetadata` on `mcp_server_name`, allowing per-server h
 |--------|-----------|---------|
 | `elicitation/create` | Server → Client | Request user input |
 | `notifications/elicitation/complete` | Client → Server | Notify URL-mode elicitation completed |
+
+---
+
+## Bundled dataviz Skill (v2.1.198)
+
+**Confidence**: Confirmed (v2.1.198; binary RE cross-checked against materialized files and a live invocation transcript)
+**Feature flag**: `tengu_cobalt_plinth_dataviz` — gates only the Artifacts-skill callout, NOT the skill itself
+**Introduced**: observed in v2.1.198; exact first-shipping version unverified (v2.1.196/.197 binary diff pending)
+
+`/dataviz` turns chart-making into a checked procedure (form first → color by job → scripted palette validation → mark specs → hover layer → a11y pass → render check). Registered unconditionally at startup (`registerDatavizSkill()`, `userInvocable: true`, no disable env var); only name + description are context-resident until invoked, with the prompt assembled lazily by `getPromptForCommand`.
+
+### Dual-Channel Delivery
+
+The skill body and its support files ship through different channels (separate `SKILL_MD` / `SKILL_FILES` exports in the bundle):
+
+| Channel | Content | On disk? |
+|---------|---------|----------|
+| Prompt injection (`SKILL_MD`) | SKILL.md body | **No** — injected at invocation, never materialized |
+| Filesystem (`SKILL_FILES`) | 7 references + 2 scripts | Yes — `$TMPDIR/claude-{uid}/bundled-skills/{version}/{content-hash}/dataviz/` (same content hash → path reuse) |
+
+Consequence: the materialized directory contains NO SKILL.md — by design, not a bug. A transcript of a dataviz-following session shows `Read`/`Bash` tool_use on the materialized files but never a `Skill` tool entry; subagents (which cannot invoke Skill) get equivalent delivery by being handed the files plus the skill body as text.
+
+### File Manifest
+
+- `references/` (7): `palette.md`, `color-formula.md`, `choosing-a-form.md`, `marks-and-anatomy.md`, `anti-patterns.md`, `interaction.md`, `components.md`
+- `scripts/` (2): `validate_palette.js` (Node CLI + browser `data-palette` module, dual entry), `validate_palette.py`
+
+### Palette Validator Contract (`validate_palette.js`)
+
+| Check | Threshold |
+|-------|-----------|
+| Lightness band (OKLCH L) | light 0.43–0.77 · dark 0.48–0.67 |
+| Chroma floor (OKLCH C) | ≥ 0.10 |
+| CVD separation (Machado-2009 protan/deutan; tritan advisory) | ΔE ≥ 12 target; 8–12 floor legal only with secondary encoding |
+| Contrast vs surface (WCAG relative luminance) | ≥ 3:1; WARN obligates visible labels or a table view |
+| `--ordinal` (separate check set) | monotonic lightness, ΔL ≥ 0.06 steps, lightest end ≥ 2:1, single hue ≤ 40° drift |
+
+Exit-code contract: hard FAIL → exit 1; WARN → exit 0 with obligations. Default surfaces `#fcfcfb` (light) / `#1a1a19` (dark). Flags: `--mode light|dark`, `--pairs adjacent|all`, `--ordinal`.
+
+### Rollout Gate Position
+
+`tengu_cobalt_plinth_dataviz` (Statsig, default false) sits on the ROUTING edge, not on the skill: it gates the `<!-- dataviz-callout -->` substitution inside the Artifacts skill (the auto-recommendation nudge). The skill itself is registered and user-invocable regardless of the flag.
+
+### Measured Value (zero-context A/B, 2026-07)
+
+Two zero-context sonnet subagents, identical dashboard task and data with 5 embedded traps; the only difference was providing the dataviz package files. The bare arm failed 3 traps (built a dual-axis combo chart; its dark palette flunked the validator with exit 1; reused status hues as series colors); the dataviz arm failed 0. The bare arm's light palette still passed CVD at 24.1 — latent model knowledge covers light-palette basics. The skill's value therefore concentrates in failure-mode elimination (dual-axis refusal, dark-mode recalibration, status-color discipline); it is maximal in empty contexts, and in a pre-saturated context the knowledge-injection component collapses toward zero, leaving procedure enforcement (validator run, render check).
 
 ---
 

@@ -91,10 +91,14 @@ Show the delta list as a draft; write each item on confirmation.
 1. `get_initiative` / `list_initiatives` for the umbrella; `list_projects`
    or the initiative's member projects.
 2. Per project: `list_milestones` — gate ladder with %.
-3. Emit the gate timeline: which gate each project sits at, which gates are
+3. Decision layer: `list_comments` with `projectId` per member project —
+   the project-anchored decision threads `decide` writes — plus open issues
+   in a hold/paused-type state (`list_issues` scoped to the project). These
+   are the executable sources for pending path decisions and HOLD items.
+4. Emit the gate timeline: which gate each project sits at, which gates are
    blocked on which (project dependencies are end-to-start only), and the
-   open path decisions (pending decision comments, HOLD items).
-4. A path decision made here → route to `decide` (comment on the issue or a
+   open path decisions from step 3 (pending decision comments, HOLD items).
+5. A path decision made here → route to `decide` (comment on the issue or a
    project-level comment via `save_comment` with `projectId`).
 
 ## Caveats learned in the field

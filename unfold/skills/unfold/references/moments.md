@@ -70,6 +70,12 @@ also a `close`-style structure delta (edge change). Do both.
 
 Checklist the session against the structure in Linear; write only deltas:
 
+0. **Read current structure first** — `list_issues` scoped to the project
+   (non-archived; `includeRelations` on candidates) and `list_documents`.
+   A delta exists only against this read: an issue, edge, or runbook line
+   already present in Linear is not a delta, and re-writing it creates
+   duplicates or clobbers edits made outside this session.
+
 1. **New workstream emerged?** → `save_issue` (team, project, milestone,
    `blockedBy`/`blocks` edges, PR links as `links`). State: let automation
    own it. Backfill exception (mirrors the SKILL.md core rule): an issue
@@ -91,13 +97,19 @@ Show the delta list as a draft; write each item on confirmation.
 1. `get_initiative` / `list_initiatives` for the umbrella; `list_projects`
    or the initiative's member projects.
 2. Per project: `list_milestones` — gate ladder with %.
-3. Decision layer: `list_comments` with `projectId` per member project —
-   the project-anchored decision threads `decide` writes — plus open issues
-   in a hold/paused-type state (`list_issues` scoped to the project). These
-   are the executable sources for pending path decisions and HOLD items.
+3. Decision layer: `list_comments` with `projectId` per member project
+   (the project-anchored decision threads `decide` writes) plus
+   `list_issues` scoped to the project for hold/paused-type states.
+   Distinguish by thread state: a thread whose latest message is a
+   `결정:` record is a RESOLVED decision — emit as context, not as open;
+   a thread ending in an open question, and any hold-state issue, is an
+   OPEN path decision. Issue-anchored decisions belong to their
+   workstream's `open`/`next` view — roadmap deliberately reads only the
+   project layer.
 4. Emit the gate timeline: which gate each project sits at, which gates are
-   blocked on which (project dependencies are end-to-start only), and the
-   open path decisions from step 3 (pending decision comments, HOLD items).
+   blocked on which (project dependencies are end-to-start only), the open
+   path decisions from step 3, and the latest resolved decisions as
+   context.
 5. A path decision made here → route to `decide` (comment on the issue or a
    project-level comment via `save_comment` with `projectId`).
 

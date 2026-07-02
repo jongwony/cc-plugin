@@ -26,6 +26,10 @@ records what the prototype proved.
 - Why: manual mirroring leads to missed updates → accumulated error → a stale
   whole-picture read back as truth — context pollution. Making the manual
   surface zero removes that chain entirely.
+- Sole exception (mirrors the SKILL.md core rule): a backfilled issue — one
+  created for work finished before the issue existed — gets its state set
+  once at creation, because no PR event will ever fire for it; a one-time
+  creation fact, not ongoing mirroring.
 - Permanently manual in Linear (do not use as state carriers): project health
   (On track / At risk — officially never automated), initiative health,
   closing a milestone itself (only its % is automatic), release stages
@@ -60,7 +64,7 @@ closing.
 | Right before deploy/merge | `deploy` | read: ordering invariants (not status) | project runbook document, ordering-invariants section |
 | Choosing a path | `decide` | **write (the only recurring hand-write)**: one line on why this path | `save_comment` on the issue (or project) — decision log |
 | Closing a span (/clear, distill, worker exit) | `close` | write: structural deltas only — new workstream issues, edge changes, runbook updates; distilled handoffs → project doc | `save_issue` (blockedBy) / `save_document`. State is not written |
-| Weekly / roadmap | `roadmap` | read + choose: path decisions over the gate timeline; record choices as comments | initiative timeline + milestone % + decision threads |
+| Weekly / roadmap | `roadmap` | read + choose: path decisions over the gate timeline; recording a choice routes to `decide` (roadmap itself writes nothing) | initiative timeline + milestone % + decision threads |
 
 Three views worth pinning in the Linear UI: ① project overview (gates +
 runbook), ② a saved "unblocked" view (saved once in the UI — views cannot be

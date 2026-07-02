@@ -55,10 +55,13 @@ The only recurring hand-write. Template (one line, plus optional basis):
 
 > 결정: <chosen path>. 이유: <one-line why>. 배제: <rejected alternative — why not>.
 
-1. Identify the issue the decision belongs to (the workstream issue whose
-   path was chosen). Ambiguous → ask which issue anchors the decision.
+1. Identify the anchor the decision belongs to: the workstream issue whose
+   path was chosen (default), or the project itself when the decision spans
+   workstreams (e.g. a roadmap path selection). Ambiguous → ask which issue
+   or project anchors the decision.
 2. Draft the comment from the template; show the draft.
-3. On confirmation, `save_comment` with `issueId`.
+3. On confirmation, `save_comment` with `issueId` — or `projectId` for a
+   project-scoped decision; the tool accepts exactly one parent.
 
 A decision that changes the dependency topology is not just a comment — it is
 also a `close`-style structure delta (edge change). Do both.

@@ -11,7 +11,7 @@ description: |
   왔지" / "roadmap" (roadmap). Reads auto-derived state from Linear via MCP;
   writes ONLY structure and decisions (never status). Invoked as
   /unfold [moment] [project].
-version: 0.1.1
+version: 0.1.2
 ---
 
 # Unfold — Linear Loop Moment Router
@@ -73,7 +73,7 @@ Resolve the target Linear project in this order; never hardcode project IDs:
 
 Linear MCP tools are deferred in most sessions. Before the first call, load
 schemas via ToolSearch, e.g.
-`select:mcp__claude_ai_Linear__list_issues,mcp__claude_ai_Linear__get_issue,mcp__claude_ai_Linear__list_milestones,mcp__claude_ai_Linear__get_project,mcp__claude_ai_Linear__list_documents,mcp__claude_ai_Linear__get_document,mcp__claude_ai_Linear__save_comment,mcp__claude_ai_Linear__save_issue,mcp__claude_ai_Linear__save_document`
+`select:mcp__claude_ai_Linear__list_issues,mcp__claude_ai_Linear__get_issue,mcp__claude_ai_Linear__list_milestones,mcp__claude_ai_Linear__get_project,mcp__claude_ai_Linear__list_documents,mcp__claude_ai_Linear__get_document,mcp__claude_ai_Linear__save_comment,mcp__claude_ai_Linear__save_issue,mcp__claude_ai_Linear__save_document,mcp__claude_ai_Linear__get_initiative,mcp__claude_ai_Linear__list_initiatives`
 (load only what the moment needs; exact server prefix may differ — discover
 with a keyword search on "linear" first when unsure).
 

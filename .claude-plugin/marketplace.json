@@ -88,6 +88,11 @@
       "name": "manim",
       "source": "./manim",
       "description": "Render short headless Manim animations (math / parametric / 3D / equations) to browser-embeddable mp4/webm/gif with a ready-to-paste embed snippet"
+    },
+    {
+      "name": "unfold",
+      "source": "./unfold",
+      "description": "Linear loop moment router — unfold the whole picture, next unblocked actions, runbook invariants, decision log, and roadmap from Linear; write only structure and decisions, never state"
     }
   ]
 }

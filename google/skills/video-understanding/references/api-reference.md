@@ -6,7 +6,7 @@ Examples use the **Interactions API** (`client.interactions.create`), the curren
 idiom. Inputs are plain dicts (no `types.*` wrappers) and output is read from
 `interaction.output_text`. `generateContent` still works and remains the fallback for the
 two capabilities the Interactions API does not expose — video clipping and custom fps
-(both noted inline below). Requires `google-genai >= 2.0.0`.
+(both noted inline below). Requires `google-genai >= 2.3.0` (Google's documented SDK floor for the Interactions API).
 
 ## Model
 
@@ -76,6 +76,10 @@ interaction = client.interactions.create(
 )
 print(interaction.output_text)
 ```
+
+Interactions are stored server-side by default (`store=true`). For one-shot
+requests pass `store=False`; it is incompatible with `previous_interaction_id`
+and `background=true`.
 
 ### With Configuration
 
@@ -192,7 +196,7 @@ https://www.youtube.com/embed/VIDEO_ID
 
 ## Inline Data
 
-For small videos (<20MB):
+For small videos — the 20MB limit is TOTAL request size after base64 encoding (~15MB raw):
 
 ```python
 import base64
@@ -404,11 +408,11 @@ print(final.output_text)
 ## SDK Installation
 
 ```bash
-# Using uv (recommended) — Interactions API requires >= 2.0.0
-uv pip install "google-genai>=2.0.0"
+# Using uv (recommended) — Interactions API requires >= 2.3.0
+uv pip install "google-genai>=2.3.0"
 
 # Using pip
-pip install "google-genai>=2.0.0"
+pip install "google-genai>=2.3.0"
 ```
 
 ## Authentication

@@ -23,7 +23,7 @@ Environment:
     GEMINI_API_KEY - Google AI API key (required)
 
 Install:
-    uv pip install "google-genai>=2.0.0"
+    uv pip install "google-genai>=2.3.0"
 """
 
 import argparse
@@ -37,7 +37,7 @@ try:
     from google import genai
     from google.genai import types  # only for the legacy clipping fallback
 except ImportError:
-    print('Error: google-genai not installed. Run: uv pip install "google-genai>=2.0.0"')
+    print('Error: google-genai not installed. Run: uv pip install "google-genai>=2.3.0"')
     sys.exit(1)
 
 
@@ -105,13 +105,17 @@ def create_interaction(client: genai.Client, input_parts: list, low_res: bool):
     generation_config has no media_resolution key in the Interactions API (an
     unknown key there is silently ignored), so --low-res is applied by tagging
     each video part. Per-item means it covers every source (local and YouTube).
+
+    Requests are sent with store=False: this is a one-shot analysis utility (no
+    previous_interaction_id chaining, no background execution), so interactions
+    are not persisted server-side.
     """
     if low_res:
         input_parts = [
             {**p, "resolution": "low"} if p.get("type") == "video" else p
             for p in input_parts
         ]
-    return client.interactions.create(model=MODEL, input=input_parts)
+    return client.interactions.create(model=MODEL, input=input_parts, store=False)
 
 
 def upload_video(client: genai.Client, file_path: str):
@@ -199,9 +203,11 @@ def analyze_local_file(
 
     file_size = path.stat().st_size
 
-    # Use inline data for small files (<20MB), Files API otherwise.
-    if file_size < 20 * 1024 * 1024:
-        print("Using inline data (file < 20MB)")
+    # The 20MB inline limit is TOTAL request size; base64 inflates ~4/3,
+    # so compare the encoded size, not the raw file size.
+    encoded_size = file_size * 4 // 3
+    if encoded_size < 20 * 1024 * 1024:
+        print("Using inline data (encoded size < 20MB)")
         with open(file_path, "rb") as f:
             video_data = base64.standard_b64encode(f.read()).decode("utf-8")
 
@@ -211,7 +217,7 @@ def analyze_local_file(
             {"type": "video", "data": video_data, "mime_type": mime_type},
         ]
     else:
-        print("Using Files API (file >= 20MB)")
+        print("Using Files API (encoded size >= 20MB)")
         video_file = upload_video(client, file_path)
         input_parts = [
             {"type": "text", "text": prompt},

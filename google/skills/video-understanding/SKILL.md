@@ -18,8 +18,8 @@ development. Inputs are plain dicts — no `types.*` wrappers — and output is 
 ## Prerequisites
 
 ```bash
-# Install SDK (Interactions API requires >= 2.0.0)
-uv pip install "google-genai>=2.0.0"
+# Install SDK (Interactions API requires >= 2.3.0)
+uv pip install "google-genai>=2.3.0"
 
 # Set API key
 export GEMINI_API_KEY="your-api-key"
@@ -29,7 +29,7 @@ export GEMINI_API_KEY="your-api-key"
 
 ### 1. Files API Upload (Recommended for local files)
 
-For files >20MB (or when reusing a video across prompts), use Files API for reliable upload.
+For files that would push the request past 20MB once base64-encoded (raw size above ~15MB), or when reusing a video across prompts, use Files API for reliable upload.
 
 ```python
 import os
@@ -61,7 +61,7 @@ interaction = client.interactions.create(
 print(interaction.output_text)
 ```
 
-### 2. Inline Data (For small files <20MB)
+### 2. Inline Data (total request <20MB after base64 encoding — raw size up to ~15MB)
 
 ```python
 import base64
@@ -195,6 +195,21 @@ interaction = client.interactions.create(
 print(interaction.output_text)
 ```
 
+### Server-Side Storage (`store`)
+
+By default the Interactions API stores every interaction server-side (`store=true`).
+The bundled script passes `store=False` — a one-shot analysis has no reason to
+persist requests. Note `store=False` is incompatible with `previous_interaction_id`
+chaining and `background=true`; omit it if you build multi-turn flows on top.
+
+```python
+interaction = client.interactions.create(
+    model="gemini-3.5-flash",
+    input=[...],
+    store=False,  # do not persist this interaction server-side
+)
+```
+
 ## Token Calculation
 
 Understanding token costs for capacity planning:
@@ -225,8 +240,8 @@ Understanding token costs for capacity planning:
 ## Workflow
 
 1. **Determine input method:**
-   - Local file >20MB → Files API upload
-   - Local file <20MB → Inline data
+   - Local file above ~15MB raw (>20MB once base64-encoded) → Files API upload
+   - Smaller local file → Inline data
    - YouTube public URL → Direct URL
 
 2. **Choose analysis type** based on user request

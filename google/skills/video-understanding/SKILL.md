@@ -29,7 +29,7 @@ export GEMINI_API_KEY="your-api-key"
 
 ### 1. Files API Upload (Recommended for local files)
 
-For files >100MB or videos >1 minute, use Files API for reliable upload.
+For files >20MB (or when reusing a video across prompts), use Files API for reliable upload.
 
 ```python
 from google import genai

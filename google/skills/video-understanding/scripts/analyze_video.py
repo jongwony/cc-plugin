@@ -78,6 +78,7 @@ Format each as: [MM:SS] Description""",
 MIME_TYPES = {
     ".mp4": "video/mp4",
     ".mpeg": "video/mpeg",
+    ".mpg": "video/mpg",
     ".mov": "video/mov",
     ".avi": "video/avi",
     ".webm": "video/webm",
@@ -97,24 +98,20 @@ def is_youtube_url(source: str) -> bool:
     return any(p in source.lower() for p in youtube_patterns)
 
 
-def generation_config(low_res: bool):
-    """Interactions generation_config dict for the request, or None.
+def create_interaction(client: genai.Client, input_parts: list, low_res: bool):
+    """Run an Interactions API request.
 
-    media_resolution is a request-level parameter, so --low-res applies to every
-    input source (local file and YouTube alike).
+    Media resolution is a per-item field on video parts ("resolution": "low");
+    generation_config has no media_resolution key in the Interactions API (an
+    unknown key there is silently ignored), so --low-res is applied by tagging
+    each video part. Per-item means it covers every source (local and YouTube).
     """
     if low_res:
-        return {"media_resolution": "MEDIA_RESOLUTION_LOW"}
-    return None
-
-
-def create_interaction(client: genai.Client, input_parts: list, low_res: bool):
-    """Run an Interactions API request, omitting generation_config when unset."""
-    kwargs = {"model": MODEL, "input": input_parts}
-    config = generation_config(low_res)
-    if config is not None:
-        kwargs["generation_config"] = config
-    return client.interactions.create(**kwargs)
+        input_parts = [
+            {**p, "resolution": "low"} if p.get("type") == "video" else p
+            for p in input_parts
+        ]
+    return client.interactions.create(model=MODEL, input=input_parts)
 
 
 def upload_video(client: genai.Client, file_path: str):

@@ -80,19 +80,21 @@ print(interaction.output_text)
 ### With Configuration
 
 Request-level settings go in `generation_config`; `response_format` moves to a top-level
-parameter (it was nested inside `GenerateContentConfig` under generateContent):
+parameter (it was nested inside `GenerateContentConfig` under generateContent). Media
+resolution is NOT one of those request-level settings — it's a per-item field on the
+video part instead:
 
 ```python
 interaction = client.interactions.create(
     model="gemini-3.5-flash",
     input=[
         {"type": "text", "text": prompt},
-        {"type": "video", "uri": video_file.uri, "mime_type": video_file.mime_type},
+        {"type": "video", "uri": video_file.uri, "mime_type": video_file.mime_type,
+         "resolution": "low"},  # per-item media resolution
     ],
     generation_config={
         "temperature": 0.7,
         "max_output_tokens": 8192,
-        "media_resolution": "MEDIA_RESOLUTION_LOW",  # Reduce token usage
     },
 )
 print(interaction.output_text)
@@ -334,7 +336,7 @@ Audio processing specs:
 
 ### Optimize Token Usage
 
-1. Use `generation_config={"media_resolution": "MEDIA_RESOLUTION_LOW"}` for non-visual analysis
+1. Use the per-item `"resolution": "low"` field on video parts for non-visual analysis
 2. Set appropriate FPS for content type (legacy `generate_content` only)
 3. Use clipping to analyze only relevant segments (legacy `generate_content` only)
 4. Delete uploaded files after use

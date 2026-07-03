@@ -176,17 +176,19 @@ video_metadata=types.VideoMetadata(fps=0.5)  # 1 frame per 2 seconds
 
 ### Resolution Control
 
-Reduce token usage with lower resolution. `media_resolution` is a request-level
-parameter under `generation_config`, so it applies to every source (local and YouTube):
+Reduce token usage with lower resolution. `resolution` is a per-item field on the video
+input part (values: `low`, `medium`, `high`, `ultra_high`), so it applies to every source
+(local and YouTube) by tagging each video part. `generation_config` has no matching
+resolution key in the Interactions API — such a key there would be silently ignored:
 
 ```python
 interaction = client.interactions.create(
     model="gemini-3.5-flash",
     input=[
         {"type": "text", "text": prompt},
-        {"type": "video", "uri": video_file.uri, "mime_type": video_file.mime_type},
+        {"type": "video", "uri": video_file.uri, "mime_type": video_file.mime_type,
+         "resolution": "low"},  # 66 tokens/frame vs 258 default
     ],
-    generation_config={"media_resolution": "MEDIA_RESOLUTION_LOW"},  # 66 tokens/frame vs 258 default
 )
 print(interaction.output_text)
 ```
@@ -228,7 +230,7 @@ Understanding token costs for capacity planning:
 2. **Choose analysis type** based on user request
 
 3. **Configure optimization:**
-   - Token budget → Use low resolution (`--low-res` / `media_resolution`)
+   - Token budget → Use low resolution (`--low-res` / per-item `resolution`)
    - Long videos → Clip specific segments (legacy `generate_content` only)
    - Static content → Lower FPS (legacy `generate_content` only)
 

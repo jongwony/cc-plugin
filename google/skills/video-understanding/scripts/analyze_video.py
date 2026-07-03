@@ -34,7 +34,7 @@ except ImportError:
 
 
 # Default model
-MODEL = "gemini-3-flash-preview"
+MODEL = "gemini-3.5-flash"
 
 # Analysis type prompts
 PROMPTS = {
@@ -196,6 +196,8 @@ def analyze_youtube(client: genai.Client, url: str, prompt: str) -> str:
 
 
 def main():
+    global MODEL
+
     parser = argparse.ArgumentParser(
         description="Analyze video with Gemini API",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -254,7 +256,6 @@ def main():
     client = genai.Client(api_key=api_key)
 
     # Update model if specified
-    global MODEL
     MODEL = args.model
 
     try:

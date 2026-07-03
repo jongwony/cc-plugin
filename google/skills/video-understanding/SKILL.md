@@ -8,7 +8,7 @@ model: sonnet
 
 # Video Understanding with Gemini
 
-Analyze video content using Google Gemini 3 Flash API. Extract summaries, transcripts, timestamps, and answer questions about video content from local files or YouTube URLs.
+Analyze video content using Google Gemini 3.5 Flash API. Extract summaries, transcripts, timestamps, and answer questions about video content from local files or YouTube URLs.
 
 ## Prerequisites
 
@@ -45,7 +45,7 @@ if video_file.state.name == "FAILED":
 
 # Analyze
 response = client.models.generate_content(
-    model="gemini-3-flash-preview",
+    model="gemini-3.5-flash",
     contents=[video_file, "Summarize this video"]
 )
 print(response.text)
@@ -60,7 +60,7 @@ with open("/path/to/short_video.mp4", "rb") as f:
     video_data = base64.standard_b64encode(f.read()).decode("utf-8")
 
 response = client.models.generate_content(
-    model="gemini-3-flash-preview",
+    model="gemini-3.5-flash",
     contents=[
         {"inline_data": {"mime_type": "video/mp4", "data": video_data}},
         "What is happening in this video?"
@@ -74,7 +74,7 @@ response = client.models.generate_content(
 from google.genai import types
 
 response = client.models.generate_content(
-    model="gemini-3-flash-preview",
+    model="gemini-3.5-flash",
     contents=types.Content(
         parts=[
             types.Part(
@@ -142,7 +142,7 @@ Analyze specific segments only:
 from google.genai import types
 
 response = client.models.generate_content(
-    model="gemini-3-flash-preview",
+    model="gemini-3.5-flash",
     contents=[
         types.Part(
             file_data=types.FileData(file_uri=video_file.uri),
@@ -178,7 +178,7 @@ config = types.GenerateContentConfig(
 )
 
 response = client.models.generate_content(
-    model="gemini-3-flash-preview",
+    model="gemini-3.5-flash",
     contents=[video_file, prompt],
     config=config
 )

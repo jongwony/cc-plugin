@@ -4,7 +4,7 @@ Detailed API documentation for video analysis with Gemini.
 
 ## Model
 
-- `gemini-3-flash-preview`: 1M Latest capabilities
+- `gemini-3.5-flash`: 1M Latest capabilities
 
 ## Files API
 
@@ -62,7 +62,7 @@ client.files.delete(name=video_file.name)
 
 ```python
 response = client.models.generate_content(
-    model="gemini-3-flash-preview",
+    model="gemini-3.5-flash",
     contents=[video_file, "Your prompt here"]
 )
 ```
@@ -73,7 +73,7 @@ response = client.models.generate_content(
 from google.genai import types
 
 response = client.models.generate_content(
-    model="gemini-3-flash-preview",
+    model="gemini-3.5-flash",
     contents=[video_file, prompt],
     config=types.GenerateContentConfig(
         temperature=0.7,
@@ -133,7 +133,7 @@ video_metadata=types.VideoMetadata(
 
 ```python
 response = client.models.generate_content(
-    model="gemini-3-flash-preview",
+    model="gemini-3.5-flash",
     contents=types.Content(
         parts=[
             types.Part(
@@ -178,7 +178,7 @@ with open("video.mp4", "rb") as f:
 video_data = base64.standard_b64encode(video_bytes).decode("utf-8")
 
 response = client.models.generate_content(
-    model="gemini-3-flash-preview",
+    model="gemini-3.5-flash",
     contents=[
         {
             "inline_data": {
@@ -197,7 +197,7 @@ Gemini 2.5+ supports up to 10 videos per request:
 
 ```python
 response = client.models.generate_content(
-    model="gemini-3-flash-preview",
+    model="gemini-3.5-flash",
     contents=[
         video_file_1,
         video_file_2,
@@ -355,7 +355,7 @@ for start, end in segments:
 
 # Combine
 final = client.models.generate_content(
-    model="gemini-3-flash-preview",
+    model="gemini-3.5-flash",
     contents=[
         f"Segment summaries:\n{chr(10).join(summaries)}",
         "Create a unified summary"

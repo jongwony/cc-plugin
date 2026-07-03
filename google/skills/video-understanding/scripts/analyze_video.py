@@ -163,7 +163,9 @@ def analyze_local_file(
     # Configure request
     config = None
     if low_res:
-        config = types.GenerateContentConfig(media_resolution="low")
+        config = types.GenerateContentConfig(
+            media_resolution=types.MediaResolution.MEDIA_RESOLUTION_LOW
+        )
 
     # Generate response
     print("Analyzing...")

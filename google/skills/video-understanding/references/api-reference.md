@@ -78,7 +78,7 @@ response = client.models.generate_content(
     config=types.GenerateContentConfig(
         temperature=0.7,
         max_output_tokens=8192,
-        media_resolution="low",  # Reduce token usage
+        media_resolution=types.MediaResolution.MEDIA_RESOLUTION_LOW,  # Reduce token usage
     )
 )
 ```
@@ -310,7 +310,7 @@ Audio processing specs:
 
 ### Optimize Token Usage
 
-1. Use `media_resolution="low"` for non-visual analysis
+1. Use `media_resolution=types.MediaResolution.MEDIA_RESOLUTION_LOW` for non-visual analysis
 2. Set appropriate FPS for content type
 3. Use clipping to analyze only relevant segments
 4. Delete uploaded files after use

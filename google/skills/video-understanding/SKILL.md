@@ -174,7 +174,7 @@ Reduce token usage with lower resolution:
 
 ```python
 config = types.GenerateContentConfig(
-    media_resolution="low"  # 66 tokens/frame vs 258 default
+    media_resolution=types.MediaResolution.MEDIA_RESOLUTION_LOW  # 66 tokens/frame vs 258 default
 )
 
 response = client.models.generate_content(

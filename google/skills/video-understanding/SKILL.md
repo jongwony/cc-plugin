@@ -32,6 +32,8 @@ export GEMINI_API_KEY="your-api-key"
 For files >20MB (or when reusing a video across prompts), use Files API for reliable upload.
 
 ```python
+import os
+
 from google import genai
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))

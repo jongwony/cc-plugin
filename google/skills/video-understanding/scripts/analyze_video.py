@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """
-Video Analysis with Gemini API
+Video Analysis with Gemini Interactions API
 
 Supports:
 - Local file upload via Files API
 - YouTube URL analysis
 - Multiple analysis types: summary, transcript, timestamps, QnA
+
+Uses the Interactions API (client.interactions.create), the current standard for
+new development. generateContent still works, but Interactions is the default idiom
+in the official docs. Video clipping (--start/--end) has no Interactions equivalent,
+so that path alone falls back to the legacy generate_content call (see analyze_clip).
 
 Usage:
     python analyze_video.py /path/to/video.mp4 "Summarize this video"
@@ -16,6 +21,9 @@ Usage:
 
 Environment:
     GEMINI_API_KEY - Google AI API key (required)
+
+Install:
+    uv pip install "google-genai>=2.0.0"
 """
 
 import argparse
@@ -27,9 +35,9 @@ from pathlib import Path
 
 try:
     from google import genai
-    from google.genai import types
+    from google.genai import types  # only for the legacy clipping fallback
 except ImportError:
-    print("Error: google-genai not installed. Run: uv pip install google-genai")
+    print('Error: google-genai not installed. Run: uv pip install "google-genai>=2.0.0"')
     sys.exit(1)
 
 
@@ -66,6 +74,18 @@ Format each as: [MM:SS] Description""",
 - Visual transitions and effects""",
 }
 
+# Extension -> MIME type
+MIME_TYPES = {
+    ".mp4": "video/mp4",
+    ".mpeg": "video/mpeg",
+    ".mov": "video/mov",
+    ".avi": "video/avi",
+    ".webm": "video/webm",
+    ".wmv": "video/wmv",
+    ".flv": "video/x-flv",
+    ".3gp": "video/3gpp",
+}
+
 
 def is_youtube_url(source: str) -> bool:
     """Check if source is a YouTube URL."""
@@ -77,7 +97,27 @@ def is_youtube_url(source: str) -> bool:
     return any(p in source.lower() for p in youtube_patterns)
 
 
-def upload_video(client: genai.Client, file_path: str) -> types.File:
+def generation_config(low_res: bool):
+    """Interactions generation_config dict for the request, or None.
+
+    media_resolution is a request-level parameter, so --low-res applies to every
+    input source (local file and YouTube alike).
+    """
+    if low_res:
+        return {"media_resolution": "MEDIA_RESOLUTION_LOW"}
+    return None
+
+
+def create_interaction(client: genai.Client, input_parts: list, low_res: bool):
+    """Run an Interactions API request, omitting generation_config when unset."""
+    kwargs = {"model": MODEL, "input": input_parts}
+    config = generation_config(low_res)
+    if config is not None:
+        kwargs["generation_config"] = config
+    return client.interactions.create(**kwargs)
+
+
+def upload_video(client: genai.Client, file_path: str):
     """Upload video file and wait for processing."""
     print(f"Uploading: {file_path}")
 
@@ -97,6 +137,51 @@ def upload_video(client: genai.Client, file_path: str) -> types.File:
     return video_file
 
 
+def analyze_clip(
+    client: genai.Client,
+    file_path: str,
+    prompt: str,
+    low_res: bool,
+    start_offset: str,
+    end_offset: str,
+) -> str:
+    """Analyze a clipped segment of a local video.
+
+    The Interactions API has no offset parameter (video_metadata is silently
+    ignored), so clipping falls back to the legacy generate_content call, which
+    still honors start/end offsets via types.VideoMetadata.
+    """
+    print("Clipping requested -> using legacy generate_content "
+          "(Interactions API has no offset support)")
+    video_file = upload_video(client, file_path)
+
+    metadata = types.VideoMetadata()
+    if start_offset:
+        metadata.start_offset = start_offset
+    if end_offset:
+        metadata.end_offset = end_offset
+
+    config = None
+    if low_res:
+        config = types.GenerateContentConfig(
+            media_resolution=types.MediaResolution.MEDIA_RESOLUTION_LOW
+        )
+
+    print("Analyzing...")
+    response = client.models.generate_content(
+        model=MODEL,
+        contents=[
+            types.Part(
+                file_data=types.FileData(file_uri=video_file.uri),
+                video_metadata=metadata,
+            ),
+            prompt,
+        ],
+        config=config,
+    )
+    return response.text
+
+
 def analyze_local_file(
     client: genai.Client,
     file_path: str,
@@ -105,96 +190,57 @@ def analyze_local_file(
     start_offset: str = None,
     end_offset: str = None,
 ) -> str:
-    """Analyze a local video file."""
+    """Analyze a local video file via the Interactions API."""
     path = Path(file_path)
 
     if not path.exists():
         raise FileNotFoundError(f"Video file not found: {file_path}")
 
+    # Clipping has no Interactions equivalent -> legacy fallback.
+    if start_offset or end_offset:
+        return analyze_clip(client, file_path, prompt, low_res, start_offset, end_offset)
+
     file_size = path.stat().st_size
 
-    # Use inline data for small files (<20MB)
+    # Use inline data for small files (<20MB), Files API otherwise.
     if file_size < 20 * 1024 * 1024:
         print("Using inline data (file < 20MB)")
         with open(file_path, "rb") as f:
             video_data = base64.standard_b64encode(f.read()).decode("utf-8")
 
-        # Determine MIME type
-        suffix = path.suffix.lower()
-        mime_types = {
-            ".mp4": "video/mp4",
-            ".mpeg": "video/mpeg",
-            ".mov": "video/mov",
-            ".avi": "video/avi",
-            ".webm": "video/webm",
-            ".wmv": "video/wmv",
-            ".flv": "video/x-flv",
-            ".3gp": "video/3gpp",
-        }
-        mime_type = mime_types.get(suffix, "video/mp4")
-
-        contents = [
-            {"inline_data": {"mime_type": mime_type, "data": video_data}},
-            prompt,
+        mime_type = MIME_TYPES.get(path.suffix.lower(), "video/mp4")
+        input_parts = [
+            {"type": "text", "text": prompt},
+            {"type": "video", "data": video_data, "mime_type": mime_type},
         ]
     else:
-        # Use Files API for larger files
         print("Using Files API (file >= 20MB)")
         video_file = upload_video(client, file_path)
+        input_parts = [
+            {"type": "text", "text": prompt},
+            {"type": "video", "uri": video_file.uri, "mime_type": video_file.mime_type},
+        ]
 
-        # Build content with optional metadata
-        if start_offset or end_offset:
-            metadata = types.VideoMetadata()
-            if start_offset:
-                metadata.start_offset = start_offset
-            if end_offset:
-                metadata.end_offset = end_offset
-
-            contents = [
-                types.Part(
-                    file_data=types.FileData(file_uri=video_file.uri),
-                    video_metadata=metadata,
-                ),
-                prompt,
-            ]
-        else:
-            contents = [video_file, prompt]
-
-    # Configure request
-    config = None
-    if low_res:
-        config = types.GenerateContentConfig(
-            media_resolution=types.MediaResolution.MEDIA_RESOLUTION_LOW
-        )
-
-    # Generate response
     print("Analyzing...")
-    response = client.models.generate_content(
-        model=MODEL,
-        contents=contents,
-        config=config,
-    )
-
-    return response.text
+    interaction = create_interaction(client, input_parts, low_res)
+    return interaction.output_text
 
 
-def analyze_youtube(client: genai.Client, url: str, prompt: str) -> str:
-    """Analyze a YouTube video."""
+def analyze_youtube(
+    client: genai.Client,
+    url: str,
+    prompt: str,
+    low_res: bool = False,
+) -> str:
+    """Analyze a YouTube video via the Interactions API."""
     print(f"Analyzing YouTube: {url}")
 
-    response = client.models.generate_content(
-        model=MODEL,
-        contents=types.Content(
-            parts=[
-                types.Part(
-                    file_data=types.FileData(file_uri=url)
-                ),
-                types.Part(text=prompt),
-            ]
-        ),
-    )
-
-    return response.text
+    input_parts = [
+        {"type": "text", "text": prompt},
+        {"type": "video", "uri": url},
+    ]
+    interaction = create_interaction(client, input_parts, low_res)
+    return interaction.output_text
 
 
 def main():
@@ -226,11 +272,11 @@ def main():
     )
     parser.add_argument(
         "--start",
-        help="Start offset (e.g., '30s', '1m30s')",
+        help="Start offset (e.g., '30s', '1m30s'); local files only",
     )
     parser.add_argument(
         "--end",
-        help="End offset (e.g., '120s', '5m')",
+        help="End offset (e.g., '120s', '5m'); local files only",
     )
     parser.add_argument(
         "--model",
@@ -262,7 +308,10 @@ def main():
 
     try:
         if is_youtube_url(args.source):
-            result = analyze_youtube(client, args.source, prompt)
+            if args.start or args.end:
+                print("Warning: --start/--end are ignored for YouTube sources "
+                      "(clipping is supported for local files only)", file=sys.stderr)
+            result = analyze_youtube(client, args.source, prompt, low_res=args.low_res)
         else:
             result = analyze_local_file(
                 client,

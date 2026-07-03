@@ -2,6 +2,12 @@
 
 Detailed API documentation for video analysis with Gemini.
 
+Examples use the **Interactions API** (`client.interactions.create`), the current standard
+idiom. Inputs are plain dicts (no `types.*` wrappers) and output is read from
+`interaction.output_text`. `generateContent` still works and remains the fallback for the
+two capabilities the Interactions API does not expose — video clipping and custom fps
+(both noted inline below). Requires `google-genai >= 2.0.0`.
+
 ## Model
 
 - `gemini-3.5-flash`: 1M Latest capabilities
@@ -61,40 +67,62 @@ client.files.delete(name=video_file.name)
 ### Basic Request
 
 ```python
-response = client.models.generate_content(
+interaction = client.interactions.create(
     model="gemini-3.5-flash",
-    contents=[video_file, "Your prompt here"]
+    input=[
+        {"type": "text", "text": "Your prompt here"},
+        {"type": "video", "uri": video_file.uri, "mime_type": video_file.mime_type},
+    ],
 )
+print(interaction.output_text)
 ```
 
 ### With Configuration
+
+Request-level settings go in `generation_config`; `response_format` moves to a top-level
+parameter (it was nested inside `GenerateContentConfig` under generateContent):
+
+```python
+interaction = client.interactions.create(
+    model="gemini-3.5-flash",
+    input=[
+        {"type": "text", "text": prompt},
+        {"type": "video", "uri": video_file.uri, "mime_type": video_file.mime_type},
+    ],
+    generation_config={
+        "temperature": 0.7,
+        "max_output_tokens": 8192,
+        "media_resolution": "MEDIA_RESOLUTION_LOW",  # Reduce token usage
+    },
+)
+print(interaction.output_text)
+```
+
+## Video Metadata Options (legacy generate_content only)
+
+The Interactions API has no video-metadata parameter: `video_metadata` offsets and `fps`
+are silently ignored (a clipped Interactions request was verified to bill the full video's
+token count). Clipping and custom fps therefore require the legacy `generate_content` call.
+
+### Clipping (Start/End Offset)
 
 ```python
 from google.genai import types
 
 response = client.models.generate_content(
     model="gemini-3.5-flash",
-    contents=[video_file, prompt],
-    config=types.GenerateContentConfig(
-        temperature=0.7,
-        max_output_tokens=8192,
-        media_resolution=types.MediaResolution.MEDIA_RESOLUTION_LOW,  # Reduce token usage
-    )
+    contents=[
+        types.Part(
+            file_data=types.FileData(file_uri=video_file.uri),
+            video_metadata=types.VideoMetadata(
+                start_offset="30s",    # Start at 30 seconds
+                end_offset="120s"      # End at 2 minutes
+            )
+        ),
+        "Summarize this segment",
+    ],
 )
-```
-
-## Video Metadata Options
-
-### Clipping (Start/End Offset)
-
-```python
-types.Part(
-    file_data=types.FileData(file_uri=video_file.uri),
-    video_metadata=types.VideoMetadata(
-        start_offset="30s",    # Start at 30 seconds
-        end_offset="120s"      # End at 2 minutes
-    )
-)
+print(response.text)
 ```
 
 **Offset formats:**
@@ -132,19 +160,14 @@ video_metadata=types.VideoMetadata(
 ### Basic Usage
 
 ```python
-response = client.models.generate_content(
+interaction = client.interactions.create(
     model="gemini-3.5-flash",
-    contents=types.Content(
-        parts=[
-            types.Part(
-                file_data=types.FileData(
-                    file_uri="https://www.youtube.com/watch?v=VIDEO_ID"
-                )
-            ),
-            types.Part(text="Summarize this video")
-        ]
-    )
+    input=[
+        {"type": "text", "text": "Summarize this video"},
+        {"type": "video", "uri": "https://www.youtube.com/watch?v=VIDEO_ID"},
+    ],
 )
+print(interaction.output_text)
 ```
 
 ### Supported URL Formats
@@ -177,33 +200,30 @@ with open("video.mp4", "rb") as f:
 
 video_data = base64.standard_b64encode(video_bytes).decode("utf-8")
 
-response = client.models.generate_content(
+interaction = client.interactions.create(
     model="gemini-3.5-flash",
-    contents=[
-        {
-            "inline_data": {
-                "mime_type": "video/mp4",
-                "data": video_data
-            }
-        },
-        "Describe this video"
-    ]
+    input=[
+        {"type": "text", "text": "Describe this video"},
+        {"type": "video", "data": video_data, "mime_type": "video/mp4"},
+    ],
 )
+print(interaction.output_text)
 ```
 
 ## Multi-Video Analysis
 
-Gemini 2.5+ supports up to 10 videos per request:
+Pass multiple video parts in a single `input` list (up to 10 videos per request):
 
 ```python
-response = client.models.generate_content(
+interaction = client.interactions.create(
     model="gemini-3.5-flash",
-    contents=[
-        video_file_1,
-        video_file_2,
-        "Compare these two videos"
-    ]
+    input=[
+        {"type": "text", "text": "Compare these two videos"},
+        {"type": "video", "uri": video_file_1.uri, "mime_type": video_file_1.mime_type},
+        {"type": "video", "uri": video_file_2.uri, "mime_type": video_file_2.mime_type},
+    ],
 )
+print(interaction.output_text)
 ```
 
 ## Token Calculation
@@ -251,12 +271,12 @@ tokens = estimate_tokens(300, "default")  # ~87,000 tokens
 import time
 import random
 
-def generate_with_retry(client, model, contents, max_retries=3):
+def generate_with_retry(client, model, input_parts, max_retries=3):
     for attempt in range(max_retries):
         try:
-            return client.models.generate_content(
+            return client.interactions.create(
                 model=model,
-                contents=contents
+                input=input_parts,
             )
         except Exception as e:
             if "RESOURCE_EXHAUSTED" in str(e) and attempt < max_retries - 1:
@@ -266,6 +286,10 @@ def generate_with_retry(client, model, contents, max_retries=3):
             else:
                 raise
 ```
+
+The error codes above are surfaced as exceptions raised by `interactions.create` (the
+underlying status codes are unchanged from generateContent), so the same `str(e)` checks
+apply.
 
 ## Timestamp Prompting
 
@@ -310,9 +334,9 @@ Audio processing specs:
 
 ### Optimize Token Usage
 
-1. Use `media_resolution=types.MediaResolution.MEDIA_RESOLUTION_LOW` for non-visual analysis
-2. Set appropriate FPS for content type
-3. Use clipping to analyze only relevant segments
+1. Use `generation_config={"media_resolution": "MEDIA_RESOLUTION_LOW"}` for non-visual analysis
+2. Set appropriate FPS for content type (legacy `generate_content` only)
+3. Use clipping to analyze only relevant segments (legacy `generate_content` only)
 4. Delete uploaded files after use
 
 ### Prompt Engineering
@@ -336,9 +360,9 @@ prompt = """Analyze this video and return JSON:
 
 ### Handling Long Videos
 
-1. Split into segments using clipping
+1. Split into segments using clipping (per-segment clipping uses the legacy `generate_content` call)
 2. Analyze segments separately
-3. Combine results with a final summary prompt
+3. Combine results with a final summary prompt (text-only → Interactions API)
 
 ```python
 segments = [
@@ -349,18 +373,16 @@ segments = [
 
 summaries = []
 for start, end in segments:
-    # Analyze each segment
+    # Analyze each segment with legacy generate_content + VideoMetadata (clipping)
     ...
     summaries.append(response.text)
 
-# Combine
-final = client.models.generate_content(
+# Combine (text-only)
+final = client.interactions.create(
     model="gemini-3.5-flash",
-    contents=[
-        f"Segment summaries:\n{chr(10).join(summaries)}",
-        "Create a unified summary"
-    ]
+    input=f"Segment summaries:\n{chr(10).join(summaries)}\n\nCreate a unified summary",
 )
+print(final.output_text)
 ```
 
 ## Supported MIME Types
@@ -380,11 +402,11 @@ final = client.models.generate_content(
 ## SDK Installation
 
 ```bash
-# Using uv (recommended)
-uv pip install google-genai
+# Using uv (recommended) — Interactions API requires >= 2.0.0
+uv pip install "google-genai>=2.0.0"
 
 # Using pip
-pip install google-genai
+pip install "google-genai>=2.0.0"
 ```
 
 ## Authentication

@@ -10,11 +10,16 @@ model: sonnet
 
 Analyze video content using Google Gemini 3.5 Flash API. Extract summaries, transcripts, timestamps, and answer questions about video content from local files or YouTube URLs.
 
+Uses the **Interactions API** (`client.interactions.create`), the current standard idiom
+in Google's docs. `generateContent` still works, but Interactions is the default for new
+development. Inputs are plain dicts — no `types.*` wrappers — and output is read from
+`interaction.output_text`.
+
 ## Prerequisites
 
 ```bash
-# Install SDK
-uv pip install google-genai
+# Install SDK (Interactions API requires >= 2.0.0)
+uv pip install "google-genai>=2.0.0"
 
 # Set API key
 export GEMINI_API_KEY="your-api-key"
@@ -44,11 +49,14 @@ if video_file.state.name == "FAILED":
     raise ValueError("Video processing failed")
 
 # Analyze
-response = client.models.generate_content(
+interaction = client.interactions.create(
     model="gemini-3.5-flash",
-    contents=[video_file, "Summarize this video"]
+    input=[
+        {"type": "text", "text": "Summarize this video"},
+        {"type": "video", "uri": video_file.uri, "mime_type": video_file.mime_type},
+    ],
 )
-print(response.text)
+print(interaction.output_text)
 ```
 
 ### 2. Inline Data (For small files <20MB)
@@ -59,33 +67,27 @@ import base64
 with open("/path/to/short_video.mp4", "rb") as f:
     video_data = base64.standard_b64encode(f.read()).decode("utf-8")
 
-response = client.models.generate_content(
+interaction = client.interactions.create(
     model="gemini-3.5-flash",
-    contents=[
-        {"inline_data": {"mime_type": "video/mp4", "data": video_data}},
-        "What is happening in this video?"
-    ]
+    input=[
+        {"type": "text", "text": "What is happening in this video?"},
+        {"type": "video", "data": video_data, "mime_type": "video/mp4"},
+    ],
 )
+print(interaction.output_text)
 ```
 
 ### 3. YouTube URL (Public videos only)
 
 ```python
-from google.genai import types
-
-response = client.models.generate_content(
+interaction = client.interactions.create(
     model="gemini-3.5-flash",
-    contents=types.Content(
-        parts=[
-            types.Part(
-                file_data=types.FileData(
-                    file_uri="https://www.youtube.com/watch?v=VIDEO_ID"
-                )
-            ),
-            types.Part(text="Summarize this video with key timestamps")
-        ]
-    )
+    input=[
+        {"type": "text", "text": "Summarize this video with key timestamps"},
+        {"type": "video", "uri": "https://www.youtube.com/watch?v=VIDEO_ID"},
+    ],
 )
+print(interaction.output_text)
 ```
 
 **YouTube Limits:**
@@ -134,9 +136,11 @@ prompt = "What tools are used in this tutorial?"
 
 ## Advanced Configuration
 
-### Video Clipping
+### Video Clipping (legacy generate_content only)
 
-Analyze specific segments only:
+The Interactions API has no offset parameter — `video_metadata` offsets are silently
+ignored (verified: a clipped request bills the full video's tokens). To analyze a
+specific segment, use the legacy `generate_content` call, which still honors offsets:
 
 ```python
 from google.genai import types
@@ -154,11 +158,13 @@ response = client.models.generate_content(
         "Summarize this segment"
     ]
 )
+print(response.text)
 ```
 
-### Frame Rate Control
+### Frame Rate Control (legacy generate_content only)
 
-Adjust sampling rate for different content types:
+Custom `fps` is likewise unavailable in the Interactions API; use the legacy
+`generate_content` call via `types.VideoMetadata`:
 
 ```python
 # Default: 1 FPS
@@ -170,18 +176,19 @@ video_metadata=types.VideoMetadata(fps=0.5)  # 1 frame per 2 seconds
 
 ### Resolution Control
 
-Reduce token usage with lower resolution:
+Reduce token usage with lower resolution. `media_resolution` is a request-level
+parameter under `generation_config`, so it applies to every source (local and YouTube):
 
 ```python
-config = types.GenerateContentConfig(
-    media_resolution=types.MediaResolution.MEDIA_RESOLUTION_LOW  # 66 tokens/frame vs 258 default
-)
-
-response = client.models.generate_content(
+interaction = client.interactions.create(
     model="gemini-3.5-flash",
-    contents=[video_file, prompt],
-    config=config
+    input=[
+        {"type": "text", "text": prompt},
+        {"type": "video", "uri": video_file.uri, "mime_type": video_file.mime_type},
+    ],
+    generation_config={"media_resolution": "MEDIA_RESOLUTION_LOW"},  # 66 tokens/frame vs 258 default
 )
+print(interaction.output_text)
 ```
 
 ## Token Calculation
@@ -221,9 +228,9 @@ Understanding token costs for capacity planning:
 2. **Choose analysis type** based on user request
 
 3. **Configure optimization:**
-   - Long videos → Use clipping for specific segments
-   - Token budget → Use low resolution
-   - Static content → Lower FPS
+   - Token budget → Use low resolution (`--low-res` / `media_resolution`)
+   - Long videos → Clip specific segments (legacy `generate_content` only)
+   - Static content → Lower FPS (legacy `generate_content` only)
 
 4. **Execute and iterate** based on results
 
@@ -246,7 +253,7 @@ for f in client.files.list():
 
 ```python
 try:
-    response = client.models.generate_content(...)
+    interaction = client.interactions.create(...)
 except Exception as e:
     if "PERMISSION_DENIED" in str(e):
         # Check API key or quota
@@ -272,5 +279,5 @@ Utility scripts for common operations:
 - [ ] Input method selected (Files API / inline / YouTube)
 - [ ] Analysis type chosen (summary / transcript / timestamps / visual / QnA)
 - [ ] Token budget considered (use low-res if needed)
-- [ ] Clipping configured for long videos (if applicable)
+- [ ] Clipping configured for long videos (legacy `generate_content`, if applicable)
 - [ ] Cleanup planned for uploaded files

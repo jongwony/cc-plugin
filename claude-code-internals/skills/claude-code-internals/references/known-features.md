@@ -1,6 +1,6 @@
 # Known Claude Code Features
 
-Last updated: 2026-07 (v2.1.198)
+Last updated: 2026-07 (v2.1.199)
 
 ## Table of Contents
 1. [Slash Commands](#slash-commands)
@@ -14,6 +14,7 @@ Last updated: 2026-07 (v2.1.198)
 9. [Context Display Behavior](#context-display-behavior)
 10. [MCP Elicitation](#mcp-elicitation)
 11. [Bundled dataviz Skill](#bundled-dataviz-skill-v21198)
+12. [Artifact Tool (frame / cobalt_plinth)](#artifact-tool--frame--cobalt_plinth-v21199)
 
 ---
 
@@ -491,6 +492,104 @@ Exit-code contract: hard FAIL → exit 1; WARN → exit 0 with obligations. Defa
 ### Measured Value (zero-context A/B, 2026-07)
 
 Two zero-context sonnet subagents, identical dashboard task and data with 5 embedded traps; the only difference was providing the dataviz package files. The bare arm failed 3 traps (built a dual-axis combo chart; its dark palette flunked the validator with exit 1; reused status hues as series colors); the dataviz arm failed 0. The bare arm's light palette still passed CVD at 24.1 — latent model knowledge covers light-palette basics. The skill's value therefore concentrates in failure-mode elimination (dual-axis refusal, dark-mode recalibration, status-color discipline); it is maximal in empty contexts, and in a pre-saturated context the knowledge-injection component collapses toward zero, leaving procedure enforcement (validator run, render check).
+
+---
+
+## Artifact Tool — `frame` / `cobalt_plinth` (v2.1.199)
+
+**Confidence**: Confirmed (v2.1.199 standalone binary RE; all quoted strings verbatim via `strings -n 6` against `~/.local/share/claude/versions/2.1.199`)
+**Internal codename**: `frame` (API/network surface) · `cobalt_plinth` (feature flags)
+**Feature flag**: `tengu_cobalt_plinth` (Statsig, default false) + paid account tier
+
+The `Artifact` tool renders an HTML/Markdown file to a **default-private page hosted on claude.ai**. Both the model-facing `name` and `userFacingName` are literally `Artifact` (symbol `S2o`, `yb="Artifact"`). It is `isReadOnly:false` and `isConcurrencySafe:false` — each publish mutates server state.
+
+### Input Schema (`T2o`, Zod `strictObject`)
+
+| Param | Req | Notes |
+|-------|-----|-------|
+| `file_path` | yes | `.html`/`.md` path; basename is fallback `<title>` |
+| `favicon` | yes | 1–2 emoji, max 32 chars, no markup; keep stable across redeploys |
+| `description` | no | max 1000; gallery-card subtitle |
+| `label` | no | max 60; version name shown in the claude.ai **version picker** |
+| `url` | no | redeploy target; **must be an artifact the user owns** (`role==="owner"`) |
+| `force` | no | skip baseVersion/conflict check (overwrite) |
+| `capabilities` | no | added only when `Xfe.isFrameMcpEnabled()` — MCP/connector grants |
+
+Output schema (`T$m`): `{url, path, title?, version?, capabilities?, stored?}`.
+
+### Deploy Flow & Network Destinations — the "where does it go" answer
+
+Flow: permission gate → read file → wrap in `<!doctype html>` skeleton (viewport meta + minimal CSS reset `eOm` injected) → size check (**`MAX_ARTIFACT_BYTES` = 16 MB**, over → `"too large: rendered page is XMB (max 16MB)"`) → deploy → return `{url, slug, version}`.
+
+Upload is **two-phase**, hitting two distinct hosts:
+
+| Endpoint | Method | Host | Purpose |
+|----------|--------|------|---------|
+| `/api/frame/deploy/init` | POST | `api.anthropic.com` | Request signed upload URL (15 s) |
+| *(signed PUT)* | PUT | `storage.googleapis.com` | HTML blob upload (GCS signed URL) |
+| `/api/frame/deploy/complete` | POST | `api.anthropic.com` | Finalize `{slug, version, ok}` |
+| `/api/frame/deploy/direct` | POST | `api.anthropic.com` | Inline fallback (60 s, 32 MB body) |
+| `/api/frame/read/${slug}` | GET | `api.anthropic.com` | Read-back of current version |
+| `/api/frame/track` | POST | `api.anthropic.com` | Telemetry |
+
+The HTML body itself goes to **Google Cloud Storage** (`storage.googleapis.com`) via a signed PUT with `Content-Type: text/html; charset=utf-8` and `Cache-Control: public, max-age=31536000, immutable`; the `/api/frame/*` control plane resolves to **`api.anthropic.com`** (confirmed by the fallback string `"signed upload to storage.googleapis.com failed (…); inline fallback via api.anthropic.com also failed:"`). Frame API base overridable via env `CLAUDE_CODE_ARTIFACTS_API_BASE_URL`.
+
+**Auth**: OAuth session token (not API key) — endpoint config `{auth:"required", refreshOAuth:true}`; failure message `"not authenticated — run /login"`.
+
+### Public URL Structure (dual-host)
+
+| Layer | Host / path | Confidence |
+|-------|-------------|------------|
+| Viewer / gallery URL (user-visible, `nUo`) | `https://claude.ai/code/artifact/<slug>` | HIGH |
+| Content serving (sandboxed per-slug origin) | `<slug>.frame.claudeusercontent.com/_f/<version>/?__frame_t=<token>` | HIGH |
+
+Content is served from an **isolated origin per slug** under a strict CSP (blocks all external-host requests — CDN scripts, fonts, fetch/XHR). Staging host: `<slug>.frame.staging.claudeusercontent.com`.
+
+### Versioning & Conflict
+
+- **baseVersion staleness** gated by flag `tengu_cobalt_plinth_fern` (default false). When on, publish sends the version this session last *read*; if the session hasn't viewed the latest, throws `"This session hasn't viewed the latest version of the artifact. WebFetch the URL first, or pass force:true to overwrite."`
+- **409 conflict**: server 409 → client parses `{conflict:true, live:<version>}`, tags telemetry `"conflict"` / `"publish_conflict"`, returns `liveVersion` for reconciliation.
+- **`force:true`** bypasses the check (overwrite). **`label`** names a per-version entry in the version picker.
+- Each version is written as an **immutable GCS object** (create-only precondition, HTTP 412 `"this version was already written (create-only precondition)…"`) → old versions are not overwritten client-side.
+
+### Retention & Deletion — server-side, NOT determinable from client
+
+- **No delete/TTL/expiry/retention logic exists in the client.** No artifact-deletion endpoint (`frame/delete` absent). The only delete-flavored strings are 404 messages (`"artifact not found — it may have been deleted…"`).
+- `Cache-Control: max-age=31536000, immutable` is a **1-year browser/CDN cache** on the immutable blob — a caching directive, **not** an artifact-retention policy.
+- **Conclusion**: retention duration, expiry, and server-side deletion are entirely server-side and cannot be read from the binary. Deletion is presumably via the claude.ai web UI. Safe operating assumption: **published content persists until the user deletes it in the web UI.**
+
+### Privacy / Sharing Model
+
+- **Default-private** (`"a default-private web page hosted on claude.ai"`).
+- **Permission gate** (`checkPermissions`): first publish → `behavior:"ask"`. Only auto-`allow` case: **same-session redeploy of an already-published, non-shared artifact**.
+- **Share modes** (`_2o` probe): `owner` · `users` (specific users) · `org` (organization) · `unknown`. Publishing to a **shared-live** artifact forces confirmation even on same-session redeploy.
+- **Ownership**: the `url` (cross-session update) path requires `role==="owner"`.
+- **Connector grants** (MCP-gated): a page may carry a "stored connector grant"; permission text warns `"granting the page access to your connectors…"` — a data-exposure surface.
+- **Org compliance block** (`uOm`): `compliance_restricted`, `org_mismatch`, `org_toggle_disabled` — server can refuse publish under org policy (e.g. HIPAA).
+
+### Feature Gating (`isEnabled = e5()`)
+
+All must pass: (1) not hard-disabled AND eligible (`ega`); (2) Statsig `tengu_cobalt_plinth` true (`tga`); (3) `allow_cobalt_plinth` AND paid tier — `Mi()` ∈ `{team, enterprise, pro, max, null}` (free excluded, `rga`); (4) settings override `enableArtifact` precedence `policySettings > flagSettings > userSettings`, default on if unset; else `f6t()` returns true.
+
+| Kill switch / override | Effect |
+|------------------------|--------|
+| env `CLAUDE_CODE_DISABLE_ARTIFACT` | hard disable |
+| env `CLAUDE_CODE_ARTIFACT_DIRECT_UPLOAD` | force inline (`deploy/direct`) path |
+| env `CLAUDE_CODE_ARTIFACTS_API_BASE_URL` | override frame API base |
+| env `CLAUDE_CODE_ARTIFACT_AUTO_OPEN` | auto-open published page |
+| settings `enableArtifact`/`disableArtifact` | policy > flag > user precedence |
+
+Related flags: `tengu_cobalt_plinth_fern` (baseVersion), `tengu_frame_publish_context`, `tengu_slate_lantern` (live-subscribe), `tengu_cobalt_plinth_reader_persist` (read-version disk persistence, default false), `tengu_cobalt_plinth_putguard` (default true), `tengu_saffron_anchor` (capabilities), `tengu_cobalt_plinth_dataviz` (dataviz callout, see prior section).
+
+### Local Traces — session-scoped RAM only
+
+- `file_path → url` mapping lives in **in-memory app state** (`frameUrls[file_path] = {url, updatedAt, title, favicon, capabilities}`), not on disk → this is why "same file path redeploys to the same URL **within a session**."
+- Version-view map `artifactReadVersions[slug]` (for baseVersion checks) is likewise app state.
+- **No `~/.claude` cache of artifact URLs/IDs**; a fresh session mints a new URL and the `url` param is the only way to target an existing artifact. (`tengu_cobalt_plinth_reader_persist`, default off, hints at future disk persistence.)
+
+### Key Symbols (re-location)
+
+`S2o`/`yb="Artifact"` (tool) · `T2o` (input schema) · `T$m` (output) · `eOm` (CSS reset) · `oee=16777216` (16 MB cap) · `nUo` (viewer URL) · `e5`/`ega`/`tga`/`rga`/`f6t` (enable gate) · `frameUrls`/`artifactReadVersions` (state) · `_2o` (share probe) · `uOm` (compliance block).
 
 ---
 

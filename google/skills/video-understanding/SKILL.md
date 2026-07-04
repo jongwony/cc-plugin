@@ -8,13 +8,18 @@ model: sonnet
 
 # Video Understanding with Gemini
 
-Analyze video content using Google Gemini 3 Flash API. Extract summaries, transcripts, timestamps, and answer questions about video content from local files or YouTube URLs.
+Analyze video content using Google Gemini 3.5 Flash API. Extract summaries, transcripts, timestamps, and answer questions about video content from local files or YouTube URLs.
+
+Uses the **Interactions API** (`client.interactions.create`), the current standard idiom
+in Google's docs. `generateContent` still works, but Interactions is the default for new
+development. Inputs are plain dicts — no `types.*` wrappers — and output is read from
+`interaction.output_text`.
 
 ## Prerequisites
 
 ```bash
-# Install SDK
-uv pip install google-genai
+# Install SDK (Interactions API requires >= 2.3.0)
+uv pip install "google-genai>=2.3.0"
 
 # Set API key
 export GEMINI_API_KEY="your-api-key"
@@ -24,9 +29,11 @@ export GEMINI_API_KEY="your-api-key"
 
 ### 1. Files API Upload (Recommended for local files)
 
-For files >100MB or videos >1 minute, use Files API for reliable upload.
+For files that would push the request past 20MB once base64-encoded (raw size above ~15MB), or when reusing a video across prompts, use Files API for reliable upload.
 
 ```python
+import os
+
 from google import genai
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
@@ -44,14 +51,17 @@ if video_file.state.name == "FAILED":
     raise ValueError("Video processing failed")
 
 # Analyze
-response = client.models.generate_content(
-    model="gemini-3-flash-preview",
-    contents=[video_file, "Summarize this video"]
+interaction = client.interactions.create(
+    model="gemini-3.5-flash",
+    input=[
+        {"type": "text", "text": "Summarize this video"},
+        {"type": "video", "uri": video_file.uri, "mime_type": video_file.mime_type},
+    ],
 )
-print(response.text)
+print(interaction.output_text)
 ```
 
-### 2. Inline Data (For small files <20MB)
+### 2. Inline Data (total request <20MB after base64 encoding — raw size up to ~15MB)
 
 ```python
 import base64
@@ -59,33 +69,27 @@ import base64
 with open("/path/to/short_video.mp4", "rb") as f:
     video_data = base64.standard_b64encode(f.read()).decode("utf-8")
 
-response = client.models.generate_content(
-    model="gemini-3-flash-preview",
-    contents=[
-        {"inline_data": {"mime_type": "video/mp4", "data": video_data}},
-        "What is happening in this video?"
-    ]
+interaction = client.interactions.create(
+    model="gemini-3.5-flash",
+    input=[
+        {"type": "text", "text": "What is happening in this video?"},
+        {"type": "video", "data": video_data, "mime_type": "video/mp4"},
+    ],
 )
+print(interaction.output_text)
 ```
 
 ### 3. YouTube URL (Public videos only)
 
 ```python
-from google.genai import types
-
-response = client.models.generate_content(
-    model="gemini-3-flash-preview",
-    contents=types.Content(
-        parts=[
-            types.Part(
-                file_data=types.FileData(
-                    file_uri="https://www.youtube.com/watch?v=VIDEO_ID"
-                )
-            ),
-            types.Part(text="Summarize this video with key timestamps")
-        ]
-    )
+interaction = client.interactions.create(
+    model="gemini-3.5-flash",
+    input=[
+        {"type": "text", "text": "Summarize this video with key timestamps"},
+        {"type": "video", "uri": "https://www.youtube.com/watch?v=VIDEO_ID"},
+    ],
 )
+print(interaction.output_text)
 ```
 
 **YouTube Limits:**
@@ -134,15 +138,17 @@ prompt = "What tools are used in this tutorial?"
 
 ## Advanced Configuration
 
-### Video Clipping
+### Video Clipping (legacy generate_content only)
 
-Analyze specific segments only:
+The Interactions API has no offset parameter — `video_metadata` offsets are silently
+ignored (verified: a clipped request bills the full video's tokens). To analyze a
+specific segment, use the legacy `generate_content` call, which still honors offsets:
 
 ```python
 from google.genai import types
 
 response = client.models.generate_content(
-    model="gemini-3-flash-preview",
+    model="gemini-3.5-flash",
     contents=[
         types.Part(
             file_data=types.FileData(file_uri=video_file.uri),
@@ -154,11 +160,13 @@ response = client.models.generate_content(
         "Summarize this segment"
     ]
 )
+print(response.text)
 ```
 
-### Frame Rate Control
+### Frame Rate Control (legacy generate_content only)
 
-Adjust sampling rate for different content types:
+Custom `fps` is likewise unavailable in the Interactions API; use the legacy
+`generate_content` call via `types.VideoMetadata`:
 
 ```python
 # Default: 1 FPS
@@ -170,17 +178,35 @@ video_metadata=types.VideoMetadata(fps=0.5)  # 1 frame per 2 seconds
 
 ### Resolution Control
 
-Reduce token usage with lower resolution:
+Reduce token usage with lower resolution. `resolution` is a per-item field on the video
+input part (values: `low`, `medium`, `high`, `ultra_high`), so it applies to every source
+(local and YouTube) by tagging each video part. `generation_config` has no matching
+resolution key in the Interactions API — such a key there would be silently ignored:
 
 ```python
-config = types.GenerateContentConfig(
-    media_resolution="low"  # 66 tokens/frame vs 258 default
+interaction = client.interactions.create(
+    model="gemini-3.5-flash",
+    input=[
+        {"type": "text", "text": prompt},
+        {"type": "video", "uri": video_file.uri, "mime_type": video_file.mime_type,
+         "resolution": "low"},  # 66 tokens/frame vs 258 default
+    ],
 )
+print(interaction.output_text)
+```
 
-response = client.models.generate_content(
-    model="gemini-3-flash-preview",
-    contents=[video_file, prompt],
-    config=config
+### Server-Side Storage (`store`)
+
+By default the Interactions API stores every interaction server-side (`store=true`).
+The bundled script passes `store=False` — a one-shot analysis has no reason to
+persist requests. Note `store=False` is incompatible with `previous_interaction_id`
+chaining and `background=true`; omit it if you build multi-turn flows on top.
+
+```python
+interaction = client.interactions.create(
+    model="gemini-3.5-flash",
+    input=[...],
+    store=False,  # do not persist this interaction server-side
 )
 ```
 
@@ -214,16 +240,16 @@ Understanding token costs for capacity planning:
 ## Workflow
 
 1. **Determine input method:**
-   - Local file >20MB → Files API upload
-   - Local file <20MB → Inline data
+   - Local file above ~15MB raw (>20MB once base64-encoded) → Files API upload
+   - Smaller local file → Inline data
    - YouTube public URL → Direct URL
 
 2. **Choose analysis type** based on user request
 
 3. **Configure optimization:**
-   - Long videos → Use clipping for specific segments
-   - Token budget → Use low resolution
-   - Static content → Lower FPS
+   - Token budget → Use low resolution (`--low-res` / per-item `resolution`)
+   - Long videos → Clip specific segments (legacy `generate_content` only)
+   - Static content → Lower FPS (legacy `generate_content` only)
 
 4. **Execute and iterate** based on results
 
@@ -246,7 +272,7 @@ for f in client.files.list():
 
 ```python
 try:
-    response = client.models.generate_content(...)
+    interaction = client.interactions.create(...)
 except Exception as e:
     if "PERMISSION_DENIED" in str(e):
         # Check API key or quota
@@ -272,5 +298,5 @@ Utility scripts for common operations:
 - [ ] Input method selected (Files API / inline / YouTube)
 - [ ] Analysis type chosen (summary / transcript / timestamps / visual / QnA)
 - [ ] Token budget considered (use low-res if needed)
-- [ ] Clipping configured for long videos (if applicable)
+- [ ] Clipping configured for long videos (legacy `generate_content`, if applicable)
 - [ ] Cleanup planned for uploaded files

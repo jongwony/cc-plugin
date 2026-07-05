@@ -16,8 +16,8 @@ Apple's built-in handwriting OCR in accuracy, Korean included.
 1. **Scan** — run the bundled scanner (Python stdlib only, read-only, headless):
 
    ```bash
-   uv run "<skill-dir>/scripts/scan_handwriting.py"            # new since watermark (loop mode)
-   uv run "<skill-dir>/scripts/scan_handwriting.py" --all --limit 10   # browse recent (on-demand)
+   uv run "${CLAUDE_PLUGIN_ROOT}/skills/handwriting/scripts/scan_handwriting.py"            # new since watermark (loop mode)
+   uv run "${CLAUDE_PLUGIN_ROOT}/skills/handwriting/scripts/scan_handwriting.py" --all --limit 10   # browse recent (on-demand)
    ```
 
    Each output line is JSON: `note_title`, `modified`, `modified_raw` (the raw

@@ -35,7 +35,7 @@ Determine the download URL from user input.
 
 **QR code image**: Decode with the bundled script:
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/media-download/scripts/decode_qr.py <image_path>
+uv run ${CLAUDE_PLUGIN_ROOT}/skills/media-download/scripts/decode_qr.py <image_path>
 ```
 
 Output is one URL per line. If multiple URLs are found, confirm which one to use.
@@ -81,7 +81,7 @@ yt-dlp \
 After download, convert the verbose `.info.json` into a slim search-friendly `.meta.json`:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/media-download/scripts/save_metadata.py \
+uv run ${CLAUDE_PLUGIN_ROOT}/skills/media-download/scripts/save_metadata.py \
   ~/Downloads/yt-dlp-output/"<filename>.info.json"
 ```
 

@@ -33,7 +33,7 @@ Install pypdf via uv inline script dependency:
 Run `scripts/extract_toc.py` to analyze the PDF:
 
 ```bash
-uv run ~/.claude/skills/pdf-split/scripts/extract_toc.py <pdf_path>
+uv run ${CLAUDE_PLUGIN_ROOT}/skills/pdf-split/scripts/extract_toc.py <pdf_path>
 ```
 
 Output includes:
@@ -63,12 +63,12 @@ chapters = [
 Run `scripts/split_by_chapters.py` with the chapter definitions:
 
 ```bash
-uv run ~/.claude/skills/pdf-split/scripts/split_by_chapters.py <pdf_path> <output_dir> --chapters '<json_chapters>'
+uv run ${CLAUDE_PLUGIN_ROOT}/skills/pdf-split/scripts/split_by_chapters.py <pdf_path> <output_dir> --chapters '<json_chapters>'
 ```
 
 Example:
 ```bash
-uv run ~/.claude/skills/pdf-split/scripts/split_by_chapters.py \
+uv run ${CLAUDE_PLUGIN_ROOT}/skills/pdf-split/scripts/split_by_chapters.py \
   ~/book.pdf \
   ~/book_chapters \
   --chapters '[[1,22,"00_Intro"],[23,45,"01_Chapter1"]]'

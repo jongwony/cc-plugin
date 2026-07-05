@@ -1,9 +1,13 @@
-#!/usr/bin/env python3
+#!/usr/bin/env uv run --quiet --script
+# /// script
+# requires-python = ">=3.9"
+# dependencies = []
+# ///
 """Extract search-friendly metadata from yt-dlp info JSON.
 
 Usage:
-    python3 save_metadata.py <info_json_path>
-    yt-dlp --dump-json URL | python3 save_metadata.py - -o output.json
+    uv run save_metadata.py <info_json_path>
+    yt-dlp --dump-json URL | uv run save_metadata.py - -o output.json
 
 Reads a yt-dlp .info.json (or stdin with '-') and writes a slim JSON
 containing only fields useful for search and content understanding.

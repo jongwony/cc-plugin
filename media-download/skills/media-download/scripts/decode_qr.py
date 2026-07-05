@@ -1,8 +1,12 @@
-#!/usr/bin/env python3
+#!/usr/bin/env uv run --quiet --script
+# /// script
+# requires-python = ">=3.9"
+# dependencies = []
+# ///
 """Decode QR codes from image files using zbarimg.
 
 Usage:
-    python3 decode_qr.py <image_path>
+    uv run decode_qr.py <image_path>
 
 Output:
     Decoded URL(s), one per line. Exit code 1 if no QR found.

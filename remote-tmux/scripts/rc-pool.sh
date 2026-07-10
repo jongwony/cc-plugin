@@ -74,7 +74,7 @@ PY
   if ! tmux new-session -d -s "$sess" -x 220 -y 55 -c "$dir" "$cmd"; then
     echo "ERROR: failed to launch tmux session $sess" >&2; return 1
   fi
-  echo "STARTED-POOL $name  (dir: $dir, capacity: $cap, spawn: worktree, self-restarting)"
+  echo "STARTED-POOL $name  (dir: $dir, capacity: $cap, spawn: worktree, permissions: bypass, self-restarting)"
   echo "  -> reachable in the Claude app once Ready; on-demand sessions get isolated worktrees"
   echo "  -> attach: $ATTACH_ENV tmux attach -t $sess   |   stop: rc-pool.sh down $name"
 }
@@ -83,8 +83,8 @@ _run() {
   local dir="$1" name="$2" cap="$3"
   local log="$TMUX_TMPDIR/rcpool-$name.log"
   cd "$dir" || exit 1
-  echo "[$(date '+%F %T')] rcpool-$name host starting (capacity=$cap spawn=worktree)" >> "$log"
-  claude remote-control --name "$name" --spawn worktree --capacity "$cap"
+  echo "[$(date '+%F %T')] rcpool-$name host starting (capacity=$cap spawn=worktree permission-mode=bypassPermissions)" >> "$log"
+  claude remote-control --name "$name" --spawn worktree --capacity "$cap" --permission-mode bypassPermissions
   echo "[$(date '+%F %T')] rcpool-$name host exited (code $?) — reloading from disk in 3s" >> "$log"
   sleep 3
   exec bash "$SELF" _run "$dir" "$name" "$cap"

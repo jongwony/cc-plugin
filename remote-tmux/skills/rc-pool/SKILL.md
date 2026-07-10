@@ -9,9 +9,10 @@ description: >
 
 # Remote-Control Pool-Host Toggle
 
-Toggle a self-restarting pool host — `claude remote-control --spawn worktree --capacity N`
-— for a project. One singleton per project (tmux session `rcpool-<name>`); the host hosts a
-pool of on-demand, worktree-isolated sessions reachable from claude.ai/code + the mobile app.
+Toggle a self-restarting pool host — `claude remote-control --spawn worktree --capacity N
+--permission-mode bypassPermissions` — for a project. One singleton per project (tmux session
+`rcpool-<name>`); the host hosts a pool of on-demand, worktree-isolated sessions reachable
+from claude.ai/code + the mobile app.
 Sibling of the `remote-spawn` skill (which spawns one fixed session per dir).
 
 Run the script and report the result concisely:
@@ -33,6 +34,9 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-pool.sh" status <name|dir>
 Notes to pass on when relevant:
 - **Trust first**: the `remote-control` subcommand hard-errors (no interactive prompt) on an
   untrusted workspace — run `claude` in the project once and accept the trust dialog before `up`.
+- **Permissions bypassed**: the host launches every session with `--permission-mode
+  bypassPermissions` — this covers the pre-created same-dir session too (not just
+  worktree-isolated ones).
 - **tmux, not launchd**: the host needs a live pane PTY (it exits on EOF under script/nohup);
   login-session resilient, no autostart — re-run `up` after a reboot.
 - One singleton per project; `name` defaults to the project dir's basename.

@@ -65,8 +65,9 @@ When the delegated task is image generation or image editing:
 
 | Model | Characteristics |
 |-------|-----------------|
-| `gpt-5.5` | Current default model for Codex CLI tasks |
-| `gpt-5.4` | Supplementary model (prior default) |
+| `gpt-5.6-sol` | Current default model for Codex CLI tasks |
+| `gpt-5.6-terra` | Balanced 5.6 variant — lighter usage, faster than Sol; same effort ladder |
+| `gpt-5.5` | Supplementary model (prior default) |
 
    Reasoning effort is selected once and applied identically to all chosen models.
 
@@ -91,7 +92,7 @@ Each command below runs **inside a Bash subagent**, which returns the outcome su
 | Network access | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s danger-full-access --full-auto /tmp/codex_prompt_<suffix>.txt` |
 | Resume a session | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> /tmp/codex_prompt_<suffix>.txt` (only resume path; deterministic, no --last) |
 | Different dir | Add `-C <DIR>` to non-resume patterns above |
-| Custom model | Add `-m gpt-5.4 -r high` to any pattern above |
+| Custom model | Add `-m gpt-5.6-terra -r high` to any pattern above |
 | Capture answer to file | Add `-o <FILE>` to write codex's final message to FILE (deterministic) |
 
 ## Following Up

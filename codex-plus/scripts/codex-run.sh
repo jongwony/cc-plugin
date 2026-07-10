@@ -5,7 +5,7 @@
 set -euo pipefail
 
 # Defaults
-readonly DEFAULT_MODEL="gpt-5.5"
+readonly DEFAULT_MODEL="gpt-5.6-sol"
 readonly DEFAULT_EFFORT="xhigh"
 readonly DEFAULT_SANDBOX="read-only"
 
@@ -22,8 +22,8 @@ usage() {
 Usage: codex-run.sh [options] <prompt_file>
 
 Options:
-  -m, --model MODEL      Model name (default: gpt-5.5)
-  -r, --effort EFFORT    Reasoning effort: medium|high|xhigh (default: xhigh)
+  -m, --model MODEL      Model name (default: gpt-5.6-sol)
+  -r, --effort EFFORT    Reasoning effort: medium|high|xhigh|max (default: xhigh)
   -s, --sandbox SANDBOX  Sandbox: read-only|workspace-write|danger-full-access (default: read-only)
   -C, --cwd DIR          Working directory for codex
   -S, --session-id ID    Resume a specific session by UUID (deterministic;
@@ -41,7 +41,7 @@ no most-recent fallback, so it is never a race under parallel sessions.
 
 Examples:
   codex-run.sh /tmp/codex_prompt_a3f9.txt
-  codex-run.sh -m gpt-5.4 -r high /tmp/codex_prompt_a3f9.txt
+  codex-run.sh -m gpt-5.6-terra -r high /tmp/codex_prompt_a3f9.txt
   codex-run.sh -S 019e3eff-c191-7401-bffb-bb8c31ac37c7 /tmp/codex_prompt_a3f9.txt
   codex-run.sh -s workspace-write --full-auto /tmp/codex_prompt_a3f9.txt
 USAGE

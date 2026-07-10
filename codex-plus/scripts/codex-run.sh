@@ -41,7 +41,7 @@ no most-recent fallback, so it is never a race under parallel sessions.
 
 Examples:
   codex-run.sh /tmp/codex_prompt_a3f9.txt
-  codex-run.sh -m gpt-5.5 -r high /tmp/codex_prompt_a3f9.txt
+  codex-run.sh -m gpt-5.6-terra -r high /tmp/codex_prompt_a3f9.txt
   codex-run.sh -S 019e3eff-c191-7401-bffb-bb8c31ac37c7 /tmp/codex_prompt_a3f9.txt
   codex-run.sh -s workspace-write --full-auto /tmp/codex_prompt_a3f9.txt
 USAGE

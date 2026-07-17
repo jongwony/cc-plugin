@@ -64,7 +64,7 @@ def _get_browser_targets(client):
         client.close()
 
 
-def _resolve_context_filter(client, prefix):
+def _resolve_context_filter(client, prefix, targets=None):
     """Resolve a browserContextId (or short prefix) to the set of target
     ids belonging to that context.
 
@@ -76,7 +76,8 @@ def _resolve_context_filter(client, prefix):
     if not prefix or not prefix.strip():
         raise CDPError("--context requires a non-empty id prefix")
 
-    targets = _get_browser_targets(client)
+    if targets is None:
+        targets = _get_browser_targets(client)
     matched_contexts = sorted({
         t.get("browserContextId") for t in targets
         if t.get("browserContextId") and t.get("browserContextId").startswith(prefix)
@@ -106,13 +107,11 @@ def _cmd_list_contexts(client, args):
     targets = _get_browser_targets(client)
     pages = [t for t in targets if t.get("type") == "page"]
 
-    if args.context:
-        pages = [
-            t for t in pages
-            if (t.get("browserContextId") or "").startswith(args.context)
-        ]
+    if args.context is not None:
+        target_ids, ctx_id = _resolve_context_filter(client, args.context, targets=targets)
+        pages = [t for t in pages if t.get("targetId") in target_ids]
         if not pages:
-            print(f"No page targets in a context matching prefix {args.context!r}")
+            print(f"No page targets in context {ctx_id[:8]}...")
             return
 
     if args.search:
@@ -154,7 +153,7 @@ def cmd_list(client, args):
     # Preserve original indexes so `select <index>` stays consistent
     indexed_tabs = list(enumerate(all_tabs))
 
-    if args.context:
+    if args.context is not None:
         target_ids, ctx_id = _resolve_context_filter(client, args.context)
         indexed_tabs = [(i, t) for i, t in indexed_tabs if t.get("id") in target_ids]
         print(f"Filtered to context {ctx_id[:8]}...\n")
@@ -194,7 +193,7 @@ def cmd_select(client, args):
 
     context_target_ids = None
     ctx_id = None
-    if args.context:
+    if args.context is not None:
         context_target_ids, ctx_id = _resolve_context_filter(client, args.context)
 
     def _guard_context(target_id):
@@ -348,15 +347,20 @@ def _snapshot_cache_path(target_id):
 
 
 def _load_snapshot_cache(target_id):
-    """Returns cached {key: {role, name, depth}}, or None if no baseline."""
+    """Returns (entries, retrieval_depth), or (None, None) if no baseline.
+
+    retrieval_depth is the getFullAXTree depth the cached snapshot was taken
+    at; a --diff against a different depth is not comparable (see caller).
+    """
     try:
         with open(_snapshot_cache_path(target_id)) as f:
-            return json.load(f).get("entries")
+            data = json.load(f)
+            return data.get("entries"), data.get("retrieval_depth")
     except (FileNotFoundError, json.JSONDecodeError):
-        return None
+        return None, None
 
 
-def _save_snapshot_cache(target_id, entries):
+def _save_snapshot_cache(target_id, entries, retrieval_depth):
     """Best-effort cache write for the next --diff call.
 
     Uses cdp_client's atomic-write helper (crash-safe rename) — the same
@@ -369,24 +373,34 @@ def _save_snapshot_cache(target_id, entries):
         atomic_write_json(_snapshot_cache_path(target_id), {
             "target_id": target_id,
             "timestamp": time.time(),
+            "retrieval_depth": retrieval_depth,
             "entries": entries,
         })
     except OSError as e:
         print(f"Warning: failed to update snapshot cache: {e}", file=sys.stderr)
 
 
-def _print_snapshot_diff(target_id, entries, order):
+def _print_snapshot_diff(target_id, entries, order, retrieval_depth):
     """Print only the delta vs the cached snapshot for this target.
 
     Falls back to the full tree (with a note) when there is no cached
     baseline yet — the cache is always written by the caller regardless,
     so the next --diff call has one.
     """
-    cached = _load_snapshot_cache(target_id)
+    cached, cached_depth = _load_snapshot_cache(target_id)
     if cached is None:
         print(
             f"No cached baseline for target {target_id[:8]}... — showing full "
             "tree (cache now primed for future --diff calls)"
+        )
+        _print_snapshot_full(entries, order)
+        return
+
+    if cached_depth != retrieval_depth:
+        print(
+            f"Cached snapshot was taken at depth {cached_depth}, this call uses "
+            f"depth {retrieval_depth} — not comparable; showing full tree "
+            "(cache now re-primed at this depth)"
         )
         _print_snapshot_full(entries, order)
         return
@@ -398,6 +412,7 @@ def _print_snapshot_diff(target_id, entries, order):
         if k in cached and (
             cached[k].get("role") != entries[k]["role"]
             or cached[k].get("name") != entries[k]["name"]
+            or cached[k].get("depth") != entries[k]["depth"]
         )
     ]
 
@@ -421,10 +436,13 @@ def _print_snapshot_diff(target_id, entries, order):
         lines.append(f"- {indent}[{e.get('role', '')}] {e.get('name', '')}".rstrip())
     for k in changed:
         old, new = cached[k], entries[k]
-        lines.append(
+        line = (
             f"~ [{old.get('role', '')}] {old.get('name', '')} -> "
-            f"[{new['role']}] {new['name']}".rstrip()
+            f"[{new['role']}] {new['name']}"
         )
+        if old.get("depth") != new["depth"]:
+            line += f" (depth {old.get('depth')}→{new['depth']})"
+        lines.append(line.rstrip())
 
     for line in lines[:SNAPSHOT_DIFF_MAX_LINES]:
         print(line)
@@ -451,7 +469,7 @@ def cmd_snapshot(client, args):
 
         if args.diff:
             if target_id:
-                _print_snapshot_diff(target_id, entries, order)
+                _print_snapshot_diff(target_id, entries, order, args.depth)
             else:
                 print(
                     "Warning: no tab selected — cannot key the snapshot cache; "
@@ -463,7 +481,7 @@ def cmd_snapshot(client, args):
             _print_snapshot_full(entries, order)
 
         if target_id:
-            _save_snapshot_cache(target_id, entries)
+            _save_snapshot_cache(target_id, entries, args.depth)
     finally:
         client.close()
 

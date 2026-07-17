@@ -20,7 +20,10 @@ from pathlib import Path
 
 # Import shared client from same directory
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cdp_client import CDPClient, CDPError, ERRORS_FILE, STATE_DIR, cdp_lock
+from cdp_client import CDPClient, CDPError, ERRORS_FILE, STATE_DIR, atomic_write_json, cdp_lock
+
+SNAPSHOT_CACHE_DIR = os.path.join(STATE_DIR, "snapshots")
+SNAPSHOT_DIFF_MAX_LINES = 200
 
 
 _TOP_LEVEL_CONST_LET_RE = re.compile(r'(?m)^(\s*)(const|let)\b')
@@ -43,13 +46,117 @@ def cmd_version(client, args):
     print(f"User-Agent: {info.get('User-Agent', 'Unknown')}")
 
 
+def _get_browser_targets(client):
+    """Fetch raw Target.getTargets() targetInfos via the browser-level
+    WebSocket endpoint.
+
+    browserContextId (Chromium profile boundary) is a stable, non-
+    experimental TargetInfo field, but the HTTP /json/list endpoint does
+    not expose it — only Target.getTargets over /devtools/browser/... does.
+    Opens a short-lived browser-level connection and closes it before
+    returning, matching the plugin's per-command connect/close discipline.
+    """
+    client.connect_browser()
+    try:
+        result = client.send("Target.getTargets")
+        return result.get("targetInfos", [])
+    finally:
+        client.close()
+
+
+def _resolve_context_filter(client, prefix, targets=None):
+    """Resolve a browserContextId (or short prefix) to the set of target
+    ids belonging to that context.
+
+    Raises CDPError when the prefix is empty/whitespace (would match every
+    context, including targets with no browserContextId at all — not a
+    meaningful filter), when it matches no context, or when it matches
+    more than one distinct context (ambiguous).
+    """
+    if not prefix or not prefix.strip():
+        raise CDPError("--context requires a non-empty id prefix")
+
+    if targets is None:
+        targets = _get_browser_targets(client)
+    matched_contexts = sorted({
+        t.get("browserContextId") for t in targets
+        if t.get("browserContextId") and t.get("browserContextId").startswith(prefix)
+    })
+    if not matched_contexts:
+        raise CDPError(f"No browser context matches prefix {prefix!r}")
+    if len(matched_contexts) > 1:
+        shown = ", ".join(c[:8] + "..." for c in matched_contexts)
+        raise CDPError(
+            f"Ambiguous context prefix {prefix!r} matches {len(matched_contexts)} "
+            f"contexts: {shown}"
+        )
+    ctx_id = matched_contexts[0]
+    target_ids = {
+        t.get("targetId") for t in targets if t.get("browserContextId") == ctx_id
+    }
+    return target_ids, ctx_id
+
+
+def _cmd_list_contexts(client, args):
+    """`list --contexts`: group page targets by browserContextId (profile).
+
+    Display + filter only — no enforcement/locking (that is separate future
+    work). `--context` narrows the grouping to one context; `--search`
+    filters titles/URLs within it, same semantics as the flat listing.
+    """
+    targets = _get_browser_targets(client)
+    pages = [t for t in targets if t.get("type") == "page"]
+
+    if args.context is not None:
+        target_ids, ctx_id = _resolve_context_filter(client, args.context, targets=targets)
+        pages = [t for t in pages if t.get("targetId") in target_ids]
+        if not pages:
+            print(f"No page targets in context {ctx_id[:8]}...")
+            return
+
+    if args.search:
+        query = args.search.lower()
+        pages = [
+            t for t in pages
+            if query in t.get("title", "").lower() or query in t.get("url", "").lower()
+        ]
+
+    groups = {}
+    for t in pages:
+        ctx = t.get("browserContextId") or "(default)"
+        groups.setdefault(ctx, []).append(t)
+
+    if not groups:
+        print("No page targets found.")
+        return
+
+    print(f"{len(groups)} browser context(s):\n")
+    for ctx, tabs in sorted(groups.items(), key=lambda kv: -len(kv[1])):
+        short = ctx[:8] + "..." if ctx != "(default)" else ctx
+        print(f"Context {short} ({len(tabs)} page(s)):")
+        for t in tabs:
+            title = (t.get("title") or "Untitled")[:70]
+            print(f"    {title}")
+            print(f"      id: {t.get('targetId', '?')}")
+        print()
+
+
 def cmd_list(client, args):
     """List browser tabs."""
+    if args.contexts:
+        _cmd_list_contexts(client, args)
+        return
+
     type_filter = args.type if args.type != "all" else "all"
     all_tabs = client.list_tabs(type_filter=type_filter if type_filter != "all" else None)
 
     # Preserve original indexes so `select <index>` stays consistent
     indexed_tabs = list(enumerate(all_tabs))
+
+    if args.context is not None:
+        target_ids, ctx_id = _resolve_context_filter(client, args.context)
+        indexed_tabs = [(i, t) for i, t in indexed_tabs if t.get("id") in target_ids]
+        print(f"Filtered to context {ctx_id[:8]}...\n")
 
     # Apply search filter (keeping original index)
     if args.search:
@@ -84,6 +191,21 @@ def cmd_select(client, args):
     """Select a tab by index or target ID."""
     selector = args.target
 
+    context_target_ids = None
+    ctx_id = None
+    if args.context is not None:
+        context_target_ids, ctx_id = _resolve_context_filter(client, args.context)
+
+    def _guard_context(target_id):
+        """Refuse to select a target outside the --context guard, if set."""
+        if context_target_ids is not None and target_id not in context_target_ids:
+            print(
+                f"Error: tab {target_id[:8]}... is outside context {ctx_id[:8]}... "
+                "— refusing to select across the profile boundary.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
     # Try as integer index first
     try:
         idx = int(selector)
@@ -91,6 +213,7 @@ def cmd_select(client, args):
         if 0 <= idx < len(tabs):
             tab = tabs[idx]
             target_id = tab["id"]
+            _guard_context(target_id)
             client.activate_tab(target_id)
             client.save_state(target_id)
             print(f"Selected tab [{idx}]: {tab.get('title', 'Untitled')[:60]}")
@@ -106,6 +229,7 @@ def cmd_select(client, args):
     tabs = client.list_tabs(type_filter=None)
     for tab in tabs:
         if tab.get("id") == selector:
+            _guard_context(selector)
             client.activate_tab(selector)
             client.save_state(selector)
             print(f"Selected tab: {tab.get('title', 'Untitled')[:60]}")
@@ -159,45 +283,218 @@ def cmd_screenshot(client, args):
         client.close()
 
 
+def _ax_node_key(node):
+    """Stable identity key for an AX node across separate snapshot calls.
+
+    backendDOMNodeId survives DOM position/order changes; CDP's own nodeId
+    is invalidated on DOM mutation (see SKILL.md 'Known Limitations'), so
+    it is unsuitable as a diff identity. Falls back to a nodeId-prefixed
+    key for the rare AX node with no backing DOM node.
+    """
+    backend_id = node.get("backendDOMNodeId")
+    if backend_id is not None:
+        return f"b{backend_id}"
+    return f"n{node.get('nodeId')}"
+
+
+def _build_ax_entries(nodes):
+    """Reduce raw AX nodes to {key: {role, name, depth, parent}}, in encounter order.
+
+    Applies the same visibility filter the (pre-existing) full-tree print
+    used: skip role in (none, generic) with no accessible name. Returns
+    (entries dict, ordered key list) — order is needed for diff output.
+    """
+    node_map = {n["nodeId"]: n for n in nodes}
+    entries = {}
+    order = []
+    for node in nodes:
+        depth = 0
+        parent_id = node.get("parentId")
+        visited = set()
+        while parent_id and parent_id not in visited:
+            visited.add(parent_id)
+            depth += 1
+            parent_node = node_map.get(parent_id)
+            if parent_node:
+                parent_id = parent_node.get("parentId")
+            else:
+                break
+
+        role = node.get("role", {}).get("value", "")
+        name = node.get("name", {}).get("value", "")
+        if role in ("none", "generic") and not name:
+            continue
+
+        immediate_parent = node_map.get(node.get("parentId"))
+        parent_key = _ax_node_key(immediate_parent) if immediate_parent else None
+        key = _ax_node_key(node)
+        # Store full role/name/depth/parent for comparison; truncation (name
+        # to 80 chars, indent depth capped at 10) happens only at render, so a
+        # change past either boundary is not silently invisible.
+        entries[key] = {
+            "role": role,
+            "name": name,
+            "depth": depth,
+            "parent": parent_key,
+        }
+        order.append(key)
+    return entries, order
+
+
+def _print_snapshot_full(entries, order):
+    """Print the full accessibility tree (original snapshot behavior)."""
+    for key in order:
+        e = entries[key]
+        prefix = "  " * min(e["depth"], 10)
+        line = f"{prefix}[{e['role']}]"
+        if e["name"]:
+            line += f" {e['name'][:80]}"
+        print(line)
+
+
+def _snapshot_cache_path(target_id):
+    return os.path.join(SNAPSHOT_CACHE_DIR, f"{target_id}.json")
+
+
+def _load_snapshot_cache(target_id):
+    """Returns (entries, retrieval_depth), or (None, None) if no baseline.
+
+    retrieval_depth is the getFullAXTree depth the cached snapshot was taken
+    at; a --diff against a different depth is not comparable (see caller).
+    """
+    try:
+        with open(_snapshot_cache_path(target_id)) as f:
+            data = json.load(f)
+            return data.get("entries"), data.get("retrieval_depth")
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None, None
+
+
+def _save_snapshot_cache(target_id, entries, retrieval_depth):
+    """Best-effort cache write for the next --diff call.
+
+    Uses cdp_client's atomic-write helper (crash-safe rename) — the same
+    care state.json gets. Concurrency is already handled by the global
+    cdp_lock (one cdp-attach command runs at a time per host:port), so no
+    separate flock is needed here. A write failure must not affect the
+    (already-printed) snapshot output.
+    """
+    try:
+        atomic_write_json(_snapshot_cache_path(target_id), {
+            "target_id": target_id,
+            "timestamp": time.time(),
+            "retrieval_depth": retrieval_depth,
+            "entries": entries,
+        })
+    except OSError as e:
+        print(f"Warning: failed to update snapshot cache: {e}", file=sys.stderr)
+
+
+def _print_snapshot_diff(target_id, entries, order, retrieval_depth):
+    """Print only the delta vs the cached snapshot for this target.
+
+    Falls back to the full tree (with a note) when there is no cached
+    baseline yet — the cache is always written by the caller regardless,
+    so the next --diff call has one.
+    """
+    cached, cached_depth = _load_snapshot_cache(target_id)
+    if cached is None:
+        print(
+            f"No cached baseline for target {target_id[:8]}... — showing full "
+            "tree (cache now primed for future --diff calls)"
+        )
+        _print_snapshot_full(entries, order)
+        return
+
+    if cached_depth != retrieval_depth:
+        print(
+            f"Cached snapshot was taken at depth {cached_depth}, this call uses "
+            f"depth {retrieval_depth} — not comparable; showing full tree "
+            "(cache now re-primed at this depth)"
+        )
+        _print_snapshot_full(entries, order)
+        return
+
+    added = [k for k in order if k not in cached]
+    removed = [k for k in cached if k not in entries]
+    changed = [
+        k for k in order
+        if k in cached and (
+            cached[k].get("role") != entries[k]["role"]
+            or cached[k].get("name") != entries[k]["name"]
+            or cached[k].get("depth") != entries[k]["depth"]
+            or cached[k].get("parent") != entries[k]["parent"]
+        )
+    ]
+
+    if not added and not removed and not changed:
+        print(f"Snapshot diff vs cached (target {target_id[:8]}...): no changes")
+        return
+
+    print(
+        f"Snapshot diff vs cached (target {target_id[:8]}...): "
+        f"{len(added)} added, {len(removed)} removed, {len(changed)} changed"
+    )
+
+    lines = []
+    for k in added:
+        e = entries[k]
+        indent = "  " * min(e["depth"], 10)
+        lines.append(f"+ {indent}[{e['role']}] {e['name'][:80]}".rstrip())
+    for k in removed:
+        e = cached[k]
+        indent = "  " * min(e.get("depth", 0), 10)
+        lines.append(f"- {indent}[{e.get('role', '')}] {(e.get('name') or '')[:80]}".rstrip())
+    for k in changed:
+        old, new = cached[k], entries[k]
+        line = (
+            f"~ [{old.get('role', '')}] {(old.get('name') or '')[:80]} -> "
+            f"[{new['role']}] {new['name'][:80]}"
+        )
+        if old.get("depth") != new["depth"]:
+            line += f" (depth {old.get('depth')}→{new['depth']})"
+        if old.get("parent") != new.get("parent"):
+            line += " (reparented)"
+        lines.append(line.rstrip())
+
+    for line in lines[:SNAPSHOT_DIFF_MAX_LINES]:
+        print(line)
+    if len(lines) > SNAPSHOT_DIFF_MAX_LINES:
+        remaining = len(lines) - SNAPSHOT_DIFF_MAX_LINES
+        print(f"... and {remaining} more changes (use without --diff for full tree)")
+
+
 def cmd_snapshot(client, args):
-    """Get accessibility tree snapshot."""
+    """Get accessibility tree snapshot.
+
+    --diff prints only the delta vs the last cached snapshot for the
+    selected target (token-economy for repeated post-action reads) instead
+    of the full tree. The cache is always refreshed — with or without
+    --diff — so a later --diff call has a baseline.
+    """
+    target_id = client.get_selected_target()
     client.connect()
     try:
         client.send("Accessibility.enable")
         result = client.send("Accessibility.getFullAXTree", {"depth": args.depth})
         nodes = result.get("nodes", [])
+        entries, order = _build_ax_entries(nodes)
 
-        # Build parent-child map
-        node_map = {}
-        for n in nodes:
-            node_map[n["nodeId"]] = n
+        if args.diff:
+            if target_id:
+                _print_snapshot_diff(target_id, entries, order, args.depth)
+            else:
+                print(
+                    "Warning: no tab selected — cannot key the snapshot cache; "
+                    "showing full tree",
+                    file=sys.stderr,
+                )
+                _print_snapshot_full(entries, order)
+        else:
+            _print_snapshot_full(entries, order)
 
-        # Print tree (limited depth already handled by CDP)
-        for node in nodes:
-            # Calculate depth from backend
-            depth = 0
-            parent_id = node.get("parentId")
-            visited = set()
-            while parent_id and parent_id not in visited:
-                visited.add(parent_id)
-                depth += 1
-                parent_node = node_map.get(parent_id)
-                if parent_node:
-                    parent_id = parent_node.get("parentId")
-                else:
-                    break
-
-            role = node.get("role", {}).get("value", "")
-            name = node.get("name", {}).get("value", "")
-            if role in ("none", "generic") and not name:
-                continue
-
-            prefix = "  " * min(depth, 10)
-            line = f"{prefix}[{role}]"
-            if name:
-                line += f" {name[:80]}"
-            print(line)
-
+        if target_id:
+            _save_snapshot_cache(target_id, entries, args.depth)
     finally:
         client.close()
 
@@ -840,10 +1137,14 @@ def main():
     p_list.add_argument("--type", default="page", help="Tab type filter: page, all (default: page)")
     p_list.add_argument("--limit", type=int, default=50, help="Max tabs to show (default: 50)")
     p_list.add_argument("--search", help="Filter by title/URL substring")
+    p_list.add_argument("--contexts", action="store_true",
+                        help="Group tabs by browserContextId (Chromium profile) instead of a flat list")
+    p_list.add_argument("--context", help="Restrict listing to one browser context (id or short prefix)")
 
     # select
     p_sel = sub.add_parser("select", help="Select a tab by index or ID")
     p_sel.add_argument("target", help="Tab index (integer) or target ID")
+    p_sel.add_argument("--context", help="Refuse to select a target outside this browser context (id or short prefix)")
 
     # screenshot
     p_ss = sub.add_parser("screenshot", help="Capture screenshot")
@@ -854,6 +1155,9 @@ def main():
     # snapshot
     p_snap = sub.add_parser("snapshot", help="Accessibility tree snapshot")
     p_snap.add_argument("--depth", type=int, default=5, help="Tree depth (default: 5)")
+    p_snap.add_argument("--diff", action="store_true",
+                        help="Show delta vs the cached snapshot for this target (updates cache); "
+                             "falls back to full tree with a note when there is no baseline yet")
 
     # evaluate
     p_eval = sub.add_parser("evaluate", help="Evaluate JavaScript")

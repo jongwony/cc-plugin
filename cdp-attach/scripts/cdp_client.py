@@ -57,6 +57,32 @@ def _log_error(category, payload):
         pass
 
 
+def atomic_write_json(path, data):
+    """Write JSON to a temp file in the target's directory, then atomically
+    rename over the destination.
+
+    Generalizes CDPClient._atomic_save_state's crash-safety discipline
+    (never leave a half-written file) for other cache files outside
+    state.json — e.g. v1's `snapshot --diff` per-target cache. Concurrent
+    writers are expected to already be serialized by cdp_lock (one CDP
+    command runs at a time per host:port), so this only needs to be
+    crash-safe, not lock-guarded.
+    """
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=directory, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+        os.rename(tmp_path, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
 class CDPError(Exception):
     """CDP protocol or connection error."""
     pass
@@ -207,6 +233,39 @@ class CDPClient:
                 f"WebSocket connection failed for {target_id}: {e}\n"
                 "Tab may be frozen/suspended. Try selecting an active tab."
             )
+
+        self._msg_id = 0
+        self._event_buffer = []
+        return self
+
+    def connect_browser(self, timeout=10):
+        """Connect WebSocket to the browser-level endpoint (not a specific tab).
+
+        Required for browser-scoped CDP methods like Target.getTargets that
+        expose fields (e.g. browserContextId) the HTTP /json/list endpoint
+        does not — the endpoint URL comes from /json/version's
+        webSocketDebuggerUrl, not the per-tab /devtools/page/{id} pattern.
+
+        Chromium (verified on 150) rejects a WebSocket Origin header on this
+        endpoint with 403 ("Use the command line flag --remote-allow-origins
+        ...") unless suppress_origin is set — same handling connect() already
+        applies for page endpoints.
+        """
+        import websocket
+
+        info = self.get_version()
+        ws_url = info.get("webSocketDebuggerUrl") if isinstance(info, dict) else None
+        if not ws_url:
+            raise CDPError("/json/version did not return webSocketDebuggerUrl")
+
+        try:
+            self._ws = websocket.create_connection(
+                ws_url,
+                timeout=timeout,
+                suppress_origin=True,
+            )
+        except Exception as e:
+            raise CDPError(f"Browser-level WebSocket connection failed: {e}")
 
         self._msg_id = 0
         self._event_buffer = []
@@ -471,18 +530,7 @@ class CDPClient:
     @staticmethod
     def _atomic_save_state(state):
         """Write state to a temp file then atomically rename."""
-        os.makedirs(STATE_DIR, exist_ok=True)
-        fd, tmp_path = tempfile.mkstemp(dir=STATE_DIR, suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w") as f:
-                json.dump(state, f, indent=2)
-            os.rename(tmp_path, STATE_FILE)
-        except BaseException:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-            raise
+        atomic_write_json(STATE_FILE, state)
 
     def _locked_state_update(self, update_fn):
         """Read-modify-write state under an exclusive file lock."""

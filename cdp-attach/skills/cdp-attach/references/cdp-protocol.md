@@ -38,7 +38,7 @@ Input.dispatchKeyEvent({type, key, code, modifiers, windowsVirtualKeyCode})
 Input.insertText({text})
 ```
 
-**Modifier bitmask**: Alt=1, Ctrl=2, Shift=4, Meta=8
+**Modifier bitmask**: Alt=1, Ctrl=2, Meta/Command=4, Shift=8
 
 ### DOM
 

@@ -70,11 +70,15 @@ $V1 version                                    # Browser info
 $V1 list                                       # List tabs (default: first 50 pages)
 $V1 list --search "github" --limit 20          # Search tabs
 $V1 list --type all                            # Include iframes, workers
+$V1 list --contexts                            # Group tabs by browser profile (browserContextId)
+$V1 list --context 3f2a                        # Restrict listing to one profile (id prefix)
 $V1 select 0                                   # Select tab by index
 $V1 select AB71CD183BCE05DD...                  # Select by target ID
+$V1 select 0 --context 3f2a                    # Refuse selecting outside that profile
 $V1 screenshot                                 # PNG of selected tab
 $V1 screenshot --full-page --format jpeg -o /tmp/page.jpg
 $V1 snapshot --depth 3                         # Accessibility tree
+$V1 snapshot --diff                            # Delta vs cached snapshot for this tab (updates cache)
 $V1 evaluate "document.title"                  # Run JavaScript
 $V1 evaluate "fetch('/api').then(r=>r.json())" --await
 $V1 evaluate --stdin <<< 'var x = document.title; x'  # Stdin mode
@@ -111,6 +115,10 @@ $V1 error_list --since-seconds 300                        # Last 5 minutes only
 > **Note on `--frame`**: accepts a CSS selector matching a frame owner (e.g. `iframe`, `frame`, `object`, `embed`) or the literal `main` for the top-level document. Cross-origin frames resolve the same way because CDP exposes per-frame execution contexts regardless of origin.
 
 > **Note on `doctor`, `cdp_call`, `error_list`**: bypass the headless guard so they run on any reachable CDP endpoint. `doctor` reports headless state itself; `cdp_call` is the escape hatch for CDP methods not wrapped by v1/v2/v3; `error_list` reads `~/.cache/cdp-attach/errors.jsonl`, which `cdp_client.send()` populates automatically on every CDP failure (CDP error response, timeout, or WebSocket error). Disable error logging with `CDP_ATTACH_NO_ERROR_LOG=1`. The file rotates to `errors.jsonl.1` at 1MB.
+
+> **Note on `list --contexts` / `--context`**: a Chromium profile is a `browserContextId` (stable, non-experimental `TargetInfo` field), but the HTTP `/json/list` endpoint does not expose it — resolving it opens a short-lived WebSocket to the browser-level endpoint (`Target.getTargets`). Display + filter only, not an access boundary — `select --context` refuses cross-context selection but nothing prevents a bare `select <id>` bypassing it. A prefix matching more than one context is an error (ambiguous), not a silent first-match.
+
+> **Note on `snapshot --diff`**: caches the accessibility tree per target under `~/.cache/cdp-attach/snapshots/{targetId}.json`, keyed by `backendDOMNodeId` (a node keeps its identity across DOM reordering, unlike `nodeId`, so a moved node is not miscounted as removed+added). The diff compares membership, role, name, nesting depth, and immediate parent — see Known Limitations for what it does not detect. Without `--diff` the full tree still prints and the cache still updates, so the first `--diff` call after a plain `snapshot` has a fresh baseline. No baseline yet → falls back to the full tree with a note.
 
 ### Common Mistakes
 
@@ -301,6 +309,8 @@ When all programmatic approaches fail:
 - During React hydration, `find_element --name/--role` may return empty results. Wait for hydration via `v1 evaluate`, then retry.
 - `scan_interactive` makes a CDP call per element; use `--limit` to constrain (default 50).
 - nodeId is invalidated on DOM changes. For stable references, use backendNodeId.
+- `snapshot --diff` compares node membership (by `backendDOMNodeId`), role, name, nesting depth, and immediate parent. It does **not** detect a pure sibling reorder that preserves all of those (same parent, same depth, same role and name — only the order among siblings changed): such a change reports "no changes". A `--depth` change between calls IS detected and forces a full-tree re-baseline instead of a false diff. For order-sensitive verification, read the full tree (without `--diff`).
+- `list --contexts` / `list --context` and `select --context` filter and guard **only** browser contexts that carry a `browserContextId`. Targets with no `browserContextId` are shown grouped as `(default)` but cannot be selected or guarded by `--context` (which requires a real context-id prefix). The default context is display-only by design — the profile filter is a display/filter aid, not a completeness guarantee over every target.
 - **CDP setter state is session-scoped, not target-scoped.** Each v1/v2/v3 invocation opens a fresh CDP session and closes it on exit, so anything you "install" via `cdp_call` or `v3 add_init_script` is discarded when the command returns. Affected: `Security.setIgnoreCertificateErrors`, `Network.setExtraHTTPHeaders`, `Page.addScriptToEvaluateOnNewDocument` (so `v3 remove_init_script <id>` from a separate call sees "Script not found"), `Emulation.setUserAgentOverride` when not paired with the same-session navigation. Workarounds: relaunch the browser with the equivalent command-line flag (e.g. `--ignore-certificate-errors`, `--user-agent=...`), or do the install + use inside a single `cdp_call` chain (limited because `cdp_call` is one method per invocation).
 
 ### Network Debugging
@@ -314,69 +324,15 @@ When all programmatic approaches fail:
 
 ### Mutating API Calls via Page Session (CSRF)
 
-A `fetch` issued via `v1 evaluate --await` with `credentials: 'include'` may return **403 Forbidden** on mutating endpoints (PUT/POST/DELETE) even though the cookie session is valid — many sites additionally require a CSRF token header on state-changing requests. The token lives in the page DOM (common locations: `<meta name="csrf-token">`, hidden inputs — verified example: Datadog stores it in the `_current_user_json` hidden input as `csrf_token`).
-
-```
-1. v1 evaluate "..."            → Locate + extract the CSRF token from page DOM
-                                  (synchronous read; no --await needed)
-2. v1 evaluate --await --stdin  → Retry the fetch with the token attached as the
-                                  appropriate header (e.g. X-CSRF-Token)
-3. Verify the response status / side effect
-```
-
-```bash
-# Example (Datadog): extract token, then retry the mutating call
-$V1 evaluate "JSON.parse(document.querySelector('input[name=_current_user_json]').value).csrf_token"
-$V1 evaluate --await --stdin <<'JS'
-var r = await fetch('/api/v1/resource', {
-  method: 'PUT',
-  credentials: 'include',
-  headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': '<token>' },
-  body: JSON.stringify({ /* payload */ })
-});
-return r.status;
-JS
-```
-
-> **Note**: the token's DOM location and header name are site-specific — capture a successful mutating request with `v3 network_start`, locate it via `network_list --filter <api-path>`, then read its request headers from `~/.cache/cdp-attach/network-events.jsonl` (the `Network.requestWillBeSent` entries carry the JS-set request headers — `X-CSRF-Token` and the like appear there, though browser-added headers arrive only via `Network.requestWillBeSentExtraInfo`, which the collector does not record; `network_list` itself prints only method/status/type/URL). If the tab holding the session is lifecycle-frozen (fetch hangs instead of returning 403), combine this with helper-tab routing below: read the token from the frozen tab synchronously, then issue the fetch from a fresh same-origin tab.
+CSRF-token retry pattern for 403s on mutating `fetch` calls: details in `references/network.md`.
 
 ### Frozen (Hidden) Tab — Network Calls Suspended
 
-Chromium freezes hidden/backgrounded tabs (observed in Dia browser, Chrome 149): fetch/XHR/timers are suspended, so `evaluate --await` network calls hang silently — the promise never settles — while synchronous main-thread JS still executes (DOM reads work). Verified non-recoveries: `Page.bringToFront` does not unfreeze the renderer, and `Page.setWebLifecycleState "active"` does not stick — Chromium implements it as a one-shot transition (the same `SetPageFrozen` call the browser's own freezing policy uses), not a persistent override: the tab remains hidden, so the freezing policy simply re-freezes it at its next decision point (verified in Chromium source: `page_handler.cc` `SetWebLifecycleState`, `freezing_policy.cc`).
-
-**Recognition test**: synchronous `v1 evaluate "1"` returns instantly, but a short `--await` fetch hangs. (Contrast with a wedged renderer, where even the synchronous evaluate times out — see Error Handling.)
-
-**Workaround — helper-tab routing** (reducible to existing primitives; no dedicated command, same rationale as the virtualized-tables fallback):
-
-```
-1. v1 evaluate "..."            → (if needed) read same-origin DOM state from the
-                                  frozen tab synchronously first (e.g. a CSRF token)
-2. v2 new_page <same-origin-url> → Fresh tabs start unfrozen; cookies are shared
-3. v1 evaluate --await "..."    → Run the fetch/XHR from the helper tab
-4. v2 close_page                → Close the helper tab when done
-```
-
-> **Note**: `v1 revive` also works (the reopened tab starts unfrozen) but discards renderer state unnecessarily — a frozen tab is not wedged; prefer helper-tab routing.
+Wedged-renderer vs lifecycle-frozen-tab discrimination + helper-tab routing: details in `references/recovery.md`.
 
 ### Virtualized Tables / Data Grids (rows missing from DOM)
 
-Modern grid libraries (MUI X DataGrid, AG Grid, TanStack Table, react-virtualized) unmount offscreen rows. DOM queries return only the visible window — `querySelectorAll('[role=row]')` may yield 10 rows for a 100-row dataset, and `snapshot` / `scan_interactive` / `find_element` all hit the same limit because they walk the live DOM/AX tree.
-
-The authoritative data lives in the XHR/Fetch response that populated the grid. `network_start` captures these bodies; retrieve them directly instead of fighting virtualization:
-
-```
-1. v1 select <tab>
-2. v3 network_start             → Start collector BEFORE the request fires
-3. v1 navigate "..."  or  v2 click "<search button>" → Trigger data fetch
-4. v3 network_list --filter <api-path> --bodies → Find requestId (✓ = body saved)
-5. v3 network_body <requestId>  → Print JSON; pipe to jq / Python for extraction
-```
-
-Body capture is constrained to XHR/Fetch/EventSource responses under 5MB. Bodies fetched before `network_start` are unrecoverable — CDP's `Network.getResponseBody` only works inside the same session that received the response, and `v1 cdp_call Network.getResponseBody` opens a fresh session whose body buffer is empty for past requests.
-
-For server-paginated grids, each pagination click triggers a new request that the collector captures automatically — iterate the UI (or increase page size) and call `network_body` per request.
-
-When the grid was already loaded before capture began (no fresh request available), fall back to scroll-and-harvest with `v2 scroll --selector "<scroller>"` + `v1 evaluate` between scrolls. This is reducible to existing primitives; no dedicated command.
+Virtualized-grid / network-body fallback guidance: details in `references/network.md`.
 
 ## Configuration
 

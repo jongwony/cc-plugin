@@ -68,13 +68,18 @@ def _resolve_context_filter(client, prefix):
     """Resolve a browserContextId (or short prefix) to the set of target
     ids belonging to that context.
 
-    Raises CDPError when the prefix matches no context or matches more
-    than one distinct context (ambiguous).
+    Raises CDPError when the prefix is empty/whitespace (would match every
+    context, including targets with no browserContextId at all — not a
+    meaningful filter), when it matches no context, or when it matches
+    more than one distinct context (ambiguous).
     """
+    if not prefix or not prefix.strip():
+        raise CDPError("--context requires a non-empty id prefix")
+
     targets = _get_browser_targets(client)
     matched_contexts = sorted({
         t.get("browserContextId") for t in targets
-        if (t.get("browserContextId") or "").startswith(prefix)
+        if t.get("browserContextId") and t.get("browserContextId").startswith(prefix)
     })
     if not matched_contexts:
         raise CDPError(f"No browser context matches prefix {prefix!r}")

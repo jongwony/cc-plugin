@@ -298,7 +298,7 @@ def _ax_node_key(node):
 
 
 def _build_ax_entries(nodes):
-    """Reduce raw AX nodes to {key: {role, name, depth}}, in encounter order.
+    """Reduce raw AX nodes to {key: {role, name, depth, parent}}, in encounter order.
 
     Applies the same visibility filter the (pre-existing) full-tree print
     used: skip role in (none, generic) with no accessible name. Returns
@@ -325,8 +325,18 @@ def _build_ax_entries(nodes):
         if role in ("none", "generic") and not name:
             continue
 
+        immediate_parent = node_map.get(node.get("parentId"))
+        parent_key = _ax_node_key(immediate_parent) if immediate_parent else None
         key = _ax_node_key(node)
-        entries[key] = {"role": role, "name": name[:80], "depth": min(depth, 10)}
+        # Store full role/name/depth/parent for comparison; truncation (name
+        # to 80 chars, indent depth capped at 10) happens only at render, so a
+        # change past either boundary is not silently invisible.
+        entries[key] = {
+            "role": role,
+            "name": name,
+            "depth": depth,
+            "parent": parent_key,
+        }
         order.append(key)
     return entries, order
 
@@ -335,10 +345,10 @@ def _print_snapshot_full(entries, order):
     """Print the full accessibility tree (original snapshot behavior)."""
     for key in order:
         e = entries[key]
-        prefix = "  " * e["depth"]
+        prefix = "  " * min(e["depth"], 10)
         line = f"{prefix}[{e['role']}]"
         if e["name"]:
-            line += f" {e['name']}"
+            line += f" {e['name'][:80]}"
         print(line)
 
 
@@ -413,6 +423,7 @@ def _print_snapshot_diff(target_id, entries, order, retrieval_depth):
             cached[k].get("role") != entries[k]["role"]
             or cached[k].get("name") != entries[k]["name"]
             or cached[k].get("depth") != entries[k]["depth"]
+            or cached[k].get("parent") != entries[k]["parent"]
         )
     ]
 
@@ -428,20 +439,22 @@ def _print_snapshot_diff(target_id, entries, order, retrieval_depth):
     lines = []
     for k in added:
         e = entries[k]
-        indent = "  " * e["depth"]
-        lines.append(f"+ {indent}[{e['role']}] {e['name']}".rstrip())
+        indent = "  " * min(e["depth"], 10)
+        lines.append(f"+ {indent}[{e['role']}] {e['name'][:80]}".rstrip())
     for k in removed:
         e = cached[k]
         indent = "  " * min(e.get("depth", 0), 10)
-        lines.append(f"- {indent}[{e.get('role', '')}] {e.get('name', '')}".rstrip())
+        lines.append(f"- {indent}[{e.get('role', '')}] {(e.get('name') or '')[:80]}".rstrip())
     for k in changed:
         old, new = cached[k], entries[k]
         line = (
-            f"~ [{old.get('role', '')}] {old.get('name', '')} -> "
-            f"[{new['role']}] {new['name']}"
+            f"~ [{old.get('role', '')}] {(old.get('name') or '')[:80]} -> "
+            f"[{new['role']}] {new['name'][:80]}"
         )
         if old.get("depth") != new["depth"]:
             line += f" (depth {old.get('depth')}→{new['depth']})"
+        if old.get("parent") != new.get("parent"):
+            line += " (reparented)"
         lines.append(line.rstrip())
 
     for line in lines[:SNAPSHOT_DIFF_MAX_LINES]:

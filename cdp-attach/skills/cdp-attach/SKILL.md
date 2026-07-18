@@ -59,6 +59,16 @@ V2="${CLAUDE_PLUGIN_ROOT}/scripts/v2_interact.py" && $V2 click --selector "a"
 V3="${CLAUDE_PLUGIN_ROOT}/scripts/v3_advanced.py" && $V3 network_start
 ```
 
+### Selecting a target — profile-aware
+
+Before selecting a target for the first time in a session, check for multiple browser profiles: run `$V1 list --contexts`. If it reports **2 or more** contexts and the user has not already named which profile or target to act on:
+
+- **Do not pick one yourself — the choice is the user's.** Build a numbered list of the contexts, each option labeled by its 2–3 most recognizable open tab titles so the user recognizes the profile at a glance — never lead with the raw `browserContextId`. Keep the context id prefix alongside the label as the machine handle.
+- This skill runs forked (`context: fork`), so it cannot pause for user input mid-run: **return that numbered list as the final result, taking no target action in this run** — the main conversation presents the choice and re-invokes with the user's pick. (If running inline instead, ask directly and wait for the pick.)
+- On an invocation that carries the user's pick, narrow to the chosen profile with `--context <id-prefix>` (e.g. `$V1 select 0 --context 3f2a`).
+
+A **single** context, or a target the user has already disambiguated, proceeds without asking. Why this matters: which browser profile to drive is a user-private choice, and `Target.getTargets` exposes no human-readable name for a browser context (only id, title, url, type) — so a context's open tab titles are the only reliable recognition signal. Tabs from different profiles otherwise intermingle in the flat `list`, hiding the multiplicity entirely.
+
 ## Quick Reference
 
 ### v1 — Core (`v1_core.py`)

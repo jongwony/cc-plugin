@@ -61,7 +61,7 @@ Kimi is a lightweight, resumable headless coding executor packaged like `codex-p
 Cross-vendor second opinions (architecture review, root-cause analysis, high-stakes reasoning) stay with `codex-plus`. This skill is the frontend-delegation executor lane, not a substitute for codex's review/analysis role.
 
 ## Running a Task
-1. **No per-invocation model/effort ask** (unlike codex-plus) — defaults are `k3` (256K context, Moderato+) + `max` effort. Deviate only when the user explicitly names a different model (`k3[1m]`, `kimi-for-coding`, `kimi-for-coding-highspeed`) or effort. `k3[1m]` (1M context) is opt-in and plan-gated at a higher tier (see Prerequisites) — reserve it for genuinely long-context work (multi-file refactors, very large scratchpad sessions).
+1. Run with the defaults — `k3` (256K context) at `max` effort, thinking on — and pass a different model or effort only when the user names one. For genuinely long-context work (multi-file refactors, very large scratchpad sessions), `-m 'k3[1m]'` opens the 1M window; `kimi-run.sh -h` lists the remaining values.
 2. Select sandbox mode; default to `read-only` unless the task requires edits. Escalate to `workspace-write` for edit tasks with user awareness; `danger-full-access` requires explicit permission (see Error Handling).
 3. Craft prompt per Context Classification and Prompt Template — classify context, write to `/tmp/kimi_prompt_<suffix>.txt`.
 4. Delegate execution to a Bash subagent (Task tool) — never run `kimi-run.sh` directly in the main session. This keeps kimi's JSON response and full output out of the main context. Give the subagent:
@@ -81,8 +81,8 @@ Kimi Code membership quota operates on a 7-day cycle plus a 5-hour rolling windo
 
 ## Prerequisites
 
-- A Kimi Code membership: Moderato tier or higher for the default `k3` (256K context). The opt-in `k3[1m]` (1M context) needs Allegretto or above — an Allegretto key was verified to be accepted for `k3[1m]` (2026-07), matching the official docs; the membership pricing page had been read as gating it at Allegro+, and that reading is not what the API enforces. Acceptance was confirmed at the call level only — it does not prove the server served a full 1M window rather than falling back.
-- Thinking is on by default and should stay on: per the Kimi Code docs, disabling it routes both K3 and K2.7 Code to K2.6 — a silent model downgrade, not an error. `kimi-run.sh` exports a positive `MAX_THINKING_TOKENS` (default 32000) because on third-party providers a value of 0 omits the `thinking` parameter entirely. Never pass `MAX_THINKING_TOKENS=0` to this skill.
+- A Kimi Code membership: Moderato or higher for the default `k3` (256K context); `k3[1m]` (1M context) needs Allegretto or above, verified accepted at the call level (2026-07) — acceptance on its own leaves open whether a full 1M window was served.
+- Thinking runs on by default and stays on: the Kimi Code docs state that a thinking-disabled request routes K3 and K2.7 Code to K2.6, a downgrade that surfaces as lower quality rather than an error. `kimi-run.sh` exports a positive `MAX_THINKING_TOKENS` (default 32000); keep it positive, and raise it when a task needs a deeper budget. Verified 2026-07: the default configuration returns real thinking content on the stream.
 - A coding key stored at gopass entry `api-key/kimi-coding`. `kimi-run.sh` pulls it at call time and never persists it.
 
 ## Error Handling

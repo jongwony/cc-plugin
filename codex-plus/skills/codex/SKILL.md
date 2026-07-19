@@ -11,10 +11,10 @@ All prompts passed to `codex` MUST be in English.
 
 ## Prompt Delivery
 1. Generate a short unique suffix (e.g., `a3f9`, timestamp fragment, or task keyword) for this invocation
-2. Write the prompt to `/tmp/codex_prompt_<suffix>.txt` using the Write tool
-3. Execute via wrapper script: `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh [options] /tmp/codex_prompt_<suffix>.txt`
+2. Write the prompt to `<scratchpad>/codex_prompt_<suffix>.txt` using the Write tool — `<scratchpad>` is the session's scratchpad directory, the `/private/tmp/…/scratchpad` path announced in the system prompt; writes there run without permission prompts. When no scratchpad directory is announced, fall back to `/private/tmp`.
+3. Execute via wrapper script: `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh [options] <scratchpad>/codex_prompt_<suffix>.txt`
 
-This per-invocation naming prevents file collisions across parallel sessions and team agents.
+This per-invocation naming prevents file collisions across team agents sharing a session scratchpad; parallel sessions are already isolated by their own scratchpad directories.
 
 ## Context Classification
 
@@ -30,11 +30,11 @@ Before writing the prompt file, classify available context on two orthogonal axe
 **Rules**:
 - **Pointers**: Provide file paths, grep patterns, test commands. A pointer is sufficient — codex re-derives the contents with its own tools, and copying is what you reserve for what it cannot re-derive.
 - **Session Context**: Extract only what is already known from the current conversation. Organize as intent, constraints, and preferences.
-- **No collection requests**: The prompt carries only user-specific information already in hand; when codex needs more, the user supplies it on resume. This bounds the content written into the `/tmp` prompt, leaving pre-prompt orchestration free (e.g., `AskUserQuestion` for model selection).
+- **No collection requests**: The prompt carries only user-specific information already in hand; when codex needs more, the user supplies it on resume. This bounds the content written into the prompt file, leaving pre-prompt orchestration free (e.g., `AskUserQuestion` for model selection).
 
 ### Prompt Template
 
-Structure `/tmp/codex_prompt_<suffix>.txt` with these sections:
+Structure `<scratchpad>/codex_prompt_<suffix>.txt` with these sections:
 
     ## Task
     [User's request — framed as a complete end-to-end objective]
@@ -71,24 +71,24 @@ When the delegated task is image generation or image editing:
    Reasoning effort is selected once and applied identically to all chosen models.
 
 2. Select sandbox mode; default to `--sandbox read-only` unless edits or network access are necessary.
-3. Craft prompt per Context Classification and Prompt Template — classify context, write to `/tmp/codex_prompt_<suffix>.txt`.
+3. Craft prompt per Context Classification and Prompt Template — classify context, write to `<scratchpad>/codex_prompt_<suffix>.txt`.
 4. Delegate execution to a Bash subagent (Task tool) — never run `codex-run.sh` directly in the main session. This keeps codex's verbose banner and full output out of the main context. Give the subagent:
-   - the exact command: `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh [options] /tmp/codex_prompt_<suffix>.txt` with `-m MODEL` / `-r EFFORT` / `-s SANDBOX` / `--full-auto` / `-C DIR`, or `-S <SESSION_ID>` to resume.
+   - the exact command: `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh [options] <scratchpad>/codex_prompt_<suffix>.txt` with `-m MODEL` / `-r EFFORT` / `-s SANDBOX` / `--full-auto` / `-C DIR`, or `-S <SESSION_ID>` to resume.
    - return contract: run the command and return ONLY (a) a concise outcome summary and (b) the session id. codex prints `session id: <uuid>` to stderr; the subagent extracts that line verbatim and returns it as `SESSION_ID: <uuid>`. The wrapper does no parsing — stderr is left unsuppressed precisely so the subagent can read the session id and any failure straight from the output.
    - **Single model**: one subagent call.
    - **Multiple models**: issue parallel subagent calls (one per model) in a single response — same prompt, sandbox, and effort, different `-m`. Each returns its own `SESSION_ID`.
 5. Record each returned `SESSION_ID` against its purpose/model. This {purpose → SESSION_ID} map is the only resume handle.
-6. Resume: write new instructions to a fresh `/tmp/codex_prompt_<suffix>.txt`, then delegate to a Bash subagent running `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> /tmp/codex_prompt_<suffix>.txt`. Resume is always by explicit id, which stays deterministic under parallel sessions. The session keeps its original model/effort/sandbox/`-C` settings.
+6. Resume: write new instructions to a fresh `<scratchpad>/codex_prompt_<suffix>.txt`, then delegate to a Bash subagent running `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> <scratchpad>/codex_prompt_<suffix>.txt`. Resume is always by explicit id, which stays deterministic under parallel sessions. The session keeps its original model/effort/sandbox/`-C` settings.
 7. Summarize each outcome to the user; for parallel work, surface which `SESSION_ID` maps to which branch. Inform the user: "Resume anytime with 'codex resume'."
 
 ### Quick Reference
 Each command below runs **inside a Bash subagent**, which returns the outcome summary plus the `session id: <uuid>` line as `SESSION_ID: <uuid>`.
 
 Base patterns:
-- Read-only analysis — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -m MODEL /tmp/codex_prompt_<suffix>.txt`
-- Apply edits — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s workspace-write --full-auto /tmp/codex_prompt_<suffix>.txt`
-- Network access — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s danger-full-access --full-auto /tmp/codex_prompt_<suffix>.txt`
-- Resume a session — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> /tmp/codex_prompt_<suffix>.txt`; the explicit id is the resume path, deterministic under parallel sessions.
+- Read-only analysis — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -m MODEL <scratchpad>/codex_prompt_<suffix>.txt`
+- Apply edits — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s workspace-write --full-auto <scratchpad>/codex_prompt_<suffix>.txt`
+- Network access — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s danger-full-access --full-auto <scratchpad>/codex_prompt_<suffix>.txt`
+- Resume a session — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> <scratchpad>/codex_prompt_<suffix>.txt`; the explicit id is the resume path, deterministic under parallel sessions.
 
 Modifiers, added to any base pattern above:
 - Different working directory — `-C <DIR>`, applying to the non-resume patterns

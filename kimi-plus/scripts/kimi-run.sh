@@ -7,7 +7,7 @@
 set -euo pipefail
 
 # Defaults
-readonly DEFAULT_MODEL="k3[1m]"
+readonly DEFAULT_MODEL="k3"
 readonly DEFAULT_EFFORT="max"
 readonly DEFAULT_SANDBOX="read-only"
 
@@ -23,9 +23,12 @@ usage() {
 Usage: kimi-run.sh [options] <prompt_file>
 
 Options:
-  -m, --model MODEL      Model name (default: k3[1m] — 1M context, requires
-                          Allegretto membership). Other valid values: k3,
-                          kimi-for-coding, kimi-for-coding-highspeed.
+  -m, --model MODEL      Model name (default: k3 — 256K context, Moderato+).
+                          Opt-in: 'k3[1m]' requests 1M-context mode, which is
+                          plan-gated at a higher membership tier — a below-tier
+                          call fails; verify your plan before opting in. Other
+                          valid values: kimi-for-coding,
+                          kimi-for-coding-highspeed.
   -r, --effort EFFORT    Reasoning effort, maps to CLAUDE_CODE_EFFORT_LEVEL
                           (default: max)
   -s, --sandbox SANDBOX  Sandbox: read-only|workspace-write|danger-full-access
@@ -54,7 +57,8 @@ raw JSON response surfaced on stderr for diagnosis.
 
 Examples:
   kimi-run.sh /tmp/kimi_prompt_a3f9.txt
-  kimi-run.sh -m k3 -r high /tmp/kimi_prompt_a3f9.txt
+  kimi-run.sh -m 'k3[1m]' /tmp/kimi_prompt_a3f9.txt
+  kimi-run.sh -r high /tmp/kimi_prompt_a3f9.txt
   kimi-run.sh -S 019e3eff-c191-7401-bffb-bb8c31ac37c7 /tmp/kimi_prompt_a3f9.txt
   kimi-run.sh -s workspace-write /tmp/kimi_prompt_a3f9.txt
 USAGE

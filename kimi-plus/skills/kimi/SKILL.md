@@ -61,7 +61,7 @@ Kimi is a lightweight, resumable headless coding executor packaged like `codex-p
 Cross-vendor second opinions (architecture review, root-cause analysis, high-stakes reasoning) stay with `codex-plus`. This skill is the frontend-delegation executor lane, not a substitute for codex's review/analysis role.
 
 ## Running a Task
-1. **No per-invocation model/effort ask** (unlike codex-plus) — defaults are `k3[1m]` (1M context) + `max` effort. Deviate only when the user explicitly names a different model (`k3`, `kimi-for-coding`, `kimi-for-coding-highspeed`) or effort.
+1. **No per-invocation model/effort ask** (unlike codex-plus) — defaults are `k3` (256K context, Moderato+) + `max` effort. Deviate only when the user explicitly names a different model (`k3[1m]`, `kimi-for-coding`, `kimi-for-coding-highspeed`) or effort. `k3[1m]` (1M context) is opt-in and plan-gated at a higher tier (see Prerequisites) — reserve it for genuinely long-context work (multi-file refactors, very large scratchpad sessions).
 2. Select sandbox mode; default to `read-only` unless the task requires edits. Escalate to `workspace-write` for edit tasks with user awareness; `danger-full-access` requires explicit permission (see Error Handling).
 3. Craft prompt per Context Classification and Prompt Template — classify context, write to `/tmp/kimi_prompt_<suffix>.txt`.
 4. Delegate execution to a Bash subagent (Task tool) — never run `kimi-run.sh` directly in the main session. This keeps kimi's JSON response and full output out of the main context. Give the subagent:
@@ -81,7 +81,7 @@ Kimi Code membership quota operates on a 7-day cycle plus a 5-hour rolling windo
 
 ## Prerequisites
 
-- A Kimi Code membership: Allegretto tier or higher for the default `k3[1m]` (1M context) model; Moderato tier caps K3 at 256K context (use `-m k3` instead of `k3[1m]` if the membership is Moderato).
+- A Kimi Code membership: Moderato tier or higher for the default `k3` (256K context). The opt-in `k3[1m]` (1M context) is gated at a higher tier — official docs state Allegretto+, while the membership pricing page has been read as Allegro+ (sources disagree as of 2026-07); verify the actual entitlement on the subscribed plan before opting in, and expect a below-tier call to fail rather than degrade.
 - A coding key stored at gopass entry `api-key/kimi-coding`. `kimi-run.sh` pulls it at call time and never persists it.
 
 ## Error Handling
@@ -99,7 +99,7 @@ Each command below runs **inside a Bash subagent**, which returns the outcome su
 | Apply edits | `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh -s workspace-write /tmp/kimi_prompt_<suffix>.txt` |
 | Resume a session | `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh -S <SESSION_ID> /tmp/kimi_prompt_<suffix>.txt` |
 | Different dir | Add `-C <DIR>` to any pattern above |
-| Custom model | Add `-m k3 -r high` to any pattern above (name explicitly when deviating from defaults) |
+| Custom model | Add `-m 'k3[1m]'` (plan-gated 1M opt-in) or `-r high` to any pattern above (name explicitly when deviating from defaults) |
 | Capture answer to file | Add `-o <FILE>` to write kimi's final result text to FILE |
 
 ## Following Up

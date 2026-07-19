@@ -18,11 +18,11 @@ records what the prototype proved.
 - **SLOW (hand-written once)**: runbook documents (topology, order,
   invariants), milestone gates, the issue tree, `blocks`/`blockedBy`
   dependency edges, decision comments. Updated only when the plan changes.
-- **FAST (system-maintained, never touched by hand)**: issue status (the
+- **FAST (read at need, never touched by hand)**: issue status (the
   GitHub integration transitions it on PR events), milestone progress %
-  (auto-computed), blocked relations (Linear auto-demotes them when the
-  blocker completes), live facts (image existence, deploy applied — never
-  stored in Linear; read from their source).
+  (auto-computed), current blocked/unblocked sets (derived on read from issue
+  status + stored dependency edges), live facts (image existence, deploy
+  applied — never stored in Linear; read from their source).
 - Why: manual mirroring leads to missed updates → accumulated error → a stale
   whole-picture read back as truth — context pollution. Making the manual
   surface zero removes that chain entirely.
@@ -44,7 +44,7 @@ pure lookup table — not a convergence loop.
 | Cognitive job (why) | Content (topology) | Form the rubric picks | Linear realization (MCP-verified) |
 |---|---|---|---|
 | Re-see the whole picture, extract actions (review-and-orient) | multi-PR dependencies, parallel (graph) | **visual map** — dependency diagram | `blocks`/`blockedBy` DAG → Linear graph/board views (native, always queryable) |
-| What deploys next? what is unblocked? (execute-and-resume / live-monitor) | graph | prose runbook + small dependency view / status board | "unblocked" filtered issue list + milestone gates |
+| What deploys next? what is unblocked? (execute-and-resume / live-monitor) | graph | prose runbook + small dependency view / status board | derived "unblocked" issue list + milestone gates |
 | Runbook distill → fresh session (execute-and-resume) | linear procedure | **cold markdown runbook** (the only cell that routes to authoring protocols) | project `save_document` |
 | Where are we right now? (live-monitor) | linear | status board / state readout | `list_*` reads → local cache → a one-line statusline |
 | Why this order? path selection (decide) | linear narrative | causal / decision log | issue or project `save_comment` — decision threads |
@@ -59,8 +59,8 @@ closing.
 
 | Moment (trigger) | Skill moment | Job | Where to read / write |
 |---|---|---|---|
-| Opening a span (session start) | `open` | read: current gate + unblocked set, then start | project overview (milestone % + runbook pointer) → unblocked filter |
-| "What next?" | `next` | read: ONLY the unblocked set — never scan the whole board | "not done & no blockers" filter (items surface here automatically when blockers complete) |
+| Opening a span (session start) | `open` | read: current gate + unblocked set, then start | project overview (milestone % + runbook pointer) → unblocked derivation |
+| "What next?" | `next` | read: ONLY the unblocked set — never scan the whole board | "not done & no active blockers" derivation (items surface when blocker status changes and the set is re-derived) |
 | Right before deploy/merge | `deploy` | read: ordering invariants (not status) | project runbook document, ordering-invariants section |
 | Choosing a path | `decide` | **write (the only recurring hand-write)**: one line on why this path | `save_comment` on the issue (or project) — decision log |
 | Closing a span (/clear, distill, worker exit) | `close` | write: structural deltas only — new workstream issues, edge changes, runbook updates; distilled handoffs → project doc | `save_issue` (blockedBy) / `save_document`. State is not written |
@@ -76,9 +76,9 @@ webhooks do not cover milestones).
 
 - Structure only was written; the first read-back already showed gate 1 at
   100% and gate 2 at 25%, auto-computed.
-- The automatic chain: `PR merge → issue auto-Done → gate % auto-updates →
-  successor issue's blocked relation auto-clears → the next action surfaces
-  in the unblocked filter` — no hand anywhere in the chain.
+- The hand-free chain: `PR merge → issue auto-Done → gate % auto-updates →
+  next read derives the successor as unblocked → the next action surfaces` —
+  no hand anywhere in the chain.
 - One precondition: the team's Git automations mapping (Team Settings →
   Workflow) must be on for the first link to fire, and the PR must reference
   the issue (identifier in the branch name, or a magic word in the PR body).

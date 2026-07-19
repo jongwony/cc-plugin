@@ -72,7 +72,7 @@ while [[ $# -gt 0 ]]; do
     -r|--effort) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; EFFORT="$2"; shift 2 ;;
     -s|--sandbox) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; SANDBOX="$2"; shift 2 ;;
     -C|--cwd) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; CWD="$2"; shift 2 ;;
-    -S|--session-id) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; SESSION_ID="$2"; shift 2 ;;
+    -S|--session-id) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty session id" >&2; usage 1; }; SESSION_ID="$2"; shift 2 ;;
     -o|--output-last-message) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; OUTPUT_FILE="$2"; shift 2 ;;
     -h|--help) usage 0 ;;
     -*) echo "Unknown option: $1" >&2; usage 1 ;;
@@ -116,8 +116,21 @@ RESUME_ARGS=()
 [[ -n "$SESSION_ID" ]] && RESUME_ARGS+=(--resume "$SESSION_ID")
 
 if [[ -n "$CWD" ]]; then
-  cd "$CWD"
+  # Neutralize CDPATH before cd: with it set, a relative -C could resolve to a
+  # CDPATH entry instead of the intended directory AND cd would print the
+  # resolved path to STDOUT, corrupting the result contract (stdout is the
+  # result text plus the SESSION_ID line, nothing else). `--` guards a $CWD
+  # that begins with `-`. Unset rather than a `CDPATH= cd` prefix: cd is a
+  # special builtin, so a preceding assignment can persist.
+  unset CDPATH
+  cd -- "$CWD"
 fi
+
+# Disable xtrace for the rest of the script: from here the coding key lives in
+# the environment (MOONSHOT_CODING_KEY, then ANTHROPIC_API_KEY), and an inherited
+# `set -x` / `bash -x` would print it verbatim to the trace stream — a log. No-op
+# when tracing is already off.
+set +x
 
 # Pull the membership coding key from gopass at call time. Never stored in
 # the repo, never persisted to disk — held only in this script's process and
@@ -217,7 +230,11 @@ fi
 set +e
 RESULT=$(printf '%s' "$RAW" | jq -r '.result // empty')
 jq_rc_result=$?
-KIMI_SESSION_ID=$(printf '%s' "$RAW" | jq -r '.session_id // empty')
+# `| strings` (not `// empty`): a non-string session_id — a number, or an object
+# that renders multiline — would otherwise pass the empty check below and be
+# emitted as an unusable resume handle. Selecting only string-typed values makes
+# a wrong-typed response fall through to that guard instead.
+KIMI_SESSION_ID=$(printf '%s' "$RAW" | jq -r '.session_id | strings')
 jq_rc_session=$?
 set -e
 if [[ $jq_rc_result -ne 0 || $jq_rc_session -ne 0 ]]; then

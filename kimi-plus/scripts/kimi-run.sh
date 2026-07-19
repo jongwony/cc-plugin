@@ -120,10 +120,8 @@ if [[ -n "$CWD" ]]; then
 fi
 
 # Pull the membership coding key from gopass at call time. Never stored in
-# the repo, never persisted to disk. Claude keeps the key for its own API
-# calls but SCRUB (exported below) strips it from the Bash/hook/MCP-stdio
-# subprocesses claude spawns — without which every tool the kimi session runs
-# inherits the key (docs: subprocesses inherit the parent env by default).
+# the repo, never persisted to disk — held only in this script's process and
+# copied into the exported ANTHROPIC_API_KEY below.
 MOONSHOT_CODING_KEY="$(gopass show -o api-key/kimi-coding)" || {
   echo "Error: gopass entry 'api-key/kimi-coding' not found. Issue the Kimi Code membership coding key and store it via 'gopass insert api-key/kimi-coding' before running kimi-run.sh." >&2
   exit 1
@@ -146,6 +144,12 @@ export ANTHROPIC_BASE_URL="https://api.kimi.com/coding/"
 # per its official docs — NOT ANTHROPIC_AUTH_TOKEN, which is the paygo
 # api.moonshot.ai convention.
 export ANTHROPIC_API_KEY="$MOONSHOT_CODING_KEY"
+# Drop the intermediate so it never reaches claude's env. Normally a non-exported
+# local stays out of the child's env, but an inherited `allexport` (exported
+# SHELLOPTS) would auto-export this custom-named var and leak the raw key to
+# claude and its tools. Unsetting the source makes that moot — ANTHROPIC_API_KEY
+# already holds a copy.
+unset MOONSHOT_CODING_KEY
 export ANTHROPIC_MODEL="$MODEL"
 export ANTHROPIC_DEFAULT_OPUS_MODEL="$MODEL"
 export ANTHROPIC_DEFAULT_SONNET_MODEL="$MODEL"
@@ -154,11 +158,13 @@ export ANTHROPIC_DEFAULT_FABLE_MODEL="$MODEL"
 export CLAUDE_CODE_SUBAGENT_MODEL="$MODEL"
 export ENABLE_TOOL_SEARCH=false
 export CLAUDE_CODE_EFFORT_LEVEL="$EFFORT"
-# Strip Anthropic/cloud credentials from the subprocesses claude spawns (Bash
-# tool, hooks, MCP stdio) — the parent keeps them for API calls. Confines the
-# coding key to claude itself instead of every tool it runs; matters most under
-# workspace-write / danger-full-access, which execute arbitrary commands.
-export CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1
+# NOTE: do not set CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1 here. On claude 2.1.215 it
+# forces permission mode to `default` and blocks the Edit tool under
+# --permission-mode acceptEdits / --dangerously-skip-permissions (verified by
+# isolated A/B run), which would break the workspace-write and danger-full-access
+# lanes this wrapper advertises. The key is already confined to claude's own
+# process tree (gopass, never persisted); edit-lane function outranks that
+# defense-in-depth here.
 
 # Thinking stays on: the Kimi Code docs state a thinking-disabled request
 # routes K3 and K2.7 Code to K2.6, a downgrade that surfaces as lower
@@ -210,5 +216,9 @@ if [[ -z "$KIMI_SESSION_ID" ]]; then
 fi
 
 printf '%s\n' "$RESULT"
-[[ -n "$OUTPUT_FILE" ]] && printf '%s\n' "$RESULT" > "$OUTPUT_FILE"
+# Emit the resume handle BEFORE the optional -o write: the session already
+# exists server-side, so an unwritable -o path must not abort (set -e) and
+# discard the only resume handle. SESSION_ID stays the last stdout line (the
+# -o write goes to a file, not stdout).
 echo "SESSION_ID: $KIMI_SESSION_ID"
+[[ -n "$OUTPUT_FILE" ]] && printf '%s\n' "$RESULT" > "$OUTPUT_FILE"

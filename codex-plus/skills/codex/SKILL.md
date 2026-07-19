@@ -20,17 +20,17 @@ This per-invocation naming prevents file collisions across parallel sessions and
 
 Before writing the prompt file, classify available context on two orthogonal axes:
 
-| | Session (already available) | Exploration (needs collection) |
-|---|---|---|
-| **AI-verifiable** | Extract paths, patterns, commands as **Pointers** — codex self-verifies | Provide search hints, entry points — codex self-explores |
-| **User-specific** | Summarize intent, constraints, preferences from current session — **copy-only** | **Blocked** — no collection requests or questions |
+- **AI-verifiable × Session (already available)** — extract paths, patterns, commands as **Pointers**; codex self-verifies them.
+- **AI-verifiable × Exploration (needs collection)** — provide search hints and entry points; codex self-explores from them.
+- **User-specific × Session (already available)** — summarize intent, constraints, and preferences from the current session, **copy-only**.
+- **User-specific × Exploration (needs collection)** — **blocked**; this cell carries no collection requests or questions.
 
 **One boundary — Reference over Copy.** Both rows are two faces of the same partition: *re-derivability by the consumer*. Codex is the consumer that cannot re-derive the parent's session context, but CAN re-derive anything reachable by its own tools under `-C DIR`. The AI-verifiable row is what codex re-derives, so pass a **reference** (path / pattern / command); the User-specific row is what it cannot, so **copy** only that into the prompt. Operational test before each item: *"Can codex re-derive this from shared substrate with its own tools?"* — yes → pass a pointer; no → copy it in.
 
 **Rules**:
-- **Pointers**: Provide file paths, grep patterns, test commands. Do not inline file contents — codex re-derives them with its own tools, so a pointer is sufficient (copying is what you reserve for what it cannot re-derive).
+- **Pointers**: Provide file paths, grep patterns, test commands. A pointer is sufficient — codex re-derives the contents with its own tools, and copying is what you reserve for what it cannot re-derive.
 - **Session Context**: Extract only what is already known from the current conversation. Organize as intent, constraints, and preferences.
-- **No collection requests**: Never embed questions or requests for additional user-specific information in the prompt. If codex needs more context, the user will resume with it. Blocked applies only to content written into `/tmp` prompt, not to pre-prompt orchestration (e.g., `AskUserQuestion` for model selection).
+- **No collection requests**: The prompt carries only user-specific information already in hand; when codex needs more, the user supplies it on resume. This bounds the content written into the `/tmp` prompt, leaving pre-prompt orchestration free (e.g., `AskUserQuestion` for model selection).
 
 ### Prompt Template
 
@@ -56,18 +56,17 @@ Omit empty sections. `## Pointers` enables codex to self-verify; `## Session Con
 When the delegated task is image generation or image editing:
 
 - Include `$imagegen` in the prompt so downstream clients treat it as an explicit image-generation request.
-- Keep the local prompt here minimal and task-specific. Do not restate detailed image prompting doctrine in this skill.
+- Keep the local prompt here minimal and task-specific.
 - Defer prompt construction details to the installed `imagegen` skill when available.
 - Use `references/image-gen-models-prompting-guide.ipynb` only as the backing reference for model choice, prompt structure, text rendering, edits, and multi-image workflows.
 
 ## Running a Task
 1. Ask the user (via `AskUserQuestion`) which model(s) and reasoning effort in a **single prompt with two questions**. Model selection is **multi-select** — multiple models can be chosen for parallel execution.
 
-| Model | Characteristics |
-|-------|-----------------|
-| `gpt-5.6-sol` | Current default model for Codex CLI tasks |
-| `gpt-5.6-terra` | Balanced 5.6 variant — lighter usage, faster than Sol; same effort ladder |
-| `gpt-5.5` | Supplementary model (prior default) |
+   Models to offer:
+   - `gpt-5.6-sol` — current default model for Codex CLI tasks.
+   - `gpt-5.6-terra` — balanced 5.6 variant; lighter usage, faster than Sol, same effort ladder.
+   - `gpt-5.5` — supplementary model, the prior default.
 
    Reasoning effort is selected once and applied identically to all chosen models.
 
@@ -78,22 +77,23 @@ When the delegated task is image generation or image editing:
    - return contract: run the command and return ONLY (a) a concise outcome summary and (b) the session id. codex prints `session id: <uuid>` to stderr; the subagent extracts that line verbatim and returns it as `SESSION_ID: <uuid>`. The wrapper does no parsing — stderr is left unsuppressed precisely so the subagent can read the session id and any failure straight from the output.
    - **Single model**: one subagent call.
    - **Multiple models**: issue parallel subagent calls (one per model) in a single response — same prompt, sandbox, and effort, different `-m`. Each returns its own `SESSION_ID`.
-5. Record each returned `SESSION_ID` against its purpose/model. This {purpose → SESSION_ID} map is the only resume handle — there is no most-recent fallback.
-6. Resume: write new instructions to a fresh `/tmp/codex_prompt_<suffix>.txt`, then delegate to a Bash subagent running `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> /tmp/codex_prompt_<suffix>.txt`. Resume is always by explicit id — deterministic, never a race under parallel sessions. Model/effort/sandbox/`-C` are ignored on resume (the session keeps its original settings).
+5. Record each returned `SESSION_ID` against its purpose/model. This {purpose → SESSION_ID} map is the only resume handle.
+6. Resume: write new instructions to a fresh `/tmp/codex_prompt_<suffix>.txt`, then delegate to a Bash subagent running `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> /tmp/codex_prompt_<suffix>.txt`. Resume is always by explicit id, which stays deterministic under parallel sessions. The session keeps its original model/effort/sandbox/`-C` settings.
 7. Summarize each outcome to the user; for parallel work, surface which `SESSION_ID` maps to which branch. Inform the user: "Resume anytime with 'codex resume'."
 
 ### Quick Reference
 Each command below runs **inside a Bash subagent**, which returns the outcome summary plus the `session id: <uuid>` line as `SESSION_ID: <uuid>`.
 
-| Use case | Command pattern |
-| --- | --- |
-| Read-only analysis | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -m MODEL /tmp/codex_prompt_<suffix>.txt` |
-| Apply edits | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s workspace-write --full-auto /tmp/codex_prompt_<suffix>.txt` |
-| Network access | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s danger-full-access --full-auto /tmp/codex_prompt_<suffix>.txt` |
-| Resume a session | `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> /tmp/codex_prompt_<suffix>.txt` (only resume path; deterministic, no --last) |
-| Different dir | Add `-C <DIR>` to non-resume patterns above |
-| Custom model | Add `-m gpt-5.6-terra -r high` to any pattern above |
-| Capture answer to file | Add `-o <FILE>` to write codex's final message to FILE (deterministic) |
+Base patterns:
+- Read-only analysis — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -m MODEL /tmp/codex_prompt_<suffix>.txt`
+- Apply edits — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s workspace-write --full-auto /tmp/codex_prompt_<suffix>.txt`
+- Network access — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s danger-full-access --full-auto /tmp/codex_prompt_<suffix>.txt`
+- Resume a session — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> /tmp/codex_prompt_<suffix>.txt`; the explicit id is the resume path, deterministic under parallel sessions.
+
+Modifiers, added to any base pattern above:
+- Different working directory — `-C <DIR>`, applying to the non-resume patterns
+- Model and effort — `-m gpt-5.6-terra`, `-r high`
+- Capture the answer to a file — `-o <FILE>` writes codex's final message to FILE deterministically
 
 ## Following Up
 After `codex` completes, use `AskUserQuestion` to confirm next steps. Restate model/reasoning/sandbox when proposing actions.

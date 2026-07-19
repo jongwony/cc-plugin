@@ -28,9 +28,9 @@ Before writing the prompt file, classify available context on two orthogonal axe
 **One boundary — Reference over Copy.** Both rows are two faces of the same partition: *re-derivability by the consumer*. The kimi session is the consumer that cannot re-derive the parent's session context, but CAN re-derive anything reachable under its `-C DIR` with its own tools. The AI-verifiable row is what it re-derives, so pass a **reference** (path / pattern / command); the User-specific row is what it cannot, so **copy** only that into the prompt. Operational test before each item: *"Can the kimi session re-derive this from shared substrate with its own tools?"* — yes → pass a pointer; no → copy it in.
 
 **Rules**:
-- **Pointers**: Provide file paths, grep patterns, test commands. Do not inline file contents — the kimi session re-derives them with its own tools, so a pointer is sufficient (copying is what you reserve for what it cannot re-derive).
+- **Pointers**: Provide file paths, grep patterns, test commands. A pointer is sufficient — the kimi session re-derives the contents with its own tools, and copying is what you reserve for what it cannot re-derive.
 - **Session Context**: Extract only what is already known from the current conversation. Organize as intent, constraints, and preferences.
-- **No collection requests**: Never embed questions or requests for additional user-specific information in the prompt. If kimi needs more context, the user will resume with it.
+- **No collection requests**: The prompt carries only user-specific information already in hand; when kimi needs more, the user supplies it on resume.
 
 ### Prompt Template
 
@@ -58,7 +58,7 @@ Kimi is a lightweight, resumable headless coding executor packaged like `codex-p
 - **Visual/UI iteration loops** — scratchpad HTML iteration, screenshot-to-component passes, quick front-end prototyping cycles.
 - **Mass boilerplate generation** — component scaffolding, stories, test skeletons, repetitive structural code.
 
-Cross-vendor second opinions (architecture review, root-cause analysis, high-stakes reasoning) stay with `codex-plus`. This skill is the frontend-delegation executor lane, not a substitute for codex's review/analysis role.
+Cross-vendor second opinions (architecture review, root-cause analysis, high-stakes reasoning) stay with `codex-plus`. This skill is the frontend-delegation executor lane.
 
 ## Running a Task
 1. Run with the defaults — `k3` (256K context) at `max` effort, thinking on — and pass a different model or effort only when the user names one. For genuinely long-context work (multi-file refactors, very large scratchpad sessions), `-m 'k3[1m]'` opens the 1M window; `kimi-run.sh -h` lists the remaining values.

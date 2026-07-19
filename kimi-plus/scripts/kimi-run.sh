@@ -119,7 +119,10 @@ MOONSHOT_CODING_KEY="$(gopass show -o api-key/kimi-coding)" || {
 }
 
 export ANTHROPIC_BASE_URL="https://api.kimi.com/coding/"
-export ANTHROPIC_AUTH_TOKEN="$MOONSHOT_CODING_KEY"
+# The coding endpoint authenticates via ANTHROPIC_API_KEY (x-api-key header),
+# per its official docs — NOT ANTHROPIC_AUTH_TOKEN, which is the paygo
+# api.moonshot.ai convention.
+export ANTHROPIC_API_KEY="$MOONSHOT_CODING_KEY"
 export ANTHROPIC_MODEL="$MODEL"
 export ANTHROPIC_DEFAULT_OPUS_MODEL="$MODEL"
 export ANTHROPIC_DEFAULT_SONNET_MODEL="$MODEL"
@@ -128,6 +131,14 @@ export ANTHROPIC_DEFAULT_FABLE_MODEL="$MODEL"
 export CLAUDE_CODE_SUBAGENT_MODEL="$MODEL"
 export ENABLE_TOOL_SEARCH=false
 export CLAUDE_CODE_EFFORT_LEVEL="$EFFORT"
+
+# Auto-compact window must match the model's actual context entitlement,
+# or compaction fires at the wrong boundary (docs: 262144 for k3/256K,
+# 1048576 for k3[1m]).
+case "$MODEL" in
+  "k3[1m]") export CLAUDE_CODE_AUTO_COMPACT_WINDOW=1048576 ;;
+  *)        export CLAUDE_CODE_AUTO_COMPACT_WINDOW=262144 ;;
+esac
 
 # Invoke claude headless against the swapped endpoint. --output-format json
 # is required (not a plain exec like codex-run.sh) because session-id capture

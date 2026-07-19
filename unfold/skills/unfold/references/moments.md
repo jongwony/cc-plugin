@@ -1,24 +1,32 @@
 # Unfold — Per-Moment Procedures
 
 Detailed execution for each moment. All reads treat Linear as the source of
-truth for structure and auto-derived state; live-system facts (image in a
-registry, deploy applied) are never read from Linear — go to their source.
+truth for structure and current issue/milestone state; live-system facts (image
+in a registry, deploy applied) are never read from Linear — go to their source.
 
 ## Shared: unblocked derivation
 
-Linear auto-demotes a `blockedBy` relation to `related` when the blocking
-issue completes, so "currently blocked" is live. There is no server-side
-"unblocked" filter — derive client-side:
+Linear's [issue-relations docs](https://linear.app/docs/issue-relations)
+describe a resolved blocker's relation moving under Related in the issue
+sidebar. API/MCP reads can still return the original `blocks`/`blockedBy`
+relation after completion. The MCP exposes no server-side `unblocked`
+filter — derive client-side:
 
 1. `list_issues` scoped to the project, excluding completed/canceled states.
 2. For candidates, `get_issue` with `includeRelations: true`.
-3. `unblocked(i)` ≡ `relations.blockedBy` is empty ∧ status type is not
-   completed/canceled.
-4. Rank: In Progress first, then Todo within the earliest un-done milestone
+3. For each distinct `blockedBy` issue, obtain its `statusType` (`get_issue`
+   unless already known from another bounded read).
+4. `unblocked(i)` ≡ `i.statusType` is not completed/canceled ∧ every
+   `relations.blockedBy` issue has `statusType` completed.
+5. Rank: In Progress first, then Todo within the earliest un-done milestone
    (gate order = milestone sortOrder), then priority.
 
+`canceled` blockers do not satisfy step 4; Linear's docs do not say whether
+`canceled` counts as resolved.
+
 Keep calls bounded: derive relations only for issues in the earliest one or
-two open gates, not the whole project.
+two open gates, deduplicate `blockedBy` IDs, and fetch only unknown blocker
+statuses — not the whole project.
 
 ## open — span-open orient
 

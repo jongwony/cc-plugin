@@ -8,7 +8,7 @@ description: |
   (next), "배포 순서" / "머지 전 확인" / "deploy order" (deploy), "이 길로
   가는 이유 기록" / "결정 남겨줘" / "log this decision" (decide), "세션 정리"
   / "구조 변경 반영" / "wrap up the span" (close), "로드맵" / "게이트 어디까지
-  왔지" / "roadmap" (roadmap). Reads auto-derived state from Linear via MCP;
+  왔지" / "roadmap" (roadmap). Reads current state from Linear via MCP;
   writes ONLY structure and decisions (never status). Invoked as
   /unfold [moment] [project].
 ---
@@ -17,16 +17,18 @@ description: |
 
 Route a recurring cognitive moment to the right Linear read or minimal write.
 The substrate premise: the whole picture (workstreams, dependency DAG, gates,
-runbook) lives in Linear as structure; state (issue status, milestone %,
-blocked-relations) is auto-derived by Linear and the GitHub integration.
+runbook) lives in Linear as structure; issue status and milestone % are
+auto-derived by Linear and the GitHub integration. Current blocked/unblocked
+sets are derived on read from those statuses and stored dependency edges.
 Unfold READS that picture on demand instead of reconstructing it from memory,
 and confines WRITES to the two moments where a human hand belongs: decisions
 and structure deltas.
 
 ## Core rule — pace layering
 
-- **Read freely**: issue status, milestone progress %, blocked/unblocked sets
-  are system-maintained. Pull them; never cache-and-trust stale copies.
+- **Read freely**: issue status and milestone progress % are system-maintained;
+  blocked/unblocked sets are derived on read from current statuses and stored
+  dependency edges. Never cache-and-trust stale copies.
 - **Write only structure and decisions**: new workstream issues, `blockedBy`
   edges, runbook documents, one-line decision comments.
 - **Never hand-write state**: do not set issue status, milestone completion,
@@ -84,8 +86,8 @@ moment. Summary:
 
 | Moment | Reads | Writes | Emit |
 |---|---|---|---|
-| `open` | project, milestones (%), open issues + relations, documents | — | current gate + % · unblocked next actions · runbook pointer |
-| `next` | open issues + relations | — | unblocked list only, ranked |
+| `open` | project, milestones (%), open issues + relations + blocker statuses, documents | — | current gate + % · unblocked next actions · runbook pointer |
+| `next` | open issues + relations + blocker statuses | — | unblocked list only, ranked |
 | `deploy` | runbook document | — | ordering invariants section only |
 | `decide` | the target issue | `save_comment` | one-line decision log (draft → confirm → write) |
 | `close` | this session's work | `save_issue` / `save_document` | structure-delta checklist → minimal writes |

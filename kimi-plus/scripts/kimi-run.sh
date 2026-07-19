@@ -31,12 +31,25 @@ Options:
                           kimi-for-coding-highspeed.
   -r, --effort EFFORT    Reasoning effort, maps to CLAUDE_CODE_EFFORT_LEVEL
                           (default: max)
-  -s, --sandbox SANDBOX  Sandbox: read-only|workspace-write|danger-full-access
-                          (default: read-only). read-only passes no permission
-                          flags (headless -p denies permission-requiring tools
-                          by default); workspace-write adds
-                          --permission-mode acceptEdits; danger-full-access
-                          adds --dangerously-skip-permissions.
+  -s, --sandbox SANDBOX  Sandbox: read-only|workspace-write|auto|danger-full-access
+                          (default: read-only). Each tier pins its permission
+                          mode explicitly, so an ambient
+                          permissions.defaultMode cannot widen it:
+                            read-only          --permission-mode default
+                                               (reads only; Bash denied)
+                            workspace-write    --permission-mode acceptEdits
+                                               (file edits; arbitrary Bash
+                                               still denied — a linter or build
+                                               will NOT run under this tier)
+                            auto               --permission-mode auto
+                                               (a classifier screens each
+                                               action instead of prompting, so
+                                               lint/build/test do run; use when
+                                               the task must verify its own
+                                               work, and state the boundary in
+                                               the prompt)
+                            danger-full-access --dangerously-skip-permissions
+                                               (no review layer at all)
   -C, --cwd DIR          Working directory to cd into before invoking claude
   -S, --session-id ID    Resume a specific session by UUID (adds --resume ID).
                           Model/effort env still applies per-invocation on
@@ -76,7 +89,9 @@ while [[ $# -gt 0 ]]; do
     -o|--output-last-message) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; OUTPUT_FILE="$2"; shift 2 ;;
     -h|--help) usage 0 ;;
     -*) echo "Unknown option: $1" >&2; usage 1 ;;
-    *) PROMPT_FILE="$1"; shift ;;
+    # Reject a second positional rather than letting it overwrite the first:
+    # silently running the last of several prompt files hides the mistake.
+    *) [[ -z "${PROMPT_FILE:-}" ]] || { echo "Error: unexpected extra argument: $1 (exactly one prompt_file is accepted)" >&2; usage 1; }; PROMPT_FILE="$1"; shift ;;
   esac
 done
 
@@ -106,11 +121,29 @@ command -v jq >/dev/null 2>&1 || { echo "Error: jq is required (used to parse cl
 # for cross-skill consistency.
 PERM_ARGS=()
 case "$SANDBOX" in
-  read-only) ;;
+  # Pinned explicitly rather than left blank: with no --permission-mode flag the
+  # run inherits whatever `permissions.defaultMode` the ambient settings carry,
+  # so a machine configured with `bypassPermissions` silently turns the
+  # advertised read-only lane into full access. Verified: the flag does take
+  # precedence over a settings-file defaultMode.
+  read-only) PERM_ARGS+=(--permission-mode default) ;;
   workspace-write) PERM_ARGS+=(--permission-mode acceptEdits) ;;
+  # auto keeps a review layer (a classifier screens each action) instead of
+  # removing the check entirely, so a boundary conveyed in the prompt has
+  # something to bind to. Unlike acceptEdits it also clears arbitrary Bash —
+  # `npm run lint` / build / test, which acceptEdits denies. Verified accepted
+  # on the Kimi coding endpoint.
+  auto) PERM_ARGS+=(--permission-mode auto) ;;
   danger-full-access) PERM_ARGS+=(--dangerously-skip-permissions) ;;
-  *) echo "Error: unknown sandbox mode: $SANDBOX (expected read-only|workspace-write|danger-full-access)" >&2; usage 1 ;;
+  *) echo "Error: unknown sandbox mode: $SANDBOX (expected read-only|workspace-write|auto|danger-full-access)" >&2; usage 1 ;;
 esac
+
+# The nested session loads installed plugin skills and may invoke them itself.
+# kimi-plus's own skill matches exactly the frontend/boilerplate prompts this
+# wrapper carries, so without this the child can call kimi-run.sh recursively.
+# Blocked at the flag layer, not in the skill's frontmatter: the skill must stay
+# model-invocable in ordinary sessions, where it is the frontend executor.
+SKILL_GUARD_ARGS=(--disallowedTools "Skill(kimi-plus:kimi)" "Skill(kimi-plus:kimi *)")
 
 RESUME_ARGS=()
 [[ -n "$SESSION_ID" ]] && RESUME_ARGS+=(--resume "$SESSION_ID")
@@ -150,7 +183,20 @@ MOONSHOT_CODING_KEY="$(gopass show -o api-key/kimi-coding)" || {
 # and need no unset. Two sources a shell swap cannot neutralize: a settings.json
 # `env` block (outranks shell exports) and a signed-in Claude apps gateway
 # session (cleared only by /logout) — out of scope for this wrapper.
-unset ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY
+unset ANTHROPIC_AUTH_TOKEN \
+      CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY \
+      CLAUDE_CODE_USE_ANTHROPIC_AWS CLAUDE_CODE_USE_MANTLE \
+      CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD CLAUDE_CODE_USE_GATEWAY \
+      ANTHROPIC_CUSTOM_HEADERS
+# The selector list above is the full set recognized by claude 2.1.215, not just
+# the three headline ones: ANTHROPIC_AWS and MANTLE are documented providers that
+# build their own endpoint from provider credentials (so they bypass this base
+# URL entirely), and GOOGLE_CLOUD/GATEWAY are present in the binary though
+# undocumented — cleared defensively since an unset costs nothing.
+# ANTHROPIC_CUSTOM_HEADERS is a different risk in kind: it is applied at
+# client construction regardless of which host ANTHROPIC_BASE_URL names, so an
+# inherited gateway/org header would be transmitted TO the third-party Kimi
+# endpoint. Routing breakage vs credential disclosure — both closed here.
 
 export ANTHROPIC_BASE_URL="https://api.kimi.com/coding/"
 # The coding endpoint authenticates via ANTHROPIC_API_KEY (x-api-key header),
@@ -207,6 +253,7 @@ set +e
 RAW=$(claude -p --output-format json \
   ${RESUME_ARGS[@]+"${RESUME_ARGS[@]}"} \
   ${PERM_ARGS[@]+"${PERM_ARGS[@]}"} \
+  ${SKILL_GUARD_ARGS[@]+"${SKILL_GUARD_ARGS[@]}"} \
   < "$PROMPT_FILE")
 rc=$?
 set -e
@@ -228,7 +275,11 @@ fi
 # response the output contract promises. Capture the parse failure and surface
 # $RAW on stderr, same shape as that guard.
 set +e
-RESULT=$(printf '%s' "$RAW" | jq -r '.result // empty')
+# `| strings` here too: a missing or non-string .result would otherwise be
+# emitted as blank text (or a JSON-rendered object) while a valid session_id
+# still carried the run to exit 0 — reporting success for a response that never
+# delivered an answer.
+RESULT=$(printf '%s' "$RAW" | jq -r '.result | strings')
 jq_rc_result=$?
 # `| strings` (not `// empty`): a non-string session_id — a number, or an object
 # that renders multiline — would otherwise pass the empty check below and be
@@ -247,7 +298,16 @@ fi
 # the resume handle would be blank and the output contract ("SESSION_ID: <uuid>")
 # unmet. Fail loudly with the raw JSON rather than printing an empty handle.
 if [[ -z "$KIMI_SESSION_ID" ]]; then
-  echo "Error: claude exited 0 but the response carried no session_id — unexpected JSON, resume handle unavailable. Raw response:" >&2
+  echo "Error: claude exited 0 but the response carried no usable session_id — unexpected JSON, resume handle unavailable. Raw response:" >&2
+  printf '%s\n' "$RAW" >&2
+  exit 1
+fi
+
+# Same reasoning for the answer itself: a zero exit that yields no result text is
+# an unexpected shape, not a successful empty answer. Surfacing it as success
+# would hand the caller a blank deliverable that looks like a completed run.
+if [[ -z "$RESULT" ]]; then
+  echo "Error: claude exited 0 but the response carried no result text — unexpected JSON. Raw response:" >&2
   printf '%s\n' "$RAW" >&2
   exit 1
 fi

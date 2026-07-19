@@ -62,7 +62,7 @@ Cross-vendor second opinions (architecture review, root-cause analysis, high-sta
 
 ## Running a Task
 1. Run with the defaults — `k3` (256K context) at `max` effort, thinking on — and pass a different model or effort only when the user names one. For genuinely long-context work (multi-file refactors, very large scratchpad sessions), `-m 'k3[1m]'` opens the 1M window; `kimi-run.sh -h` lists the remaining values.
-2. Select sandbox mode; default to `read-only` unless the task requires edits. Escalate to `workspace-write` for edit tasks with user awareness; `danger-full-access` requires explicit permission (see Error Handling).
+2. Select sandbox mode; default to `read-only` unless the task requires edits. Escalate to `workspace-write` for edit tasks with user awareness. Choose `auto` when the task must run its own verification — `workspace-write` permits file edits but still denies arbitrary Bash, so a linter, build, or test will not run under it; `auto` puts a classifier in front of each action instead, so those commands execute while a review layer remains. Under `auto`, state the task's boundary in the prompt itself (what it may touch, what it must not) — that conveyed boundary is what the review layer binds to. `danger-full-access` removes the review layer entirely and requires explicit permission (see Error Handling).
 3. Craft prompt per Context Classification and Prompt Template — classify context, write to `/tmp/kimi_prompt_<suffix>.txt`.
 4. Delegate execution to a Bash subagent (Task tool) — never run `kimi-run.sh` directly in the main session. This keeps kimi's JSON response and full output out of the main context. Give the subagent:
    - the exact command: `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh [options] /tmp/kimi_prompt_<suffix>.txt` with `-m MODEL` / `-r EFFORT` / `-s SANDBOX` / `-C DIR`, or `-S <SESSION_ID>` to resume.
@@ -86,7 +86,7 @@ Kimi Code membership quota operates on a 7-day cycle plus a 5-hour rolling windo
 - A coding key stored at gopass entry `api-key/kimi-coding`. `kimi-run.sh` pulls it at call time and never persists it.
 
 ## Error Handling
-- Stop and report failures whenever a `kimi-run.sh` invocation exits non-zero; the script surfaces the raw JSON response on stderr — relay it and ask direction before retrying.
+- Stop and report failures whenever a `kimi-run.sh` invocation exits non-zero. When the failure came from claude or from processing its response, the script surfaces the raw JSON on stderr — relay it and ask direction before retrying. Setup failures (bad arguments, a missing prompt file, an unreachable `-C` directory, a missing gopass entry, an unwritable `-o` path) print a one-line stderr message instead, with no JSON to relay.
 - Missing gopass entry (`api-key/kimi-coding`): surface the prerequisite to the user rather than attempting a workaround.
 - Before using `-s danger-full-access`, ask the user for permission unless it was already given.
 - Quota/429-style errors: stop immediately, report, do not retry-loop (see Quota Awareness).
@@ -97,6 +97,7 @@ Each command below runs **inside a Bash subagent**, which returns the outcome su
 Base patterns:
 - Read-only analysis — `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh /tmp/kimi_prompt_<suffix>.txt`
 - Apply edits — `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh -s workspace-write /tmp/kimi_prompt_<suffix>.txt`
+- Edit and self-verify (lint/build/test) — `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh -s auto /tmp/kimi_prompt_<suffix>.txt`
 - Resume a session — `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh -S <SESSION_ID> /tmp/kimi_prompt_<suffix>.txt`
 
 Modifiers, added to any base pattern above:

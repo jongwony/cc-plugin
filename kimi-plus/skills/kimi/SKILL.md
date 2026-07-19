@@ -20,10 +20,10 @@ This per-invocation naming prevents file collisions across parallel sessions and
 
 Before writing the prompt file, classify available context on two orthogonal axes:
 
-| | Session (already available) | Exploration (needs collection) |
-|---|---|---|
-| **AI-verifiable** | Extract paths, patterns, commands as **Pointers** — the kimi session self-verifies | Provide search hints, entry points — the kimi session self-explores |
-| **User-specific** | Summarize intent, constraints, preferences from current session — **copy-only** | **Blocked** — no collection requests or questions |
+- **AI-verifiable × Session (already available)** — extract paths, patterns, commands as **Pointers**; the kimi session self-verifies them.
+- **AI-verifiable × Exploration (needs collection)** — provide search hints and entry points; the kimi session self-explores from them.
+- **User-specific × Session (already available)** — summarize intent, constraints, and preferences from the current session, **copy-only**.
+- **User-specific × Exploration (needs collection)** — **blocked**; this cell carries no collection requests or questions.
 
 **One boundary — Reference over Copy.** Both rows are two faces of the same partition: *re-derivability by the consumer*. The kimi session is the consumer that cannot re-derive the parent's session context, but CAN re-derive anything reachable under its `-C DIR` with its own tools. The AI-verifiable row is what it re-derives, so pass a **reference** (path / pattern / command); the User-specific row is what it cannot, so **copy** only that into the prompt. Operational test before each item: *"Can the kimi session re-derive this from shared substrate with its own tools?"* — yes → pass a pointer; no → copy it in.
 
@@ -94,14 +94,16 @@ Kimi Code membership quota operates on a 7-day cycle plus a 5-hour rolling windo
 ### Quick Reference
 Each command below runs **inside a Bash subagent**, which returns the outcome summary plus the `SESSION_ID: <uuid>` line.
 
-| Use case | Command pattern |
-| --- | --- |
-| Read-only analysis | `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh /tmp/kimi_prompt_<suffix>.txt` |
-| Apply edits | `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh -s workspace-write /tmp/kimi_prompt_<suffix>.txt` |
-| Resume a session | `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh -S <SESSION_ID> /tmp/kimi_prompt_<suffix>.txt` |
-| Different dir | Add `-C <DIR>` to any pattern above |
-| Custom model | Add `-m 'k3[1m]'` (plan-gated 1M opt-in) or `-r high` to any pattern above (name explicitly when deviating from defaults) |
-| Capture answer to file | Add `-o <FILE>` to write kimi's final result text to FILE |
+Base patterns:
+- Read-only analysis — `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh /tmp/kimi_prompt_<suffix>.txt`
+- Apply edits — `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh -s workspace-write /tmp/kimi_prompt_<suffix>.txt`
+- Resume a session — `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh -S <SESSION_ID> /tmp/kimi_prompt_<suffix>.txt`
+
+Modifiers, added to any base pattern above:
+- Different working directory — `-C <DIR>`
+- Long-context opt-in — `-m 'k3[1m]'`, plan-gated at a higher membership tier
+- Deeper reasoning — `-r high`
+- Capture the answer to a file — `-o <FILE>` writes kimi's final result text to FILE
 
 ## Following Up
 After `kimi-run.sh` completes, use `AskUserQuestion` to confirm next steps when the outcome is ambiguous or partial.

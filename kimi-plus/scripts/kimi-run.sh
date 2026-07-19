@@ -91,6 +91,15 @@ if [[ ! -f "$PROMPT_FILE" ]]; then
   exit 1
 fi
 
+# Anchor a relative prompt path to the invocation cwd BEFORE any -C cd. The -f
+# check above resolves against the current cwd, but the `< "$PROMPT_FILE"`
+# redirection at invocation runs after the cd — so with -C a relative path would
+# validate here yet read a different (or missing) same-named file afterward.
+case "$PROMPT_FILE" in
+  /*) : ;;
+  *)  PROMPT_FILE="$PWD/$PROMPT_FILE" ;;
+esac
+
 command -v jq >/dev/null 2>&1 || { echo "Error: jq is required (used to parse claude's --output-format json response)" >&2; exit 1; }
 
 # Sandbox tier -> claude permission flags. Same tier names as codex-run.sh
@@ -111,8 +120,10 @@ if [[ -n "$CWD" ]]; then
 fi
 
 # Pull the membership coding key from gopass at call time. Never stored in
-# the repo, never persisted to disk — exported only into this script's own
-# process tree (the claude child process invoked below).
+# the repo, never persisted to disk. Claude keeps the key for its own API
+# calls but SCRUB (exported below) strips it from the Bash/hook/MCP-stdio
+# subprocesses claude spawns — without which every tool the kimi session runs
+# inherits the key (docs: subprocesses inherit the parent env by default).
 MOONSHOT_CODING_KEY="$(gopass show -o api-key/kimi-coding)" || {
   echo "Error: gopass entry 'api-key/kimi-coding' not found. Issue the Kimi Code membership coding key and store it via 'gopass insert api-key/kimi-coding' before running kimi-run.sh." >&2
   exit 1
@@ -143,16 +154,23 @@ export ANTHROPIC_DEFAULT_FABLE_MODEL="$MODEL"
 export CLAUDE_CODE_SUBAGENT_MODEL="$MODEL"
 export ENABLE_TOOL_SEARCH=false
 export CLAUDE_CODE_EFFORT_LEVEL="$EFFORT"
+# Strip Anthropic/cloud credentials from the subprocesses claude spawns (Bash
+# tool, hooks, MCP stdio) — the parent keeps them for API calls. Confines the
+# coding key to claude itself instead of every tool it runs; matters most under
+# workspace-write / danger-full-access, which execute arbitrary commands.
+export CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1
 
 # Thinking stays on: the Kimi Code docs state a thinking-disabled request
 # routes K3 and K2.7 Code to K2.6, a downgrade that surfaces as lower
-# quality rather than an error. An explicit positive budget keeps the
-# configuration stated rather than inherited. Verified 2026-07: this default
-# yields real thinking blocks on the stream (186 thinking_delta events on a
-# reasoning prompt). Probing MAX_THINKING_TOKENS=0 did NOT suppress thinking
-# here, so this variable's exact effect against this endpoint is unconfirmed
-# — the budget is a safeguard, and the verified claim is only that the
-# default configuration thinks.
+# quality rather than an error. Unset the inherited off-switch so the wrapper's
+# thinking-on contract is not silently overridden by parent env. Verified
+# 2026-07: this default yields real thinking blocks on the stream (186
+# thinking_delta events on a reasoning prompt). Probing MAX_THINKING_TOKENS=0
+# did NOT suppress thinking here (this endpoint omits the param rather than
+# forcing off), so the budget below is a stated safeguard, not a guarantee; the
+# verified claim is only that the default configuration thinks. Left overridable
+# (`:-`) so a task can raise the budget.
+unset CLAUDE_CODE_DISABLE_THINKING
 export MAX_THINKING_TOKENS="${MAX_THINKING_TOKENS:-32000}"
 
 # Auto-compact window must match the model's actual context entitlement,

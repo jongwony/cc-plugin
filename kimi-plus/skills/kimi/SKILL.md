@@ -81,7 +81,8 @@ Kimi Code membership quota operates on a 7-day cycle plus a 5-hour rolling windo
 
 ## Prerequisites
 
-- A Kimi Code membership: Moderato tier or higher for the default `k3` (256K context). The opt-in `k3[1m]` (1M context) is gated at a higher tier — official docs state Allegretto+, while the membership pricing page has been read as Allegro+ (sources disagree as of 2026-07); verify the actual entitlement on the subscribed plan before opting in, and expect a below-tier call to fail rather than degrade.
+- A Kimi Code membership: Moderato tier or higher for the default `k3` (256K context). The opt-in `k3[1m]` (1M context) needs Allegretto or above — an Allegretto key was verified to be accepted for `k3[1m]` (2026-07), matching the official docs; the membership pricing page had been read as gating it at Allegro+, and that reading is not what the API enforces. Acceptance was confirmed at the call level only — it does not prove the server served a full 1M window rather than falling back.
+- Keep thinking enabled. Per the Kimi Code docs, disabling it routes both K3 and K2.7 Code to K2.6 — a silent model downgrade, not an error.
 - A coding key stored at gopass entry `api-key/kimi-coding`. `kimi-run.sh` pulls it at call time and never persists it.
 
 ## Error Handling

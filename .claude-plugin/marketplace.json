@@ -20,6 +20,11 @@
       "description": "Enhanced OpenAI Codex CLI integration (multi-model, context classification)"
     },
     {
+      "name": "kimi-plus",
+      "source": "./kimi-plus",
+      "description": "Kimi K3 headless coding executor (frontend delegation, Claude Code env-swap)"
+    },
+    {
       "name": "pdf-split",
       "source": "./pdf-split",
       "description": "PDF chapter splitting"

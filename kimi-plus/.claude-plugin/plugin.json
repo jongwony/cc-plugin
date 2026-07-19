@@ -1,0 +1,9 @@
+{
+  "name": "kimi-plus",
+  "description": "Kimi K3 headless coding executor via Claude Code env-swap (Kimi Code membership endpoint), frontend-delegation oriented",
+  "version": "0.1.13",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

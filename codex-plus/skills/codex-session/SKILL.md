@@ -27,11 +27,9 @@ Each JSONL file contains:
 
 Determine what the user wants to find:
 
-| Input | Action |
-|-------|--------|
-| Partial/full UUID | Direct lookup |
-| "recent" / "latest" | Show recent sessions |
-| Topic/keyword | Search via grep across sessions |
+- Partial or full UUID — direct lookup.
+- "recent" / "latest" — show recent sessions.
+- Topic or keyword — search via grep across sessions.
 
 ### 2. Execute Extraction
 

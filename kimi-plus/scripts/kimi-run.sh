@@ -198,13 +198,33 @@ RAW=$(claude -p --output-format json \
 rc=$?
 set -e
 
+# The coding key was needed only for the claude call above. Drop it now, before
+# the jq subprocesses below, so they never inherit it — this is what makes the
+# "confined to claude's own process tree" claim (see NOTE above) literally true
+# rather than approximately so.
+unset ANTHROPIC_API_KEY
+
 if [[ $rc -ne 0 ]]; then
   printf '%s\n' "$RAW" >&2
   exit "$rc"
 fi
 
+# Guard the JSON parse like the claude call above: malformed or wrong-type JSON
+# makes jq exit non-zero (pipefail propagates it), which under set -e would abort
+# HERE — before the empty-session_id guard below — and never surface the raw
+# response the output contract promises. Capture the parse failure and surface
+# $RAW on stderr, same shape as that guard.
+set +e
 RESULT=$(printf '%s' "$RAW" | jq -r '.result // empty')
+jq_rc_result=$?
 KIMI_SESSION_ID=$(printf '%s' "$RAW" | jq -r '.session_id // empty')
+jq_rc_session=$?
+set -e
+if [[ $jq_rc_result -ne 0 || $jq_rc_session -ne 0 ]]; then
+  echo "Error: claude exited 0 but its response did not parse as JSON — resume handle unavailable. Raw response:" >&2
+  printf '%s\n' "$RAW" >&2
+  exit 1
+fi
 
 # A zero exit with no session_id is an unexpected response shape, not success:
 # the resume handle would be blank and the output contract ("SESSION_ID: <uuid>")
@@ -221,4 +241,13 @@ printf '%s\n' "$RESULT"
 # discard the only resume handle. SESSION_ID stays the last stdout line (the
 # -o write goes to a file, not stdout).
 echo "SESSION_ID: $KIMI_SESSION_ID"
-[[ -n "$OUTPUT_FILE" ]] && printf '%s\n' "$RESULT" > "$OUTPUT_FILE"
+# `if`, not `[[ … ]] && …`: a bare trailing test whose condition is false (no -o)
+# would be the script's LAST command and hand its exit status (1) to the whole
+# script, failing every otherwise-successful default run. An unwritable -o still
+# aborts (set -e) inside the body — after SESSION_ID is already emitted, per the
+# ordering above. The explicit `exit 0` pins the success contract to the code
+# path rather than to whatever command happened to run last.
+if [[ -n "$OUTPUT_FILE" ]]; then
+  printf '%s\n' "$RESULT" > "$OUTPUT_FILE"
+fi
+exit 0

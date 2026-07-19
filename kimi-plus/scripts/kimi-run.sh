@@ -118,6 +118,18 @@ MOONSHOT_CODING_KEY="$(gopass show -o api-key/kimi-coding)" || {
   exit 1
 }
 
+# Neutralize inherited credentials that OUTRANK ANTHROPIC_API_KEY, or the swap
+# is silently hijacked (docs: Authentication precedence). ANTHROPIC_AUTH_TOKEN
+# (rank 2, sent as Authorization: Bearer) beats ANTHROPIC_API_KEY (rank 3,
+# x-api-key) — the request still hits the Kimi base URL but with the wrong
+# credential in the wrong header (401, or a wrong-identity success if the
+# endpoint also accepts the bearer). The cloud-provider selectors rank above
+# both. CLAUDE_CODE_OAUTH_TOKEN and on-disk OAuth login rank BELOW the API key
+# and need no unset. Two sources a shell swap cannot neutralize: a settings.json
+# `env` block (outranks shell exports) and a signed-in Claude apps gateway
+# session (cleared only by /logout) — out of scope for this wrapper.
+unset ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY
+
 export ANTHROPIC_BASE_URL="https://api.kimi.com/coding/"
 # The coding endpoint authenticates via ANTHROPIC_API_KEY (x-api-key header),
 # per its official docs — NOT ANTHROPIC_AUTH_TOKEN, which is the paygo
@@ -169,6 +181,15 @@ fi
 
 RESULT=$(printf '%s' "$RAW" | jq -r '.result // empty')
 KIMI_SESSION_ID=$(printf '%s' "$RAW" | jq -r '.session_id // empty')
+
+# A zero exit with no session_id is an unexpected response shape, not success:
+# the resume handle would be blank and the output contract ("SESSION_ID: <uuid>")
+# unmet. Fail loudly with the raw JSON rather than printing an empty handle.
+if [[ -z "$KIMI_SESSION_ID" ]]; then
+  echo "Error: claude exited 0 but the response carried no session_id — unexpected JSON, resume handle unavailable. Raw response:" >&2
+  printf '%s\n' "$RAW" >&2
+  exit 1
+fi
 
 printf '%s\n' "$RESULT"
 [[ -n "$OUTPUT_FILE" ]] && printf '%s\n' "$RESULT" > "$OUTPUT_FILE"

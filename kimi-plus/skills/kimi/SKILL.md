@@ -102,7 +102,7 @@ Base patterns:
 Modifiers, added to any base pattern above:
 - Different working directory — `-C <DIR>`
 - Long-context opt-in — `-m 'k3[1m]'`, plan-gated at a higher membership tier
-- Deeper reasoning — `-r high`
+- Change reasoning effort — `-r EFFORT` (the default is already `max`, the ceiling; `-r high` is *lower*, for lighter runs)
 - Capture the answer to a file — `-o <FILE>` writes kimi's final result text to FILE
 
 ## Following Up

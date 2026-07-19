@@ -132,6 +132,14 @@ export CLAUDE_CODE_SUBAGENT_MODEL="$MODEL"
 export ENABLE_TOOL_SEARCH=false
 export CLAUDE_CODE_EFFORT_LEVEL="$EFFORT"
 
+# Thinking must stay on: the Kimi Code docs state that disabling it routes
+# both K3 and K2.7 Code to K2.6 — a silent model downgrade, not an error.
+# On third-party providers MAX_THINKING_TOKENS=0 omits the `thinking`
+# parameter entirely, so an explicit positive budget is what guarantees it.
+# Caller may override with a different positive value; 0 would defeat the
+# model choice and is not a supported configuration here.
+export MAX_THINKING_TOKENS="${MAX_THINKING_TOKENS:-32000}"
+
 # Auto-compact window must match the model's actual context entitlement,
 # or compaction fires at the wrong boundary (docs: 262144 for k3/256K,
 # 1048576 for k3[1m]).

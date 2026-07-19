@@ -82,7 +82,7 @@ Kimi Code membership quota operates on a 7-day cycle plus a 5-hour rolling windo
 ## Prerequisites
 
 - A Kimi Code membership: Moderato tier or higher for the default `k3` (256K context). The opt-in `k3[1m]` (1M context) needs Allegretto or above — an Allegretto key was verified to be accepted for `k3[1m]` (2026-07), matching the official docs; the membership pricing page had been read as gating it at Allegro+, and that reading is not what the API enforces. Acceptance was confirmed at the call level only — it does not prove the server served a full 1M window rather than falling back.
-- Keep thinking enabled. Per the Kimi Code docs, disabling it routes both K3 and K2.7 Code to K2.6 — a silent model downgrade, not an error.
+- Thinking is on by default and should stay on: per the Kimi Code docs, disabling it routes both K3 and K2.7 Code to K2.6 — a silent model downgrade, not an error. `kimi-run.sh` exports a positive `MAX_THINKING_TOKENS` (default 32000) because on third-party providers a value of 0 omits the `thinking` parameter entirely. Never pass `MAX_THINKING_TOKENS=0` to this skill.
 - A coding key stored at gopass entry `api-key/kimi-coding`. `kimi-run.sh` pulls it at call time and never persists it.
 
 ## Error Handling

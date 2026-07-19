@@ -68,12 +68,12 @@ Output contract: stdout is the result text followed by a final line
 "SESSION_ID: <uuid>". A non-zero claude exit propagates unchanged, with the
 raw JSON response surfaced on stderr for diagnosis.
 
-Examples:
-  kimi-run.sh /tmp/kimi_prompt_a3f9.txt
-  kimi-run.sh -m 'k3[1m]' /tmp/kimi_prompt_a3f9.txt
-  kimi-run.sh -r high /tmp/kimi_prompt_a3f9.txt
-  kimi-run.sh -S 019e3eff-c191-7401-bffb-bb8c31ac37c7 /tmp/kimi_prompt_a3f9.txt
-  kimi-run.sh -s workspace-write /tmp/kimi_prompt_a3f9.txt
+Examples (<scratchpad> = the calling session's scratchpad directory):
+  kimi-run.sh <scratchpad>/kimi_prompt_a3f9.txt
+  kimi-run.sh -m 'k3[1m]' <scratchpad>/kimi_prompt_a3f9.txt
+  kimi-run.sh -r high <scratchpad>/kimi_prompt_a3f9.txt
+  kimi-run.sh -S 019e3eff-c191-7401-bffb-bb8c31ac37c7 <scratchpad>/kimi_prompt_a3f9.txt
+  kimi-run.sh -s workspace-write <scratchpad>/kimi_prompt_a3f9.txt
 USAGE
   exit "${1:-0}"
 }

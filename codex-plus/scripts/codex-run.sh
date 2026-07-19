@@ -39,11 +39,11 @@ suppressed, so the caller (a subagent) reads that line directly and resumes
 that exact session later with -S. Resume is always by explicit id — there is
 no most-recent fallback, so it is never a race under parallel sessions.
 
-Examples:
-  codex-run.sh /tmp/codex_prompt_a3f9.txt
-  codex-run.sh -m gpt-5.6-terra -r high /tmp/codex_prompt_a3f9.txt
-  codex-run.sh -S 019e3eff-c191-7401-bffb-bb8c31ac37c7 /tmp/codex_prompt_a3f9.txt
-  codex-run.sh -s workspace-write --full-auto /tmp/codex_prompt_a3f9.txt
+Examples (<scratchpad> = the calling session's scratchpad directory):
+  codex-run.sh <scratchpad>/codex_prompt_a3f9.txt
+  codex-run.sh -m gpt-5.6-terra -r high <scratchpad>/codex_prompt_a3f9.txt
+  codex-run.sh -S 019e3eff-c191-7401-bffb-bb8c31ac37c7 <scratchpad>/codex_prompt_a3f9.txt
+  codex-run.sh -s workspace-write --full-auto <scratchpad>/codex_prompt_a3f9.txt
 USAGE
   exit "${1:-0}"
 }

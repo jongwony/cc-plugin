@@ -70,6 +70,7 @@ Cross-vendor second opinions (architecture review, root-cause analysis, high-sta
 3. Craft prompt per Context Classification and Prompt Template — classify context, write to `<scratchpad>/kimi_prompt_<suffix>.txt`.
 4. Delegate execution to a Bash subagent (Task tool) — never run `kimi-run.sh` directly in the main session. This keeps kimi's JSON response and full output out of the main context. Give the subagent:
    - the exact command: `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh [options] <scratchpad>/kimi_prompt_<suffix>.txt` with `-m MODEL` / `-r EFFORT` / `-s SANDBOX` / `-C DIR`, or `-S <SESSION_ID>` to resume.
+   - liveness note: while the command runs, stderr streams compact one-line `[kimi] <event>` markers (hook/init/thinking/tool/text/result activity) — this is expected, ordinary progress, not an error; tell the subagent not to relay these lines individually and not to read them as a hang or failure signal. Only a non-zero exit, or the absence of the final `SESSION_ID:` line on stdout, means the run failed.
    - return contract: run the command and return ONLY (a) a concise outcome summary and (b) the `SESSION_ID: <uuid>` line verbatim, exactly as the script prints it on its final stdout line.
 5. Record each returned `SESSION_ID` against its purpose. This {purpose → SESSION_ID} map is the only resume handle.
 6. Resume: write new instructions to a fresh `<scratchpad>/kimi_prompt_<suffix>.txt`, then delegate to a Bash subagent running `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh -S <SESSION_ID> <scratchpad>/kimi_prompt_<suffix>.txt`. See Session Discipline below before resuming with a non-default model.
@@ -90,7 +91,7 @@ Kimi Code membership quota operates on a 7-day cycle plus a 5-hour rolling windo
 - A coding key stored at gopass entry `api-key/kimi-coding`. `kimi-run.sh` pulls it at call time and never persists it.
 
 ## Error Handling
-- Stop and report failures whenever a `kimi-run.sh` invocation exits non-zero. When the failure came from claude or from processing its response, the script surfaces the raw JSON on stderr — relay it and ask direction before retrying. Setup failures (bad arguments, a missing prompt file, an unreachable `-C` directory, a missing gopass entry, an unwritable `-o` path) print a one-line stderr message instead, with no JSON to relay.
+- Stop and report failures whenever a `kimi-run.sh` invocation exits non-zero. When the failure came from claude or from processing its response, the script surfaces the raw captured event stream on stderr (the same JSON events the `[kimi] <event>` liveness markers were compactly summarizing during the run) — relay it and ask direction before retrying. Setup failures (bad arguments, a missing prompt file, an unreachable `-C` directory, a missing gopass entry, an unwritable `-o` path) print a one-line stderr message instead, with no JSON to relay.
 - Missing gopass entry (`api-key/kimi-coding`): surface the prerequisite to the user rather than attempting a workaround.
 - Before using `-s danger-full-access`, ask the user for permission unless it was already given.
 - Quota/429-style errors: stop immediately, report, do not retry-loop (see Quota Awareness).

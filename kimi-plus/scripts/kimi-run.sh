@@ -66,7 +66,9 @@ entry does not exist yet, the script exits with a one-line error naming it.
 
 Output contract: stdout is the result text followed by a final line
 "SESSION_ID: <uuid>". A non-zero claude exit propagates unchanged, with the
-raw JSON response surfaced on stderr for diagnosis.
+raw event stream surfaced on stderr for diagnosis. During the run, stderr
+also carries compact one-line "[kimi] <event>" liveness markers as events
+arrive — never full message payloads, never stdout.
 
 Examples (<scratchpad> = the calling session's scratchpad directory):
   kimi-run.sh <scratchpad>/kimi_prompt_a3f9.txt
@@ -115,7 +117,7 @@ case "$PROMPT_FILE" in
   *)  PROMPT_FILE="$PWD/$PROMPT_FILE" ;;
 esac
 
-command -v jq >/dev/null 2>&1 || { echo "Error: jq is required (used to parse claude's --output-format json response)" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "Error: jq is required (used to parse claude's --output-format stream-json response)" >&2; exit 1; }
 
 # Sandbox tier -> claude permission flags. Same tier names as codex-run.sh
 # for cross-skill consistency.
@@ -281,17 +283,67 @@ case "$MODEL" in
   *)        export CLAUDE_CODE_AUTO_COMPACT_WINDOW=262144 ;;
 esac
 
-# Invoke claude headless against the swapped endpoint. --output-format json
-# is required (not a plain exec like codex-run.sh) because session-id capture
-# here is JSON-based, not a stderr banner grep.
+# Invoke claude headless against the swapped endpoint, streaming events so a
+# delegating Bash subagent observes liveness during a long (10+ min) run
+# instead of total silence. --output-format stream-json requires --verbose
+# (verified against the installed CLI: a bare stream-json invocation errors
+# "When using --print, --output-format=stream-json requires --verbose").
+# The full raw NDJSON event stream is captured to a temp file — for the final
+# result-type event's .result/.session_id below, and for a stderr dump on
+# failure — while a compact one-line-per-event marker streams to stderr live.
+# Markers only, never full message payloads (protects the calling subagent's
+# context window), and stderr only, never stdout (preserves the stdout
+# contract). No `lastpipe`/subshell-variable dependency: jq alone derives each
+# marker line and PIPESTATUS reads claude's own exit code, so this is fine
+# under macOS's bash 3.2.
+#
+# `thinking_tokens` events fire at near-per-token granularity — measured at
+# ~3000 lines over a 2-minute run, which would scale to tens of thousands of
+# stderr lines on a real 10+ minute run, working against the very
+# context-window protection this streaming exists for. `foreach inputs`
+# (under -n) carries a tiny running-state accumulator across events — still
+# processing one JSON value at a time as it arrives (verified with a
+# slow-drip synthetic producer: output appears on each 0.5s tick, not
+# buffered to EOF) — so only every ~500-token climb emits a marker; every
+# other event type is unthrottled.
+RAW_STREAM_FILE="$(mktemp)"
+trap 'rm -f "$RAW_STREAM_FILE"' EXIT
+
 set +e
-RAW=$(claude -p --output-format json \
+claude -p --output-format stream-json --verbose \
   ${RESUME_ARGS[@]+"${RESUME_ARGS[@]}"} \
   ${PERM_ARGS[@]+"${PERM_ARGS[@]}"} \
   ${DELEGATION_GUARD_ARGS[@]+"${DELEGATION_GUARD_ARGS[@]}"} \
   ${STANCE_ARGS[@]+"${STANCE_ARGS[@]}"} \
-  < "$PROMPT_FILE")
-rc=$?
+  < "$PROMPT_FILE" \
+  | tee "$RAW_STREAM_FILE" \
+  | jq -n --unbuffered -r '
+      def descr($e):
+        if $e.type == "system" then
+          "system:" + ($e.subtype // "?")
+        elif $e.type == "result" then "result:" + ($e.subtype // "?")
+        elif $e.type == "assistant" or $e.type == "user" then
+          (($e.message.content // [{}])[0]) as $c
+          | if ($c.type // "") == "tool_use" then "\($e.type):tool_use:\($c.name // "?")"
+            else "\($e.type):\($c.type // "?")"
+            end
+        else ($e.type // "unknown")
+        end;
+      foreach inputs as $e (
+        {last_tt: -1, out: null};
+        if ($e.type == "system" and $e.subtype == "thinking_tokens") then
+          (($e.estimated_tokens // 0)) as $tt
+          | if ($tt - .last_tt) >= 500
+            then {last_tt: $tt, out: ("[kimi] system:thinking_tokens:" + ($tt | tostring))}
+            else {last_tt: .last_tt, out: null}
+            end
+        else
+          {last_tt: .last_tt, out: ("[kimi] " + descr($e))}
+        end;
+        if .out == null then empty else .out end
+      )
+    ' >&2 2>/dev/null
+rc="${PIPESTATUS[0]}"
 set -e
 
 # The coding key was needed only for the claude call above. Drop it now, before
@@ -301,32 +353,49 @@ set -e
 unset ANTHROPIC_API_KEY
 
 if [[ $rc -ne 0 ]]; then
-  printf '%s\n' "$RAW" >&2
+  cat "$RAW_STREAM_FILE" >&2
   exit "$rc"
 fi
+
+# The final `result`-type event carries the answer and resume handle (verified
+# shape: {"type":"result","subtype":"success",...,"result":"<text>","session_id":"<uuid>"});
+# take the LAST one, in case an earlier line coincidentally matched the select.
+# Guarded with its own set +e/PIPESTATUS: a malformed line in the captured
+# stream makes this jq exit non-zero too (pipefail propagates it through the
+# `| tail -n 1`), which under set -e would abort right here — before the
+# malformed-JSON guard below even runs — silently, with no raw dump. Folding
+# jq_rc_final into that guard's condition below closes this.
+set +e
+FINAL_EVENT="$(jq -c 'select(.type == "result")' "$RAW_STREAM_FILE" | tail -n 1)"
+jq_rc_final="${PIPESTATUS[0]}"
+set -e
 
 # Guard the JSON parse like the claude call above: malformed or wrong-type JSON
 # makes jq exit non-zero (pipefail propagates it), which under set -e would abort
 # HERE — before the empty-session_id guard below — and never surface the raw
 # response the output contract promises. Capture the parse failure and surface
-# $RAW on stderr, same shape as that guard.
+# the raw stream on stderr, same shape as that guard.
 set +e
 # `| strings` here too: a missing or non-string .result would otherwise be
 # emitted as blank text (or a JSON-rendered object) while a valid session_id
 # still carried the run to exit 0 — reporting success for a response that never
 # delivered an answer.
-RESULT=$(printf '%s' "$RAW" | jq -r '.result | strings')
+RESULT=$(printf '%s' "$FINAL_EVENT" | jq -r '.result | strings')
 jq_rc_result=$?
 # `| strings` (not `// empty`): a non-string session_id — a number, or an object
 # that renders multiline — would otherwise pass the empty check below and be
 # emitted as an unusable resume handle. Selecting only string-typed values makes
 # a wrong-typed response fall through to that guard instead.
-KIMI_SESSION_ID=$(printf '%s' "$RAW" | jq -r '.session_id | strings')
+KIMI_SESSION_ID=$(printf '%s' "$FINAL_EVENT" | jq -r '.session_id | strings')
 jq_rc_session=$?
 set -e
-if [[ $jq_rc_result -ne 0 || $jq_rc_session -ne 0 ]]; then
+# An empty $FINAL_EVENT (no result-type line in the stream at all) is folded
+# into this same guard: jq on empty stdin exits 0 with empty output, which
+# would otherwise slip past the jq_rc checks and only be caught by the
+# emptiness checks below with a less accurate message.
+if [[ -z "$FINAL_EVENT" || $jq_rc_final -ne 0 || $jq_rc_result -ne 0 || $jq_rc_session -ne 0 ]]; then
   echo "Error: claude exited 0 but its response did not parse as JSON — resume handle unavailable. Raw response:" >&2
-  printf '%s\n' "$RAW" >&2
+  cat "$RAW_STREAM_FILE" >&2
   exit 1
 fi
 
@@ -335,7 +404,7 @@ fi
 # unmet. Fail loudly with the raw JSON rather than printing an empty handle.
 if [[ -z "$KIMI_SESSION_ID" ]]; then
   echo "Error: claude exited 0 but the response carried no usable session_id — unexpected JSON, resume handle unavailable. Raw response:" >&2
-  printf '%s\n' "$RAW" >&2
+  cat "$RAW_STREAM_FILE" >&2
   exit 1
 fi
 
@@ -344,7 +413,7 @@ fi
 # would hand the caller a blank deliverable that looks like a completed run.
 if [[ -z "$RESULT" ]]; then
   echo "Error: claude exited 0 but the response carried no result text — unexpected JSON. Raw response:" >&2
-  printf '%s\n' "$RAW" >&2
+  cat "$RAW_STREAM_FILE" >&2
   exit 1
 fi
 

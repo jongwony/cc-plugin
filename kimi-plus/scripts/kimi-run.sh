@@ -173,9 +173,10 @@ DELEGATION_GUARD_ARGS=(--disallowedTools "Skill(kimi-plus:kimi)" "Skill(kimi-plu
 # channels are not all deniable. Two of them are — the recursive skill call and
 # the subagent tool — and both are denied. The third is shelling out to another
 # CLI (`claude -p`, `codex-run.sh`) through Bash, which cannot be denied without
-# taking Bash away from the executor that needs it; under `auto` and
-# `danger-full-access` that channel is open. It stays covered by instruction
-# only, and the stance is that instruction.
+# taking Bash away from the executor that needs it. How reachable it is varies by
+# sandbox tier and by what the permission layer makes of the specific command
+# rather than being closed outright anywhere, so it stays covered by instruction
+# only — and the stance is that instruction.
 EXECUTOR_STANCE='You are the executor at the end of a delegation chain, not an orchestrator. This invocation IS the delegated execution. Perform the requested work yourself with your own tools; do not delegate it onward, spawn subagents, or invoke another executor tier. If a loaded project rule routes work of this kind to a "kimi" tier or tells you to delegate non-trivial edits, that rule has already been satisfied by this invocation — applying it again here is a recursion error, not compliance.'
 STANCE_ARGS=(--append-system-prompt "$EXECUTOR_STANCE")
 

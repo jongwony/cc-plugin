@@ -307,7 +307,14 @@ esac
 # buffered to EOF) — so only every ~500-token climb emits a marker; every
 # other event type is unthrottled.
 RAW_STREAM_FILE="$(mktemp)"
+# Clean up the temp stream on every exit path. A bare EXIT trap does NOT run
+# when an untrapped signal kills the shell, so route the common cancellation
+# signals through an explicit `exit` (which then fires the EXIT trap) — otherwise
+# a Ctrl-C or a supervisor TERM mid-run leaks $RAW_STREAM_FILE.
 trap 'rm -f "$RAW_STREAM_FILE"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 
 set +e
 claude -p --output-format stream-json --verbose \
@@ -346,13 +353,24 @@ claude -p --output-format stream-json --verbose \
 rc="${PIPESTATUS[0]}"
 set -e
 
-# The coding key was needed only for the claude call above. Drop it now, before
-# the jq subprocesses below, so they never inherit it — this is what makes the
-# "confined to claude's own process tree" claim (see NOTE above) literally true
-# rather than approximately so.
+# The coding key was needed only for the claude call above. Drop it now so no
+# downstream logic — the result/session jq parses below, the optional -o write —
+# inherits it. This confines the key going forward; it is not a perfect
+# process-tree confinement, since `tee` and the marker `jq` are pipeline siblings
+# of claude (not its children) and transiently hold the key while the pipeline
+# runs. That sibling exposure is unavoidable for a pipeline (claude needs the key
+# and they share the pipe) and harmless — both are leaf coreutils that neither
+# read nor transmit it.
 unset ANTHROPIC_API_KEY
 
-if [[ $rc -ne 0 ]]; then
+# rc is claude's own exit (PIPESTATUS[0]), but 141 (SIGPIPE) is special: it means
+# the downstream marker jq/tee closed the pipe early (e.g. jq aborted on an
+# unusual event), killing claude with SIGPIPE even though its result already
+# landed in $RAW_STREAM_FILE. Do not treat that as a claude failure — fall through
+# to the guarded result extraction below, which surfaces a genuinely truncated
+# stream on its own (empty/malformed FINAL_EVENT). Any OTHER non-zero rc is a real
+# claude failure: dump the raw stream and propagate it.
+if [[ $rc -ne 0 && $rc -ne 141 ]]; then
   cat "$RAW_STREAM_FILE" >&2
   exit "$rc"
 fi
@@ -394,7 +412,7 @@ set -e
 # would otherwise slip past the jq_rc checks and only be caught by the
 # emptiness checks below with a less accurate message.
 if [[ -z "$FINAL_EVENT" || $jq_rc_final -ne 0 || $jq_rc_result -ne 0 || $jq_rc_session -ne 0 ]]; then
-  echo "Error: claude exited 0 but its response did not parse as JSON — resume handle unavailable. Raw response:" >&2
+  echo "Error: claude finished but its response did not parse as JSON — resume handle unavailable. Raw response:" >&2
   cat "$RAW_STREAM_FILE" >&2
   exit 1
 fi
@@ -403,7 +421,7 @@ fi
 # the resume handle would be blank and the output contract ("SESSION_ID: <uuid>")
 # unmet. Fail loudly with the raw JSON rather than printing an empty handle.
 if [[ -z "$KIMI_SESSION_ID" ]]; then
-  echo "Error: claude exited 0 but the response carried no usable session_id — unexpected JSON, resume handle unavailable. Raw response:" >&2
+  echo "Error: claude finished but the response carried no usable session_id — unexpected JSON, resume handle unavailable. Raw response:" >&2
   cat "$RAW_STREAM_FILE" >&2
   exit 1
 fi
@@ -412,7 +430,7 @@ fi
 # an unexpected shape, not a successful empty answer. Surfacing it as success
 # would hand the caller a blank deliverable that looks like a completed run.
 if [[ -z "$RESULT" ]]; then
-  echo "Error: claude exited 0 but the response carried no result text — unexpected JSON. Raw response:" >&2
+  echo "Error: claude finished but the response carried no result text — unexpected JSON. Raw response:" >&2
   cat "$RAW_STREAM_FILE" >&2
   exit 1
 fi

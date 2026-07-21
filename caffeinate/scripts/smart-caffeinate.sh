@@ -11,9 +11,11 @@
 THRESHOLD=${CAFFEINATE_BATTERY_THRESHOLD:-30}
 CHECK_INTERVAL=60
 GRACE_MAX=2  # consecutive failures before stop
-PIDFILE=/tmp/caffeinate-smart.pid
+# Not /tmp: macOS prunes files there after 3 days, which orphans a long-running daemon
+PIDFILE="${HOME}/.cache/caffeinate-smart.pid"
 
 # Own PID file — daemon is the single owner
+mkdir -p "$(dirname "$PIDFILE")"
 echo "$$" > "$PIDFILE"
 
 # Prevent clamshell sleep on battery

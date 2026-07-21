@@ -322,6 +322,17 @@ trap 'rm -f "$RAW_STREAM_FILE"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
+# Accepted limitation (not a fix target): bash defers these traps while the shell
+# waits on the foreground `claude | tee | jq` pipeline. If a supervisor signals
+# ONLY this wrapper's PID (not the process group), the trap stays pending until the
+# pipeline returns on its own, and a KILL escalation bypasses the EXIT cleanup —
+# leaking $RAW_STREAM_FILE and orphaning the 3 pipeline stages. Deliberately not
+# hardened with pipeline-forwarding process management: this is a thin wrapper whose
+# happy-path stability is prioritized over signal-forwarding machinery. The marginal
+# cost over the blocking baseline (single `claude` child, no temp) is one temp file
+# + two extra orphaned stages, only in the rare PID-only-then-KILL path. Observed
+# supervisors signal the whole process group (children die → deferred trap fires →
+# EXIT cleans), so this path is not exercised in practice.
 
 set +e
 claude -p --output-format stream-json --verbose \

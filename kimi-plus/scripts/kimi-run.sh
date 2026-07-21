@@ -143,7 +143,42 @@ esac
 # wrapper carries, so without this the child can call kimi-run.sh recursively.
 # Blocked at the flag layer, not in the skill's frontmatter: the skill must stay
 # model-invocable in ordinary sessions, where it is the frontend executor.
-SKILL_GUARD_ARGS=(--disallowedTools "Skill(kimi-plus:kimi)" "Skill(kimi-plus:kimi *)")
+#
+# The subagent tool is denied in the same flag, one level down. The recursive
+# skill call is only the child's FIRST attempt at delegating; blocked there, it
+# does not conclude that it is the executor — it spawns a plain subagent on some
+# other tier instead, and that is the channel the observed silent failure
+# actually took. Denying it here is what makes the executor stance below
+# enforced rather than merely obeyed, which matters because the stance's
+# obey-dependence is the part that does not travel to a non-Anthropic endpoint.
+# `Task` is the name that bites in a headless `claude -p` session; `Agent`
+# matches nothing there today and is listed beside it so a rename cannot
+# silently reopen the channel.
+DELEGATION_GUARD_ARGS=(--disallowedTools "Skill(kimi-plus:kimi)" "Skill(kimi-plus:kimi *)" "Task" "Agent")
+
+# Blocking the recursive skill call is not enough on its own. The nested session
+# also loads the ambient CLAUDE.md / rules/*.md, including any Tier Registry that
+# routes frontend work TO kimi and delegates non-trivial edits to an executor. A
+# frontend prompt satisfies that rule inside the wrapper exactly as it does
+# outside it, and the rule carries no termination condition, so the child reads
+# itself as an orchestrator: it tries the recursive skill call, meets the guard
+# above, and falls back to spawning some OTHER executor rather than concluding
+# that it is itself the executor. The observable is a run that "succeeds" with
+# the work done by a fallback tier — the requested model never touches it.
+# Stance is therefore pinned at the flag layer too, for the same reason the guard
+# is: a prompt-file clause only helps when the caller remembers to write one, and
+# a resume (-S) reuses a prompt file the caller may not revisit.
+#
+# The stance is not made redundant by the guard above, because the offload
+# channels are not all deniable. Two of them are — the recursive skill call and
+# the subagent tool — and both are denied. The third is shelling out to another
+# CLI (`claude -p`, `codex-run.sh`) through Bash, which cannot be denied without
+# taking Bash away from the executor that needs it. How reachable it is varies by
+# sandbox tier and by what the permission layer makes of the specific command
+# rather than being closed outright anywhere, so it stays covered by instruction
+# only — and the stance is that instruction.
+EXECUTOR_STANCE='You are the executor at the end of a delegation chain, not an orchestrator. This invocation IS the delegated execution. Perform the requested work yourself with your own tools; do not delegate it onward, spawn subagents, or invoke another executor tier. If a loaded project rule routes work of this kind to a "kimi" tier or tells you to delegate non-trivial edits, that rule has already been satisfied by this invocation — applying it again here is a recursion error, not compliance.'
+STANCE_ARGS=(--append-system-prompt "$EXECUTOR_STANCE")
 
 RESUME_ARGS=()
 [[ -n "$SESSION_ID" ]] && RESUME_ARGS+=(--resume "$SESSION_ID")
@@ -253,7 +288,8 @@ set +e
 RAW=$(claude -p --output-format json \
   ${RESUME_ARGS[@]+"${RESUME_ARGS[@]}"} \
   ${PERM_ARGS[@]+"${PERM_ARGS[@]}"} \
-  ${SKILL_GUARD_ARGS[@]+"${SKILL_GUARD_ARGS[@]}"} \
+  ${DELEGATION_GUARD_ARGS[@]+"${DELEGATION_GUARD_ARGS[@]}"} \
+  ${STANCE_ARGS[@]+"${STANCE_ARGS[@]}"} \
   < "$PROMPT_FILE")
 rc=$?
 set -e

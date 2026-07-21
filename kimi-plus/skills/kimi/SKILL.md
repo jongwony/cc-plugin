@@ -68,11 +68,12 @@ Cross-vendor second opinions (architecture review, root-cause analysis, high-sta
 1. Run with the defaults — `k3` (256K context) at `max` effort, thinking on — and pass a different model or effort only when the user names one. For genuinely long-context work (multi-file refactors, very large scratchpad sessions), `-m 'k3[1m]'` opens the 1M window; `kimi-run.sh -h` lists the remaining values.
 2. Select sandbox mode; default to `read-only` unless the task requires edits. Escalate to `workspace-write` for edit tasks with user awareness. Choose `auto` when the task must run its own verification — `workspace-write` permits file edits but still denies arbitrary Bash, so a linter, build, or test will not run under it; `auto` puts a classifier in front of each action instead, so those commands execute while a review layer remains. Under `auto`, state the task's boundary in the prompt itself (what it may touch, what it must not) — that conveyed boundary is what the review layer binds to. `danger-full-access` removes the review layer entirely and requires explicit permission (see Error Handling).
 3. Craft prompt per Context Classification and Prompt Template — classify context, write to `<scratchpad>/kimi_prompt_<suffix>.txt`.
-4. Delegate execution to a Bash subagent (Task tool) — never run `kimi-run.sh` directly in the main session. This keeps kimi's JSON response and full output out of the main context. Give the subagent:
-   - the exact command: `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh [options] <scratchpad>/kimi_prompt_<suffix>.txt` with `-m MODEL` / `-r EFFORT` / `-s SANDBOX` / `-C DIR`, or `-S <SESSION_ID>` to resume.
-   - return contract: run the command and return ONLY (a) a concise outcome summary and (b) the `SESSION_ID: <uuid>` line verbatim, exactly as the script prints it on its final stdout line.
+4. Run `kimi-run.sh` as a background job (Bash `run_in_background=true`) — never run it blocking inline in the main session. Backgrounding serves two ends at once: it keeps kimi's full JSON output in the job's output file (out of the main context unless you read it), and it gives pollable liveness on long runs — a blocking or subagent run is a black box until it returns, which is the silent-multi-minute-run problem. The command: `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh [options] <scratchpad>/kimi_prompt_<suffix>.txt` with `-m MODEL` / `-r EFFORT` / `-s SANDBOX` / `-C DIR`, or `-S <SESSION_ID>` to resume. Keep the bulk out of context:
+   - pass `-o <FILE>` so kimi's final result text lands in a file you read deliberately, not inline;
+   - while it runs, poll progress with BashOutput and read only bounded slices — a `tail`, or an on-demand `grep`/`jq` over the output file when you actually need to filter the event stream (not an always-on transform); the session is re-invoked when the job exits;
+   - capture the `SESSION_ID: <uuid>` line — the script's final stdout line — from the completed output.
 5. Record each returned `SESSION_ID` against its purpose. This {purpose → SESSION_ID} map is the only resume handle.
-6. Resume: write new instructions to a fresh `<scratchpad>/kimi_prompt_<suffix>.txt`, then delegate to a Bash subagent running `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh -S <SESSION_ID> <scratchpad>/kimi_prompt_<suffix>.txt`. See Session Discipline below before resuming with a non-default model.
+6. Resume: write new instructions to a fresh `<scratchpad>/kimi_prompt_<suffix>.txt`, then background-run `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh -S <SESSION_ID> <scratchpad>/kimi_prompt_<suffix>.txt` (same `run_in_background=true` pattern). See Session Discipline below before resuming with a non-default model.
 7. Summarize the outcome to the user. Inform the user: "Resume anytime with the recorded SESSION_ID."
 
 ## Session Discipline
@@ -96,7 +97,7 @@ Kimi Code membership quota operates on a 7-day cycle plus a 5-hour rolling windo
 - Quota/429-style errors: stop immediately, report, do not retry-loop (see Quota Awareness).
 
 ### Quick Reference
-Each command below runs **inside a Bash subagent**, which returns the outcome summary plus the `SESSION_ID: <uuid>` line.
+Each command below runs as a **background job** (`run_in_background=true`); poll it with BashOutput while it runs and read the `SESSION_ID: <uuid>` line from its output when it exits.
 
 Base patterns:
 - Read-only analysis — `${CLAUDE_PLUGIN_ROOT}/scripts/kimi-run.sh <scratchpad>/kimi_prompt_<suffix>.txt`

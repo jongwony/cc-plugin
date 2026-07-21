@@ -65,8 +65,10 @@ process (claude) — it is never written to disk or the repo. If the gopass
 entry does not exist yet, the script exits with a one-line error naming it.
 
 Output contract: stdout is the result text followed by a final line
-"SESSION_ID: <uuid>". A non-zero claude exit propagates unchanged, with the
-raw JSON response surfaced on stderr for diagnosis.
+"SESSION_ID: <uuid>". The full claude event log streams to a scratchpad file
+(<prompt>.stream.jsonl) for mid-run progress and post-run inspection. A non-zero
+claude exit propagates unchanged, with the raw event stream surfaced on stderr
+for diagnosis.
 
 Examples (<scratchpad> = the calling session's scratchpad directory):
   kimi-run.sh <scratchpad>/kimi_prompt_a3f9.txt
@@ -115,7 +117,7 @@ case "$PROMPT_FILE" in
   *)  PROMPT_FILE="$PWD/$PROMPT_FILE" ;;
 esac
 
-command -v jq >/dev/null 2>&1 || { echo "Error: jq is required (used to parse claude's --output-format json response)" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "Error: jq is required (used to parse claude's stream-json event log)" >&2; exit 1; }
 
 # Sandbox tier -> claude permission flags. Same tier names as codex-run.sh
 # for cross-skill consistency.
@@ -281,70 +283,90 @@ case "$MODEL" in
   *)        export CLAUDE_CODE_AUTO_COMPACT_WINDOW=262144 ;;
 esac
 
-# Invoke claude headless against the swapped endpoint. --output-format json
-# is required (not a plain exec like codex-run.sh) because session-id capture
-# here is JSON-based, not a stderr banner grep.
+# Invoke claude headless against the swapped endpoint, streaming the event log to
+# a scratchpad file rather than capturing one blocking JSON blob. Two ends at once:
+# the caller can open the stream file mid-run for progress and after for the result
+# (no silent multi-minute wait), and — critical for a thin wrapper — NO transform
+# sits in the result-carrying path. claude writes the stream directly to the file
+# with `>`; there is no `tee`/`jq` pipeline whose failure could SIGPIPE claude or
+# truncate the capture. The stream file is a bystander: the run's integrity never
+# depends on anything downstream reading it.
+#
+# STREAM_FILE co-locates with the prompt in the scratchpad (kimi_prompt_<sfx>.txt ->
+# kimi_prompt_<sfx>.stream.jsonl) — a known, inspectable path the caller already
+# reaches, cleaned by the same session lifecycle that cleans the prompt file. No
+# mktemp, no exit-trap cleanup, nothing to leak on an untrapped signal.
+STREAM_FILE="${PROMPT_FILE%.txt}.stream.jsonl"
+
+# --verbose is required for stream-json to emit the full event log (incl. the final
+# result event carrying .result and .session_id). Session persistence stays ON so
+# `-S <SESSION_ID>` resume keeps working — the whole {purpose -> SESSION_ID} contract.
 set +e
-RAW=$(claude -p --output-format json \
+claude -p --output-format stream-json --verbose \
   ${RESUME_ARGS[@]+"${RESUME_ARGS[@]}"} \
   ${PERM_ARGS[@]+"${PERM_ARGS[@]}"} \
   ${DELEGATION_GUARD_ARGS[@]+"${DELEGATION_GUARD_ARGS[@]}"} \
   ${STANCE_ARGS[@]+"${STANCE_ARGS[@]}"} \
-  < "$PROMPT_FILE")
+  < "$PROMPT_FILE" > "$STREAM_FILE"
 rc=$?
 set -e
 
-# The coding key was needed only for the claude call above. Drop it now, before
-# the jq subprocesses below, so they never inherit it — this is what makes the
-# "confined to claude's own process tree" claim (see NOTE above) literally true
-# rather than approximately so.
+# The coding key was needed only for the claude call above. Drop it now, before the
+# jq parses below, so they never inherit it. Unlike a streaming-pipe design, jq here
+# runs strictly AFTER claude has exited — never a concurrent pipeline sibling holding
+# the key — so the confinement is literal, not approximate.
 unset ANTHROPIC_API_KEY
 
 if [[ $rc -ne 0 ]]; then
-  printf '%s\n' "$RAW" >&2
+  cat "$STREAM_FILE" >&2
   exit "$rc"
 fi
 
-# Guard the JSON parse like the claude call above: malformed or wrong-type JSON
-# makes jq exit non-zero (pipefail propagates it), which under set -e would abort
-# HERE — before the empty-session_id guard below — and never surface the raw
-# response the output contract promises. Capture the parse failure and surface
-# $RAW on stderr, same shape as that guard.
+# Extract the final `result`-type event from the streamed log (verified shape:
+# {"type":"result","subtype":"success","result":"<text>","session_id":"<uuid>",...}).
+# Because claude wrote the stream directly to the file with no downstream transform,
+# the file is complete here — this is a plain post-read, no SIGPIPE/PIPESTATUS games,
+# no truncation risk. Take the LAST result event in case an earlier line coincidentally
+# matched. Guarded: a malformed stream makes jq exit non-zero, which under set -e would
+# abort before the guards below and never surface the raw stream.
 set +e
-# `| strings` here too: a missing or non-string .result would otherwise be
-# emitted as blank text (or a JSON-rendered object) while a valid session_id
-# still carried the run to exit 0 — reporting success for a response that never
-# delivered an answer.
-RESULT=$(printf '%s' "$RAW" | jq -r '.result | strings')
+FINAL_EVENT=$(jq -cs '[.[] | select(.type == "result")] | last // empty' "$STREAM_FILE")
+jq_rc_final=$?
+set -e
+if [[ $jq_rc_final -ne 0 || -z "$FINAL_EVENT" ]]; then
+  echo "Error: claude finished but its stream carried no parseable result event — resume handle unavailable. Raw stream:" >&2
+  cat "$STREAM_FILE" >&2
+  exit 1
+fi
+
+# `| strings`: a missing or non-string .result/.session_id is selected out rather than
+# emitted as blank text or an unusable multiline handle, so a wrong-shaped event falls
+# through to the guards below instead of passing as success.
+set +e
+RESULT=$(printf '%s' "$FINAL_EVENT" | jq -r '.result | strings')
 jq_rc_result=$?
-# `| strings` (not `// empty`): a non-string session_id — a number, or an object
-# that renders multiline — would otherwise pass the empty check below and be
-# emitted as an unusable resume handle. Selecting only string-typed values makes
-# a wrong-typed response fall through to that guard instead.
-KIMI_SESSION_ID=$(printf '%s' "$RAW" | jq -r '.session_id | strings')
+KIMI_SESSION_ID=$(printf '%s' "$FINAL_EVENT" | jq -r '.session_id | strings')
 jq_rc_session=$?
 set -e
 if [[ $jq_rc_result -ne 0 || $jq_rc_session -ne 0 ]]; then
-  echo "Error: claude exited 0 but its response did not parse as JSON — resume handle unavailable. Raw response:" >&2
-  printf '%s\n' "$RAW" >&2
+  echo "Error: claude finished but the result event did not parse — resume handle unavailable. Raw stream:" >&2
+  cat "$STREAM_FILE" >&2
   exit 1
 fi
 
-# A zero exit with no session_id is an unexpected response shape, not success:
-# the resume handle would be blank and the output contract ("SESSION_ID: <uuid>")
-# unmet. Fail loudly with the raw JSON rather than printing an empty handle.
+# A finished run with no session_id is an unexpected shape, not success: the resume
+# handle would be blank and the output contract ("SESSION_ID: <uuid>") unmet.
 if [[ -z "$KIMI_SESSION_ID" ]]; then
-  echo "Error: claude exited 0 but the response carried no usable session_id — unexpected JSON, resume handle unavailable. Raw response:" >&2
-  printf '%s\n' "$RAW" >&2
+  echo "Error: claude finished but the result event carried no usable session_id — resume handle unavailable. Raw stream:" >&2
+  cat "$STREAM_FILE" >&2
   exit 1
 fi
 
-# Same reasoning for the answer itself: a zero exit that yields no result text is
-# an unexpected shape, not a successful empty answer. Surfacing it as success
-# would hand the caller a blank deliverable that looks like a completed run.
+# Same for the answer: a finished run yielding no result text is an unexpected shape,
+# not a successful empty answer, and must not be handed over as a blank deliverable.
 if [[ -z "$RESULT" ]]; then
-  echo "Error: claude exited 0 but the response carried no result text — unexpected JSON. Raw response:" >&2
-  printf '%s\n' "$RAW" >&2
+  echo "Error: claude finished but the result event carried no result text — unexpected stream shape. Raw stream:" >&2
+  cat "$STREAM_FILE" >&2
   exit 1
 fi
 

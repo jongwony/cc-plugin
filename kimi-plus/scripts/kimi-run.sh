@@ -305,7 +305,14 @@ esac
 # processing one JSON value at a time as it arrives (verified with a
 # slow-drip synthetic producer: output appears on each 0.5s tick, not
 # buffered to EOF) — so only every ~500-token climb emits a marker; every
-# other event type is unthrottled.
+# other event type is unthrottled. Any non-thinking event also RESETS the
+# throttle baseline (last_tt -> -1): `estimated_tokens` restarts low at each new
+# thinking block (multi-turn / post-tool-use runs), so without the reset a later
+# block would stay silent until it exceeded the previous block's peak + 500,
+# recreating dead intervals on exactly the long multi-turn runs this streaming
+# exists for. thinking_tokens events arrive in consecutive bursts (a non-thinking
+# event separates blocks), so the reset fires only at block boundaries and keeps
+# the 500-token throttle intact within a burst.
 RAW_STREAM_FILE="$(mktemp)"
 # Clean up the temp stream on every exit path. A bare EXIT trap does NOT run
 # when an untrapped signal kills the shell, so route the common cancellation
@@ -345,7 +352,7 @@ claude -p --output-format stream-json --verbose \
             else {last_tt: .last_tt, out: null}
             end
         else
-          {last_tt: .last_tt, out: ("[kimi] " + descr($e))}
+          {last_tt: -1, out: ("[kimi] " + descr($e))}
         end;
         if .out == null then empty else .out end
       )

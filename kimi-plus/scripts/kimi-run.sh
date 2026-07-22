@@ -66,9 +66,9 @@ entry does not exist yet, the script exits with a one-line error naming it.
 
 Output contract: stdout is the result text followed by a final line
 "SESSION_ID: <uuid>". The full claude event log streams to a scratchpad file
-(<prompt>.stream.jsonl) for mid-run progress and post-run inspection. A non-zero
-claude exit propagates unchanged, with the raw event stream surfaced on stderr
-for diagnosis.
+(<prompt>.stream.jsonl) for mid-run progress and post-run inspection. On failure
+the script names that file path on stderr rather than dumping it — the log can be
+very long; inspect it with head/tail (see the skill's Error Handling).
 
 Examples (<scratchpad> = the calling session's scratchpad directory):
   kimi-run.sh <scratchpad>/kimi_prompt_a3f9.txt
@@ -318,7 +318,7 @@ set -e
 unset ANTHROPIC_API_KEY
 
 if [[ $rc -ne 0 ]]; then
-  cat "$STREAM_FILE" >&2
+  echo "Error: claude exited $rc. Full event stream: $STREAM_FILE (inspect with head/tail)." >&2
   exit "$rc"
 fi
 
@@ -334,8 +334,7 @@ FINAL_EVENT=$(jq -cs '[.[] | select(.type == "result")] | last // empty' "$STREA
 jq_rc_final=$?
 set -e
 if [[ $jq_rc_final -ne 0 || -z "$FINAL_EVENT" ]]; then
-  echo "Error: claude finished but its stream carried no parseable result event — resume handle unavailable. Raw stream:" >&2
-  cat "$STREAM_FILE" >&2
+  echo "Error: claude finished but its stream carried no parseable result event — resume handle unavailable. Full event stream: $STREAM_FILE (inspect with head/tail)." >&2
   exit 1
 fi
 
@@ -349,24 +348,21 @@ KIMI_SESSION_ID=$(printf '%s' "$FINAL_EVENT" | jq -r '.session_id | strings')
 jq_rc_session=$?
 set -e
 if [[ $jq_rc_result -ne 0 || $jq_rc_session -ne 0 ]]; then
-  echo "Error: claude finished but the result event did not parse — resume handle unavailable. Raw stream:" >&2
-  cat "$STREAM_FILE" >&2
+  echo "Error: claude finished but the result event did not parse — resume handle unavailable. Full event stream: $STREAM_FILE (inspect with head/tail)." >&2
   exit 1
 fi
 
 # A finished run with no session_id is an unexpected shape, not success: the resume
 # handle would be blank and the output contract ("SESSION_ID: <uuid>") unmet.
 if [[ -z "$KIMI_SESSION_ID" ]]; then
-  echo "Error: claude finished but the result event carried no usable session_id — resume handle unavailable. Raw stream:" >&2
-  cat "$STREAM_FILE" >&2
+  echo "Error: claude finished but the result event carried no usable session_id — resume handle unavailable. Full event stream: $STREAM_FILE (inspect with head/tail)." >&2
   exit 1
 fi
 
 # Same for the answer: a finished run yielding no result text is an unexpected shape,
 # not a successful empty answer, and must not be handed over as a blank deliverable.
 if [[ -z "$RESULT" ]]; then
-  echo "Error: claude finished but the result event carried no result text — unexpected stream shape. Raw stream:" >&2
-  cat "$STREAM_FILE" >&2
+  echo "Error: claude finished but the result event carried no result text — unexpected stream shape. Full event stream: $STREAM_FILE (inspect with head/tail)." >&2
   exit 1
 fi
 

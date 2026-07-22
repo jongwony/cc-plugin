@@ -91,7 +91,7 @@ Kimi Code membership quota operates on a 7-day cycle plus a 5-hour rolling windo
 - A coding key stored at gopass entry `api-key/kimi-coding`. `kimi-run.sh` pulls it at call time and never persists it.
 
 ## Error Handling
-- Stop and report failures whenever a `kimi-run.sh` invocation exits non-zero. When the failure came from claude or from processing its response, the script surfaces the raw event stream on stderr — relay it and ask direction before retrying. Setup failures (bad arguments, a missing prompt file, an unreachable `-C` directory, a missing gopass entry, an unwritable `-o` path) print a one-line stderr message instead, with no stream to relay.
+- Stop and report failures whenever a `kimi-run.sh` invocation exits non-zero. When the failure came from claude or from processing its response, the script prints a one-line error **naming the stream file path** (`<prompt>.stream.jsonl`) — it does not dump the log, which can run to many MB. Inspect that file with `head`/`tail` on demand (across several turns if it is large — never `cat` it whole into context), locate the failure, then ask direction before retrying. Setup failures (bad arguments, a missing prompt file, an unreachable `-C` directory, a missing gopass entry, an unwritable `-o` path) print a one-line stderr message with no stream file to inspect.
 - Missing gopass entry (`api-key/kimi-coding`): surface the prerequisite to the user rather than attempting a workaround.
 - Before using `-s danger-full-access`, ask the user for permission unless it was already given.
 - Quota/429-style errors: stop immediately, report, do not retry-loop (see Quota Awareness).

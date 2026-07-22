@@ -68,7 +68,8 @@ Output contract: stdout is the result text followed by a final line
 "SESSION_ID: <uuid>". The full claude event log streams to a scratchpad file
 (<prompt>.stream.jsonl) for mid-run progress and post-run inspection. On failure
 the script names that file path on stderr rather than dumping it — the log can be
-very long; inspect it with head/tail (see the skill's Error Handling).
+very long; inspect it byte-bounded (tail -c / jq, not bare head/tail — one event can be
+many MB; see the skill's Error Handling).
 
 Examples (<scratchpad> = the calling session's scratchpad directory):
   kimi-run.sh <scratchpad>/kimi_prompt_a3f9.txt
@@ -320,7 +321,7 @@ set -e
 unset ANTHROPIC_API_KEY
 
 if [[ $rc -ne 0 ]]; then
-  echo "Error: claude exited $rc — or, if that code is a redirection failure, its event stream at $STREAM_FILE could not be opened and claude never ran (the file is then absent). If present, inspect with tail -c / jq (not bare head/tail: one event can be many MB)." >&2
+  echo "Error: claude exited $rc — or its event stream at $STREAM_FILE could not be opened. If present, inspect with tail -c / jq (not bare head/tail: one event can be many MB)." >&2
   exit "$rc"
 fi
 
@@ -363,10 +364,12 @@ if [[ -z "$KIMI_SESSION_ID" ]]; then
   exit 1
 fi
 
-# Same for the answer: a finished run yielding no result text is an unexpected shape,
-# not a successful empty answer, and must not be handed over as a blank deliverable.
+# Same for the answer: a finished run yielding no result text is not a successful empty
+# answer — it is either a malformed stream or a claude-side failure carried in the event's
+# `subtype`/`is_error`, and must not be handed over as a blank deliverable. The message
+# points at the subtype rather than asserting which case it is (unknowable from here).
 if [[ -z "$RESULT" ]]; then
-  echo "Error: claude finished but the result event carried no result text — unexpected stream shape. Full event stream: $STREAM_FILE (inspect with tail -c / jq, not bare head/tail: one event can be many MB)." >&2
+  echo "Error: claude finished but the result event carried no result text; inspect $STREAM_FILE for its subtype (with tail -c / jq, not bare head/tail: one event can be many MB)." >&2
   exit 1
 fi
 

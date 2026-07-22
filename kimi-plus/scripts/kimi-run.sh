@@ -56,17 +56,30 @@ Options:
                           resume — switching models mid-session is a session
                           discipline concern, not enforced by this script.
   -o, --output-last-message FILE
-                         Also write kimi's final result text to FILE
+                         Also write kimi's final result text to FILE. Must not
+                          be the reserved stream path (<prompt>.stream.jsonl):
+                          the late result write would truncate the diagnostic
+                          event log the empty-result/error inspection path needs.
   -h, --help             Show this help
 
-The Kimi Code membership coding key is pulled from gopass at call time
-(entry: api-key/kimi-coding) and exported only into this script's own child
-process (claude) — it is never written to disk or the repo. If the gopass
-entry does not exist yet, the script exits with a one-line error naming it.
+The Kimi Code membership coding key is read from the MOONSHOT_CODING_KEY
+environment variable, which the caller exports before invoking (how to source it
+is machine-local setup outside this wrapper's concern). It is exported only
+into this script's own child process (claude); the SCRIPT itself never fetches,
+writes, or persists it. One caveat it does not own: env-scrub is left off (see the
+SUBPROCESS_ENV_SCRUB note below) so claude's own child subprocesses inherit the
+key, and a child that surfaces its environment could echo it into the stream
+file — that subprocess credential boundary is a claude-harness concern (its
+SUBPROCESS_ENV_SCRUB owns it), not this wrapper's to solve. If MOONSHOT_CODING_KEY
+is unset, the script exits with a one-line error naming it.
 
 Output contract: stdout is the result text followed by a final line
-"SESSION_ID: <uuid>". A non-zero claude exit propagates unchanged, with the
-raw JSON response surfaced on stderr for diagnosis.
+"SESSION_ID: <uuid>". The full claude event log streams to a scratchpad file
+(<prompt>.stream.jsonl) for mid-run progress and post-run inspection. Failures are not
+intercepted: a failing claude/jq surfaces its own stderr and exit code directly
+(set -e), and a claude failure's full event log is in that stream file — inspect it
+byte-bounded (tail -c / jq, not bare head/tail — one event can be many MB; see the
+skill's Error Handling).
 
 Examples (<scratchpad> = the calling session's scratchpad directory):
   kimi-run.sh <scratchpad>/kimi_prompt_a3f9.txt
@@ -86,7 +99,7 @@ while [[ $# -gt 0 ]]; do
     -s|--sandbox) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; SANDBOX="$2"; shift 2 ;;
     -C|--cwd) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; CWD="$2"; shift 2 ;;
     -S|--session-id) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty session id" >&2; usage 1; }; SESSION_ID="$2"; shift 2 ;;
-    -o|--output-last-message) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; OUTPUT_FILE="$2"; shift 2 ;;
+    -o|--output-last-message) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; OUTPUT_FILE="$2"; shift 2 ;;
     -h|--help) usage 0 ;;
     -*) echo "Unknown option: $1" >&2; usage 1 ;;
     # Reject a second positional rather than letting it overwrite the first:
@@ -115,7 +128,7 @@ case "$PROMPT_FILE" in
   *)  PROMPT_FILE="$PWD/$PROMPT_FILE" ;;
 esac
 
-command -v jq >/dev/null 2>&1 || { echo "Error: jq is required (used to parse claude's --output-format json response)" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "Error: jq is required (used to parse claude's stream-json event log)" >&2; exit 1; }
 
 # Sandbox tier -> claude permission flags. Same tier names as codex-run.sh
 # for cross-skill consistency.
@@ -200,13 +213,14 @@ fi
 # when tracing is already off.
 set +x
 
-# Pull the membership coding key from gopass at call time. Never stored in
-# the repo, never persisted to disk — held only in this script's process and
-# copied into the exported ANTHROPIC_API_KEY below.
-MOONSHOT_CODING_KEY="$(gopass show -o api-key/kimi-coding)" || {
-  echo "Error: gopass entry 'api-key/kimi-coding' not found. Issue the Kimi Code membership coding key and store it via 'gopass insert api-key/kimi-coding' before running kimi-run.sh." >&2
-  exit 1
-}
+# The membership coding key is read from the environment, not fetched by this
+# script: the caller exports MOONSHOT_CODING_KEY before invoking (how to source it,
+# e.g. from a secret store, is machine-local setup outside this wrapper's concern).
+# Held only in this script's process and copied into the exported ANTHROPIC_API_KEY
+# below; the wrapper never fetches, stores, or persists it. A one-line error (not a
+# raw traceback) names the missing var, since an unset key is a caller setup mistake,
+# not a runtime failure to pass through.
+[[ -n "${MOONSHOT_CODING_KEY:-}" ]] || { echo "Error: MOONSHOT_CODING_KEY is not set — export the Kimi coding key before invoking" >&2; exit 1; }
 
 # Neutralize inherited credentials that OUTRANK ANTHROPIC_API_KEY, or the swap
 # is silently hijacked (docs: Authentication precedence). ANTHROPIC_AUTH_TOKEN
@@ -238,11 +252,11 @@ export ANTHROPIC_BASE_URL="https://api.kimi.com/coding/"
 # per its official docs — NOT ANTHROPIC_AUTH_TOKEN, which is the paygo
 # api.moonshot.ai convention.
 export ANTHROPIC_API_KEY="$MOONSHOT_CODING_KEY"
-# Drop the intermediate so it never reaches claude's env. Normally a non-exported
-# local stays out of the child's env, but an inherited `allexport` (exported
-# SHELLOPTS) would auto-export this custom-named var and leak the raw key to
-# claude and its tools. Unsetting the source makes that moot — ANTHROPIC_API_KEY
-# already holds a copy.
+# Drop the source var so it never reaches claude's env. The caller exports
+# MOONSHOT_CODING_KEY, so it IS in this script's environment and would otherwise be
+# inherited by claude and its tools; unsetting it confines the raw key to
+# ANTHROPIC_API_KEY (which already holds a copy). This also covers the allexport
+# case — an inherited exported SHELLOPTS auto-exporting the custom-named var.
 unset MOONSHOT_CODING_KEY
 export ANTHROPIC_MODEL="$MODEL"
 export ANTHROPIC_DEFAULT_OPUS_MODEL="$MODEL"
@@ -256,9 +270,14 @@ export CLAUDE_CODE_EFFORT_LEVEL="$EFFORT"
 # forces permission mode to `default` and blocks the Edit tool under
 # --permission-mode acceptEdits / --dangerously-skip-permissions (verified by
 # isolated A/B run), which would break the workspace-write and danger-full-access
-# lanes this wrapper advertises. The key is already confined to claude's own
-# process tree (gopass, never persisted); edit-lane function outranks that
-# defense-in-depth here.
+# lanes this wrapper advertises. Consequence, accepted deliberately: the key is
+# confined to claude's process tree but NOT scrubbed from its child subprocesses,
+# so a child that dumps its environment can echo the key into the stream file on
+# disk — the "never persisted" guarantee is scoped to the SCRIPT's own handling,
+# not to what a claude child chooses to print. That subprocess credential
+# boundary is a claude-harness concern SUBPROCESS_ENV_SCRUB exists to own; taking
+# it here breaks the edit lanes, so edit-lane function outranks that
+# defense-in-depth and the boundary stays where the harness owns it.
 
 # Thinking stays on: the Kimi Code docs state a thinking-disabled request
 # routes K3 and K2.7 Code to K2.6, a downgrade that surfaces as lower
@@ -281,72 +300,67 @@ case "$MODEL" in
   *)        export CLAUDE_CODE_AUTO_COMPACT_WINDOW=262144 ;;
 esac
 
-# Invoke claude headless against the swapped endpoint. --output-format json
-# is required (not a plain exec like codex-run.sh) because session-id capture
-# here is JSON-based, not a stderr banner grep.
-set +e
-RAW=$(claude -p --output-format json \
+# Invoke claude headless against the swapped endpoint, streaming the event log to
+# a scratchpad file rather than capturing one blocking JSON blob. Two ends at once:
+# the caller can open the stream file mid-run for progress and after for the result
+# (no silent multi-minute wait), and — critical for a thin wrapper — NO transform
+# sits in the result-carrying path. claude writes the stream directly to the file
+# with `>`; there is no `tee`/`jq` pipeline whose failure could SIGPIPE claude or
+# truncate the capture. The stream file is a bystander: the run's integrity never
+# depends on anything downstream reading it.
+#
+# STREAM_FILE co-locates with the prompt in the scratchpad (kimi_prompt_<sfx>.txt ->
+# kimi_prompt_<sfx>.stream.jsonl) — a known, inspectable path the caller already
+# reaches. The script keeps no cleanup of its own — deliberately: no mktemp, no
+# exit-trap cleanup, nothing to leak on an untrapped signal. When the scratchpad is
+# lifecycle-managed (the usual case) the stream file is removed with the prompt file;
+# otherwise these possibly-large files persist until that directory's owner clears them.
+STREAM_FILE="${PROMPT_FILE%.txt}.stream.jsonl"
+
+# --verbose is required for stream-json to emit the full event log (incl. the final
+# result event carrying .result and .session_id). Session persistence stays ON so
+# `-S <SESSION_ID>` resume keeps working — the whole {purpose -> SESSION_ID} contract.
+#
+# No error interception here. On any claude failure — a nonzero exit, a stream-file that
+# will not open (bash's own redirect error), or the binary missing — set -e aborts and
+# the underlying tool's stderr + exit code pass straight to the caller. The thin wrapper
+# crafts no message; the calling agent reads the raw failure and fixes it over the next turn.
+claude -p --output-format stream-json --verbose \
   ${RESUME_ARGS[@]+"${RESUME_ARGS[@]}"} \
   ${PERM_ARGS[@]+"${PERM_ARGS[@]}"} \
   ${DELEGATION_GUARD_ARGS[@]+"${DELEGATION_GUARD_ARGS[@]}"} \
   ${STANCE_ARGS[@]+"${STANCE_ARGS[@]}"} \
-  < "$PROMPT_FILE")
-rc=$?
-set -e
+  < "$PROMPT_FILE" > "$STREAM_FILE"
 
-# The coding key was needed only for the claude call above. Drop it now, before
-# the jq subprocesses below, so they never inherit it — this is what makes the
-# "confined to claude's own process tree" claim (see NOTE above) literally true
-# rather than approximately so.
+# The coding key was needed only for the claude call above. Drop it now, before the jq
+# parses below, so they never inherit it — jq runs strictly AFTER claude has exited, so
+# the confinement is literal, not approximate.
 unset ANTHROPIC_API_KEY
 
-if [[ $rc -ne 0 ]]; then
-  printf '%s\n' "$RAW" >&2
-  exit "$rc"
-fi
+# Neutralize allexport for the extraction captures below — symmetric with the key-defense
+# at the MOONSHOT_CODING_KEY unset above. Under an inherited `allexport` (exported SHELLOPTS)
+# the RESULT/FINAL_EVENT assignments would auto-export a multi-hundred-KB payload into the
+# environment, whose envp then counts toward ARG_MAX at the next `jq` exec — a large but valid
+# run could abort with "Argument list too long". Two steps, both required: `set +a` stops NEW
+# auto-exports, but does NOT clear an export attribute a same-named var INHERITED from the
+# caller (a caller under `set -a` carrying its own generic `RESULT` reassigns-but-stays-exported,
+# so `set +a` alone leaves that one exported); the `unset` drops any inherited attribute so the
+# fresh assignments start clean. No child below needs a fresh export (claude already ran), so
+# this is free; unset of never-set names is a no-op even under `set -u`.
+set +a
+unset FINAL_EVENT RESULT KIMI_SESSION_ID
 
-# Guard the JSON parse like the claude call above: malformed or wrong-type JSON
-# makes jq exit non-zero (pipefail propagates it), which under set -e would abort
-# HERE — before the empty-session_id guard below — and never surface the raw
-# response the output contract promises. Capture the parse failure and surface
-# $RAW on stderr, same shape as that guard.
-set +e
-# `| strings` here too: a missing or non-string .result would otherwise be
-# emitted as blank text (or a JSON-rendered object) while a valid session_id
-# still carried the run to exit 0 — reporting success for a response that never
-# delivered an answer.
-RESULT=$(printf '%s' "$RAW" | jq -r '.result | strings')
-jq_rc_result=$?
-# `| strings` (not `// empty`): a non-string session_id — a number, or an object
-# that renders multiline — would otherwise pass the empty check below and be
-# emitted as an unusable resume handle. Selecting only string-typed values makes
-# a wrong-typed response fall through to that guard instead.
-KIMI_SESSION_ID=$(printf '%s' "$RAW" | jq -r '.session_id | strings')
-jq_rc_session=$?
-set -e
-if [[ $jq_rc_result -ne 0 || $jq_rc_session -ne 0 ]]; then
-  echo "Error: claude exited 0 but its response did not parse as JSON — resume handle unavailable. Raw response:" >&2
-  printf '%s\n' "$RAW" >&2
-  exit 1
-fi
+# Extract the final `result`-type event from the streamed log. Because claude wrote the
+# stream directly to the file with no downstream transform, this is a plain post-read.
+# `last(inputs | select ...)` streams the log lazily and retains only that one event, so
+# an arbitrarily large stream is never slurped into memory. A malformed stream makes jq
+# exit non-zero and set -e aborts with jq's own parse error surfaced — no crafted message.
+FINAL_EVENT=$(jq -n -c 'last(inputs | select(.type == "result")) // empty' "$STREAM_FILE")
 
-# A zero exit with no session_id is an unexpected response shape, not success:
-# the resume handle would be blank and the output contract ("SESSION_ID: <uuid>")
-# unmet. Fail loudly with the raw JSON rather than printing an empty handle.
-if [[ -z "$KIMI_SESSION_ID" ]]; then
-  echo "Error: claude exited 0 but the response carried no usable session_id — unexpected JSON, resume handle unavailable. Raw response:" >&2
-  printf '%s\n' "$RAW" >&2
-  exit 1
-fi
-
-# Same reasoning for the answer itself: a zero exit that yields no result text is
-# an unexpected shape, not a successful empty answer. Surfacing it as success
-# would hand the caller a blank deliverable that looks like a completed run.
-if [[ -z "$RESULT" ]]; then
-  echo "Error: claude exited 0 but the response carried no result text — unexpected JSON. Raw response:" >&2
-  printf '%s\n' "$RAW" >&2
-  exit 1
-fi
+# `| strings`: a missing or non-string .result / .session_id is selected out and emitted
+# as empty rather than as garbage — the extraction stays type-safe with no guard block.
+RESULT=$(printf '%s' "$FINAL_EVENT" | jq -r '.result | strings')
+KIMI_SESSION_ID=$(printf '%s' "$FINAL_EVENT" | jq -r '.session_id | strings')
 
 printf '%s\n' "$RESULT"
 # Emit the resume handle BEFORE the optional -o write: the session already

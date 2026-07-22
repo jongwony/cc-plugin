@@ -321,6 +321,14 @@ claude -p --output-format stream-json --verbose \
 # the confinement is literal, not approximate.
 unset ANTHROPIC_API_KEY
 
+# Disable allexport before the extraction captures below — symmetric with the key-defense
+# at the MOONSHOT_CODING_KEY unset above. Under an inherited `allexport` (exported SHELLOPTS)
+# the RESULT/FINAL_EVENT assignments would auto-export a multi-hundred-KB payload into the
+# environment, and that envp then counts toward ARG_MAX at the next `jq` exec — a large but
+# valid run could abort with "Argument list too long". No child below needs a fresh export
+# (claude already ran), so turning allexport off here is free. No-op when it was never set.
+set +a
+
 # Extract the final `result`-type event from the streamed log. Because claude wrote the
 # stream directly to the file with no downstream transform, this is a plain post-read.
 # `last(inputs | select ...)` streams the log lazily and retains only that one event, so

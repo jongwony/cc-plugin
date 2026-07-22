@@ -66,10 +66,11 @@ entry does not exist yet, the script exits with a one-line error naming it.
 
 Output contract: stdout is the result text followed by a final line
 "SESSION_ID: <uuid>". The full claude event log streams to a scratchpad file
-(<prompt>.stream.jsonl) for mid-run progress and post-run inspection. On failure
-the script names that file path on stderr rather than dumping it — the log can be
-very long; inspect it byte-bounded (tail -c / jq, not bare head/tail — one event can be
-many MB; see the skill's Error Handling).
+(<prompt>.stream.jsonl) for mid-run progress and post-run inspection. Failures are not
+intercepted: a failing claude/gopass/jq surfaces its own stderr and exit code directly
+(set -e), and a claude failure's full event log is in that stream file — inspect it
+byte-bounded (tail -c / jq, not bare head/tail — one event can be many MB; see the
+skill's Error Handling).
 
 Examples (<scratchpad> = the calling session's scratchpad directory):
   kimi-run.sh <scratchpad>/kimi_prompt_a3f9.txt
@@ -205,11 +206,10 @@ set +x
 
 # Pull the membership coding key from gopass at call time. Never stored in
 # the repo, never persisted to disk — held only in this script's process and
-# copied into the exported ANTHROPIC_API_KEY below.
-MOONSHOT_CODING_KEY="$(gopass show -o api-key/kimi-coding)" || {
-  echo "Error: gopass entry 'api-key/kimi-coding' not found. Issue the Kimi Code membership coding key and store it via 'gopass insert api-key/kimi-coding' before running kimi-run.sh." >&2
-  exit 1
-}
+# copied into the exported ANTHROPIC_API_KEY below. On failure (missing entry,
+# locked store, decryption error) gopass's own stderr is the diagnostic and set -e
+# aborts — the wrapper adds no interpretation over it.
+MOONSHOT_CODING_KEY="$(gopass show -o api-key/kimi-coding)"
 
 # Neutralize inherited credentials that OUTRANK ANTHROPIC_API_KEY, or the swap
 # is silently hijacked (docs: Authentication precedence). ANTHROPIC_AUTH_TOKEN
@@ -304,74 +304,34 @@ STREAM_FILE="${PROMPT_FILE%.txt}.stream.jsonl"
 # --verbose is required for stream-json to emit the full event log (incl. the final
 # result event carrying .result and .session_id). Session persistence stays ON so
 # `-S <SESSION_ID>` resume keeps working — the whole {purpose -> SESSION_ID} contract.
-set +e
+#
+# No error interception here. On any claude failure — a nonzero exit, a stream-file that
+# will not open (bash's own redirect error), or the binary missing — set -e aborts and
+# the underlying tool's stderr + exit code pass straight to the caller. The thin wrapper
+# crafts no message; the calling agent reads the raw failure and fixes it over the next turn.
 claude -p --output-format stream-json --verbose \
   ${RESUME_ARGS[@]+"${RESUME_ARGS[@]}"} \
   ${PERM_ARGS[@]+"${PERM_ARGS[@]}"} \
   ${DELEGATION_GUARD_ARGS[@]+"${DELEGATION_GUARD_ARGS[@]}"} \
   ${STANCE_ARGS[@]+"${STANCE_ARGS[@]}"} \
   < "$PROMPT_FILE" > "$STREAM_FILE"
-rc=$?
-set -e
 
-# The coding key was needed only for the claude call above. Drop it now, before the
-# jq parses below, so they never inherit it. Unlike a streaming-pipe design, jq here
-# runs strictly AFTER claude has exited — never a concurrent pipeline sibling holding
-# the key — so the confinement is literal, not approximate.
+# The coding key was needed only for the claude call above. Drop it now, before the jq
+# parses below, so they never inherit it — jq runs strictly AFTER claude has exited, so
+# the confinement is literal, not approximate.
 unset ANTHROPIC_API_KEY
 
-if [[ $rc -ne 0 ]]; then
-  echo "Error: claude exited $rc — or its event stream at $STREAM_FILE could not be opened. If present, inspect with tail -c / jq (not bare head/tail: one event can be many MB)." >&2
-  exit "$rc"
-fi
-
-# Extract the final `result`-type event from the streamed log (verified shape:
-# {"type":"result","subtype":"success","result":"<text>","session_id":"<uuid>",...}).
-# Because claude wrote the stream directly to the file with no downstream transform,
-# the file is complete here — this is a plain post-read, no SIGPIPE/PIPESTATUS games,
-# no truncation risk. Take the LAST result event in case an earlier line coincidentally
-# matched — `last(inputs | select ...)` streams the log lazily and retains only that one
-# event, so an arbitrarily large stream is never slurped whole into memory (no `-s`).
-# Guarded: a malformed stream makes jq exit non-zero, which under set -e would abort
-# before the guards below and never surface the raw stream.
-set +e
+# Extract the final `result`-type event from the streamed log. Because claude wrote the
+# stream directly to the file with no downstream transform, this is a plain post-read.
+# `last(inputs | select ...)` streams the log lazily and retains only that one event, so
+# an arbitrarily large stream is never slurped into memory. A malformed stream makes jq
+# exit non-zero and set -e aborts with jq's own parse error surfaced — no crafted message.
 FINAL_EVENT=$(jq -n -c 'last(inputs | select(.type == "result")) // empty' "$STREAM_FILE")
-jq_rc_final=$?
-set -e
-if [[ $jq_rc_final -ne 0 || -z "$FINAL_EVENT" ]]; then
-  echo "Error: claude finished but its result event could not be extracted — the stream did not parse, or carried no result event; resume handle unavailable. Full event stream: $STREAM_FILE (inspect with tail -c / jq, not bare head/tail: one event can be many MB)." >&2
-  exit 1
-fi
 
-# `| strings`: a missing or non-string .result/.session_id is selected out rather than
-# emitted as blank text or an unusable multiline handle, so a wrong-shaped event falls
-# through to the guards below instead of passing as success.
-set +e
+# `| strings`: a missing or non-string .result / .session_id is selected out and emitted
+# as empty rather than as garbage — the extraction stays type-safe with no guard block.
 RESULT=$(printf '%s' "$FINAL_EVENT" | jq -r '.result | strings')
-jq_rc_result=$?
 KIMI_SESSION_ID=$(printf '%s' "$FINAL_EVENT" | jq -r '.session_id | strings')
-jq_rc_session=$?
-set -e
-if [[ $jq_rc_result -ne 0 || $jq_rc_session -ne 0 ]]; then
-  echo "Error: claude finished but the result event did not parse — resume handle unavailable. Full event stream: $STREAM_FILE (inspect with tail -c / jq, not bare head/tail: one event can be many MB)." >&2
-  exit 1
-fi
-
-# A finished run with no session_id is an unexpected shape, not success: the resume
-# handle would be blank and the output contract ("SESSION_ID: <uuid>") unmet.
-if [[ -z "$KIMI_SESSION_ID" ]]; then
-  echo "Error: claude finished but the result event carried no usable session_id — resume handle unavailable. Full event stream: $STREAM_FILE (inspect with tail -c / jq, not bare head/tail: one event can be many MB)." >&2
-  exit 1
-fi
-
-# Same for the answer: a finished run yielding no result text is not a successful empty
-# answer — it is either a malformed stream or a claude-side failure carried in the event's
-# `subtype`/`is_error`, and must not be handed over as a blank deliverable. The message
-# points at the subtype rather than asserting which case it is (unknowable from here).
-if [[ -z "$RESULT" ]]; then
-  echo "Error: claude finished but the result event carried no result text; inspect $STREAM_FILE for its subtype (with tail -c / jq, not bare head/tail: one event can be many MB)." >&2
-  exit 1
-fi
 
 printf '%s\n' "$RESULT"
 # Emit the resume handle BEFORE the optional -o write: the session already

@@ -56,13 +56,21 @@ Options:
                           resume — switching models mid-session is a session
                           discipline concern, not enforced by this script.
   -o, --output-last-message FILE
-                         Also write kimi's final result text to FILE
+                         Also write kimi's final result text to FILE. Must not
+                          be the reserved stream path (<prompt>.stream.jsonl):
+                          the late result write would truncate the diagnostic
+                          event log the empty-result/error inspection path needs.
   -h, --help             Show this help
 
 The Kimi Code membership coding key is pulled from gopass at call time
 (entry: api-key/kimi-coding) and exported only into this script's own child
-process (claude) — it is never written to disk or the repo. If the gopass
-entry does not exist yet, the script exits with a one-line error naming it.
+process (claude). The SCRIPT itself never writes it to disk or the repo. One
+caveat it does not own: env-scrub is left off (see the SUBPROCESS_ENV_SCRUB note
+below) so claude's own child subprocesses inherit the key, and a child that
+surfaces its environment could echo it into the stream file — that subprocess
+credential boundary is a claude-harness concern (its SUBPROCESS_ENV_SCRUB owns
+it), not this wrapper's to solve. If the gopass entry does not exist yet, the
+script exits with a one-line error naming it.
 
 Output contract: stdout is the result text followed by a final line
 "SESSION_ID: <uuid>". The full claude event log streams to a scratchpad file
@@ -90,7 +98,7 @@ while [[ $# -gt 0 ]]; do
     -s|--sandbox) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; SANDBOX="$2"; shift 2 ;;
     -C|--cwd) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; CWD="$2"; shift 2 ;;
     -S|--session-id) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty session id" >&2; usage 1; }; SESSION_ID="$2"; shift 2 ;;
-    -o|--output-last-message) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; OUTPUT_FILE="$2"; shift 2 ;;
+    -o|--output-last-message) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; OUTPUT_FILE="$2"; shift 2 ;;
     -h|--help) usage 0 ;;
     -*) echo "Unknown option: $1" >&2; usage 1 ;;
     # Reject a second positional rather than letting it overwrite the first:
@@ -259,9 +267,14 @@ export CLAUDE_CODE_EFFORT_LEVEL="$EFFORT"
 # forces permission mode to `default` and blocks the Edit tool under
 # --permission-mode acceptEdits / --dangerously-skip-permissions (verified by
 # isolated A/B run), which would break the workspace-write and danger-full-access
-# lanes this wrapper advertises. The key is already confined to claude's own
-# process tree (gopass, never persisted); edit-lane function outranks that
-# defense-in-depth here.
+# lanes this wrapper advertises. Consequence, accepted deliberately: the key is
+# confined to claude's process tree but NOT scrubbed from its child subprocesses,
+# so a child that dumps its environment can echo the key into the stream file on
+# disk — the "never persisted" guarantee is scoped to the SCRIPT's own handling,
+# not to what a claude child chooses to print. That subprocess credential
+# boundary is a claude-harness concern SUBPROCESS_ENV_SCRUB exists to own; taking
+# it here breaks the edit lanes, so edit-lane function outranks that
+# defense-in-depth and the boundary stays where the harness owns it.
 
 # Thinking stays on: the Kimi Code docs state a thinking-disabled request
 # routes K3 and K2.7 Code to K2.6, a downgrade that surfaces as lower

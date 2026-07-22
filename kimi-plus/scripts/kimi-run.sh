@@ -62,20 +62,21 @@ Options:
                           event log the empty-result/error inspection path needs.
   -h, --help             Show this help
 
-The Kimi Code membership coding key is pulled from gopass at call time
-(entry: api-key/kimi-coding) and exported only into this script's own child
-process (claude). The SCRIPT itself never writes it to disk or the repo. One
-caveat it does not own: env-scrub is left off (see the SUBPROCESS_ENV_SCRUB note
-below) so claude's own child subprocesses inherit the key, and a child that
-surfaces its environment could echo it into the stream file — that subprocess
-credential boundary is a claude-harness concern (its SUBPROCESS_ENV_SCRUB owns
-it), not this wrapper's to solve. If the gopass entry does not exist yet, the
-script exits with a one-line error naming it.
+The Kimi Code membership coding key is read from the MOONSHOT_CODING_KEY
+environment variable, which the caller exports before invoking (how to source it
+is machine-local setup outside this wrapper's concern). It is exported only
+into this script's own child process (claude); the SCRIPT itself never fetches,
+writes, or persists it. One caveat it does not own: env-scrub is left off (see the
+SUBPROCESS_ENV_SCRUB note below) so claude's own child subprocesses inherit the
+key, and a child that surfaces its environment could echo it into the stream
+file — that subprocess credential boundary is a claude-harness concern (its
+SUBPROCESS_ENV_SCRUB owns it), not this wrapper's to solve. If MOONSHOT_CODING_KEY
+is unset, the script exits with a one-line error naming it.
 
 Output contract: stdout is the result text followed by a final line
 "SESSION_ID: <uuid>". The full claude event log streams to a scratchpad file
 (<prompt>.stream.jsonl) for mid-run progress and post-run inspection. Failures are not
-intercepted: a failing claude/gopass/jq surfaces its own stderr and exit code directly
+intercepted: a failing claude/jq surfaces its own stderr and exit code directly
 (set -e), and a claude failure's full event log is in that stream file — inspect it
 byte-bounded (tail -c / jq, not bare head/tail — one event can be many MB; see the
 skill's Error Handling).
@@ -212,12 +213,14 @@ fi
 # when tracing is already off.
 set +x
 
-# Pull the membership coding key from gopass at call time. Never stored in
-# the repo, never persisted to disk — held only in this script's process and
-# copied into the exported ANTHROPIC_API_KEY below. On failure (missing entry,
-# locked store, decryption error) gopass's own stderr is the diagnostic and set -e
-# aborts — the wrapper adds no interpretation over it.
-MOONSHOT_CODING_KEY="$(gopass show -o api-key/kimi-coding)"
+# The membership coding key is read from the environment, not fetched by this
+# script: the caller exports MOONSHOT_CODING_KEY before invoking (how to source it,
+# e.g. from a secret store, is machine-local setup outside this wrapper's concern).
+# Held only in this script's process and copied into the exported ANTHROPIC_API_KEY
+# below; the wrapper never fetches, stores, or persists it. A one-line error (not a
+# raw traceback) names the missing var, since an unset key is a caller setup mistake,
+# not a runtime failure to pass through.
+[[ -n "${MOONSHOT_CODING_KEY:-}" ]] || { echo "Error: MOONSHOT_CODING_KEY is not set — export the Kimi coding key before invoking" >&2; exit 1; }
 
 # Neutralize inherited credentials that OUTRANK ANTHROPIC_API_KEY, or the swap
 # is silently hijacked (docs: Authentication precedence). ANTHROPIC_AUTH_TOKEN
@@ -249,11 +252,11 @@ export ANTHROPIC_BASE_URL="https://api.kimi.com/coding/"
 # per its official docs — NOT ANTHROPIC_AUTH_TOKEN, which is the paygo
 # api.moonshot.ai convention.
 export ANTHROPIC_API_KEY="$MOONSHOT_CODING_KEY"
-# Drop the intermediate so it never reaches claude's env. Normally a non-exported
-# local stays out of the child's env, but an inherited `allexport` (exported
-# SHELLOPTS) would auto-export this custom-named var and leak the raw key to
-# claude and its tools. Unsetting the source makes that moot — ANTHROPIC_API_KEY
-# already holds a copy.
+# Drop the source var so it never reaches claude's env. The caller exports
+# MOONSHOT_CODING_KEY, so it IS in this script's environment and would otherwise be
+# inherited by claude and its tools; unsetting it confines the raw key to
+# ANTHROPIC_API_KEY (which already holds a copy). This also covers the allexport
+# case — an inherited exported SHELLOPTS auto-exporting the custom-named var.
 unset MOONSHOT_CODING_KEY
 export ANTHROPIC_MODEL="$MODEL"
 export ANTHROPIC_DEFAULT_OPUS_MODEL="$MODEL"

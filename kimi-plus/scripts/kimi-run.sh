@@ -329,10 +329,12 @@ fi
 # Because claude wrote the stream directly to the file with no downstream transform,
 # the file is complete here — this is a plain post-read, no SIGPIPE/PIPESTATUS games,
 # no truncation risk. Take the LAST result event in case an earlier line coincidentally
-# matched. Guarded: a malformed stream makes jq exit non-zero, which under set -e would
-# abort before the guards below and never surface the raw stream.
+# matched — `last(inputs | select ...)` streams the log lazily and retains only that one
+# event, so an arbitrarily large stream is never slurped whole into memory (no `-s`).
+# Guarded: a malformed stream makes jq exit non-zero, which under set -e would abort
+# before the guards below and never surface the raw stream.
 set +e
-FINAL_EVENT=$(jq -cs '[.[] | select(.type == "result")] | last // empty' "$STREAM_FILE")
+FINAL_EVENT=$(jq -n -c 'last(inputs | select(.type == "result")) // empty' "$STREAM_FILE")
 jq_rc_final=$?
 set -e
 if [[ $jq_rc_final -ne 0 || -z "$FINAL_EVENT" ]]; then

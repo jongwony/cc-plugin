@@ -339,7 +339,7 @@ FINAL_EVENT=$(jq -n -c 'last(inputs | select(.type == "result")) // empty' "$STR
 jq_rc_final=$?
 set -e
 if [[ $jq_rc_final -ne 0 || -z "$FINAL_EVENT" ]]; then
-  echo "Error: claude finished but its stream carried no parseable result event — resume handle unavailable. Full event stream: $STREAM_FILE (inspect with tail -c / jq, not bare head/tail: one event can be many MB)." >&2
+  echo "Error: claude finished but its result event could not be extracted — the stream did not parse, or carried no result event; resume handle unavailable. Full event stream: $STREAM_FILE (inspect with tail -c / jq, not bare head/tail: one event can be many MB)." >&2
   exit 1
 fi
 

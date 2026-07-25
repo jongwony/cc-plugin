@@ -51,6 +51,18 @@ Structure `<scratchpad>/codex_prompt_<suffix>.txt` with these sections:
 
 Omit empty sections. `## Pointers` enables codex to self-verify; `## Session Context` provides copy-only background without requiring follow-up.
 
+## Consult Mode (review, not execution)
+
+A consult asks codex to judge a decision rather than carry out work — the reasoning is the deliverable, not a changed file. Four things differ from a task run.
+
+**Declare the role.** Every prompt this skill sends states whether codex is acting as executor or reviewer; a consult declares **reviewer** — codex is asked what it thinks of a decision, not to implement it. Make that call yourself and write it down rather than leaving it to be inferred from the prompt's shape.
+
+**Carry the decision; point at everything else.** The part codex cannot re-derive with its own tools is the decision — what is being chosen, the approach taken so far and where it is still uncommitted, and the item most often omitted: **what would change the answer**, the evidence or outcome that would flip it. State those. Everything else goes through `## Context Classification`'s test: a pointer when codex can re-derive it under `-C DIR`, copied in when it cannot — in practice the session-bound evidence that left no trace on disk. Codex searches for itself, and handing it the tools beats transcribing what the search would have found. A consult invites follow-up, so pass the same `-C` again when you resume one: the pointers mean nothing without the tree they were written against.
+
+**Take the reviewer's own words, not the summary.** The run goes through a Bash subagent, so its outcome summary is normally all that comes back — which for a consult discards the part that mattered. Pass `-o <FILE>` to write codex's final message verbatim, then read that file instead of relying on the summary. Give that path the same per-invocation uniqueness as the prompt file, plus the model name when consulting several in parallel — one shared path and the reviewers overwrite each other, leaving an answer that reads complete but is not the one you think.
+
+**Read-only, and no ask when the caller already decided.** A consult reads and answers, so `--sandbox read-only` stands. When the caller arrives with the model and reasoning effort already fixed, use those and skip the model/effort question in `## Running a Task` step 1.
+
 ## Image Generation Requests
 
 When the delegated task is image generation or image editing:
@@ -78,7 +90,7 @@ When the delegated task is image generation or image editing:
    - **Single model**: one subagent call.
    - **Multiple models**: issue parallel subagent calls (one per model) in a single response — same prompt, sandbox, and effort, different `-m`. Each returns its own `SESSION_ID`.
 5. Record each returned `SESSION_ID` against its purpose/model. This {purpose → SESSION_ID} map is the only resume handle.
-6. Resume: write new instructions to a fresh `<scratchpad>/codex_prompt_<suffix>.txt`, then delegate to a Bash subagent running `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> <scratchpad>/codex_prompt_<suffix>.txt`. Resume is always by explicit id, which stays deterministic under parallel sessions. The session keeps its original model/effort/sandbox/`-C` settings.
+6. Resume: write new instructions to a fresh `<scratchpad>/codex_prompt_<suffix>.txt`, then delegate to a Bash subagent running `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> <scratchpad>/codex_prompt_<suffix>.txt`. Resume is always by explicit id, which stays deterministic under parallel sessions. The session keeps its original model/effort/sandbox settings. `-C` is the exception: `codex exec resume` has no `--cd`, so pass the same `-C <DIR>` again and the wrapper restores it before handing off. Omit it and the resumed turn runs wherever the subagent happens to be, re-resolving every pointer against that tree without saying so.
 7. Summarize each outcome to the user; for parallel work, surface which `SESSION_ID` maps to which branch. Inform the user: "Resume anytime with 'codex resume'."
 
 ### Quick Reference
@@ -91,7 +103,7 @@ Base patterns:
 - Resume a session — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> <scratchpad>/codex_prompt_<suffix>.txt`; the explicit id is the resume path, deterministic under parallel sessions.
 
 Modifiers, added to any base pattern above:
-- Different working directory — `-C <DIR>`, applying to the non-resume patterns
+- Different working directory — `-C <DIR>`; pass it again when resuming, since `codex exec resume` has no `--cd` of its own
 - Model and effort — `-m gpt-5.6-terra`, `-r high`
 - Capture the answer to a file — `-o <FILE>` writes codex's final message to FILE deterministically
 

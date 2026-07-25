@@ -4,6 +4,13 @@
 
 set -euo pipefail
 
+# `cd` consults CDPATH for a relative target and then echoes the directory it
+# picked to stdout — which would silently corrupt the command substitutions
+# below. Neutralize it once, and use `cd -P` everywhere: the kernel resolves
+# `symlink/..` physically when it opens a file, so logical `cd` would pin a
+# different directory than the one the path actually names.
+CDPATH=
+
 # Defaults
 readonly DEFAULT_MODEL="gpt-5.6-sol"
 readonly DEFAULT_EFFORT="xhigh"
@@ -25,7 +32,9 @@ Options:
   -m, --model MODEL      Model name (default: gpt-5.6-sol)
   -r, --effort EFFORT    Reasoning effort: medium|high|xhigh|max (default: xhigh)
   -s, --sandbox SANDBOX  Sandbox: read-only|workspace-write|danger-full-access (default: read-only)
-  -C, --cwd DIR          Working directory for codex
+  -C, --cwd DIR          Working directory for codex. Pass it again when
+                         resuming: `codex exec resume` has no --cd of its own,
+                         so this script cd's there before handing off
   -S, --session-id ID    Resume a specific session by UUID (deterministic;
                          the only resume path — there is no --last fallback)
   -o, --output-last-message FILE
@@ -48,19 +57,27 @@ USAGE
   exit "${1:-0}"
 }
 
-# Parse options
+# Parse options.
+#
+# -S, -C and -o are checked for emptiness, not merely for presence: each is
+# tested with -n further down, so an empty value there is indistinguishable from
+# the option never being passed. A caller whose variable came up empty would
+# silently get a new session, its own cwd, or no capture at all. -m/-r/-s carry
+# no such check — their values are always handed through to codex, so an empty
+# one is codex's to reject in the open rather than something this script
+# swallows. The asymmetry is the point; it is not an oversight to even out.
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -m|--model) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; MODEL="$2"; shift 2 ;;
     -r|--effort) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; EFFORT="$2"; shift 2 ;;
     -s|--sandbox) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; SANDBOX="$2"; shift 2 ;;
-    -C|--cwd) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; CWD="$2"; shift 2 ;;
-    -S|--session-id) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; SESSION_ID="$2"; shift 2 ;;
-    -o|--output-last-message) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; OUTPUT_FILE="$2"; shift 2 ;;
+    -C|--cwd) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; CWD="$2"; shift 2 ;;
+    -S|--session-id) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; SESSION_ID="$2"; shift 2 ;;
+    -o|--output-last-message) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; OUTPUT_FILE="$2"; shift 2 ;;
     --full-auto) FULL_AUTO=true; shift ;;
     -h|--help) usage 0 ;;
     -*) echo "Unknown option: $1" >&2; usage 1 ;;
-    *) PROMPT_FILE="$1"; shift ;;
+    *) [[ -z "${PROMPT_FILE:-}" ]] || { echo "Error: only one prompt file is accepted, got \"$PROMPT_FILE\" and \"$1\"" >&2; usage 1; }; PROMPT_FILE="$1"; shift ;;
   esac
 done
 
@@ -75,6 +92,35 @@ if [[ ! -f "$PROMPT_FILE" ]]; then
   exit 1
 fi
 
+# Resolve paths to absolute BEFORE the resume branch changes directory below —
+# a relative path would otherwise be re-resolved against the new cwd, silently
+# reading the wrong prompt or writing the answer somewhere else. The resolution
+# runs through command substitution, which strips trailing newlines: a path
+# ending in one would resolve to a different sibling and read it without a word.
+# Reject that shape up front instead. Every path operand is passed after `--`,
+# so a leading dash is a directory name here, never an option.
+if [[ "$PROMPT_FILE" == *$'\n'* || "$OUTPUT_FILE" == *$'\n'* ]]; then
+  echo "Error: paths containing newlines are not supported" >&2
+  exit 1
+fi
+PROMPT_FILE="$(cd -P -- "$(dirname -- "$PROMPT_FILE")" && pwd -P)/$(basename -- "$PROMPT_FILE")"
+if [[ -n "$OUTPUT_FILE" ]]; then
+  OUTPUT_DIR="$(cd -P -- "$(dirname -- "$OUTPUT_FILE")" 2>/dev/null && pwd -P)" || {
+    echo "Error: output directory not found: $(dirname -- "$OUTPUT_FILE")" >&2
+    exit 1
+  }
+  OUTPUT_FILE="$OUTPUT_DIR/$(basename -- "$OUTPUT_FILE")"
+fi
+
+# Resolve codex itself before the resume branch cd's below: PATH lookup happens
+# at exec time, so a relative PATH entry would be re-rooted at the new directory
+# and could hand the prompt to an entirely different binary.
+CODEX_BIN="$(command -v codex)" || {
+  echo "Error: codex not found on PATH" >&2
+  exit 1
+}
+[[ "$CODEX_BIN" == /* ]] || CODEX_BIN="$PWD/$CODEX_BIN"
+
 # Build codex argv. Resume iff a session id was given.
 CODEX_ARGS=(exec --skip-git-repo-check)
 [[ -n "$OUTPUT_FILE" ]] && CODEX_ARGS+=(--output-last-message "$OUTPUT_FILE")
@@ -86,9 +132,15 @@ if [[ -n "$SESSION_ID" ]]; then
   [[ "$EFFORT" != "$DEFAULT_EFFORT" ]] && IGNORED+=("-r $EFFORT")
   [[ "$SANDBOX" != "$DEFAULT_SANDBOX" ]] && IGNORED+=("-s $SANDBOX")
   [[ "$FULL_AUTO" == true ]] && IGNORED+=("--full-auto")
-  [[ -n "$CWD" ]] && IGNORED+=("-C $CWD")
   if [[ ${#IGNORED[@]} -gt 0 ]]; then
     echo "Warning: resume ignores options: ${IGNORED[*]} (uses session settings)" >&2
+  fi
+  # -C is NOT one of them. `codex exec resume` has no --cd, so a resumed turn
+  # runs in whatever cwd it inherits — not the session's original directory.
+  # Restore the scope here; otherwise every pointer in the prompt silently
+  # re-resolves against the caller's tree.
+  if [[ -n "$CWD" ]]; then
+    cd -P -- "$CWD"
   fi
   CODEX_ARGS+=(resume "$SESSION_ID")
 else
@@ -102,4 +154,4 @@ fi
 # subagent reads the session id (and any failure) straight from the output,
 # so no in-script regex extraction is needed. exec propagates codex's exit
 # code unchanged.
-exec codex "${CODEX_ARGS[@]}" < "$PROMPT_FILE"
+exec "$CODEX_BIN" "${CODEX_ARGS[@]}" < "$PROMPT_FILE"

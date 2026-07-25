@@ -86,15 +86,32 @@ fi
 
 # Resolve paths to absolute BEFORE the resume branch changes directory below —
 # a relative path would otherwise be re-resolved against the new cwd, silently
-# reading the wrong prompt or writing the answer somewhere else.
-PROMPT_FILE="$(cd -P "$(dirname "$PROMPT_FILE")" && pwd -P)/$(basename "$PROMPT_FILE")"
+# reading the wrong prompt or writing the answer somewhere else. The resolution
+# runs through command substitution, which strips trailing newlines: a path
+# ending in one would resolve to a different sibling and read it without a word.
+# Reject that shape up front instead. Every path operand is passed after `--`,
+# so a leading dash is a directory name here, never an option.
+if [[ "$PROMPT_FILE" == *$'\n'* || "$OUTPUT_FILE" == *$'\n'* ]]; then
+  echo "Error: paths containing newlines are not supported" >&2
+  exit 1
+fi
+PROMPT_FILE="$(cd -P -- "$(dirname -- "$PROMPT_FILE")" && pwd -P)/$(basename -- "$PROMPT_FILE")"
 if [[ -n "$OUTPUT_FILE" ]]; then
-  OUTPUT_DIR="$(cd -P "$(dirname "$OUTPUT_FILE")" 2>/dev/null && pwd -P)" || {
-    echo "Error: output directory not found: $(dirname "$OUTPUT_FILE")" >&2
+  OUTPUT_DIR="$(cd -P -- "$(dirname -- "$OUTPUT_FILE")" 2>/dev/null && pwd -P)" || {
+    echo "Error: output directory not found: $(dirname -- "$OUTPUT_FILE")" >&2
     exit 1
   }
-  OUTPUT_FILE="$OUTPUT_DIR/$(basename "$OUTPUT_FILE")"
+  OUTPUT_FILE="$OUTPUT_DIR/$(basename -- "$OUTPUT_FILE")"
 fi
+
+# Resolve codex itself before the resume branch cd's below: PATH lookup happens
+# at exec time, so a relative PATH entry would be re-rooted at the new directory
+# and could hand the prompt to an entirely different binary.
+CODEX_BIN="$(command -v codex)" || {
+  echo "Error: codex not found on PATH" >&2
+  exit 1
+}
+[[ "$CODEX_BIN" == /* ]] || CODEX_BIN="$PWD/$CODEX_BIN"
 
 # Build codex argv. Resume iff a session id was given.
 CODEX_ARGS=(exec --skip-git-repo-check)
@@ -115,7 +132,7 @@ if [[ -n "$SESSION_ID" ]]; then
   # Restore the scope here; otherwise every pointer in the prompt silently
   # re-resolves against the caller's tree.
   if [[ -n "$CWD" ]]; then
-    cd -P "$CWD"
+    cd -P -- "$CWD"
   fi
   CODEX_ARGS+=(resume "$SESSION_ID")
 else
@@ -129,4 +146,4 @@ fi
 # subagent reads the session id (and any failure) straight from the output,
 # so no in-script regex extraction is needed. exec propagates codex's exit
 # code unchanged.
-exec codex "${CODEX_ARGS[@]}" < "$PROMPT_FILE"
+exec "$CODEX_BIN" "${CODEX_ARGS[@]}" < "$PROMPT_FILE"

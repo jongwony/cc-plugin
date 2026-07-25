@@ -6,10 +6,10 @@ description: |
   "automate browser", "inspect accessibility tree", "monitor network",
   "run JavaScript in browser", "fill form in browser", "debug web page",
   or mentions CDP. Attaches to a running CDP instance for browser automation.
+  Pass the user's request verbatim — this skill reads a free-form request, not a subcommand.
 user_invocable: true
 context: fork
 model: sonnet
-argument-hint: "<operation> [args...]"
 ---
 
 # CDP Attach
@@ -400,9 +400,3 @@ Tab attachment and screenshot capture are inherently flaky. When a CDP operation
 ## Protocol Reference
 
 For CDP domain methods, key codes, and device presets, see `references/cdp-protocol.md`.
-
-## Argument Dispatch
-
-When user provides arguments to `/cdp-attach`:
-- Single word matching a subcommand → run directly (e.g., `/cdp-attach list`)
-- Free-form request → map to appropriate v1/v2/v3 command sequence

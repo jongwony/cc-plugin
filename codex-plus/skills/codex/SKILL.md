@@ -61,7 +61,7 @@ A consult asks codex to judge a decision rather than carry out work — the reas
 
 **Take the reviewer's own words, not the summary.** The run goes through a Bash subagent, so its outcome summary is normally all that comes back — which for a consult discards the part that mattered. Pass `-o <FILE>` to write codex's final message verbatim, then read that file instead of relying on the summary. Give that path the same per-invocation uniqueness as the prompt file, plus the model name when consulting several in parallel — one shared path and the reviewers overwrite each other, leaving an answer that reads complete but is not the one you think.
 
-**Read-only, and no ask when the caller already decided.** A consult reads and answers, so `--sandbox read-only` stands. When the caller arrives with the model and reasoning effort already fixed, use those and skip the model/effort question in `## Running a Task` step 1.
+**Leave the sandbox at its default, and no ask when the caller already decided.** Do not reach for `-s`: the default is `workspace-write` with network access, and a consult routinely needs the network to check a claim against a live source rather than against its own recollection. The default permits writes, so what keeps a consult from editing is the reviewer role declared above — not the sandbox. When the caller arrives with the model and reasoning effort already fixed, use those and skip the model/effort question in `## Running a Task` step 1.
 
 ## Image Generation Requests
 
@@ -82,7 +82,7 @@ When the delegated task is image generation or image editing:
 
    Reasoning effort is selected once and applied identically to all chosen models.
 
-2. Select sandbox mode; default to `--sandbox read-only` unless edits or network access are necessary.
+2. Select sandbox mode. Omitting `-s` gives `workspace-write` **with network access** — codex offers no network under `read-only` at all, so this is the only mode short of full access that has any. Pass `-s read-only` when a run must neither touch the tree nor reach off-machine; `-s danger-full-access` only when it must write outside the workspace. Because the default already permits writes, what bounds a run that is meant to only read is the role its prompt declares — state it.
 3. Craft prompt per Context Classification and Prompt Template — classify context, write to `<scratchpad>/codex_prompt_<suffix>.txt`.
 4. Delegate execution to a Bash subagent (Task tool) — never run `codex-run.sh` directly in the main session. This keeps codex's verbose banner and full output out of the main context. Give the subagent:
    - the exact command: `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh [options] <scratchpad>/codex_prompt_<suffix>.txt` with `-m MODEL` / `-r EFFORT` / `-s SANDBOX` / `--full-auto` / `-C DIR`, or `-S <SESSION_ID>` to resume.
@@ -97,9 +97,10 @@ When the delegated task is image generation or image editing:
 Each command below runs **inside a Bash subagent**, which returns the outcome summary plus the `session id: <uuid>` line as `SESSION_ID: <uuid>`.
 
 Base patterns:
-- Read-only analysis — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -m MODEL <scratchpad>/codex_prompt_<suffix>.txt`
-- Apply edits — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s workspace-write --full-auto <scratchpad>/codex_prompt_<suffix>.txt`
-- Network access — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s danger-full-access --full-auto <scratchpad>/codex_prompt_<suffix>.txt`
+- Analysis, network reachable — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -m MODEL <scratchpad>/codex_prompt_<suffix>.txt` (the default sandbox: workspace-write, network on)
+- Apply edits unattended — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh --full-auto <scratchpad>/codex_prompt_<suffix>.txt`
+- Neither writes nor network — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s read-only <scratchpad>/codex_prompt_<suffix>.txt`
+- Write outside the workspace — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s danger-full-access --full-auto <scratchpad>/codex_prompt_<suffix>.txt`
 - Resume a session — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> <scratchpad>/codex_prompt_<suffix>.txt`; the explicit id is the resume path, deterministic under parallel sessions.
 
 Modifiers, added to any base pattern above:

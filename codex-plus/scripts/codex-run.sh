@@ -14,7 +14,15 @@ CDPATH=
 # Defaults
 readonly DEFAULT_MODEL="gpt-5.6-sol"
 readonly DEFAULT_EFFORT="xhigh"
-readonly DEFAULT_SANDBOX="read-only"
+# workspace-write, not read-only, for one reason: the network. codex exposes no
+# network switch under read-only — the toggle lives in the
+# sandbox_workspace_write table and does nothing while the mode is read-only
+# (verified on 0.144.6: the same request is blocked with the key and without
+# it). Reaching the network therefore costs workspace writes. That cost is
+# being paid, not a judgment that codex ought to be writing. What holds a run
+# to its lane is the role its prompt declares — skills/codex/SKILL.md requires
+# every prompt to state one — not the sandbox.
+readonly DEFAULT_SANDBOX="workspace-write"
 
 MODEL="$DEFAULT_MODEL"
 EFFORT="$DEFAULT_EFFORT"
@@ -31,7 +39,10 @@ Usage: codex-run.sh [options] <prompt_file>
 Options:
   -m, --model MODEL      Model name (default: gpt-5.6-sol)
   -r, --effort EFFORT    Reasoning effort: medium|high|xhigh|max (default: xhigh)
-  -s, --sandbox SANDBOX  Sandbox: read-only|workspace-write|danger-full-access (default: read-only)
+  -s, --sandbox SANDBOX  Sandbox: read-only|workspace-write|danger-full-access
+                         (default: workspace-write, which this wrapper always
+                         runs with network access enabled). read-only has no
+                         network at all — codex offers no switch for it there
   -C, --cwd DIR          Working directory for codex. Pass it again when
                          resuming: `codex exec resume` has no --cd of its own,
                          so this script cd's there before handing off
@@ -145,6 +156,11 @@ if [[ -n "$SESSION_ID" ]]; then
   CODEX_ARGS+=(resume "$SESSION_ID")
 else
   CODEX_ARGS+=(-m "$MODEL" --config "model_reasoning_effort=$EFFORT" --sandbox "$SANDBOX")
+  # The mode and the network are two separate switches: workspace-write on its
+  # own still blocks every outbound connection. Since the network is the whole
+  # reason this wrapper defaults to that mode, bind them here — `-s
+  # workspace-write` must never quietly mean "writes, but still no network".
+  [[ "$SANDBOX" == "workspace-write" ]] && CODEX_ARGS+=(--config "sandbox_workspace_write.network_access=true")
   [[ "$FULL_AUTO" == true ]] && CODEX_ARGS+=(--full-auto)
   [[ -n "$CWD" ]] && CODEX_ARGS+=(-C "$CWD")
 fi

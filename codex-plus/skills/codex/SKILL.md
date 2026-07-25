@@ -51,6 +51,18 @@ Structure `<scratchpad>/codex_prompt_<suffix>.txt` with these sections:
 
 Omit empty sections. `## Pointers` enables codex to self-verify; `## Session Context` provides copy-only background without requiring follow-up.
 
+## Consult Mode (review, not execution)
+
+A consult asks codex to judge a decision rather than carry out work — the reasoning is the deliverable, not a changed file. Four things differ from a task run.
+
+**Declare the role.** Every prompt this skill sends states whether codex is acting as executor or reviewer; a consult declares **reviewer** — codex is asked what it thinks of a decision, not to implement it. Make that call yourself and write it down rather than leaving it to be inferred from the prompt's shape.
+
+**Carry the decision; point at everything else.** What codex cannot re-derive with its own tools is the decision itself — what is being chosen, the approach taken so far and where it is still uncommitted, and the item most often omitted: **what would change the answer**, the evidence or outcome that would flip it. State those. The rest stays a pointer under `-C DIR`: codex searches for itself, and handing it the tools beats transcribing what the search would have found. This is `## Context Classification` applied to a decision instead of a task.
+
+**Take the reviewer's own words, not the summary.** The run goes through a Bash subagent, so its outcome summary is normally all that comes back — which for a consult discards the part that mattered. Pass `-o <FILE>` to write codex's final message verbatim, then read that file instead of relying on the summary.
+
+**Read-only, and no ask when the caller already decided.** A consult reads and answers, so `--sandbox read-only` stands. When the caller arrives with the model and reasoning effort already fixed, use those and skip the model/effort question in `## Running a Task` step 1.
+
 ## Image Generation Requests
 
 When the delegated task is image generation or image editing:

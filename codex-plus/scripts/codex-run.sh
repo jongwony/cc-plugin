@@ -4,6 +4,13 @@
 
 set -euo pipefail
 
+# `cd` consults CDPATH for a relative target and then echoes the directory it
+# picked to stdout — which would silently corrupt the command substitutions
+# below. Neutralize it once, and use `cd -P` everywhere: the kernel resolves
+# `symlink/..` physically when it opens a file, so logical `cd` would pin a
+# different directory than the one the path actually names.
+CDPATH=
+
 # Defaults
 readonly DEFAULT_MODEL="gpt-5.6-sol"
 readonly DEFAULT_EFFORT="xhigh"
@@ -80,9 +87,9 @@ fi
 # Resolve paths to absolute BEFORE the resume branch changes directory below —
 # a relative path would otherwise be re-resolved against the new cwd, silently
 # reading the wrong prompt or writing the answer somewhere else.
-PROMPT_FILE="$(cd "$(dirname "$PROMPT_FILE")" && pwd)/$(basename "$PROMPT_FILE")"
+PROMPT_FILE="$(cd -P "$(dirname "$PROMPT_FILE")" && pwd -P)/$(basename "$PROMPT_FILE")"
 if [[ -n "$OUTPUT_FILE" ]]; then
-  OUTPUT_DIR="$(cd "$(dirname "$OUTPUT_FILE")" 2>/dev/null && pwd)" || {
+  OUTPUT_DIR="$(cd -P "$(dirname "$OUTPUT_FILE")" 2>/dev/null && pwd -P)" || {
     echo "Error: output directory not found: $(dirname "$OUTPUT_FILE")" >&2
     exit 1
   }
@@ -108,7 +115,7 @@ if [[ -n "$SESSION_ID" ]]; then
   # Restore the scope here; otherwise every pointer in the prompt silently
   # re-resolves against the caller's tree.
   if [[ -n "$CWD" ]]; then
-    cd "$CWD"
+    cd -P "$CWD"
   fi
   CODEX_ARGS+=(resume "$SESSION_ID")
 else

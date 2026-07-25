@@ -25,7 +25,9 @@ Options:
   -m, --model MODEL      Model name (default: gpt-5.6-sol)
   -r, --effort EFFORT    Reasoning effort: medium|high|xhigh|max (default: xhigh)
   -s, --sandbox SANDBOX  Sandbox: read-only|workspace-write|danger-full-access (default: read-only)
-  -C, --cwd DIR          Working directory for codex
+  -C, --cwd DIR          Working directory for codex. Pass it again when
+                         resuming: `codex exec resume` has no --cd of its own,
+                         so this script cd's there before handing off
   -S, --session-id ID    Resume a specific session by UUID (deterministic;
                          the only resume path — there is no --last fallback)
   -o, --output-last-message FILE
@@ -75,6 +77,18 @@ if [[ ! -f "$PROMPT_FILE" ]]; then
   exit 1
 fi
 
+# Resolve paths to absolute BEFORE the resume branch changes directory below —
+# a relative path would otherwise be re-resolved against the new cwd, silently
+# reading the wrong prompt or writing the answer somewhere else.
+PROMPT_FILE="$(cd "$(dirname "$PROMPT_FILE")" && pwd)/$(basename "$PROMPT_FILE")"
+if [[ -n "$OUTPUT_FILE" ]]; then
+  OUTPUT_DIR="$(cd "$(dirname "$OUTPUT_FILE")" 2>/dev/null && pwd)" || {
+    echo "Error: output directory not found: $(dirname "$OUTPUT_FILE")" >&2
+    exit 1
+  }
+  OUTPUT_FILE="$OUTPUT_DIR/$(basename "$OUTPUT_FILE")"
+fi
+
 # Build codex argv. Resume iff a session id was given.
 CODEX_ARGS=(exec --skip-git-repo-check)
 [[ -n "$OUTPUT_FILE" ]] && CODEX_ARGS+=(--output-last-message "$OUTPUT_FILE")
@@ -86,9 +100,15 @@ if [[ -n "$SESSION_ID" ]]; then
   [[ "$EFFORT" != "$DEFAULT_EFFORT" ]] && IGNORED+=("-r $EFFORT")
   [[ "$SANDBOX" != "$DEFAULT_SANDBOX" ]] && IGNORED+=("-s $SANDBOX")
   [[ "$FULL_AUTO" == true ]] && IGNORED+=("--full-auto")
-  [[ -n "$CWD" ]] && IGNORED+=("-C $CWD")
   if [[ ${#IGNORED[@]} -gt 0 ]]; then
     echo "Warning: resume ignores options: ${IGNORED[*]} (uses session settings)" >&2
+  fi
+  # -C is NOT one of them. `codex exec resume` has no --cd, so a resumed turn
+  # runs in whatever cwd it inherits — not the session's original directory.
+  # Restore the scope here; otherwise every pointer in the prompt silently
+  # re-resolves against the caller's tree.
+  if [[ -n "$CWD" ]]; then
+    cd "$CWD"
   fi
   CODEX_ARGS+=(resume "$SESSION_ID")
 else

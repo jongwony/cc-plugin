@@ -6,10 +6,10 @@ description: |
   "automate browser", "inspect accessibility tree", "monitor network",
   "run JavaScript in browser", "fill form in browser", "debug web page",
   or mentions CDP. Attaches to a running CDP instance for browser automation.
+  Pass the user's request verbatim — this skill reads a free-form request, not a subcommand.
 user_invocable: true
 context: fork
 model: sonnet
-argument-hint: "<operation> [args...]"
 ---
 
 # CDP Attach
@@ -61,7 +61,7 @@ V3="${CLAUDE_PLUGIN_ROOT}/scripts/v3_advanced.py" && $V3 network_start
 
 ### Selecting a target — profile-aware
 
-Before selecting a target for the first time in a session, check for multiple browser profiles: run `$V1 list --contexts`. If it reports **2 or more** contexts and the user has not already named which profile or target to act on:
+Before selecting a target for the first time in a session, check for multiple browser profiles: run `$V1 list --contexts`. A `list --search` that matches no tab counts as the same situation — the target is undetermined, so run this check instead of returning empty-handed. If it reports **2 or more** contexts and the user has not already named which profile or target to act on:
 
 - **Do not pick one yourself — the choice is the user's.** Build a numbered list of the contexts, each option labeled by its 2–3 most recognizable open tab titles so the user recognizes the profile at a glance — never lead with the raw `browserContextId`. Keep the context id prefix alongside the label as the machine handle.
 - This skill runs forked (`context: fork`), so it cannot pause for user input mid-run: **return that numbered list as the final result, taking no target action in this run** — the main conversation presents the choice and re-invokes with the user's pick. (If running inline instead, ask directly and wait for the pick.)
@@ -400,9 +400,3 @@ Tab attachment and screenshot capture are inherently flaky. When a CDP operation
 ## Protocol Reference
 
 For CDP domain methods, key codes, and device presets, see `references/cdp-protocol.md`.
-
-## Argument Dispatch
-
-When user provides arguments to `/cdp-attach`:
-- Single word matching a subcommand → run directly (e.g., `/cdp-attach list`)
-- Free-form request → map to appropriate v1/v2/v3 command sequence

@@ -21,9 +21,22 @@ Attach to a running Chrome DevTools Protocol instance. Command-level timeouts ar
 A **visible** (headed) CDP-enabled browser must be running. Headless instances are blocked — silent execution without user visibility is a security risk.
 
 ```bash
-# Manual launch (visible browser)
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+# Manual launch (visible browser, dedicated profile)
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --user-data-dir="$HOME/.cache/cdp-attach/browser-profile" --remote-debugging-port=9222
 ```
+
+`--user-data-dir` is required, not decorative. Since Chrome 136 the port flag is
+ignored when the profile directory is the platform default
+([announcement](https://developer.chrome.com/blog/remote-debugging-port)), so the
+command without it opens no port at all — it fails silently, with no error to read.
+Any non-default path works. A Chromium fork may still honour the flag on its own
+default profile; that is fork behaviour and can disappear on any update, so do not
+build on it.
+
+The dedicated profile starts empty — no logins, no extensions, no existing tabs. To
+drive the browser you already work in, leave that browser running and attach to it
+rather than launching a new instance.
 
 > **Note**: `claude --chrome` may launch a headless instance. If `v1 version` shows `HeadlessChrome`, use the manual launch method above instead.
 

@@ -172,9 +172,13 @@ class CDPClient:
                 "Headless Chrome detected — cdp-attach requires a visible browser.\n"
                 "Silent execution risk: actions occur without user visibility.\n"
                 "\n"
-                "Launch a visible Chrome instance:\n"
-                "  /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome "
-                "--remote-debugging-port=9222"
+                "Launch a visible Chrome instance with a dedicated profile:\n"
+                "  /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome \\\n"
+                '    --user-data-dir="$HOME/.cache/cdp-attach/browser-profile" '
+                "--remote-debugging-port=9222\n"
+                "\n"
+                "--user-data-dir is required: since Chrome 136 the port flag is ignored\n"
+                "on the platform-default profile, so omitting it opens no port silently."
             )
 
     def new_tab(self, url=""):

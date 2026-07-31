@@ -122,7 +122,7 @@ Base patterns:
 
 Modifiers, added to any base pattern above:
 - Different working directory — `-C <DIR>`
-- Long-context opt-in — `-m 'k3[1m]'`, plan-gated at a higher membership tier
+- Long-context opt-in — `-m 'k3[1m]'` *requests* the 1M window, plan-gated at a higher membership tier; whether the full window is actually served is unverified, because this wrapper leaves the paired context-window variables unset. See Prerequisites before relying on it
 - Change reasoning effort — `-r EFFORT`, one of `low` / `high` / `max` (default `high`). `medium` and `xhigh` are accepted but collapse onto `high` and `max`; an out-of-set value is rejected before the run rather than silently discarded. See the effort ladder under Running a Task.
 - Capture the answer to a file — `-o <FILE>` writes kimi's final result text to FILE
 

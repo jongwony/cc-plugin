@@ -7,17 +7,19 @@
 set -euo pipefail
 
 # Defaults
-# `k3-256k`, not `k3`: this is the id Kimi's own Claude Code setup block uses for
-# the 256K case (https://www.kimi.com/code/docs/en/third-party-tools/claude-code.html
-# — plain `k3` appears in no block there), and the docs put `k3` at roughly twice
-# its quota cost ("k3（1M）消耗约为 k3-256k 两倍",
-# https://www.kimi.com/code/docs/en/kimi-code/models). The previous default also
-# misdescribed itself: `k3` is the 1M model, and the "256K" this wrapper
-# advertised was the cap a Moderato membership imposes on it, not the model. What
-# the docs do NOT settle is whether a tier-capped `k3` bills at the lower rate —
-# they compare the two ids, not a capped call — so the swap here rests on `k3-256k`
-# being the documented id for a 256K run, and any saving is a bonus not claimed.
-readonly DEFAULT_MODEL="k3-256k"
+# `k3[1m]`: the model value in Kimi's own 1M Claude Code setup block
+# (https://www.kimi.com/code/docs/en/third-party-tools/claude-code.html — plain
+# `k3` appears in no block there, only `k3[1m]` and `k3-256k`). Reading `k3[1m]`
+# as "pin the 1M tier" is INFERENCE: it sits in that setup block but not in the
+# canonical four-id list (https://www.kimi.com/code/docs/en/kimi-code/models).
+#
+# This default is plan-gated at Allegretto or above; below that tier the default
+# ITSELF fails rather than degrading, which is a real narrowing versus a 256K
+# default that worked from Moderato up. It also runs at the more expensive rung —
+# the docs put the 1M model at roughly twice the quota cost of the 256K one
+# ("k3（1M）消耗约为 k3-256k 两倍") — so `-m k3-256k` is the lever for runs that
+# do not need the window. Same quota axis the effort ladder turns on, bigger step.
+readonly DEFAULT_MODEL="k3[1m]"
 # `high`, not `max`: Kimi's own official Claude Code setup block ships
 # `export CLAUDE_CODE_EFFORT_LEVEL=high`
 # (https://www.kimi.com/code/docs/en/third-party-tools/claude-code.html, CN
@@ -43,16 +45,17 @@ usage() {
 Usage: kimi-run.sh [options] <prompt_file>
 
 Options:
-  -m, --model MODEL      Model name (default: k3-256k — K3 at a fixed 256K
-                          context, Moderato+, and the id Kimi's own Claude Code
-                          setup block uses for the 256K case).
-                          Opt-in: 'k3[1m]' requests 1M-context mode, plan-gated
-                          at Allegretto or above — a below-tier call fails, so
-                          verify your plan before opting in. Also documented:
-                          k3 (the 1M model itself, ~2x the quota cost of
-                          k3-256k, capped to 256K below Allegretto),
-                          kimi-for-coding (K2.7 Code, all members, thinking
-                          always on and no effort granularity), and
+  -m, --model MODEL      Model name (default: 'k3[1m]' — 1M-context mode, the
+                          model value in Kimi's own 1M Claude Code setup block.
+                          PLAN-GATED at Allegretto or above: below that tier the
+                          default itself fails, so verify your plan. Costs ~2x
+                          the 256K model per the docs.)
+                          Cheaper: k3-256k — K3 at a fixed 256K context,
+                          Moderato+, ~half the quota. Reach for it when the run
+                          does not need the window. Also documented: k3 (the 1M
+                          model under its canonical id, capped to 256K below
+                          Allegretto), kimi-for-coding (K2.7 Code, all members,
+                          thinking always on and no effort granularity), and
                           kimi-for-coding-highspeed (~3x quota for 5-6x output
                           speed, Allegretto+). Not validated here: the accepted
                           set is not as closed as the effort set, and 'k3[1m]'
@@ -344,13 +347,27 @@ export CLAUDE_CODE_EFFORT_LEVEL="$EFFORT"
 unset CLAUDE_CODE_DISABLE_THINKING
 export MAX_THINKING_TOKENS="${MAX_THINKING_TOKENS:-32000}"
 
-# Auto-compact window must match the model's actual context entitlement,
-# or compaction fires at the wrong boundary (docs: 262144 for k3/256K,
-# 1048576 for k3[1m]).
+# Both context-window variables must match the model's actual entitlement, or
+# compaction fires at the wrong boundary and the session under-uses a window it
+# is paying for. Kimi's own Claude Code setup blocks ship the pair alongside the
+# model — 1048576 with 'k3[1m]', 262144 with k3-256k — so they move together
+# here rather than being pinned to one value. The failure mode when they drift
+# is silent (a quietly narrower window), never an error, which is why they are
+# derived from $MODEL instead of hardcoded.
+#
+# Case patterns are QUOTED deliberately: 'k3[1m]' is a glob to the shell, and an
+# unquoted pattern would match the character class [1m] rather than the literal
+# id. Every other $MODEL expansion in this script is double-quoted for the same
+# reason — this value is now the default, so the hazard is on the common path.
+#
+# Left overridable (`:-`) like MAX_THINKING_TOKENS above, so a caller can pin a
+# narrower window without changing the model.
 case "$MODEL" in
-  "k3[1m]") export CLAUDE_CODE_AUTO_COMPACT_WINDOW=1048576 ;;
-  *)        export CLAUDE_CODE_AUTO_COMPACT_WINDOW=262144 ;;
+  "k3[1m]") MODEL_CONTEXT_WINDOW=1048576 ;;
+  *)        MODEL_CONTEXT_WINDOW=262144 ;;
 esac
+export CLAUDE_CODE_AUTO_COMPACT_WINDOW="${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-$MODEL_CONTEXT_WINDOW}"
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS="${CLAUDE_CODE_MAX_CONTEXT_TOKENS:-$MODEL_CONTEXT_WINDOW}"
 
 # Invoke claude headless against the swapped endpoint, streaming the event log to
 # a scratchpad file rather than capturing one blocking JSON blob. Two ends at once:

@@ -7,9 +7,29 @@
 set -euo pipefail
 
 # Defaults
-readonly DEFAULT_MODEL="k3"
-readonly DEFAULT_EFFORT="max"
+# `k3-256k`, not `k3`: this is the id Kimi's own Claude Code setup block uses for
+# the 256K case (https://www.kimi.com/code/docs/en/third-party-tools/claude-code.html
+# — plain `k3` appears in no block there), and the docs put `k3` at roughly twice
+# its quota cost ("k3（1M）消耗约为 k3-256k 两倍",
+# https://www.kimi.com/code/docs/en/kimi-code/models). The previous default also
+# misdescribed itself: `k3` is the 1M model, and the "256K" this wrapper
+# advertised was the cap a Moderato membership imposes on it, not the model. What
+# the docs do NOT settle is whether a tier-capped `k3` bills at the lower rate —
+# they compare the two ids, not a capped call — so the swap here rests on `k3-256k`
+# being the documented id for a 256K run, and any saving is a bonus not claimed.
+readonly DEFAULT_MODEL="k3-256k"
+# `high`, not `max`: Kimi's own official Claude Code setup block ships
+# `export CLAUDE_CODE_EFFORT_LEVEL=high`
+# (https://www.kimi.com/code/docs/en/third-party-tools/claude-code.html, CN
+# mirror identical), so the previous `max` default sat a rung above the vendor's
+# own recommendation and spent quota accordingly on every run that never asked
+# for it. Verified 2026-07.
+readonly DEFAULT_EFFORT="high"
 readonly DEFAULT_SANDBOX="read-only"
+# Accepted by claude's CLAUDE_CODE_EFFORT_LEVEL parser. K3 itself resolves only
+# three levels — low, high, max — so `medium` lands on high and `xhigh` on max;
+# both are accepted here because claude accepts them, not because they add a rung.
+readonly VALID_EFFORTS="low|medium|high|xhigh|max|auto"
 
 MODEL="$DEFAULT_MODEL"
 EFFORT="$DEFAULT_EFFORT"
@@ -23,14 +43,28 @@ usage() {
 Usage: kimi-run.sh [options] <prompt_file>
 
 Options:
-  -m, --model MODEL      Model name (default: k3 — 256K context, Moderato+).
-                          Opt-in: 'k3[1m]' requests 1M-context mode, which is
-                          plan-gated at a higher membership tier — a below-tier
-                          call fails; verify your plan before opting in. Other
-                          valid values: kimi-for-coding,
-                          kimi-for-coding-highspeed.
-  -r, --effort EFFORT    Reasoning effort, maps to CLAUDE_CODE_EFFORT_LEVEL
-                          (default: max)
+  -m, --model MODEL      Model name (default: k3-256k — K3 at a fixed 256K
+                          context, Moderato+, and the id Kimi's own Claude Code
+                          setup block uses for the 256K case).
+                          Opt-in: 'k3[1m]' requests 1M-context mode, plan-gated
+                          at Allegretto or above — a below-tier call fails, so
+                          verify your plan before opting in. Also documented:
+                          k3 (the 1M model itself, ~2x the quota cost of
+                          k3-256k, capped to 256K below Allegretto),
+                          kimi-for-coding (K2.7 Code, all members, thinking
+                          always on and no effort granularity), and
+                          kimi-for-coding-highspeed (~3x quota for 5-6x output
+                          speed, Allegretto+). Not validated here: the accepted
+                          set is not as closed as the effort set, and 'k3[1m]'
+                          is absent from the canonical id list while appearing
+                          in the official setup block.
+  -r, --effort EFFORT    Reasoning effort: low|medium|high|xhigh|max|auto
+                          (default: high — the value Kimi's own Claude Code
+                          setup block ships). Maps to CLAUDE_CODE_EFFORT_LEVEL.
+                          K3 resolves three levels only: medium collapses onto
+                          high, xhigh onto max. An out-of-set value is rejected
+                          here, because claude would otherwise discard it
+                          silently and fall back to the default.
   -s, --sandbox SANDBOX  Sandbox: read-only|workspace-write|auto|danger-full-access
                           (default: read-only). Each tier pins its permission
                           mode explicitly, so an ambient
@@ -150,6 +184,24 @@ case "$SANDBOX" in
   danger-full-access) PERM_ARGS+=(--dangerously-skip-permissions) ;;
   *) echo "Error: unknown sandbox mode: $SANDBOX (expected read-only|workspace-write|auto|danger-full-access)" >&2; usage 1 ;;
 esac
+
+# Effort tier validation, same shape as the sandbox check above and for a sharper
+# reason. claude's CLAUDE_CODE_EFFORT_LEVEL parser accepts only the values in
+# VALID_EFFORTS and DISCARDS anything else in silence — no warning (unlike the
+# --effort CLI flag, which does warn), and it does not trim, so a stray leading
+# space alone loses the value. The run then proceeds at the default and looks
+# entirely normal. The Kimi endpoint would answer an unknown level with HTTP 400,
+# but that error is unreachable from here: claude's own filter drops the value
+# before a request is ever built. This wrapper is therefore the only place the
+# loss can be made loud, so it is made loud here. Verified 2026-07 against claude
+# 2.1.220.
+# Matched against VALID_EFFORTS itself rather than a second literal list, so the
+# accepted set has one definition. The delimiters on both sides make it an exact
+# member test: without them "hi" would match inside "xhigh".
+if [[ "|$VALID_EFFORTS|" != *"|$EFFORT|"* ]]; then
+  echo "Error: unknown effort level: '$EFFORT' (expected $VALID_EFFORTS)" >&2
+  usage 1
+fi
 
 # The nested session loads installed plugin skills and may invoke them itself.
 # kimi-plus's own skill matches exactly the frontend/boilerplate prompts this

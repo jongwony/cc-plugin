@@ -7,31 +7,34 @@
 set -euo pipefail
 
 # Defaults
+#
+# This wrapper serves ONE context tier — 1M — on the standing assumption of a
+# membership that carries it. That premise is what lets the window constants
+# below be constants; it is the only thing that would have to be revisited if
+# the subscription ever changed.
+#
 # `k3[1m]`: the model value in Kimi's own 1M Claude Code setup block
 # (https://www.kimi.com/code/docs/en/third-party-tools/claude-code.html — plain
 # `k3` appears in no block there, only `k3[1m]` and `k3-256k`). Reading `k3[1m]`
 # as "pin the 1M tier" is INFERENCE: it sits in that setup block but not in the
 # canonical four-id list (https://www.kimi.com/code/docs/en/kimi-code/models).
-#
-# This default is plan-gated at Allegretto or above; below that tier the default
-# ITSELF fails rather than degrading, which is a real narrowing versus a 256K
-# default that worked from Moderato up. It also runs at the more expensive rung —
-# the docs put the 1M model at roughly twice the quota cost of the 256K one
-# ("k3（1M）消耗约为 k3-256k 两倍") — so `-m k3-256k` is the lever for runs that
-# do not need the window. Same quota axis the effort ladder turns on, bigger step.
+# Keep every `$MODEL` expansion double-quoted — the brackets are a glob pattern.
 readonly DEFAULT_MODEL="k3[1m]"
 # `high`, not `max`: Kimi's own official Claude Code setup block ships
-# `export CLAUDE_CODE_EFFORT_LEVEL=high`
-# (https://www.kimi.com/code/docs/en/third-party-tools/claude-code.html, CN
-# mirror identical), so the previous `max` default sat a rung above the vendor's
-# own recommendation and spent quota accordingly on every run that never asked
-# for it. Verified 2026-07.
+# `export CLAUDE_CODE_EFFORT_LEVEL=high`, so the previous `max` default sat a
+# rung above the vendor's own recommendation and spent quota accordingly on
+# every run that never asked for it. Verified 2026-07.
 readonly DEFAULT_EFFORT="high"
 readonly DEFAULT_SANDBOX="read-only"
 # Accepted by claude's CLAUDE_CODE_EFFORT_LEVEL parser. K3 itself resolves only
 # three levels — low, high, max — so `medium` lands on high and `xhigh` on max;
 # both are accepted here because claude accepts them, not because they add a rung.
 readonly VALID_EFFORTS="low|medium|high|xhigh|max|auto"
+# The 1M window, pinned to the one tier this wrapper serves. Kimi's setup block
+# ships both window variables alongside the model; here they are constants
+# rather than derived from $MODEL. Consequence, with -m left open: a 256K model
+# passed via -m still gets a 1M declaration — see the -m note in usage.
+readonly CONTEXT_WINDOW=1048576
 
 MODEL="$DEFAULT_MODEL"
 EFFORT="$DEFAULT_EFFORT"
@@ -45,22 +48,18 @@ usage() {
 Usage: kimi-run.sh [options] <prompt_file>
 
 Options:
-  -m, --model MODEL      Model name (default: 'k3[1m]' — 1M-context mode, the
-                          model value in Kimi's own 1M Claude Code setup block.
-                          PLAN-GATED at Allegretto or above: below that tier the
-                          default itself fails, so verify your plan. Costs ~2x
-                          the 256K model per the docs.)
-                          Cheaper: k3-256k — K3 at a fixed 256K context,
-                          Moderato+, ~half the quota. Reach for it when the run
-                          does not need the window. Also documented: k3 (the 1M
-                          model under its canonical id, capped to 256K below
-                          Allegretto), kimi-for-coding (K2.7 Code, all members,
-                          thinking always on and no effort granularity), and
-                          kimi-for-coding-highspeed (~3x quota for 5-6x output
-                          speed, Allegretto+). Not validated here: the accepted
-                          set is not as closed as the effort set, and 'k3[1m]'
-                          is absent from the canonical id list while appearing
-                          in the official setup block.
+  -m, --model MODEL      Model name (default: 'k3[1m]' — the 1M window, and the
+                          model value in Kimi's own 1M Claude Code setup block).
+                          Passthrough, not validated: the accepted ids are not a
+                          closed set the way the effort levels are, and 'k3[1m]'
+                          is itself absent from the canonical id list while
+                          appearing in the official setup block, so a validator
+                          would reject a value Kimi's own instructions hand you.
+                          TRADEOFF: the context-window variables are pinned to
+                          1M and do NOT follow -m. Passing a narrower model
+                          (k3-256k, ~half the quota) therefore leaves the window
+                          declared at 1M. The escape hatch was kept over a guard
+                          deliberately — mind the mismatch when you use it.
   -r, --effort EFFORT    Reasoning effort: low|medium|high|xhigh|max|auto
                           (default: high — the value Kimi's own Claude Code
                           setup block ships). Maps to CLAUDE_CODE_EFFORT_LEVEL.
@@ -101,14 +100,14 @@ Options:
 
 The Kimi Code membership coding key is read from the MOONSHOT_CODING_KEY
 environment variable, which the caller exports before invoking (how to source it
-is machine-local setup outside this wrapper's concern). It is exported only
-into this script's own child process (claude); the SCRIPT itself never fetches,
-writes, or persists it. One caveat it does not own: env-scrub is left off (see the
-SUBPROCESS_ENV_SCRUB note below) so claude's own child subprocesses inherit the
-key, and a child that surfaces its environment could echo it into the stream
-file — that subprocess credential boundary is a claude-harness concern (its
-SUBPROCESS_ENV_SCRUB owns it), not this wrapper's to solve. If MOONSHOT_CODING_KEY
-is unset, the script exits with a one-line error naming it.
+is machine-local setup outside this wrapper's concern). It is exported only into
+this script's own child process (claude); the SCRIPT itself never fetches,
+writes, or persists it. That guarantee is scoped to the script's own handling —
+env-scrub is left off, so claude's child subprocesses inherit the key and one
+that dumps its environment could echo it into the stream file (see the
+SUBPROCESS_ENV_SCRUB note in the source for why that boundary is left where the
+harness owns it). If MOONSHOT_CODING_KEY is unset, the script exits with a
+one-line error naming it.
 
 Output contract: stdout is the result text followed by a final line
 "SESSION_ID: <uuid>". The full claude event log streams to a scratchpad file
@@ -120,8 +119,7 @@ skill's Error Handling).
 
 Examples (<scratchpad> = the calling session's scratchpad directory):
   kimi-run.sh <scratchpad>/kimi_prompt_a3f9.txt
-  kimi-run.sh -m 'k3[1m]' <scratchpad>/kimi_prompt_a3f9.txt
-  kimi-run.sh -r high <scratchpad>/kimi_prompt_a3f9.txt
+  kimi-run.sh -r max <scratchpad>/kimi_prompt_a3f9.txt
   kimi-run.sh -S 019e3eff-c191-7401-bffb-bb8c31ac37c7 <scratchpad>/kimi_prompt_a3f9.txt
   kimi-run.sh -s workspace-write <scratchpad>/kimi_prompt_a3f9.txt
 USAGE
@@ -347,27 +345,15 @@ export CLAUDE_CODE_EFFORT_LEVEL="$EFFORT"
 unset CLAUDE_CODE_DISABLE_THINKING
 export MAX_THINKING_TOKENS="${MAX_THINKING_TOKENS:-32000}"
 
-# Both context-window variables must match the model's actual entitlement, or
-# compaction fires at the wrong boundary and the session under-uses a window it
-# is paying for. Kimi's own Claude Code setup blocks ship the pair alongside the
-# model — 1048576 with 'k3[1m]', 262144 with k3-256k — so they move together
-# here rather than being pinned to one value. The failure mode when they drift
-# is silent (a quietly narrower window), never an error, which is why they are
-# derived from $MODEL instead of hardcoded.
-#
-# Case patterns are QUOTED deliberately: 'k3[1m]' is a glob to the shell, and an
-# unquoted pattern would match the character class [1m] rather than the literal
-# id. Every other $MODEL expansion in this script is double-quoted for the same
-# reason — this value is now the default, so the hazard is on the common path.
-#
-# Left overridable (`:-`) like MAX_THINKING_TOKENS above, so a caller can pin a
-# narrower window without changing the model.
-case "$MODEL" in
-  "k3[1m]") MODEL_CONTEXT_WINDOW=1048576 ;;
-  *)        MODEL_CONTEXT_WINDOW=262144 ;;
-esac
-export CLAUDE_CODE_AUTO_COMPACT_WINDOW="${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-$MODEL_CONTEXT_WINDOW}"
-export CLAUDE_CODE_MAX_CONTEXT_TOKENS="${CLAUDE_CODE_MAX_CONTEXT_TOKENS:-$MODEL_CONTEXT_WINDOW}"
+# Kimi's own Claude Code setup blocks ship both window variables alongside the
+# model, and a mismatch is silent — compaction fires at the wrong boundary and
+# the session under-uses a window it is paying for, never an error. Pinned to
+# the single 1M tier this wrapper serves (CONTEXT_WINDOW above) rather than
+# derived from $MODEL; the -m tradeoff that follows from that is documented in
+# usage. Left overridable (`:-`) like MAX_THINKING_TOKENS above, so a caller can
+# still pin a narrower window.
+export CLAUDE_CODE_AUTO_COMPACT_WINDOW="${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-$CONTEXT_WINDOW}"
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS="${CLAUDE_CODE_MAX_CONTEXT_TOKENS:-$CONTEXT_WINDOW}"
 
 # Invoke claude headless against the swapped endpoint, streaming the event log to
 # a scratchpad file rather than capturing one blocking JSON blob. Two ends at once:

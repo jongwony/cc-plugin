@@ -60,7 +60,12 @@ up() {
   # workspace -> the loop would crash-loop. Verify trust up front; do NOT auto-trust.
   python3 - "$dir" <<'PY' || { echo "ERROR: workspace not trusted — run 'claude' in $dir once, accept the trust dialog, then retry" >&2; return 1; }
 import json, os, sys
-d = json.load(open(os.path.expanduser("~/.claude.json")))
+# `.claude.json` does NOT go through the usual config-dir resolver. Its resolver is
+# `path.join(CLAUDE_CONFIG_DIR || homedir(), ".claude.json")` — the base is the RAW
+# variable falling back to $HOME, NOT to $HOME/.claude. `or` matches `||`, which falls
+# back on an empty string too (unlike the `??` used for paths inside the config dir).
+base = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~")
+d = json.load(open(os.path.join(base, ".claude.json")))
 sys.exit(0 if d.get("projects", {}).get(sys.argv[1], {}).get("hasTrustDialogAccepted") else 1)
 PY
   local sess="rcpool-$name"

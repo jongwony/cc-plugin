@@ -27,7 +27,6 @@ readonly DEFAULT_SANDBOX="workspace-write"
 MODEL="$DEFAULT_MODEL"
 EFFORT="$DEFAULT_EFFORT"
 SANDBOX="$DEFAULT_SANDBOX"
-FULL_AUTO=false
 SESSION_ID=""
 CWD=""
 OUTPUT_FILE=""
@@ -41,8 +40,11 @@ Options:
   -r, --effort EFFORT    Reasoning effort: medium|high|xhigh|max (default: xhigh)
   -s, --sandbox SANDBOX  Sandbox: read-only|workspace-write|danger-full-access
                          (default: workspace-write, which this wrapper always
-                         runs with network access enabled). read-only has no
-                         network at all — codex offers no switch for it there
+                         runs with network access enabled, and which already
+                         applies edits unattended — `codex exec` is headless, so
+                         there is no approval step to opt out of and no
+                         --ask-for-approval to set). read-only has no network at
+                         all — codex offers no switch for it there
   -C, --cwd DIR          Working directory for codex. Pass it again when
                          resuming: `codex exec resume` has no --cd of its own,
                          so this script cd's there before handing off
@@ -51,7 +53,6 @@ Options:
   -o, --output-last-message FILE
                          Also write codex's final message to FILE (deterministic
                          capture, decoupled from stdout banner noise)
-  --full-auto            Enable full auto mode
   -h, --help             Show this help
 
 codex prints "session id: <uuid>" to stderr on every run. stderr is not
@@ -63,7 +64,6 @@ Examples (<scratchpad> = the calling session's scratchpad directory):
   codex-run.sh <scratchpad>/codex_prompt_a3f9.txt
   codex-run.sh -m gpt-5.6-terra -r high <scratchpad>/codex_prompt_a3f9.txt
   codex-run.sh -S 019e3eff-c191-7401-bffb-bb8c31ac37c7 <scratchpad>/codex_prompt_a3f9.txt
-  codex-run.sh -s workspace-write --full-auto <scratchpad>/codex_prompt_a3f9.txt
 USAGE
   exit "${1:-0}"
 }
@@ -85,7 +85,6 @@ while [[ $# -gt 0 ]]; do
     -C|--cwd) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; CWD="$2"; shift 2 ;;
     -S|--session-id) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; SESSION_ID="$2"; shift 2 ;;
     -o|--output-last-message) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; OUTPUT_FILE="$2"; shift 2 ;;
-    --full-auto) FULL_AUTO=true; shift ;;
     -h|--help) usage 0 ;;
     -*) echo "Unknown option: $1" >&2; usage 1 ;;
     *) [[ -z "${PROMPT_FILE:-}" ]] || { echo "Error: only one prompt file is accepted, got \"$PROMPT_FILE\" and \"$1\"" >&2; usage 1; }; PROMPT_FILE="$1"; shift ;;
@@ -142,7 +141,6 @@ if [[ -n "$SESSION_ID" ]]; then
   [[ "$MODEL" != "$DEFAULT_MODEL" ]] && IGNORED+=("-m $MODEL")
   [[ "$EFFORT" != "$DEFAULT_EFFORT" ]] && IGNORED+=("-r $EFFORT")
   [[ "$SANDBOX" != "$DEFAULT_SANDBOX" ]] && IGNORED+=("-s $SANDBOX")
-  [[ "$FULL_AUTO" == true ]] && IGNORED+=("--full-auto")
   if [[ ${#IGNORED[@]} -gt 0 ]]; then
     echo "Warning: resume ignores options: ${IGNORED[*]} (uses session settings)" >&2
   fi
@@ -161,7 +159,6 @@ else
   # reason this wrapper defaults to that mode, bind them here — `-s
   # workspace-write` must never quietly mean "writes, but still no network".
   [[ "$SANDBOX" == "workspace-write" ]] && CODEX_ARGS+=(--config "sandbox_workspace_write.network_access=true")
-  [[ "$FULL_AUTO" == true ]] && CODEX_ARGS+=(--full-auto)
   [[ -n "$CWD" ]] && CODEX_ARGS+=(-C "$CWD")
 fi
 

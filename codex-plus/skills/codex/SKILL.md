@@ -14,8 +14,6 @@ All prompts passed to `codex` MUST be in English.
 2. Write the prompt to `<scratchpad>/codex_prompt_<suffix>.txt` using the Write tool — `<scratchpad>` is the session's scratchpad directory, the `/private/tmp/…/scratchpad` path announced in the system prompt; writes there run without permission prompts. When no scratchpad directory is announced, fall back to `/private/tmp`.
 3. Execute via wrapper script: `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh [options] <scratchpad>/codex_prompt_<suffix>.txt`
 
-This per-invocation naming prevents file collisions across team agents sharing a session scratchpad; parallel sessions are already isolated by their own scratchpad directories.
-
 ## Context Classification
 
 Before writing the prompt file, classify available context on two orthogonal axes:
@@ -25,12 +23,12 @@ Before writing the prompt file, classify available context on two orthogonal axe
 - **User-specific × Session (already available)** — summarize intent, constraints, and preferences from the current session, **copy-only**.
 - **User-specific × Exploration (needs collection)** — **blocked**; this cell carries no collection requests or questions.
 
-**One boundary — Reference over Copy.** Both rows are two faces of the same partition: *re-derivability by the consumer*. Codex is the consumer that cannot re-derive the parent's session context, but CAN re-derive anything reachable by its own tools under `-C DIR`. The AI-verifiable row is what codex re-derives, so pass a **reference** (path / pattern / command); the User-specific row is what it cannot, so **copy** only that into the prompt. Operational test before each item: *"Can codex re-derive this from shared substrate with its own tools?"* — yes → pass a pointer; no → copy it in.
+**Test each item before including it**: *"Can codex re-derive this from shared substrate with its own tools?"* — yes → pass a pointer; no → copy it in.
 
 **Rules**:
-- **Pointers**: Provide file paths, grep patterns, test commands. A pointer is sufficient — codex re-derives the contents with its own tools, and copying is what you reserve for what it cannot re-derive.
+- **Pointers**: Provide file paths, grep patterns, test commands. Reserve copying for what codex cannot re-derive.
 - **Session Context**: Extract only what is already known from the current conversation. Organize as intent, constraints, and preferences.
-- **No collection requests**: The prompt carries only user-specific information already in hand; when codex needs more, the user supplies it on resume. This bounds the content written into the prompt file, leaving pre-prompt orchestration free (e.g., `AskUserQuestion` for model selection).
+- **No collection requests**: The prompt carries only user-specific information already in hand; when codex needs more, the user supplies it on resume. This bounds the prompt file only — pre-prompt orchestration stays free, so `AskUserQuestion` for model selection is fine.
 
 ### Prompt Template
 
@@ -49,7 +47,7 @@ Structure `<scratchpad>/codex_prompt_<suffix>.txt` with these sections:
     - constraints: [limitations, compatibility requirements]
     - preferences: [coding style, library choices, conventions]
 
-Omit empty sections. `## Pointers` enables codex to self-verify; `## Session Context` provides copy-only background without requiring follow-up.
+Omit empty sections.
 
 ## Consult Mode (review, not execution)
 
@@ -78,14 +76,13 @@ When the delegated task is image generation or image editing:
    Models to offer:
    - `gpt-5.6-sol` — current default model for Codex CLI tasks.
    - `gpt-5.6-terra` — balanced 5.6 variant; lighter usage, faster than Sol, same effort ladder.
-   - `gpt-5.5` — supplementary model, the prior default.
 
    Reasoning effort is selected once and applied identically to all chosen models.
 
 2. Select sandbox mode. Omitting `-s` gives `workspace-write` **with network access** — codex offers no network under `read-only` at all, so this is the only mode short of full access that has any. Pass `-s read-only` when a run must neither touch the tree nor reach off-machine; `-s danger-full-access` only when it must write outside the workspace. Because the default already permits writes, what bounds a run that is meant to only read is the role its prompt declares — state it.
 3. Craft prompt per Context Classification and Prompt Template — classify context, write to `<scratchpad>/codex_prompt_<suffix>.txt`.
 4. Delegate execution to a Bash subagent (Task tool) — never run `codex-run.sh` directly in the main session. This keeps codex's verbose banner and full output out of the main context. Give the subagent:
-   - the exact command: `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh [options] <scratchpad>/codex_prompt_<suffix>.txt` with `-m MODEL` / `-r EFFORT` / `-s SANDBOX` / `--full-auto` / `-C DIR`, or `-S <SESSION_ID>` to resume.
+   - the exact command: `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh [options] <scratchpad>/codex_prompt_<suffix>.txt` with `-m MODEL` / `-r EFFORT` / `-s SANDBOX` / `-C DIR`, or `-S <SESSION_ID>` to resume.
    - return contract: run the command and return ONLY (a) a concise outcome summary and (b) the session id. codex prints `session id: <uuid>` to stderr; the subagent extracts that line verbatim and returns it as `SESSION_ID: <uuid>`. The wrapper does no parsing — stderr is left unsuppressed precisely so the subagent can read the session id and any failure straight from the output.
    - **Single model**: one subagent call.
    - **Multiple models**: issue parallel subagent calls (one per model) in a single response — same prompt, sandbox, and effort, different `-m`. Each returns its own `SESSION_ID`.
@@ -97,14 +94,13 @@ When the delegated task is image generation or image editing:
 Each command below runs **inside a Bash subagent**, which returns the outcome summary plus the `session id: <uuid>` line as `SESSION_ID: <uuid>`.
 
 Base patterns:
-- Analysis, network reachable — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -m MODEL <scratchpad>/codex_prompt_<suffix>.txt` (the default sandbox: workspace-write, network on)
-- Apply edits unattended — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh --full-auto <scratchpad>/codex_prompt_<suffix>.txt`
+- Analysis or unattended edits, network reachable — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -m MODEL <scratchpad>/codex_prompt_<suffix>.txt` (the default sandbox: workspace-write, network on — it applies edits without prompting, because `codex exec` is headless and has no approval step to opt out of)
 - Neither writes nor network — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s read-only <scratchpad>/codex_prompt_<suffix>.txt`
-- Write outside the workspace — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s danger-full-access --full-auto <scratchpad>/codex_prompt_<suffix>.txt`
+- Write outside the workspace — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s danger-full-access <scratchpad>/codex_prompt_<suffix>.txt`
 - Resume a session — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> <scratchpad>/codex_prompt_<suffix>.txt`; the explicit id is the resume path, deterministic under parallel sessions.
 
 Modifiers, added to any base pattern above:
-- Different working directory — `-C <DIR>`; pass it again when resuming, since `codex exec resume` has no `--cd` of its own
+- Different working directory — `-C <DIR>`; pass it again on resume (step 6)
 - Model and effort — `-m gpt-5.6-terra`, `-r high`
 - Capture the answer to a file — `-o <FILE>` writes codex's final message to FILE deterministically
 
@@ -113,7 +109,7 @@ After `codex` completes, use `AskUserQuestion` to confirm next steps. Restate mo
 
 ## Error Handling
 - Stop and report failures whenever `codex --version` or a `codex exec` command exits non-zero; request direction before retrying.
-- Before you use high-impact flags (`--full-auto`, `--sandbox danger-full-access`, `--skip-git-repo-check`) ask the user for permission using AskUserQuestion unless it was already given.
+- Before you use high-impact flags (`--sandbox danger-full-access`, `--skip-git-repo-check`) ask the user for permission using AskUserQuestion unless it was already given.
 - When output includes warnings or partial results, summarize them and ask how to adjust using `AskUserQuestion`.
 
 ## Reference Guide
@@ -140,10 +136,3 @@ Read the image reference when the delegated task involves image generation, imag
 **File**: `references/image-gen-models-prompting-guide.ipynb`
 
 Use the notebook directly instead of duplicating its per-use-case guidance here.
-
-## Prompt Crafting Workflow
-
-1. **Clarify first**: Use `AskUserQuestion` for ambiguous requests before crafting prompts
-2. **Classify context**: Apply the 2×2 matrix (see Context Classification) — separate pointers from session context, block user-specific collection requests
-3. **Structure the prompt**: Use the Prompt Template sections. Frame tasks as "complete end-to-end", define constraints explicitly
-4. **Execute and iterate**: Use metaprompting (root-cause analysis + surgical refinement) rather than complete rewrites

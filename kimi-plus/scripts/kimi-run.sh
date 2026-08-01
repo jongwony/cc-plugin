@@ -26,10 +26,11 @@ readonly DEFAULT_MODEL="k3[1m]"
 # every run that never asked for it. Verified 2026-07.
 readonly DEFAULT_EFFORT="high"
 readonly DEFAULT_SANDBOX="read-only"
-# Accepted by claude's CLAUDE_CODE_EFFORT_LEVEL parser. K3 itself resolves only
-# three levels — low, high, max — so `medium` lands on high and `xhigh` on max;
-# both are accepted here because claude accepts them, not because they add a rung.
-readonly VALID_EFFORTS="low|medium|high|xhigh|max|auto"
+# The two levels this wrapper offers. Deliberately narrower than what claude's
+# CLAUDE_CODE_EFFORT_LEVEL parser will take — a value claude accepts but that adds
+# no rung here is a choice that changes nothing, so it is refused rather than
+# listed. See the PR history for what the wider set was and why it went.
+readonly VALID_EFFORTS="high|max"
 # The 1M window, pinned to the one tier this wrapper serves. Kimi's setup block
 # ships both window variables alongside the model; here they are constants
 # rather than derived from $MODEL. Consequence, with -m left open: a 256K model
@@ -60,13 +61,9 @@ Options:
                           (k3-256k, ~half the quota) therefore leaves the window
                           declared at 1M. The escape hatch was kept over a guard
                           deliberately — mind the mismatch when you use it.
-  -r, --effort EFFORT    Reasoning effort: low|medium|high|xhigh|max|auto
-                          (default: high — the value Kimi's own Claude Code
-                          setup block ships). Maps to CLAUDE_CODE_EFFORT_LEVEL.
-                          K3 resolves three levels only: medium collapses onto
-                          high, xhigh onto max. An out-of-set value is rejected
-                          here, because claude would otherwise discard it
-                          silently and fall back to the default.
+  -r, --effort EFFORT    Reasoning effort: high|max (default: high — the value
+                          Kimi's own Claude Code setup block ships). Maps to
+                          CLAUDE_CODE_EFFORT_LEVEL.
   -s, --sandbox SANDBOX  Sandbox: read-only|workspace-write|auto|danger-full-access
                           (default: read-only). Each tier pins its permission
                           mode explicitly, so an ambient
@@ -187,18 +184,17 @@ case "$SANDBOX" in
 esac
 
 # Effort tier validation, same shape as the sandbox check above and for a sharper
-# reason. claude's CLAUDE_CODE_EFFORT_LEVEL parser accepts only the values in
-# VALID_EFFORTS and DISCARDS anything else in silence — no warning (unlike the
-# --effort CLI flag, which does warn), and it does not trim, so a stray leading
-# space alone loses the value. The run then proceeds at the default and looks
-# entirely normal. The Kimi endpoint would answer an unknown level with HTTP 400,
-# but that error is unreachable from here: claude's own filter drops the value
-# before a request is ever built. This wrapper is therefore the only place the
-# loss can be made loud, so it is made loud here. Verified 2026-07 against claude
-# 2.1.220.
+# reason. claude's CLAUDE_CODE_EFFORT_LEVEL parser DISCARDS a value it does not
+# recognize in silence — no warning (unlike the --effort CLI flag, which does
+# warn), and it does not trim, so a stray leading space alone loses the value. The
+# run then proceeds at the default and looks entirely normal. The Kimi endpoint
+# would answer an unknown level with HTTP 400, but that error is unreachable from
+# here: claude's own filter drops the value before a request is ever built. This
+# wrapper is therefore the only place the loss can be made loud, so it is made
+# loud here. Verified 2026-07 against claude 2.1.220.
 # Matched against VALID_EFFORTS itself rather than a second literal list, so the
 # accepted set has one definition. The delimiters on both sides make it an exact
-# member test: without them "hi" would match inside "xhigh".
+# member test: without them "ax" would match inside "max".
 if [[ "|$VALID_EFFORTS|" != *"|$EFFORT|"* ]]; then
   echo "Error: unknown effort level: '$EFFORT' (expected $VALID_EFFORTS)" >&2
   usage 1

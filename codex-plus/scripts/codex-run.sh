@@ -64,7 +64,6 @@ Examples (<scratchpad> = the calling session's scratchpad directory):
   codex-run.sh <scratchpad>/codex_prompt_a3f9.txt
   codex-run.sh -m gpt-5.6-terra -r high <scratchpad>/codex_prompt_a3f9.txt
   codex-run.sh -S 019e3eff-c191-7401-bffb-bb8c31ac37c7 <scratchpad>/codex_prompt_a3f9.txt
-  codex-run.sh -s read-only <scratchpad>/codex_prompt_a3f9.txt
 USAGE
   exit "${1:-0}"
 }

@@ -1,7 +1,7 @@
 {
   "name": "codex-plus",
   "description": "Enhanced OpenAI Codex CLI integration (multi-model, context classification)",
-  "version": "2.8.1",
+  "version": "2.8.2",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

@@ -14,8 +14,6 @@ All prompts passed to `codex` MUST be in English.
 2. Write the prompt to `<scratchpad>/codex_prompt_<suffix>.txt` using the Write tool — `<scratchpad>` is the session's scratchpad directory, the `/private/tmp/…/scratchpad` path announced in the system prompt; writes there run without permission prompts. When no scratchpad directory is announced, fall back to `/private/tmp`.
 3. Execute via wrapper script: `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh [options] <scratchpad>/codex_prompt_<suffix>.txt`
 
-This per-invocation naming prevents file collisions across team agents sharing a session scratchpad; parallel sessions are already isolated by their own scratchpad directories.
-
 ## Context Classification
 
 Before writing the prompt file, classify available context on two orthogonal axes:
@@ -25,12 +23,12 @@ Before writing the prompt file, classify available context on two orthogonal axe
 - **User-specific × Session (already available)** — summarize intent, constraints, and preferences from the current session, **copy-only**.
 - **User-specific × Exploration (needs collection)** — **blocked**; this cell carries no collection requests or questions.
 
-**One boundary — Reference over Copy.** Both rows are two faces of the same partition: *re-derivability by the consumer*. Codex is the consumer that cannot re-derive the parent's session context, but CAN re-derive anything reachable by its own tools under `-C DIR`. The AI-verifiable row is what codex re-derives, so pass a **reference** (path / pattern / command); the User-specific row is what it cannot, so **copy** only that into the prompt. Operational test before each item: *"Can codex re-derive this from shared substrate with its own tools?"* — yes → pass a pointer; no → copy it in.
+**Test each item before including it**: *"Can codex re-derive this from shared substrate with its own tools?"* — yes → pass a pointer; no → copy it in.
 
 **Rules**:
-- **Pointers**: Provide file paths, grep patterns, test commands. A pointer is sufficient — codex re-derives the contents with its own tools, and copying is what you reserve for what it cannot re-derive.
+- **Pointers**: Provide file paths, grep patterns, test commands. Reserve copying for what codex cannot re-derive.
 - **Session Context**: Extract only what is already known from the current conversation. Organize as intent, constraints, and preferences.
-- **No collection requests**: The prompt carries only user-specific information already in hand; when codex needs more, the user supplies it on resume. This bounds the content written into the prompt file, leaving pre-prompt orchestration free (e.g., `AskUserQuestion` for model selection).
+- **No collection requests**: The prompt carries only user-specific information already in hand; when codex needs more, the user supplies it on resume. This bounds the prompt file only — pre-prompt orchestration stays free, so `AskUserQuestion` for model selection is fine.
 
 ### Prompt Template
 
@@ -49,7 +47,7 @@ Structure `<scratchpad>/codex_prompt_<suffix>.txt` with these sections:
     - constraints: [limitations, compatibility requirements]
     - preferences: [coding style, library choices, conventions]
 
-Omit empty sections. `## Pointers` enables codex to self-verify; `## Session Context` provides copy-only background without requiring follow-up.
+Omit empty sections.
 
 ## Consult Mode (review, not execution)
 

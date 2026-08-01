@@ -1,0 +1,9 @@
+{
+  "name": "skill-review",
+  "description": "Skill reviewer — wraps plugin-dev:skill-reviewer for structure and triggering, then applies belonging tests that route each finding to the skill body, references/, the enforcement layer, or the commit message",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

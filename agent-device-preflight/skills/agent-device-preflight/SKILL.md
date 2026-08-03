@@ -340,8 +340,8 @@ Once this passes, hand off: `agent-device help workflow`.
 
 ## Failure → cause
 
-Each row is the cause measured for that symptom in the sessions this file was written from,
-not the only cause the symptom can have. Where a row names more than one, work them in order.
+Each row names the cause this file has evidence for, not the only cause the symptom can have.
+Where a row names more than one, work them in order.
 
 | Symptom | Cause | Section |
 |---|---|---|

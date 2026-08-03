@@ -216,19 +216,33 @@ updates profiles but does not register devices:
 for that device type, and registrations are not freely removable until membership renewal.
 Ask the user before running it and wait for their answer — do not run it on your own initiative.
 
-Resolve the runner project from the binary you validated in item 1, not from `npm root -g` —
-the install may not be npm's, and a pnpm, Volta, or per-project install would send the build
-at a different source tree or none at all.
+Two things this command has to be told, because neither reaches it on its own.
+
+Resolve the runner project from the binary you validated in item 1 rather than from
+`npm root -g`, which assumes npm was the installer — then confirm the project is actually
+there before building. If that check fails, this install is laid out differently and you
+locate `AgentDeviceRunner.xcodeproj` inside the installed package yourself; do not build
+against a guess.
+
+Pass the bundle id as a build setting too. `AGENT_DEVICE_IOS_BUNDLE_ID` is read by
+`agent-device`, not by `xcodebuild` — the packaged project carries its own default
+(`AGENT_DEVICE_IOS_RUNNER_APP_BUNDLE_ID = com.callstack.agentdevice.runner`), so a raw build
+would register and sign the callstack id while every actual run uses yours. The test id
+derives from it inside the project, so setting the one setting covers both.
 
 ```bash
 AD_ROOT=$(dirname "$(dirname "$(readlink -f "$(command -v agent-device)")")")
+PROJ="$AD_ROOT/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunner.xcodeproj"
+[ -d "$PROJ" ] || echo "not at $PROJ — find it inside the installed package before continuing"
+
 xcodebuild build-for-testing \
-  -project "$AD_ROOT/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunner.xcodeproj" \
+  -project "$PROJ" \
   -scheme AgentDeviceRunner \
   -destination "platform=iOS,id=<target udid>" \
   -derivedDataPath /tmp/ad-register-dd \
   -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
-  CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=<OU value>
+  CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=<OU value> \
+  AGENT_DEVICE_IOS_RUNNER_APP_BUNDLE_ID=<the AGENT_DEVICE_IOS_BUNDLE_ID value>
 ```
 
 Two things to expect:

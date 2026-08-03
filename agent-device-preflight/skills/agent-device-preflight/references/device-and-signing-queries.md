@@ -22,26 +22,36 @@ for d in json.load(open('/tmp/dev.json'))['result']['devices']:
 
 ## Checking provisioning-profile coverage
 
-Run this before registering a device, to check whether an existing profile already covers
-it for the target team.
+Run this before registering a device, to check whether an existing profile already covers it —
+for the target team, and for both App IDs the runner needs.
 
 ```bash
 UDID=<target udid>
 TEAM=<the OU value from step 5>
+BUNDLE=<the AGENT_DEVICE_IOS_BUNDLE_ID value from step 5>
 for f in ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision; do
   security cms -D -i "$f" > /tmp/p.plist 2>/dev/null && python3 -c "
-import plistlib
+import plistlib, fnmatch
 d = plistlib.load(open('/tmp/p.plist','rb'))
 devs = d.get('ProvisionedDevices') or []
 team = (d.get('TeamIdentifier') or [None])[0]
-print(d.get('Name'), '| team:', team, '| devices:', len(devs),
-      '| covers target:', '$UDID' in devs and team == '$TEAM')
+appid = (d.get('Entitlements') or {}).get('application-identifier') or ''
+def ok(w): return '$UDID' in devs and team == '$TEAM' and fnmatch.fnmatch(w, appid)
+print(d.get('Name'), '| team:', team, '| app id:', appid, '| devices:', len(devs),
+      '| runner:', ok('$TEAM.$BUNDLE'), '| uitests:', ok('$TEAM.$BUNDLE.uitests'))
 "
 done
 ```
 
-A profile that lists the device but reports a different `team` does not help you: coverage is
-per team. Read `covers target` as false unless both columns agree.
+Three things have to line up, and the device UDID alone is none of them. A profile that lists
+the device but reports a different `team` does not help you — coverage is per team. A same-team
+profile issued for an unrelated App ID does not help either, which is why the `app id` column
+is printed: it is the pattern the runner's identifier has to match.
+
+You need **both** the `runner` and `uitests` columns true, across the profiles you have. One
+wildcard profile (`app id` ending in `.*`) satisfies both at once; an explicit profile names a
+single App ID, so two of them are needed between them. Nothing covering both means the
+registration step below is still owed.
 
 ## Confirming what a built runner is signed for
 

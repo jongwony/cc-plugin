@@ -102,7 +102,7 @@
     {
       "name": "agent-device-preflight",
       "source": "./agent-device-preflight",
-      "description": "Resolve agent-device attachment prerequisites before `open` — signing team from the certificate OU, developer disk image mount, macOS DevToolsSecurity, stale daemon environment, and physical-vs-virtual device selection"
+      "description": "Resolve agent-device attachment prerequisites before `open` — device lock state, signing team from the certificate OU, developer-account device registration, developer disk image mount, macOS DevToolsSecurity, stale runner cache and daemon environment, and physical-vs-virtual device selection"
     }
   ]
 }

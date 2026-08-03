@@ -107,8 +107,38 @@ no blockers on a device with it disabled. Enable on the device: Settings → Pri
 Security → Developer Mode. The device reboots and asks once more after unlock.
 
 Connect by cable for first setup — the alternative runner transport
-(`AGENT_DEVICE_IOS_RUNNER_ROUTE=usbmux`) is cable-only, and a locked device wedges either
-transport. Keep the screen unlocked for the whole run.
+(`AGENT_DEVICE_IOS_RUNNER_ROUTE=usbmux`) is cable-only.
+
+### 2b. Device is unlocked — check it, do not assume it
+
+A locked device cannot be driven, and **`open` does not tell you.** Measured on one device,
+same session, same command, only the lock state changed:
+
+| device state | `passcodeRequired` | `open` | `snapshot` |
+|---|---|---|---|
+| locked (screen off, face away) | `true` | reports `Opened: ...` | `Daemon request timed out` |
+| unlocked | `false` | reports `Opened: ...` | 49 nodes |
+
+So `open` succeeding proves nothing about controllability, and the first real symptom is a
+timeout several steps later. Check the lock state directly instead:
+
+```bash
+xcrun devicectl device info lockState --device <udid>
+# passcodeRequired: true  -> currently LOCKED, control will time out
+# passcodeRequired: false -> currently unlocked
+```
+
+`passcodeRequired` is a live lock readout, not the static "is a passcode configured"
+setting. Do not confuse it with `unlockedSinceBoot`, which stays `true` after the first
+unlock and says nothing about the present moment.
+
+Recovery needs no daemon restart: unlocking the device and re-running the same command in
+the same session succeeds.
+
+Because a Face ID device unlocks the instant its owner looks at it, "the screen was off"
+and "the device was locked" are easy to conflate while sitting next to it. Remove the
+variable for the whole run rather than watching it — on the device, Settings → Display &
+Brightness → Auto-Lock → Never, restored afterwards.
 
 ### 3. Developer disk image mounts
 
@@ -308,6 +338,7 @@ Once this passes, hand off: `agent-device help workflow`.
 
 | Symptom | Cause | Section |
 |---|---|---|
+| `Daemon request timed out` on `snapshot`, after `open` reported success | device is locked | 2b |
 | `CoreDeviceError 12040`, DDI could not be mounted | device preparation not driven | 3 |
 | `Developer mode is disabled for Apple development tools` | macOS `DevToolsSecurity` off | 4 |
 | `No Account for Team "..."` / `No profiles for ...were found` | team id read from `CN` instead of `OU` | 5 |

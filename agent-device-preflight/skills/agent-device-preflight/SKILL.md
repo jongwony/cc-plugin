@@ -312,9 +312,14 @@ Same trap for every other `AGENT_DEVICE_*` variable.
 
 ## Sandbox
 
-The daemon binds to localhost and fails with `listen EPERM` inside a sandbox. Any
-agent shell that sandboxes command execution must run agent-device work unsandboxed —
-including `doctor`, since it starts the daemon too.
+The daemon binds to localhost, and in one sandboxed agent shell that failed with
+`listen EPERM`. Because `doctor` starts the daemon too, the failure strands everything
+downstream of it.
+
+It is not a property of every sandbox. A later session ran `devices`, `doctor`, `open`,
+`snapshot`, and `close` entirely inside a sandboxed agent shell, and the daemon started
+and stayed up throughout. So treat `listen EPERM` as the signal to re-run that shell
+unsandboxed, rather than moving all agent-device work out of the sandbox pre-emptively.
 
 ## Verify
 

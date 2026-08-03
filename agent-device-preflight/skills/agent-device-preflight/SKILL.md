@@ -175,9 +175,18 @@ UID=..., CN=Apple Development: Some Name (AAAAAAAAAA), OU=BBBBBBBBBB, O=..., C=U
 `error: No Account for Team "AAAAAAAAAA"` plus `No profiles for 'com.callstack.agentdevice.runner' were found`,
 which reads like a provisioning problem and is not one.
 
+Set the bundle id too. `agent-device help physical-device` asks for both of these and only
+these, and for a bundle id **you** own — the shared default belongs to callstack's team, and
+your team may not be allowed to sign it:
+
 ```bash
 export AGENT_DEVICE_IOS_TEAM_ID=<the OU value>
+export AGENT_DEVICE_IOS_BUNDLE_ID=com.yourname.agentdevice.runner
 ```
+
+Both messages above, and the install failure in item 6, carry whichever bundle id is in
+effect — the callstack default while `AGENT_DEVICE_IOS_BUNDLE_ID` is unset, your own id once
+it is set.
 
 Do not infer "no Apple account is signed in" from
 `defaults read com.apple.dt.Xcode IDEProvisioningTeams` returning *does not exist* —
@@ -207,9 +216,14 @@ updates profiles but does not register devices:
 for that device type, and registrations are not freely removable until membership renewal.
 Ask the user before running it and wait for their answer — do not run it on your own initiative.
 
+Resolve the runner project from the binary you validated in item 1, not from `npm root -g` —
+the install may not be npm's, and a pnpm, Volta, or per-project install would send the build
+at a different source tree or none at all.
+
 ```bash
+AD_ROOT=$(dirname "$(dirname "$(readlink -f "$(command -v agent-device)")")")
 xcodebuild build-for-testing \
-  -project "$(npm root -g)/agent-device/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunner.xcodeproj" \
+  -project "$AD_ROOT/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunner.xcodeproj" \
   -scheme AgentDeviceRunner \
   -destination "platform=iOS,id=<target udid>" \
   -derivedDataPath /tmp/ad-register-dd \
@@ -275,12 +289,13 @@ including `doctor`, since it starts the daemon too.
 
 A first snapshot taking 20–30s is normal; the CLI warns about it itself. The first physical
 run builds and installs a signed XCTest runner
-(`AgentDeviceRunnerUITests-Runner`, bundle id `com.callstack.agentdevice.runner.uitests.xctrunner`)
+(`AgentDeviceRunnerUITests-Runner`, bundle id `<AGENT_DEVICE_IOS_BUNDLE_ID>.uitests.xctrunner`)
 onto the device — tell the user before you run this, and note that removing it is a
 home-screen delete.
 
 ```bash
 export AGENT_DEVICE_IOS_TEAM_ID=<OU value>
+export AGENT_DEVICE_IOS_BUNDLE_ID=com.yourname.agentdevice.runner
 agent-device doctor --platform ios --udid <udid>
 agent-device open com.apple.Preferences --platform ios --udid <udid> --session preflight
 agent-device snapshot -i --session preflight

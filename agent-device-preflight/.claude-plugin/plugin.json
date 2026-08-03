@@ -1,0 +1,9 @@
+{
+  "name": "agent-device-preflight",
+  "description": "Preflight the local environment before agent-device attaches to a device: signing team derivation, DDI mount, DevToolsSecurity, daemon env freshness, device selector resolution",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

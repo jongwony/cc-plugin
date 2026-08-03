@@ -287,9 +287,15 @@ so check for both — a daemon carrying the right team and a stale bundle id pas
 check and still builds the wrong runner:
 
 ```bash
-grep -oE '(DEVELOPMENT_TEAM|AGENT_DEVICE_IOS_RUNNER_APP_BUNDLE_ID)=[^ ]+' \
-  ~/.agent-device/sessions/<session>/runner.log | sort -u
+grep 'build-for-testing' ~/.agent-device/sessions/<session>/runner.log | tail -1 \
+  | grep -oE '(DEVELOPMENT_TEAM|AGENT_DEVICE_IOS_RUNNER_APP_BUNDLE_ID)=[^ ]+'
 ```
+
+The log is appended to rather than truncated per build, so it holds every value this session
+has ever built with — including the ones from before you corrected the environment. Read only
+the last `build-for-testing` line: scanning the whole file returns those stale values alongside
+the corrected ones, and a build that succeeded after the restart would still read as a
+mismatch.
 
 Two lines that both match your shell mean the daemon is current. **Anything else — one line,
 no lines, no log yet, or a value you do not recognise — means restart, not proceed.** A setting
@@ -334,12 +340,16 @@ Once this passes, hand off: `agent-device help workflow`.
 
 ## Failure → cause
 
+Each row is the cause measured for that symptom in the sessions this file was written from,
+not the only cause the symptom can have. Where a row names more than one, work them in order.
+
 | Symptom | Cause | Section |
 |---|---|---|
 | `Daemon request timed out` on `snapshot`, after `open` reported success | device is locked | 2b |
 | `CoreDeviceError 12040`, DDI could not be mounted | device preparation not driven | 3 |
 | `Developer mode is disabled for Apple development tools` | macOS `DevToolsSecurity` off | 4 |
-| `No Account for Team "..."` / `No profiles for ...were found` | team id read from `CN` instead of `OU` | 5 |
+| `No Account for Team "..."` | team id read from `CN` instead of `OU` | 5 |
+| `No profiles for ...were found` | wrong team id, or no profile Xcode can auto-select for this App ID and device; with both already correct, name the profile in `AGENT_DEVICE_IOS_PROVISIONING_PROFILE` (a profile name or specifier, not a path) | 5, 6 |
 | `0xe8008012 This provisioning profile cannot be installed on this device` | target device not in any profile | 6 |
 | Hint blames a heavy or animating screen | misleading in 0.20.3 — read `runner.log`; usually 6 | Reading failures |
 | Signing fix applied but the same error repeats | stale runner cache, or daemon holding stale env | 7, 8 |

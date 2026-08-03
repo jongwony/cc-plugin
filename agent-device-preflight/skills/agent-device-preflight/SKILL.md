@@ -253,9 +253,11 @@ Two things to expect:
   still succeeded**; re-run the coverage query rather than re-reading the exit code.
 - With a concrete destination xcodebuild states the real problem plainly
   (`Device "X" isn't registered in your developer account`). That diagnostic never appears
-  through agent-device's generic-destination build. To get it *without* registering anything,
-  run the same command with `-allowProvisioningDeviceRegistration` removed —
-  `-allowProvisioningUpdates` alone does not register devices, so the diagnostic is free.
+  through agent-device's generic-destination build. To get it without spending a device slot,
+  run the same command with `-allowProvisioningDeviceRegistration` removed. That is cheaper,
+  not free: `-allowProvisioningUpdates` still creates and updates profiles, App IDs, and
+  certificates in the account, exactly as stated above. It stays under the same ask-first
+  gate — only the irreversible device slot is off the table.
 
 ### 7. Runner build cache is not device-aware
 
@@ -279,13 +281,22 @@ with**. Exporting a corrected `AGENT_DEVICE_IOS_TEAM_ID` into your shell does no
 already-running daemon: it keeps building with the stale value, and the identical error
 repeats as if the fix had not been applied.
 
-Confirm what the daemon actually used — the build command line is echoed in the runner log:
+Confirm what the daemon actually used. `agent-device` passes both the team and the runner
+bundle id to `xcodebuild` as build settings, and that command line is echoed in the runner log,
+so check for both — a daemon carrying the right team and a stale bundle id passes a team-only
+check and still builds the wrong runner:
 
 ```bash
-grep -o 'DEVELOPMENT_TEAM=[A-Z0-9]*' ~/.agent-device/sessions/<session>/runner.log | tail -1
+grep -oE '(DEVELOPMENT_TEAM|AGENT_DEVICE_IOS_RUNNER_APP_BUNDLE_ID)=[^ ]+' \
+  ~/.agent-device/sessions/<session>/runner.log | sort -u
 ```
 
-If it disagrees with your shell, restart the daemon:
+Two lines that both match your shell mean the daemon is current. **Anything else — one line,
+no lines, no log yet, or a value you do not recognise — means restart, not proceed.** A setting
+the daemon never received leaves nothing in the log to disagree with, so an empty result is the
+one outcome that reads like a pass and is not.
+
+To restart the daemon:
 
 ```bash
 agent-device daemon stop   # there is no `daemon start`; the next command respawns it

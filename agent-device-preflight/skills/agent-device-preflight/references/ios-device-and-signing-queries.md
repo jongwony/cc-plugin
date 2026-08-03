@@ -1,6 +1,8 @@
 # Device and Signing Queries
 
-Read-only queries the preflight steps call for.
+Queries the iOS preflight steps call for. None of them changes the device, the Apple Developer
+account, or any project state — but they do write and remove fixed `/tmp` paths, so they are
+read-only with respect to what you are diagnosing, not to the filesystem.
 
 ## Deriving the device UDID
 
@@ -27,8 +29,8 @@ for the target team, and for both App IDs the runner needs.
 
 ```bash
 UDID=<target udid>
-TEAM=<the OU value from step 5>
-BUNDLE=<the AGENT_DEVICE_IOS_BUNDLE_ID value from step 5>
+TEAM=<the OU value from ios-preflight.md item 4>
+BUNDLE=<the AGENT_DEVICE_IOS_BUNDLE_ID value from ios-preflight.md item 4>
 for f in ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision; do
   security cms -D -i "$f" > /tmp/p.plist 2>/dev/null && python3 -c "
 import plistlib, fnmatch
@@ -50,8 +52,8 @@ is printed: it is the pattern the runner's identifier has to match.
 
 You need **both** the `runner` and `uitests` columns true, across the profiles you have. One
 wildcard profile (`app id` ending in `.*`) satisfies both at once; an explicit profile names a
-single App ID, so two of them are needed between them. Nothing covering both means the
-registration step below is still owed.
+single App ID, so two of them are needed between them. Nothing covering both means the device
+registration in `ios-preflight.md` item 5 is still owed — it is not in this file.
 
 ## Confirming what a built runner is signed for
 

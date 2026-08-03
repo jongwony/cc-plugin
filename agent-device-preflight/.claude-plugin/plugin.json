@@ -1,7 +1,7 @@
 {
   "name": "agent-device-preflight",
-  "description": "Preflight the local environment before agent-device attaches to a device: lock-state check, signing team derivation, device registration, DDI mount, DevToolsSecurity, runner cache and daemon env staleness, device selector resolution",
-  "version": "0.4.5",
+  "description": "Preflight the local environment before agent-device attaches to a physical iOS or Android device: device selector resolution, lock-state check, adb authorization, signing team derivation, device registration, DDI mount, DevToolsSecurity, helper install, runner cache and daemon env staleness",
+  "version": "0.5.0",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

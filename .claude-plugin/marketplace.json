@@ -98,6 +98,11 @@
       "name": "unfold",
       "source": "./unfold",
       "description": "Linear loop moment router — unfold the whole picture, next unblocked actions, runbook invariants, decision log, and roadmap from Linear; write only structure and decisions, never state"
+    },
+    {
+      "name": "agent-device-preflight",
+      "source": "./agent-device-preflight",
+      "description": "Resolve agent-device attachment prerequisites before `open` — device lock state, signing team from the certificate OU, developer-account device registration, developer disk image mount, macOS DevToolsSecurity, stale runner cache and daemon environment, and physical-vs-virtual device selection"
     }
   ]
 }

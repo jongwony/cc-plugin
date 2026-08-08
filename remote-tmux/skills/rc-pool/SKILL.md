@@ -13,7 +13,15 @@ Toggle a self-restarting pool host — `claude remote-control --spawn worktree -
 --permission-mode bypassPermissions` — for a project. One singleton per project (tmux session
 `rcpool-<name>`); the host hosts a pool of on-demand, worktree-isolated sessions reachable
 from claude.ai/code + the mobile app.
-Sibling of the `remote-spawn` skill (which spawns one fixed session per dir).
+
+**What the pool is for, and what it cannot do.** Its purpose is originating a session
+*without a CLI* — opening a new one from the phone — plus the keep-alive nothing else
+provides. The cost is structural: the host's children run as `sdk-cli` and get no
+messaging socket, so a pool child **can send a message but cannot receive a task or a
+reply**. It is not addressable, and to peers it appears unnamed. This is a design
+boundary, not a bug to fix: work that a supervisor must direct is spawned by that
+supervisor (see the `remote-spawn` skill), and a pool child that needs direction
+escalates to it rather than being driven from outside.
 
 Run the script and report the result concisely:
 

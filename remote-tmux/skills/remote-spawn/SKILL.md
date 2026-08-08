@@ -15,15 +15,26 @@ One command spawns a worker that is background-resident, worktree-isolated,
 app-reachable, and message-addressable:
 
 ```bash
-claude --bg --worktree <unit> --remote-control <unit> -n <unit> \
-       --dangerously-skip-permissions "<brief + reporting contract>"
+( cd <project-dir> && claude --bg --worktree <unit> --remote-control <unit> -n <unit> \
+                             --dangerously-skip-permissions -- "<brief + reporting contract>" )
 ```
 
 It prints `backgrounded · <jobId> · <name>`. Report that back. The four flags are
 independent and each earns its place: `--bg` detaches without a PTY, `--worktree`
 cuts a branch `worktree-<unit>` from `origin/<default>`, `--remote-control` registers
 the app bridge, `-n` pins a permanent name (without it the name is regenerated every
-launch). Drop `--worktree` to run in the current directory.
+launch). Drop `--worktree` to run in the project directory itself.
+
+**The `cd` is what picks the project.** There is no flag for it — `--add-dir` grants tool
+access to extra paths but does not set the session's project; the spawned session simply
+inherits the launching shell's working directory. `--worktree` additionally requires that
+directory to be inside a git repo. Keep the `cd` inside a subshell so the caller's own
+working directory survives the spawn.
+
+**The `--` is not decoration.** Without it the brief is parsed as options: a brief that
+starts with a dash, or that follows `--remote-control` (whose name argument is optional and
+will happily swallow it), is consumed silently — `claude` prints `(idle — send a prompt to
+start)`, no error, no transcript, and a worker sits there having been told nothing.
 
 **The permission mode must match the supervisor's.** A cross-session message from a
 sender in a different permission class is not delivered — it opens a dialog the worker
@@ -59,8 +70,12 @@ A spawned session never reads this file. Carry the contract in the brief itself:
 
 ## Observing
 
-`claude agents --json` covers most needs. The registry at `~/.claude/sessions/<pid>.json`
-carries more — `waitingFor`, `state`, `detail`, `tempo`, `entrypoint`, `statusUpdatedAt`.
+`claude agents --json` covers most needs — it is also where `state` lives (background entries
+only). The registry at `~/.claude/sessions/<pid>.json` is a different surface and answers a
+different question: **`messagingSocketPath` is present exactly when the session is addressable
+by `SendMessage`**, which nothing else reports. Alongside it: `entrypoint`, `bridgeSessionId`
+(app reachability), `nameSource`, `jobId`, `statusUpdatedAt`, and `waitingFor` — the last
+written only while the session is actually waiting, so its absence is the normal case.
 
 `status: "waiting"` means **an unanswered dialog exists, not that the session is stuck** —
 a worker in that state still accepts app input and still processes peer messages. Judge by
@@ -79,8 +94,16 @@ to close out a work unit, the same lease discipline a worktree gets.
 ## Resuming
 
 ```bash
-claude --bg --resume <sessionId> -n <name> --dangerously-skip-permissions "<next instruction>"
+( cd <its-cwd> && claude --bg --remote-control <name> -n <name> --resume <sessionId> \
+                         --dangerously-skip-permissions -- "<next instruction>" )
 ```
+
+Carry `--remote-control` through the resume too. It composes, and dropping it costs the
+resumed worker its app bridge permanently — the socket and the bridge are both decided at
+launch, so a session that comes back without them cannot be given them later.
+
+Resume restores the conversation, not the working directory, so the same `cd` applies;
+`claude agents --json` reports each session's `cwd`, which is where to read it from.
 
 Prior context carries over intact, but a **new sessionId is minted** — resume the newest
 one next time. `jobId` is the first 8 hex characters of `sessionId`, so the two views join

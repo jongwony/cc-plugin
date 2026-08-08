@@ -14,8 +14,8 @@ No script. One command gives a session that is background-resident, worktree-iso
 app-reachable, and addressable by `SendMessage` from other sessions:
 
 ```bash
-claude --bg --worktree foo --remote-control foo -n foo \
-       --dangerously-skip-permissions "<brief>"
+( cd ~/src/foo && claude --bg --worktree foo --remote-control foo -n foo \
+                         --dangerously-skip-permissions -- "<brief>" )
 
 claude agents --json     # fleet view (no TTY needed)
 claude logs   <jobId>    # recent output
@@ -29,9 +29,18 @@ Each flag is load-bearing: `--bg` detaches without a PTY, `--worktree` cuts a br
 (otherwise it is regenerated every launch, along with the peer ref other sessions address it
 by — so neither is safe to cache).
 
+The two pieces of shell around them are load-bearing as well. The **`cd` is what selects the
+project** — there is no flag for it, the session inherits the launching shell's directory, and
+`--worktree` needs that directory inside a git repo; the subshell keeps the caller's own cwd.
+The **`--` guards the brief** — without it a brief starting with a dash, or one sitting where
+`--remote-control`'s optional name argument can take it, is swallowed with no error and the
+worker comes up idle having been told nothing.
+
 A worker keeps its socket after finishing a turn and stays idle-resident, so follow-up
-instructions reach it. `claude --bg --resume <sessionId>` carries context over but mints a
-new sessionId; `jobId` is that id's first 8 hex characters.
+instructions reach it. Resume with `( cd <its-cwd> && claude --bg --remote-control <name> -n
+<name> --resume <sessionId> … -- "<next>" )` — keep `--remote-control`, or the resumed worker
+loses its app bridge for good. Context carries over but a new sessionId is minted; `jobId` is
+that id's first 8 hex characters.
 
 ## Why the script went away
 
@@ -63,9 +72,11 @@ bash scripts/rc-pool.sh status <name|dir>
 ```
 
 This one keeps its tmux pane, for two reasons a backgrounded session cannot cover: the host
-needs a live PTY and an inherited TCC grant to run under `~/Downloads` and friends, and
-nothing else restarts it when it crashes. It also remains the only way to originate a
-session **without a CLI** — that is what makes it the phone's entry point.
+is an interactive TUI that needs a live PTY, and nothing else restarts it when it crashes.
+(TCC is *not* one of those reasons — a `--bg` session forks from the invoking shell and
+inherits its grant just as the tmux server does. The grant only goes missing under launchd,
+which is what the original comparison was about.) It also remains the only way to originate
+a session **without a CLI** — that is what makes it the phone's entry point.
 
 The host re-execs this script from disk each cycle (on-disk edits take effect on restart).
 The `remote-control` subcommand hard-errors on an untrusted workspace, so trust the project

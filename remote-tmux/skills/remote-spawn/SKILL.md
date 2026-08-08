@@ -50,9 +50,12 @@ claude attach <jobId>         # open it in this terminal
 ```
 
 From a session, `ListAgents` lists addressable peers and `SendMessage` reaches them.
-**Resolve the address at send time**: a bare name is rejected, so send the exact
-`name [ref]` string `ListAgents` just printed. Never cache it — when the target
-restarts, both its ref and its auto-derived name change.
+**Resolve the address at send time**: send the exact `name [ref]` string `ListAgents`
+just printed. The first message to a peer you have not addressed before comes back
+asking you to re-send with its `[ref]` — a one-time confirmation, after which the bare
+name resolves for the rest of that conversation. Sending the ref every time skips that
+round trip and survives the other hazard: names collide heavily here, and a target that
+restarts changes both its ref and its auto-derived name. So read it, do not cache it.
 
 A worker keeps its socket after finishing a turn: it goes idle and resident, so
 follow-up instructions still reach it.
@@ -63,7 +66,8 @@ A spawned session never reads this file. Carry the contract in the brief itself:
 
 > You are a worker supervised by `<supervisor-name>`. To report: call `ListAgents`
 > first, read the exact `name [ref]` string for your supervisor, and use that string
-> as `to` in `SendMessage` — a bare name is rejected. Send (a) an ACK on start,
+> as `to` in `SendMessage` — your first send to a peer is answered with a re-send
+> request unless it carries the ref, and names collide. Send (a) an ACK on start,
 > (b) your state whenever you are blocked on a decision you cannot make alone, and
 > (c) a completion report. Do not wait for a reply — durable output (PR, parked task)
 > ships regardless of the channel.

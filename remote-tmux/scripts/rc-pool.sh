@@ -1,8 +1,18 @@
 #!/usr/bin/env bash
 # rc-pool — self-restarting, project-singleton keep-alive for a `claude remote-control
-# --spawn worktree` POOL HOST. Sibling of rc-spawn.sh: rc-spawn spawns one fixed
-# remote-control session per dir; rc-pool keeps a pool HOST alive (capacity N on-demand
-# worktree sessions) for a project, one singleton per project.
+# --spawn worktree` POOL HOST (capacity N on-demand worktree sessions), one singleton
+# per project.
+#
+# WHY THIS SCRIPT STILL EXISTS. Spawning a single worker no longer needs a script — a
+# backgrounded `claude --bg --worktree ... --remote-control ...` is app-reachable and
+# message-addressable on its own. Two jobs survive here, and only these two:
+#   1. Keep-alive. A backgrounded session has no restart-on-crash; the re-exec loop below
+#      is the only thing that brings the host back.
+#   2. Session ORIGINATION without a CLI. The pool host is what lets a new session be
+#      opened from the phone. Everything else starts from a shell.
+# Cost of job 2: the host's children run as `sdk-cli` and get no messaging socket, so they
+# can send but cannot RECEIVE a task or a reply. Work that needs supervising must be
+# spawned by the supervisor session, not opened through the pool.
 #
 # Subcommands:
 #   up     <dir> [name] [capacity]   start the singleton pool host (idempotent)
@@ -103,9 +113,8 @@ down() {
   if ! tmux has-session -t "$sess" 2>/dev/null; then echo "NOT-RUNNING $name"; return 0; fi
   # Graceful: SIGTERM the host first (children flush, no orphans), then drop the session inside
   # the loop's 3s pre-re-exec window so it can't relaunch behind us. Resolve the target ONLY
-  # through THIS session's own tmux pane — never a global `ps | grep`, which would also match a
-  # coexisting rc-spawn `rc-<name>` that shares this name. Each tool touches only its own
-  # sessions, so the two are independent by construction. The pane runs `bash … _run`, so the
+  # through THIS session's own tmux pane — never a global `ps | grep`, which would also match
+  # any unrelated claude process that happens to share this name. The pane runs `bash … _run`, so the
   # claude host is its child — but during the 3s restart window the child is `sleep 3`, not
   # claude; signaling that would only let _run re-exec a throwaway host. So pick the child
   # actually running remote-control; if none is live (restart window or already exited), signal

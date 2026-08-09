@@ -14,12 +14,19 @@ Out of scope, by design: uploading to storage, files too large to send in one
 request, bucket objects and pre-signed URLs, clipping, and frame-rate control.
 Each of those was removed rather than fixed; see the commit that removed them.
 
-Usage:
-    uv run analyze_video.py /path/to/video.mp4 "Summarize this video"
-    uv run analyze_video.py "https://www.youtube.com/watch?v=VIDEO_ID" "What is discussed?"
-    uv run analyze_video.py /path/to/video.mp4 --type summary
-    uv run analyze_video.py /path/to/video.mp4 --type transcript
-    uv run analyze_video.py /path/to/video.mp4 --type timestamps
+Usage (the skill runs with the user's project as cwd, never this directory,
+so every invocation goes through the plugin root):
+    SCRIPT="${CLAUDE_PLUGIN_ROOT}/skills/video-understanding/scripts/analyze_video.py"
+
+    uv run "$SCRIPT" /path/to/video.mp4 "Summarize this video"
+    uv run "$SCRIPT" "https://www.youtube.com/watch?v=VIDEO_ID" "What is discussed?"
+    uv run "$SCRIPT" /path/to/video.mp4 --type summary
+    uv run "$SCRIPT" /path/to/video.mp4 --type transcript
+    uv run "$SCRIPT" /path/to/video.mp4 --type timestamps
+
+Output streams:
+    stdout carries the analysis text and nothing else, so it pipes into a
+    parser. Progress, banners, and errors go to stderr.
 
 Environment:
     GEMINI_API_KEY - Google AI API key (required)
@@ -38,7 +45,8 @@ try:
     from google import genai
 except ImportError:
     print("Error: google-genai not available. Run this through uv "
-          "(`uv run analyze_video.py ...`) so the inline dependency resolves.")
+          "(`uv run <path>/analyze_video.py ...`) so the inline dependency "
+          "resolves.", file=sys.stderr)
     sys.exit(1)
 
 
@@ -103,10 +111,14 @@ MIME_TYPES = {
 
 def is_youtube_url(source: str) -> bool:
     """Check if source is a YouTube URL."""
+    # A URL that misses this list falls through to the local-file branch and
+    # dies as "file not found", which names the wrong problem entirely.
     youtube_patterns = [
         "youtube.com/watch",
         "youtu.be/",
         "youtube.com/embed/",
+        "youtube.com/shorts/",
+        "youtube.com/live/",
     ]
     return any(p in source.lower() for p in youtube_patterns)
 
@@ -153,19 +165,29 @@ def analyze_local_file(client: genai.Client, file_path: str, prompt: str) -> str
     with open(file_path, "rb") as f:
         video_data = base64.standard_b64encode(f.read()).decode("utf-8")
 
-    mime_type = MIME_TYPES.get(path.suffix.lower(), "video/mp4")
+    # MIME_TYPES mirrors the vendor's accepted set, so an extension outside it
+    # is rejected server-side anyway. Guessing mp4 only buys an opaque
+    # INVALID_ARGUMENT after uploading the whole payload; failing here names
+    # the problem before anything is spent.
+    mime_type = MIME_TYPES.get(path.suffix.lower())
+    if mime_type is None:
+        raise ValueError(
+            f"{path.suffix or path.name} is not a supported video extension. "
+            f"Supported: {', '.join(sorted(MIME_TYPES))}. Re-encode, or rename "
+            f"if the file is really one of these."
+        )
     input_parts = [
         {"type": "text", "text": prompt},
         {"type": "video", "data": video_data, "mime_type": mime_type},
     ]
 
-    print("Analyzing...")
+    print("Analyzing...", file=sys.stderr)
     return create_interaction(client, input_parts)
 
 
 def analyze_youtube(client: genai.Client, url: str, prompt: str) -> str:
     """Analyze a YouTube video via the Interactions API."""
-    print(f"Analyzing YouTube: {url}")
+    print(f"Analyzing YouTube: {url}", file=sys.stderr)
 
     input_parts = [
         {"type": "text", "text": prompt},
@@ -215,7 +237,8 @@ def main():
     # Check API key
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        print("Error: GEMINI_API_KEY environment variable not set")
+        print("Error: GEMINI_API_KEY environment variable not set",
+              file=sys.stderr)
         sys.exit(1)
 
     # Initialize client
@@ -233,9 +256,12 @@ def main():
         else:
             result = analyze_local_file(client, args.source, prompt)
 
-        print("\n" + "=" * 60)
-        print("ANALYSIS RESULT")
-        print("=" * 60 + "\n")
+        # The banner is an affordance for someone reading a terminal, so it
+        # goes to stderr with the progress lines. stdout stays result-only:
+        # a caller piping this into a parser must not have to strip it.
+        print("\n" + "=" * 60, file=sys.stderr)
+        print("ANALYSIS RESULT", file=sys.stderr)
+        print("=" * 60 + "\n", file=sys.stderr)
         print(result)
 
     except Exception as e:

@@ -21,10 +21,14 @@ audio stream, so a screen recording with narration yields more than either alone
 
 ```bash
 export GEMINI_API_KEY="your-api-key"
+SCRIPT="${CLAUDE_PLUGIN_ROOT}/skills/video-understanding/scripts/analyze_video.py"
 
-uv run scripts/analyze_video.py /tmp/bug.mp4 "List the reproduction steps with MM:SS timestamps"
-uv run scripts/analyze_video.py "https://www.youtube.com/watch?v=VIDEO_ID" --type summary
+uv run "$SCRIPT" /tmp/bug.mp4 "List the reproduction steps with MM:SS timestamps"
+uv run "$SCRIPT" "https://www.youtube.com/watch?v=VIDEO_ID" --type summary
 ```
+
+The path goes through `CLAUDE_PLUGIN_ROOT` because this runs with the user's project
+as the working directory, not this one. A bare relative path does not resolve.
 
 The script declares its own dependency inline (PEP 723), so `uv run` resolves it;
 there is no install step.
@@ -65,9 +69,10 @@ you send it.
 
 ## Reading a result
 
-On success the analysis text goes to stdout and the exit code is 0. On failure the
-message goes to stderr and the exit code is non-zero. Read the exit code before
-trusting stdout.
+On success the analysis text goes to stdout and the exit code is 0. Progress lines,
+the result banner, and every error message go to stderr, so stdout is the analysis
+and nothing else — it pipes into a parser unedited. On failure the exit code is
+non-zero. Read the exit code before trusting stdout.
 
 **A refusal is not an empty video.** When the model declines to answer — a safety
 block, a truncation, an exhausted budget — the script fails rather than printing

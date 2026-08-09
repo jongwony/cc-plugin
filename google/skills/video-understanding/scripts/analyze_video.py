@@ -1,48 +1,61 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "google-genai>=2.3.0",
+# ]
+# ///
 """
 Video Analysis with Gemini Interactions API
 
-Supports:
-- Local file upload via Files API
-- YouTube URL analysis
-- Multiple analysis types: summary, transcript, timestamps, QnA
+Takes a local video file or a public YouTube URL and returns text.
 
-Uses the Interactions API (client.interactions.create), the current standard for
-new development. generateContent still works, but Interactions is the default idiom
-in the official docs. Video clipping (--start/--end) has no Interactions equivalent,
-so that path alone falls back to the legacy generate_content call (see analyze_clip).
+Out of scope, by design: uploading to storage, files too large to send in one
+request, bucket objects and pre-signed URLs, clipping, and frame-rate control.
+Each of those was removed rather than fixed; see the commit that removed them.
 
 Usage:
-    python analyze_video.py /path/to/video.mp4 "Summarize this video"
-    python analyze_video.py "https://www.youtube.com/watch?v=VIDEO_ID" "What is discussed?"
-    python analyze_video.py /path/to/video.mp4 --type summary
-    python analyze_video.py /path/to/video.mp4 --type transcript
-    python analyze_video.py /path/to/video.mp4 --type timestamps
+    uv run analyze_video.py /path/to/video.mp4 "Summarize this video"
+    uv run analyze_video.py "https://www.youtube.com/watch?v=VIDEO_ID" "What is discussed?"
+    uv run analyze_video.py /path/to/video.mp4 --type summary
+    uv run analyze_video.py /path/to/video.mp4 --type transcript
+    uv run analyze_video.py /path/to/video.mp4 --type timestamps
 
 Environment:
     GEMINI_API_KEY - Google AI API key (required)
 
-Install:
-    uv pip install "google-genai>=2.3.0"
+The dependency is declared inline (PEP 723); uv resolves it. There is no
+manual install step.
 """
 
 import argparse
 import base64
 import os
 import sys
-import time
 from pathlib import Path
 
 try:
     from google import genai
-    from google.genai import types  # only for the legacy clipping fallback
 except ImportError:
-    print('Error: google-genai not installed. Run: uv pip install "google-genai>=2.3.0"')
+    print("Error: google-genai not available. Run this through uv "
+          "(`uv run analyze_video.py ...`) so the inline dependency resolves.")
     sys.exit(1)
 
 
 # Default model
-MODEL = "gemini-3.5-flash"
+MODEL = "gemini-3.6-flash"
+
+# A local file is sent inline in a single request; there is no upload path.
+# The vendor limit is on TOTAL request size and base64 inflates the payload by
+# 4/3, so the raw file must sit below the limit with room to spare for the
+# prompt and the request envelope. 0.70 keeps that headroom.
+INLINE_REQUEST_LIMIT_BYTES = 100 * 1024**2
+MAX_LOCAL_FILE_BYTES = int(INLINE_REQUEST_LIMIT_BYTES * 0.70)
+
+# google-genai opts OUT of a default httpx timeout by setting it to None, so a
+# stalled request would hang with no ceiling. The SDK takes this value in
+# MILLISECONDS at its boundary.
+HTTP_TIMEOUT_SECONDS = 600
 
 # Analysis type prompts
 PROMPTS = {
@@ -98,143 +111,59 @@ def is_youtube_url(source: str) -> bool:
     return any(p in source.lower() for p in youtube_patterns)
 
 
-def create_interaction(client: genai.Client, input_parts: list, low_res: bool):
-    """Run an Interactions API request.
-
-    Media resolution is a per-item field on video parts ("resolution": "low");
-    generation_config has no media_resolution key in the Interactions API (an
-    unknown key there is silently ignored), so --low-res is applied by tagging
-    each video part. Per-item means it covers every source (local and YouTube).
+def create_interaction(client: genai.Client, input_parts: list) -> str:
+    """Run an Interactions API request and return its text.
 
     Requests are sent with store=False: this is a one-shot analysis utility (no
     previous_interaction_id chaining, no background execution), so interactions
     are not persisted server-side.
+
+    A model that declines to answer -- a safety block, a truncation, an
+    exhausted budget -- yields no text. That is a failure, not an empty
+    result: returning it would let a refusal read as an answer.
     """
-    if low_res:
-        input_parts = [
-            {**p, "resolution": "low"} if p.get("type") == "video" else p
-            for p in input_parts
-        ]
-    return client.interactions.create(model=MODEL, input=input_parts, store=False)
-
-
-def upload_video(client: genai.Client, file_path: str):
-    """Upload video file and wait for processing."""
-    print(f"Uploading: {file_path}")
-
-    video_file = client.files.upload(file=file_path)
-    print(f"Uploaded: {video_file.name}")
-
-    # Wait for processing
-    while video_file.state.name == "PROCESSING":
-        print("Processing...", end="\r")
-        time.sleep(5)
-        video_file = client.files.get(name=video_file.name)
-
-    if video_file.state.name == "FAILED":
-        raise ValueError(f"Video processing failed: {video_file.name}")
-
-    print(f"Ready: {video_file.state.name}")
-    return video_file
-
-
-def analyze_clip(
-    client: genai.Client,
-    file_path: str,
-    prompt: str,
-    low_res: bool,
-    start_offset: str,
-    end_offset: str,
-) -> str:
-    """Analyze a clipped segment of a local video.
-
-    The Interactions API has no offset parameter (video_metadata is silently
-    ignored), so clipping falls back to the legacy generate_content call, which
-    still honors start/end offsets via types.VideoMetadata.
-    """
-    print("Clipping requested -> using legacy generate_content "
-          "(Interactions API has no offset support)")
-    video_file = upload_video(client, file_path)
-
-    metadata = types.VideoMetadata()
-    if start_offset:
-        metadata.start_offset = start_offset
-    if end_offset:
-        metadata.end_offset = end_offset
-
-    config = None
-    if low_res:
-        config = types.GenerateContentConfig(
-            media_resolution=types.MediaResolution.MEDIA_RESOLUTION_LOW
-        )
-
-    print("Analyzing...")
-    response = client.models.generate_content(
-        model=MODEL,
-        contents=[
-            types.Part(
-                file_data=types.FileData(file_uri=video_file.uri),
-                video_metadata=metadata,
-            ),
-            prompt,
-        ],
-        config=config,
+    interaction = client.interactions.create(
+        model=MODEL, input=input_parts, store=False
     )
-    return response.text
+    text = interaction.output_text
+    if not text:
+        raise RuntimeError(
+            "The model returned no text. This is a refusal or a truncation, "
+            "not an empty video."
+        )
+    return text
 
 
-def analyze_local_file(
-    client: genai.Client,
-    file_path: str,
-    prompt: str,
-    low_res: bool = False,
-    start_offset: str = None,
-    end_offset: str = None,
-) -> str:
+def analyze_local_file(client: genai.Client, file_path: str, prompt: str) -> str:
     """Analyze a local video file via the Interactions API."""
     path = Path(file_path)
 
     if not path.exists():
         raise FileNotFoundError(f"Video file not found: {file_path}")
 
-    # Clipping has no Interactions equivalent -> legacy fallback.
-    if start_offset or end_offset:
-        return analyze_clip(client, file_path, prompt, low_res, start_offset, end_offset)
-
     file_size = path.stat().st_size
+    if file_size > MAX_LOCAL_FILE_BYTES:
+        raise ValueError(
+            f"{file_path} is {file_size / 1024**2:.1f} MB; this skill sends a "
+            f"local file in one request and takes at most "
+            f"{MAX_LOCAL_FILE_BYTES / 1024**2:.0f} MB. Shorten or re-encode "
+            f"the clip. Stored, reusable media needs different tooling."
+        )
 
-    # The 20MB inline limit is TOTAL request size; base64 inflates ~4/3,
-    # so compare the encoded size, not the raw file size.
-    encoded_size = file_size * 4 // 3
-    if encoded_size < 20 * 1024 * 1024:
-        print("Using inline data (encoded size < 20MB)")
-        with open(file_path, "rb") as f:
-            video_data = base64.standard_b64encode(f.read()).decode("utf-8")
+    with open(file_path, "rb") as f:
+        video_data = base64.standard_b64encode(f.read()).decode("utf-8")
 
-        mime_type = MIME_TYPES.get(path.suffix.lower(), "video/mp4")
-        input_parts = [
-            {"type": "text", "text": prompt},
-            {"type": "video", "data": video_data, "mime_type": mime_type},
-        ]
-    else:
-        print("Using Files API (encoded size >= 20MB)")
-        video_file = upload_video(client, file_path)
-        input_parts = [
-            {"type": "text", "text": prompt},
-            {"type": "video", "uri": video_file.uri, "mime_type": video_file.mime_type},
-        ]
+    mime_type = MIME_TYPES.get(path.suffix.lower(), "video/mp4")
+    input_parts = [
+        {"type": "text", "text": prompt},
+        {"type": "video", "data": video_data, "mime_type": mime_type},
+    ]
 
     print("Analyzing...")
-    interaction = create_interaction(client, input_parts, low_res)
-    return interaction.output_text
+    return create_interaction(client, input_parts)
 
 
-def analyze_youtube(
-    client: genai.Client,
-    url: str,
-    prompt: str,
-    low_res: bool = False,
-) -> str:
+def analyze_youtube(client: genai.Client, url: str, prompt: str) -> str:
     """Analyze a YouTube video via the Interactions API."""
     print(f"Analyzing YouTube: {url}")
 
@@ -242,8 +171,7 @@ def analyze_youtube(
         {"type": "text", "text": prompt},
         {"type": "video", "uri": url},
     ]
-    interaction = create_interaction(client, input_parts, low_res)
-    return interaction.output_text
+    return create_interaction(client, input_parts)
 
 
 def main():
@@ -269,19 +197,6 @@ def main():
         help="Predefined analysis type",
     )
     parser.add_argument(
-        "--low-res",
-        action="store_true",
-        help="Use low resolution (saves tokens)",
-    )
-    parser.add_argument(
-        "--start",
-        help="Start offset (e.g., '30s', '1m30s'); local files only",
-    )
-    parser.add_argument(
-        "--end",
-        help="End offset (e.g., '120s', '5m'); local files only",
-    )
-    parser.add_argument(
         "--model",
         default=MODEL,
         help=f"Model to use (default: {MODEL})",
@@ -304,26 +219,19 @@ def main():
         sys.exit(1)
 
     # Initialize client
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(
+        api_key=api_key,
+        http_options={"timeout": HTTP_TIMEOUT_SECONDS * 1000},
+    )
 
     # Update model if specified
     MODEL = args.model
 
     try:
         if is_youtube_url(args.source):
-            if args.start or args.end:
-                print("Warning: --start/--end are ignored for YouTube sources "
-                      "(clipping is supported for local files only)", file=sys.stderr)
-            result = analyze_youtube(client, args.source, prompt, low_res=args.low_res)
+            result = analyze_youtube(client, args.source, prompt)
         else:
-            result = analyze_local_file(
-                client,
-                args.source,
-                prompt,
-                low_res=args.low_res,
-                start_offset=args.start,
-                end_offset=args.end,
-            )
+            result = analyze_local_file(client, args.source, prompt)
 
         print("\n" + "=" * 60)
         print("ANALYSIS RESULT")

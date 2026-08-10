@@ -174,13 +174,23 @@ def main():
 
     try:
         video = generate(client, args)
-        if video.video_bytes:
-            Path(args.output).write_bytes(video.video_bytes)
-            print(f"Saved to {args.output}", file=sys.stderr)
-        elif video.uri:
-            print(f"Video available at: {video.uri}", file=sys.stderr)
-        else:
+        # The API may return the clip inline or as a file reference; which one
+        # arrives is not something the caller controls. A URI-only response
+        # used to be printed and left there, so the run exited 0 having written
+        # nothing — fetch it instead, and fall back to surfacing the URI only
+        # when the fetch itself fails, so the clip stays recoverable by hand.
+        if not video.video_bytes and video.uri:
+            try:
+                client.files.download(file=video)
+            except Exception as e:
+                raise RuntimeError(
+                    f"Could not download the generated video ({e}). "
+                    f"Fetch it manually within the file's retention window: {video.uri}"
+                ) from e
+        if not video.video_bytes:
             raise RuntimeError("Response carried neither video bytes nor a URI.")
+        Path(args.output).write_bytes(video.video_bytes)
+        print(f"Saved to {args.output}", file=sys.stderr)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

@@ -7,7 +7,7 @@
     {
       "name": "google",
       "source": "./google",
-      "description": "Google Gemini video understanding"
+      "description": "Google Gemini video understanding, Veo video generation"
     },
     {
       "name": "claude-code-internals",

@@ -21,6 +21,7 @@ from google import genai
 from google.genai import types
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+prompt = "A neon hologram of a cat driving at top speed"
 
 operation = client.models.generate_videos(
     model="veo-3.1-generate-preview",
@@ -43,7 +44,8 @@ if not operation.response or not operation.response.generated_videos:
 video = operation.response.generated_videos[0].video
 if not video.video_bytes and video.uri:
     client.files.download(file=video)   # sets video.video_bytes in place
-open("output.mp4", "wb").write(video.video_bytes)
+with open("output.mp4", "wb") as f:
+    f.write(video.video_bytes)
 ```
 
 Inputs go through `source=types.GenerateVideosSource(...)`, not the
@@ -62,6 +64,9 @@ omit it rather than pass it explicitly.
 The Gemini API path takes the source video as inline bytes. A `gs://` URI is a
 Vertex AI concept and does not apply here.
 
+Output is 720p when extending, whatever `resolution` says, and
+`veo-3.1-lite-generate-preview` does not accept video input at all.
+
 ```python
 source=types.GenerateVideosSource(
     prompt="Transform into a cyberpunk style with neon lights",
@@ -74,7 +79,8 @@ source=types.GenerateVideosSource(
 
 ## First and last frame
 
-The start image goes on the source, the end image on the config.
+The start image goes on the source, the end image on the config. `last_frame`
+only works alongside `image` — an end frame with no start frame is rejected.
 
 ```python
 source=types.GenerateVideosSource(prompt=prompt, image=start_image)
@@ -92,18 +98,37 @@ where each frame is `types.Image(image_bytes=..., mime_type="image/png")`.
 Reference images ride on the config, not the source; the prompt then refers to
 them ("Using the provided character and office setting, ...").
 
+Each one is a `VideoGenerationReferenceImage`, not a bare `Image` — the wrapper
+exists to carry `reference_type`, which decides whether the picture supplies
+content or style.
+
 ```python
 config=types.GenerateVideosConfig(
     number_of_videos=1,
-    duration_seconds=6,
-    reference_images=[character_ref, location_ref],
+    duration_seconds=8,
+    reference_images=[
+        types.VideoGenerationReferenceImage(
+            image=character_ref,
+            reference_type=types.VideoGenerationReferenceType.ASSET,
+        ),
+        types.VideoGenerationReferenceImage(
+            image=location_ref,
+            reference_type=types.VideoGenerationReferenceType.STYLE,
+        ),
+    ],
 )
 ```
 
-The SDK's own field documentation for `reference_images` describes it in terms
-of Veo 2 ("Veo 2 supports up to 3 asset images or 1 style image"); whether the
-feature is fully supported on the veo-3.1 line is **not verified** here —
-check the API's response if it matters for the task.
+Three constraints come with it, and the first two are silent until the API
+rejects the call:
+
+- Reference images do not combine with `image`, `video`, or `last_frame` —
+  the prompt is the only other input.
+- Duration is forced to 8 seconds.
+- `veo-3.1-lite-generate-preview` does not accept reference images at all;
+  use the full or fast variant.
+
+Up to three images, per the Veo 3.1 model table.
 
 ## Resources
 

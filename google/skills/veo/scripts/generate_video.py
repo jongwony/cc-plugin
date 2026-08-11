@@ -22,7 +22,10 @@ so every invocation goes through the plugin root):
 
     uv run "$SCRIPT" "A neon hologram of a cat driving at top speed"
     uv run "$SCRIPT" "Slow dolly shot, cinematic lighting" --image photo.jpg
-    uv run "$SCRIPT" "Zoom out to reveal the city skyline" --model veo-3.1-fast-generate-preview --duration 4
+    uv run "$SCRIPT" "Zoom out to reveal the city skyline" --model veo-3.1-fast-generate-preview --duration 4 --resolution 720p
+
+A clip shorter than 8 seconds must be 720p; --resolution defaults to 1080p,
+so the two flags move together.
 
 Environment:
     GEMINI_API_KEY - Google AI API key (required)
@@ -56,6 +59,13 @@ DEFAULT_MODEL = "veo-3.1-generate-preview"
 
 DURATION_CHOICES = [4, 6, 8]
 DEFAULT_DURATION = 8
+
+# The Veo 3.1 line couples the two: above 720p a clip is 8 seconds or nothing.
+# The default resolution is the high one, so shortening a clip alone produces a
+# pair the API rejects — and it rejects it after the request is out, naming the
+# combination rather than the flag the caller actually moved.
+FIXED_DURATION_RESOLUTIONS = {"1080p", "4k"}
+FIXED_DURATION = 8
 
 # google-genai opts OUT of a default httpx timeout by setting it to None, so a
 # stalled request would hang with no ceiling. The SDK takes this value in
@@ -160,6 +170,12 @@ def main():
         help="Output file path (default: output.mp4)",
     )
     args = parser.parse_args()
+
+    if args.resolution in FIXED_DURATION_RESOLUTIONS and args.duration != FIXED_DURATION:
+        print(f"Error: {args.resolution} is {FIXED_DURATION}s only. Either pass "
+              f"--resolution 720p to keep --duration {args.duration}, or drop "
+              f"--duration to get the {FIXED_DURATION}s default.", file=sys.stderr)
+        sys.exit(1)
 
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:

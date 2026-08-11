@@ -33,7 +33,7 @@ SCRIPT="${CLAUDE_PLUGIN_ROOT}/skills/veo/scripts/generate_video.py"
 
 uv run "$SCRIPT" "A neon hologram of a cat driving at top speed"
 uv run "$SCRIPT" "Slow dolly shot, cinematic lighting" --image photo.jpg
-uv run "$SCRIPT" "Zoom out to reveal the skyline" --model veo-3.1-fast-generate-preview --duration 4
+uv run "$SCRIPT" "Zoom out to reveal the skyline" --model veo-3.1-fast-generate-preview --duration 4 --resolution 720p
 ```
 
 The path goes through `CLAUDE_PLUGIN_ROOT` because this runs with the
@@ -59,9 +59,13 @@ prompt text to adapt in place, in
 | `veo-3.1-fast-generate-preview` | Faster iteration, drafts |
 | `veo-3.1-lite-generate-preview` | Cheapest, quick previews, high volume |
 
-Price scales per second of output, and the same two levers move it for
-every variant: resolution, and whether audio is generated alongside the
-video (video+audio costs more than video-only). Check
+Lite is not just a cheaper tier of the same thing — it takes no video input
+and no reference images, so video extension and ingredients-to-video are off
+the table there. All three are preview models.
+
+Price scales per second of output, and resolution is the lever that moves it
+(720p, or 1080p and 4k at 8 seconds). Audio is not a second lever on this
+model line — Veo 3.1 always generates it. Check
 [Google's Vertex AI generative-AI pricing page](https://cloud.google.com/vertex-ai/generative-ai/pricing)
 for the current per-second figures before a spend decision — a number
 copied here would go stale silently.
@@ -70,6 +74,12 @@ copied here would go stale silently.
 
 Supported single-generation durations are **4, 6, or 8 seconds** —
 anything else is rejected by the API. `--duration` defaults to 8.
+
+Duration and resolution are coupled: **1080p and 4k are 8 seconds only**, so
+a 4- or 6-second clip has to be 720p. The script's `--resolution` defaults to
+1080p, which means shortening a clip means dropping the resolution in the
+same command. It rejects the invalid pair locally rather than letting the API
+reject it after the request is already out.
 
 ## The Prompting Formula
 
@@ -92,8 +102,9 @@ techniques), see [references/prompting-guide.md](references/prompting-guide.md).
 
 ## Audio Direction
 
-Veo 3.1 generates complete soundtracks based on text instructions in the
-same prompt — there is no separate audio parameter.
+Audio is always on for Veo 3.1 and cannot be switched off. Veo builds the
+soundtrack from text instructions in the same prompt — there is no separate
+audio parameter, only the prompt.
 
 - **Dialogue** — quotation marks: `A woman says, "We have to leave now."`
 - **Sound effects** — described explicitly: `SFX: thunder cracks in the distance`

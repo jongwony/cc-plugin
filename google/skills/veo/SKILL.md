@@ -76,7 +76,7 @@ look it up in the same table before planning a silent render or budgeting
 around one.
 
 All three live in one place: the model table on
-[the Veo API page](https://ai.google.dev/gemini-api/docs/video), with
+[the Veo API page](https://ai.google.dev/gemini-api/docs/veo), with
 per-second figures on
 [the Gemini API pricing page](https://ai.google.dev/gemini-api/docs/pricing).
 
@@ -115,5 +115,5 @@ at it before promising a client an unmarked render.
 
 ## Resources
 
-- [Veo API Reference](https://ai.google.dev/gemini-api/docs/video)
+- [Veo API Reference](https://ai.google.dev/gemini-api/docs/veo)
 - [Google GenAI Python SDK](https://github.com/googleapis/python-genai)

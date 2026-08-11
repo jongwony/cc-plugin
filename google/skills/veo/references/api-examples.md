@@ -72,7 +72,7 @@ Vertex AI concept and does not apply here.
 Extension constrains the output — resolution in particular may be pinned
 regardless of what you asked for — and the cheaper variants may not accept
 video input at all. Both are in the model table on
-[the Veo API page](https://ai.google.dev/gemini-api/docs/video); check it
+[the Veo API page](https://ai.google.dev/gemini-api/docs/veo); check it
 before building a pipeline on an extension step.
 
 ```python
@@ -132,12 +132,12 @@ constraints are silent until the call is rejected. They bound three things
 at once — which other inputs may accompany them, how long the clip may be,
 and which variants accept them at all — and the counts move between
 releases. The model table on
-[the Veo API page](https://ai.google.dev/gemini-api/docs/video) carries the
+[the Veo API page](https://ai.google.dev/gemini-api/docs/veo) carries the
 current set; read it before assuming a reference-image run can also carry a
 start frame, or run at the length you had in mind.
 
 ## Resources
 
-- [Veo API Reference](https://ai.google.dev/gemini-api/docs/video)
+- [Veo API Reference](https://ai.google.dev/gemini-api/docs/veo)
 - [Prompting Guide](./prompting-guide.md)
 - [Google GenAI Python SDK](https://github.com/googleapis/python-genai)

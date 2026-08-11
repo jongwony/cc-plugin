@@ -1,97 +1,29 @@
-# Veo 3.1 Prompting Guide
+# Veo 3.1 — prompt craft
 
-Complete guide to prompting Google's Veo 3.1 video generation model.
+The prompt text you cannot guess: cinematography vocabulary, negative
+prompting, and the three multi-input workflows written as prompts. The API
+shapes those workflows need are in [api-examples.md](./api-examples.md); the
+five-part formula and audio direction are in [SKILL.md](../SKILL.md) and are
+not repeated here.
 
-Source: [Google Cloud Blog - Ultimate Prompting Guide for Veo 3.1](https://cloud.google.com/blog/products/ai-machine-learning/ultimate-prompting-guide-for-veo-3-1)
+Source: [Google Cloud Blog — Ultimate Prompting Guide for Veo 3.1](https://cloud.google.com/blog/products/ai-machine-learning/ultimate-prompting-guide-for-veo-3-1)
 
-## Table of Contents
+## The language of cinematography
 
-1. [Model Capabilities](#model-capabilities)
-2. [Prompting Formula](#prompting-formula)
-3. [Essential Prompting Techniques](#essential-prompting-techniques)
-4. [Advanced Creative Workflows](#advanced-creative-workflows)
+The [Cinematography] slot of the formula is the strongest lever on tone.
 
-## Model Capabilities
+- **Camera movement** — dolly, tracking, crane, aerial, slow pan, POV
+- **Composition** — wide, close-up, extreme close-up, low angle, two-shot
+- **Lens & focus** — shallow depth of field, wide-angle, soft focus, macro, deep focus
 
-### Core Generation Features
+Two worked examples, showing how far the vocabulary carries a whole prompt:
 
-- **High-fidelity video:** 720p or 1080p resolution
-- **Aspect ratio:** 16:9 or 9:16
-- **Variable clip length:** 4, 6, or 8 seconds
-- **Rich audio & dialogue:** Realistic, synchronized sound including multi-person conversations and precisely timed sound effects
-- **Complex scene comprehension:** Deeper understanding of narrative structure and cinematic styles for better character interactions and storytelling
-
-### Advanced Creative Controls
-
-- **Improved image-to-video:** Animate source images with greater prompt adherence and enhanced audio-visual quality
-- **Consistent elements ("ingredients to video"):** Provide reference images of scenes, characters, objects, or styles to maintain consistent aesthetics across multiple shots (includes audio generation)
-- **Seamless transitions ("first and last frame"):** Generate natural video transitions between provided start and end images, complete with audio
-- **Add/remove object:** Introduce new objects or remove existing ones from generated videos while preserving scene composition (currently uses Veo 2, no audio)
-- **Digital watermarking:** All videos marked with SynthID to indicate AI-generated content
-
-## Prompting Formula
-
-A structured prompt yields consistent, high-quality results. Use this five-part formula:
-
-**[Cinematography] + [Subject] + [Action] + [Context] + [Style & Ambiance]**
-
-### Formula Components
-
-- **Cinematography:** Camera work and shot composition
-- **Subject:** Main character or focal point
-- **Action:** What the subject is doing
-- **Context:** Environment and background elements
-- **Style & ambiance:** Overall aesthetic, mood, and lighting
-
-### Example
-
-```
-Medium shot, a tired corporate worker, rubbing his temples in exhaustion,
-in front of a bulky 1980s computer in a cluttered office late at night.
-The scene is lit by the harsh fluorescent overhead lights and the green
-glow of the monochrome monitor. Retro aesthetic, shot as if on 1980s
-color film, slightly grainy.
-```
-
-## Essential Prompting Techniques
-
-### The Language of Cinematography
-
-The [Cinematography] element is your most powerful tool for conveying tone and emotion.
-
-#### Camera Movement
-
-- Dolly shot
-- Tracking shot
-- Crane shot
-- Aerial view
-- Slow pan
-- POV shot
-
-**Example (Crane shot):**
 ```
 Crane shot starting low on a lone hiker and ascending high above,
 revealing they are standing on the edge of a colossal, mist-filled
 canyon at sunrise, epic fantasy style, awe-inspiring, soft morning light.
 ```
 
-#### Composition
-
-- Wide shot
-- Close-up
-- Extreme close-up
-- Low angle
-- Two-shot
-
-#### Lens & Focus
-
-- Shallow depth of field
-- Wide-angle lens
-- Soft focus
-- Macro lens
-- Deep focus
-
-**Example (Shallow depth of field):**
 ```
 Close-up with very shallow depth of field, a young woman's face,
 looking out a bus window at the passing city lights with her reflection
@@ -99,55 +31,20 @@ faintly visible on the glass, inside a bus at night during a rainstorm,
 melancholic mood with cool blue tones, moody, cinematic.
 ```
 
-### Directing the Soundstage
+## Negative prompts
 
-Veo 3.1 generates complete soundtracks based on text instructions.
+State the exclusion affirmatively — describe the scene you want, not the
+thing you want absent.
 
-#### Dialogue
+- Instead of `no man-made structures`
+- Write `a desolate landscape with no buildings or roads`
 
-Use quotation marks for specific speech:
-```
-A woman says, "We have to leave now."
-```
+## Workflow 1 — dynamic transition (first and last frame)
 
-#### Sound Effects (SFX)
+Generate the two endpoint frames with an image model, then let Veo move
+between them.
 
-Describe sounds with clarity:
-```
-SFX: thunder cracks in the distance
-```
-
-#### Ambient Noise
-
-Define background soundscape:
-```
-Ambient noise: the quiet hum of a starship bridge
-```
-
-### Mastering Negative Prompts
-
-Describe what you wish to exclude affirmatively.
-
-**Instead of:** "no man-made structures"
-**Use:** "a desolate landscape with no buildings or roads"
-
-### Prompt Enhancement with Gemini
-
-Use Gemini to analyze and enrich simple prompts with more descriptive and cinematic language.
-
-## Advanced Creative Workflows
-
-Multi-step workflows offer unparalleled control by breaking down the creative process into manageable stages.
-
-### Workflow 1: Dynamic Transition with "First and Last Frame"
-
-Create specific and controlled camera movement or transformation between two distinct points of view.
-
-#### Step 1: Create the Starting Frame
-
-Use Gemini 2.5 Flash Image to generate initial shot.
-
-**Example prompt:**
+Starting frame:
 ```
 Medium shot of a female pop star singing passionately into a vintage
 microphone. She is on a dark stage, lit by a single, dramatic spotlight
@@ -155,11 +52,7 @@ from the front. She has her eyes closed, capturing an emotional moment.
 Photorealistic, cinematic.
 ```
 
-#### Step 2: Create the Ending Frame
-
-Generate a second, complementary image (e.g., different POV angle).
-
-**Example prompt:**
+Ending frame — a complementary point of view:
 ```
 POV shot from behind the singer on stage, looking out at a large,
 cheering crowd. The stage lights are bright, creating lens flare.
@@ -167,11 +60,7 @@ You can see the back of the singer's head and shoulders in the foreground.
 The audience is a sea of lights and silhouettes. Energetic atmosphere.
 ```
 
-#### Step 3: Animate with Veo
-
-Input both images using the **First and Last Frame** feature. Describe the transition and desired audio.
-
-**Example prompt:**
+The Veo prompt then describes the movement between them, and the audio:
 ```
 The camera performs a smooth 180-degree arc shot, starting with the
 front-facing view of the singer and circling around her to seamlessly
@@ -179,19 +68,10 @@ end on the POV shot from behind her on stage. The singer sings
 "when you look me in the eyes, I can see a million stars."
 ```
 
-### Workflow 2: Building a Dialogue Scene with "Ingredients to Video"
+## Workflow 2 — dialogue scene (ingredients to video)
 
-Create multi-shot scenes with consistent characters engaged in conversation.
-
-#### Step 1: Generate Your "Ingredients"
-
-Create reference images using Gemini 2.5 Flash Image for characters and settings.
-
-#### Step 2: Compose the Scene
-
-Use **Ingredients to Video** feature with relevant reference images.
-
-**Example prompts:**
+Generate reference images for each character and setting, then name them in
+the prompt so consecutive shots stay consistent.
 
 Shot 1:
 ```
@@ -208,11 +88,11 @@ setting, create a shot focusing on the woman. A slight, mysterious smile
 plays on her lips as she replies, "You were highly recommended."
 ```
 
-### Workflow 3: Timestamp Prompting
+## Workflow 3 — timestamp prompting
 
-Direct a complete, multi-shot sequence with precise cinematic pacing within a single generation. Assign actions to timed segments to create full scenes with multiple distinct shots efficiently.
-
-**Example:**
+A multi-shot sequence inside one generation. There is no parameter for this —
+the timing lives in the prompt text, so the segments must sum to the clip
+length you asked for.
 
 ```
 [00:00-00:02] Medium shot from behind a young female explorer with a
@@ -232,12 +112,3 @@ standing small in the center of the vast, forgotten temple complex,
 half-swallowed by the jungle. SFX: A swelling, gentle orchestral score
 begins to play.
 ```
-
-## Tips for Success
-
-1. **Be specific:** Detailed prompts yield more precise results
-2. **Use the formula:** Structure prompts with [Cinematography] + [Subject] + [Action] + [Context] + [Style & Ambiance]
-3. **Master cinematography language:** Camera movements and lens choices convey emotion
-4. **Direct audio explicitly:** Use quotation marks for dialogue, describe SFX and ambient noise
-5. **Experiment with workflows:** Combine Veo with Gemini 2.5 Flash Image for complex projects
-6. **Iterate:** The best way to master these techniques is through real-world application

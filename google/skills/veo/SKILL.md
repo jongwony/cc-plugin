@@ -19,18 +19,13 @@ model: sonnet
 
 # Veo Video Generation
 
-Generate video with Google Veo 3.1 via the Gemini API. Supports
-text-to-video, image-to-video, video extension, and multi-shot workflows
-with cinematography control and synchronized audio.
+Generate video with Google Veo 3.1 via the Gemini API, with cinematography
+control and synchronized audio.
 
-**This is not the default video-generation route.** Google's current
-guidance is to reach for Gemini Omni Flash first — it gives better video
-coherence, reasons over text/image/audio/video together, keeps characters
-consistent, and supports multi-turn conversational editing via the
-Interactions API. Come here specifically for Veo's own controls: scene
-extension, last-frame control, or integrating with an existing Veo
-pipeline. If the request is a plain "generate a video of X," that is
-Omni Flash's job, not this skill's.
+Not the default video-generation route: a plain "generate a video of X" is
+Gemini Omni Flash's job, which leads on coherence, multi-input reasoning,
+character consistency, and multi-turn editing. Come here for Veo's own
+controls.
 
 ```bash
 export GEMINI_API_KEY="your-api-key"
@@ -48,11 +43,13 @@ path does not resolve.
 The script declares its own dependency inline (PEP 723), so `uv run`
 resolves it; there is no install step. `--help` carries the current flags.
 
-The script covers text-to-video and image-to-video. Video extension,
-first/last-frame transitions, and ingredients-to-video (reference images)
-take more inputs than a CLI comfortably carries — see
-[references/api-examples.md](references/api-examples.md) for worked code
-to adapt directly.
+The script covers text-to-video and image-to-video, and nothing else.
+Video extension, first/last-frame transitions, and ingredients-to-video
+take more inputs than a CLI comfortably carries; timestamp prompting takes
+no parameter at all. None of the four are commands — they are code and
+prompt text to adapt in place, in
+[references/api-examples.md](references/api-examples.md) and
+[references/prompting-guide.md](references/prompting-guide.md).
 
 ## Choosing a Veo variant
 
@@ -63,8 +60,8 @@ to adapt directly.
 | `veo-3.1-lite-generate-preview` | Cheapest, quick previews, high volume |
 
 Price scales per second of output, and the same two levers move it for
-every variant: resolution (720p/1080p/4k) and whether audio is generated
-alongside the video (video+audio costs more than video-only). Check
+every variant: resolution, and whether audio is generated alongside the
+video (video+audio costs more than video-only). Check
 [Google's Vertex AI generative-AI pricing page](https://cloud.google.com/vertex-ai/generative-ai/pricing)
 for the current per-second figures before a spend decision — a number
 copied here would go stale silently.
@@ -102,32 +99,13 @@ same prompt — there is no separate audio parameter.
 - **Sound effects** — described explicitly: `SFX: thunder cracks in the distance`
 - **Ambient noise** — background soundscape: `Ambient noise: the quiet hum of a starship bridge`
 
-## Advanced Workflows
-
-For complex projects requiring precise control, combine Veo with an image
-model (e.g. Gemini's image generation) to prepare inputs, then feed them
-to Veo:
-
-- **First and Last Frame** — controlled transition between two specific
-  viewpoints (`last_frame` in the generation config).
-- **Ingredients to Video** — consistent characters/objects across shots via
-  `reference_images` in the generation config.
-- **Timestamp Prompting** — direct a multi-shot sequence with precise
-  timing inside a single generation, via the prompt text alone.
-
-See [references/prompting-guide.md](references/prompting-guide.md) for
-workflow instructions and [references/api-examples.md](references/api-examples.md)
-for the code.
-
 ## Watermarking
 
 Google DeepMind documents that Veo output carries an invisible SynthID
-watermark — invisible does not mean absent, and it is meant to be
-machine-detectable rather than seen. Whether API output additionally
-carries a *visible* watermark, the way some consumer surfaces (the Gemini
-app, Flow) do, is **not verified here** — do not assume API output is
-visibly watermark-free, and do not assume it is watermarked, without
-checking a generated clip directly.
+watermark — invisible does not mean absent. Whether API output *also*
+carries a visible watermark, the way some consumer surfaces (the Gemini
+app, Flow) do, is **not verified here** — check a generated clip rather
+than assuming either way.
 
 ## Resources
 

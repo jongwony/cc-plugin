@@ -1,10 +1,10 @@
-# Veo 3.1 — prompt craft
+# Veo — prompt craft
 
-The prompt text you cannot guess: cinematography vocabulary, negative
-prompting, and the three multi-input workflows written as prompts. The API
-shapes those workflows need are in [api-examples.md](./api-examples.md); the
-five-part formula and audio direction are in [SKILL.md](../SKILL.md) and are
-not repeated here.
+The prompt text you cannot guess: cinematography vocabulary, audio
+direction, negative prompting, and the three multi-input workflows written
+as prompts. The API shapes those workflows need are in
+[api-examples.md](./api-examples.md); the five-part formula is in
+[SKILL.md](../SKILL.md) and is not repeated here.
 
 Source: [Google Cloud Blog — Ultimate Prompting Guide for Veo 3.1](https://cloud.google.com/blog/products/ai-machine-learning/ultimate-prompting-guide-for-veo-3-1)
 
@@ -30,6 +30,18 @@ looking out a bus window at the passing city lights with her reflection
 faintly visible on the glass, inside a bus at night during a rainstorm,
 melancholic mood with cool blue tones, moody, cinematic.
 ```
+
+## Audio direction
+
+The soundtrack is written into the same prompt as the picture — three
+idioms carry it:
+
+- **Dialogue** — quotation marks: `A woman says, "We have to leave now."`
+- **Sound effects** — named explicitly: `SFX: thunder cracks in the distance`
+- **Ambient noise** — the background bed: `Ambient noise: the quiet hum of a starship bridge`
+
+Silence is worth stating too, when you want it — an unmentioned soundtrack
+is not the same instruction as a specified quiet one.
 
 ## Negative prompts
 

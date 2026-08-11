@@ -1,4 +1,4 @@
-# Veo 3.1 — the API shapes the CLI does not carry
+# Veo — the API shapes the CLI does not carry
 
 [scripts/generate_video.py](../scripts/generate_video.py) covers text-to-video
 and image-to-video, so neither is repeated here. What follows is the four
@@ -24,7 +24,7 @@ client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 prompt = "A neon hologram of a cat driving at top speed"
 
 operation = client.models.generate_videos(
-    model="veo-3.1-generate-preview",
+    model=MODEL,                                        # see below
     source=types.GenerateVideosSource(prompt=prompt),   # ← varies
     config=types.GenerateVideosConfig(                  # ← varies
         number_of_videos=1,
@@ -48,24 +48,32 @@ with open("output.mp4", "wb") as f:
     f.write(video.video_bytes)
 ```
 
+`MODEL` is a variant name, and the live list is
+`MODEL_CHOICES` in [scripts/generate_video.py](../scripts/generate_video.py)
+— or `--help`, which prints it. Do not copy a variant name out of prose.
+
 Inputs go through `source=types.GenerateVideosSource(...)`, not the
-`prompt=`/`image=`/`video=` kwargs on `generate_videos()` — those are
-deprecated in favor of `source`.
+`prompt=`/`image=`/`video=` kwargs on `generate_videos()`.
 
 Check `operation.error`, then `operation.response`, then
 `operation.response.generated_videos`, in that order, before touching the
 result; the earlier one being fine does not imply the later one exists.
 
-`enhance_prompt` defaults to `True` and cannot be set to `False` on Veo 3.1 —
-omit it rather than pass it explicitly.
+For any config field's accepted values and defaults, read the annotations
+on `types.GenerateVideosConfig` — `python -c "from google.genai import
+types; help(types.GenerateVideosConfig)"` — rather than a value written
+down here. The SDK ships with the model line; this page does not.
 
 ## Video extension ("video-to-video")
 
 The Gemini API path takes the source video as inline bytes. A `gs://` URI is a
 Vertex AI concept and does not apply here.
 
-Output is 720p when extending, whatever `resolution` says, and
-`veo-3.1-lite-generate-preview` does not accept video input at all.
+Extension constrains the output — resolution in particular may be pinned
+regardless of what you asked for — and the cheaper variants may not accept
+video input at all. Both are in the model table on
+[the Veo API page](https://ai.google.dev/gemini-api/docs/video); check it
+before building a pipeline on an extension step.
 
 ```python
 source=types.GenerateVideosSource(
@@ -119,16 +127,14 @@ config=types.GenerateVideosConfig(
 )
 ```
 
-Three constraints come with it, and the first two are silent until the API
-rejects the call:
-
-- Reference images do not combine with `image`, `video`, or `last_frame` —
-  the prompt is the only other input.
-- Duration is forced to 8 seconds.
-- `veo-3.1-lite-generate-preview` does not accept reference images at all;
-  use the full or fast variant.
-
-Up to three images, per the Veo 3.1 model table.
+Reference images are the most constrained input on the API, and the
+constraints are silent until the call is rejected. They bound three things
+at once — which other inputs may accompany them, how long the clip may be,
+and which variants accept them at all — and the counts move between
+releases. The model table on
+[the Veo API page](https://ai.google.dev/gemini-api/docs/video) carries the
+current set; read it before assuming a reference-image run can also carry a
+start frame, or run at the length you had in mind.
 
 ## Resources
 

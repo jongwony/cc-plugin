@@ -9,23 +9,19 @@ description: |
 
   Not the default for a plain "generate a video" / "make a video from this
   photo" request with no Veo-specific control named — prefer Gemini Omni
-  Flash for that (Google's current default for video generation: better
-  coherence, multi-input reasoning, character consistency, multi-turn
-  editing). Reach for this skill only when the task specifically needs
-  Veo's own controls.
+  Flash for that. Reach for this skill only when the task specifically
+  needs Veo's own controls.
 context: fork
 model: sonnet
 ---
 
 # Veo Video Generation
 
-Generate video with Google Veo 3.1 via the Gemini API, with cinematography
+Generate video with Google Veo via the Gemini API, with cinematography
 control and synchronized audio.
 
-Not the default video-generation route: a plain "generate a video of X" is
-Gemini Omni Flash's job, which leads on coherence, multi-input reasoning,
-character consistency, and multi-turn editing. Come here for Veo's own
-controls.
+Not the default video-generation route — a plain "generate a video of X"
+goes to Gemini Omni Flash. Come here for Veo's own controls.
 
 ```bash
 export GEMINI_API_KEY="your-api-key"
@@ -33,7 +29,6 @@ SCRIPT="${CLAUDE_PLUGIN_ROOT}/skills/veo/scripts/generate_video.py"
 
 uv run "$SCRIPT" "A neon hologram of a cat driving at top speed"
 uv run "$SCRIPT" "Slow dolly shot, cinematic lighting" --image photo.jpg
-uv run "$SCRIPT" "Zoom out to reveal the skyline" --model veo-3.1-fast-generate-preview --duration 4 --resolution 720p
 ```
 
 The path goes through `CLAUDE_PLUGIN_ROOT` because this runs with the
@@ -41,7 +36,12 @@ user's project as the working directory, not this one. A bare relative
 path does not resolve.
 
 The script declares its own dependency inline (PEP 723), so `uv run`
-resolves it; there is no install step. `--help` carries the current flags.
+resolves it; there is no install step.
+
+`--help` is the list of model variants, durations, and resolutions the
+script accepts. It is generated from the code, so it is current in a way
+this page cannot be — read it before choosing flags, and do not take a
+variant name from prose anywhere.
 
 The script covers text-to-video and image-to-video, and nothing else.
 Video extension, first/last-frame transitions, and ingredients-to-video
@@ -51,35 +51,34 @@ prompt text to adapt in place, in
 [references/api-examples.md](references/api-examples.md) and
 [references/prompting-guide.md](references/prompting-guide.md).
 
-## Choosing a Veo variant
+## Variant, duration, resolution — read the model table, not this page
 
-| Model | Use when |
-|---|---|
-| `veo-3.1-generate-preview` | Best fidelity, production/hero shots |
-| `veo-3.1-fast-generate-preview` | Faster iteration, drafts |
-| `veo-3.1-lite-generate-preview` | Cheapest, quick previews, high volume |
+Three things about a Veo generation are decided together, and all three
+move with each Veo release. No figures are given here on purpose; what
+follows is what to look up and where.
 
-Lite is not just a cheaper tier of the same thing — it takes no video input
-and no reference images, so video extension and ingredients-to-video are off
-the table there. All three are preview models.
+**The variants are not one model at several prices.** They differ in
+which *inputs* they accept, so a workflow needing a source video or
+reference images can be unavailable on a cheaper rung whatever its price
+per second. Check the accepted inputs before designing around a variant,
+not after.
 
-Price scales per second of output, and resolution is the lever that moves it
-(720p, or 1080p and 4k at 8 seconds). Audio is not a second lever on this
-model line — Veo 3.1 always generates it. Check
-[Google's Vertex AI generative-AI pricing page](https://cloud.google.com/vertex-ai/generative-ai/pricing)
-for the current per-second figures before a spend decision — a number
-copied here would go stale silently.
+**Duration and resolution are not independent.** The higher resolutions
+are offered at a restricted set of clip lengths, so shortening a clip can
+force the resolution down in the same command. The script rejects an
+invalid pair locally, naming both flags, instead of letting the request go
+out and come back rejected — so the error message, not this page, is where
+the current rule reaches you.
 
-## Duration
+**Audio is not reliably a lever.** Whether it can be switched off at all,
+and whether switching it off changes the price, differs by model line —
+look it up in the same table before planning a silent render or budgeting
+around one.
 
-Supported single-generation durations are **4, 6, or 8 seconds** —
-anything else is rejected by the API. `--duration` defaults to 8.
-
-Duration and resolution are coupled: **1080p and 4k are 8 seconds only**, so
-a 4- or 6-second clip has to be 720p. The script's `--resolution` defaults to
-1080p, which means shortening a clip means dropping the resolution in the
-same command. It rejects the invalid pair locally rather than letting the API
-reject it after the request is already out.
+All three live in one place: the model table on
+[the Veo API page](https://ai.google.dev/gemini-api/docs/video), with
+per-second figures on
+[the Gemini API pricing page](https://ai.google.dev/gemini-api/docs/pricing).
 
 ## The Prompting Formula
 
@@ -100,23 +99,19 @@ color film, slightly grainy.
 For detailed cinematography language (camera movements, composition, lens
 techniques), see [references/prompting-guide.md](references/prompting-guide.md).
 
-## Audio Direction
+## Audio
 
-Audio is always on for Veo 3.1 and cannot be switched off. Veo builds the
-soundtrack from text instructions in the same prompt — there is no separate
-audio parameter, only the prompt.
-
-- **Dialogue** — quotation marks: `A woman says, "We have to leave now."`
-- **Sound effects** — described explicitly: `SFX: thunder cracks in the distance`
-- **Ambient noise** — background soundscape: `Ambient noise: the quiet hum of a starship bridge`
+Veo builds the soundtrack from the prompt text. There is no audio
+parameter to reach for — dialogue, effects, and ambience are written into
+the same string as the picture, and the idioms for each are in
+[references/prompting-guide.md](references/prompting-guide.md).
 
 ## Watermarking
 
-Google DeepMind documents that Veo output carries an invisible SynthID
-watermark — invisible does not mean absent. Whether API output *also*
-carries a visible watermark, the way some consumer surfaces (the Gemini
-app, Flow) do, is **not verified here** — check a generated clip rather
-than assuming either way.
+Veo output is watermarked. Whether a given clip carries a *visible* mark
+on top of the invisible one varies by surface and by release, and it is
+not something to assume in either direction — generate one clip and look
+at it before promising a client an unmarked render.
 
 ## Resources
 

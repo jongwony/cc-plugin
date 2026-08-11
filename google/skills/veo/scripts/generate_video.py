@@ -22,10 +22,10 @@ so every invocation goes through the plugin root):
 
     uv run "$SCRIPT" "A neon hologram of a cat driving at top speed"
     uv run "$SCRIPT" "Slow dolly shot, cinematic lighting" --image photo.jpg
-    uv run "$SCRIPT" "Zoom out to reveal the city skyline" --model veo-3.1-fast-generate-preview --duration 4 --resolution 720p
+    uv run "$SCRIPT" "Zoom out to reveal the city skyline" --duration 4 --resolution 720p
 
-A clip shorter than 8 seconds must be 720p; --resolution defaults to 1080p,
-so the two flags move together.
+Duration and resolution are not independent; --help's flag list carries the
+accepted values, and an unusable pair is rejected before the request goes out.
 
 Environment:
     GEMINI_API_KEY - Google AI API key (required)
@@ -60,11 +60,17 @@ DEFAULT_MODEL = "veo-3.1-generate-preview"
 DURATION_CHOICES = [4, 6, 8]
 DEFAULT_DURATION = 8
 
-# The Veo 3.1 line couples the two: above 720p a clip is 8 seconds or nothing.
-# The default resolution is the high one, so shortening a clip alone produces a
-# pair the API rejects — and it rejects it after the request is out, naming the
+# A local mirror of a vendor rule, kept because the alternative is learning it
+# from a rejected request: the default resolution is the high one, so shortening
+# a clip alone produces a pair the API refuses — and it refuses by naming the
 # combination rather than the flag the caller actually moved.
-FIXED_DURATION_RESOLUTIONS = {"1080p", "4k"}
+#
+# Being a mirror, it can go stale in the one direction that hurts: if the vendor
+# relaxes the pairing, this rejects a call the API would now accept. That is the
+# bug to suspect first if a valid-looking pair stops working — widen or delete
+# the check rather than working around it. Members must stay reachable through
+# the --resolution choices below, or they assert a rule nothing can trigger.
+FIXED_DURATION_RESOLUTIONS = {"1080p"}
 FIXED_DURATION = 8
 
 # google-genai opts OUT of a default httpx timeout by setting it to None, so a
@@ -190,11 +196,10 @@ def main():
 
     try:
         video = generate(client, args)
-        # The API may return the clip inline or as a file reference; which one
-        # arrives is not something the caller controls. A URI-only response
-        # used to be printed and left there, so the run exited 0 having written
-        # nothing — fetch it instead, and fall back to surfacing the URI only
-        # when the fetch itself fails, so the clip stays recoverable by hand.
+        # The API may return the clip inline or as a file reference, and which
+        # one arrives is not the caller's to control — so fetch the reference
+        # rather than reporting it, and surface the URI only when the fetch
+        # itself fails, keeping the clip recoverable by hand.
         if not video.video_bytes and video.uri:
             try:
                 client.files.download(file=video)

@@ -74,6 +74,10 @@ _rec_start_ts = None   # time.monotonic() 녹음 시작 시각 — watchdog 의 
 _state_lock = threading.Lock()  # _recording/_rec_proc/_rec_start_ts 전이를 원자화 —
                                  # 정상 정지(리스너)와 watchdog 폐기가 동시에 도달해도
                                  # 정확히 하나만 선점하게 한다 (아래 _claim_stop)
+_dying = set()         # 종료 진행 중인 rec 자식. _claim_stop 이 _rec_proc 를 비우는
+                        # 순간부터 종료가 끝날 때까지 이 자식은 전역 어디에도 없어,
+                        # 그 사이 프로세스가 끝나면 정리 담당 스레드와 함께 사라지며
+                        # 마이크를 쥔 채 남는다 — 그 구간을 여기서 붙잡아 둔다.
 _lock_fp = None        # 단일 인스턴스 락 fd — 프로세스 수명 동안 열어 둬 락 유지
 _transcribe_q = queue.Queue()  # (snapshot, dur) FIFO 큐 — 단일 consumer 워커가 순서대로 전사
 _wav_seq = 0           # WAV 스냅샷 고유 카운터(리스너 단일 스레드에서만 증가)
@@ -163,22 +167,33 @@ def _claim_stop(expected_ts=None, take_wav=None):
 def _terminate_rec(proc):
     """rec 자식을 SIGINT 로 먼저 종료 — sox 가 CoreAudio 입력 장치를 정상 반납해야
     마이크 표시등이 꺼진다(SIGKILL 만 쓰면 표시등이 켜진 채 남을 수 있음). 타임아웃
-    시에만 SIGKILL 로 폴백."""
+    시에만 SIGKILL 로 폴백.
+
+    자식이 실제로 죽은 것을 확인했으면 True. 확인하지 못했으면 False — 이때 자식은
+    *아직 살아 있고* 장치를 쥐고 있을 수 있다(거둬지지 않은 좀비가 아니다). 호출부는
+    이 값을 '마이크가 반납됐다'고 말해도 되는지의 근거로 쓴다.
+    """
     if proc is None:
-        return
-    proc.send_signal(signal.SIGINT)
+        return True
+    _dying.add(proc)
     try:
-        proc.wait(timeout=REC_EXIT_TIMEOUT)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+        proc.send_signal(signal.SIGINT)
         try:
-            proc.wait(timeout=REC_EXIT_TIMEOUT)   # SIGKILL 후 reap
+            proc.wait(timeout=REC_EXIT_TIMEOUT)
+            return True
         except subprocess.TimeoutExpired:
-            # 커널 대기(중단 불가 I/O)에 걸린 자식은 SIGKILL 로도 즉시 사라지지
-            # 않는다. 무한정 기다리면 이 함수를 부른 감시 스레드가 그대로 멎어
-            # 상한이 사라지므로, 좀비 하나를 남기더라도 감시자를 살려 둔다
-            # (좀비는 데몬이 끝날 때 정리된다).
-            pass
+            proc.kill()
+            try:
+                proc.wait(timeout=REC_EXIT_TIMEOUT)   # SIGKILL 후 reap
+                return True
+            except subprocess.TimeoutExpired:
+                # SIGKILL 을 보내고도 시간 안에 거두지 못했다는 것은 자식이 중단 불가
+                # 커널 대기에 걸려 아직 살아 있다는 뜻이다. 여기서 무한정 기다리면
+                # 이 함수를 부른 감시 스레드가 그대로 멎어 상한이 사라지므로 포기하고
+                # 돌아가되, 확인하지 못했다는 사실을 그대로 올려보낸다.
+                return False
+    finally:
+        _dying.discard(proc)
 
 
 def _stop_and_transcribe():
@@ -193,9 +208,13 @@ def _stop_and_transcribe():
     claimed, proc, snapshot = _claim_stop(take_wav=f"{WAV}.{_wav_seq}")
     if not claimed:
         return
-    _terminate_rec(proc)
+    if not _terminate_rec(proc):
+        print("  (경고: rec 가 종료를 확인해 주지 않음 — 마이크가 아직 잡혀 있을 수 있음)",
+              flush=True)
     if snapshot is None:
-        # rec 가 파일을 못 만든 경우(장치 점유/권한 오류 등) — 조용히 종료
+        # rec 가 파일을 만들지 못한 경우(장치 점유/권한 오류 등). 조용히 넘기면
+        # 사용자는 말을 하고도 아무 반응 없는 화면만 보게 되므로 이유를 남긴다.
+        print("  (녹음 파일 없음 — 이번 발화는 버려집니다)", flush=True)
         return
 
     # 오발화(짧은 brush)는 스레드를 만들기 전에 리스너 스레드에서 바로 거른다
@@ -239,13 +258,18 @@ def _watchdog():
                                                    take_wav=f"{WAV}.discard")
             if not claimed:
                 continue  # 정상 정지가 먼저 선점했거나 다른 녹음으로 바뀜 — no-op
-            _terminate_rec(proc)
+            stopped = _terminate_rec(proc)
             if discarded is not None:
                 try:
                     os.remove(discarded)
                 except OSError:
                     pass
-            print(f"⏱ 최대 녹음 시간({MAX_REC_SEC:.0f}s) 도달 — 정지 후 폐기(전사 생략)",
+            # 파일을 지웠다고 해서 장치가 반납된 것은 아니다 — 종료를 확인하지 못한
+            # 경우까지 '정지 완료'라고 말하면, 마이크가 켜진 채인데 끝났다고 믿게 된다.
+            print(f"⏱ 최대 녹음 시간({MAX_REC_SEC:.0f}s) 도달 — 정지 후 폐기(전사 생략)"
+                  if stopped else
+                  f"⏱ 최대 녹음 시간({MAX_REC_SEC:.0f}s) 도달 — 폐기했지만 rec 종료 미확인"
+                  " (마이크가 아직 잡혀 있을 수 있음)",
                   flush=True)
             try:
                 # timeout 필수 — 알림이 멎으면(Notification Center 지연, GUI 세션
@@ -490,6 +514,12 @@ def _shutdown_rec():
     claimed, proc, _ = _claim_stop()
     if claimed:
         _terminate_rec(proc)
+    # 선점은 끝났지만 종료는 아직인 자식은 전역에서 이미 사라진 상태다(_claim_stop 이
+    # _rec_proc 를 비운다). 그 순간 종료가 끝나면 담당 스레드가 프로세스와 함께
+    # 사라지므로, 위 선점만으로는 '정리했다'는 말이 거짓이 된다 — 정리 중 목록에서
+    # 직접 찾아 마저 거둔다.
+    for dying in list(_dying):
+        _terminate_rec(dying)
 
 
 def _on_term(signum, frame):

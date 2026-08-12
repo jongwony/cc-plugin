@@ -118,7 +118,7 @@ def _start_recording():
     print("● 녹음…", flush=True)
 
 
-def _claim_stop(expected_ts=None, take_wav=False):
+def _claim_stop(expected_ts=None, take_wav=None):
     """_recording→False 전이를 원자적으로 선점한다.
 
     정상 정지(리스너 release)와 watchdog 폐기(상한 도달)가 동시에 도달해도 정확히
@@ -131,12 +131,14 @@ def _claim_stop(expected_ts=None, take_wav=False):
       '정상 정지 + 새 누름'이 끼어들 수 있고, 그때 선점을 그대로 진행하면 상한과
       무관한 *갓 시작한* 녹음을 대신 끊게 된다. 관찰한 녹음이 아니면 손대지 않는다.
 
-    take_wav — 선점과 같은 임계구역 안에서 WAV 를 폐기 전용 경로로 옮겨 온 뒤
-      그 경로를 돌려준다. 선점 직후 _recording 은 이미 False 라 다음 누름이 곧바로
-      새 녹음을 같은 WAV 경로에 시작할 수 있는데, 락 밖에서 WAV 를 지우면 그 새
-      녹음의 파일을 지우게 된다(새 녹음은 계속 녹음 중이라 믿지만 파일은 사라진
-      상태). 경로 자체를 선점 시점에 떼어 오면 이후 정리는 항상 자기 세대의
-      파일만 건드린다.
+    take_wav — 넘긴 경로로 WAV 를 선점과 같은 임계구역 안에서 옮겨 오고 그 경로를
+      돌려준다(옮기지 못하면 None). 선점 직후 _recording 은 이미 False 라 다음
+      누름이 곧바로 새 녹음을 같은 WAV 경로에 시작할 수 있고, 그 뒤 락 밖에서
+      공유 경로를 건드리면 남의 세대를 건드리게 된다 — 폐기 쪽은 새 녹음의 파일을
+      지우고(녹음 중이라 믿는데 파일이 없다), 전사 쪽은 새 녹음이 쓰는 중인 파일을
+      스냅샷으로 채 가거나 그 빈 파일 길이를 읽어 방금 한 말을 '너무 짧음'으로
+      버린다. 경로를 선점 시점에 떼어 오면 이후 작업은 항상 자기 세대의 파일만
+      본다. rec 는 fd(inode)에 계속 쓰므로 옮긴 뒤에도 그 파일에 정상 기록·마감된다.
     """
     global _recording, _rec_proc, _rec_start_ts
     with _state_lock:
@@ -148,11 +150,12 @@ def _claim_stop(expected_ts=None, take_wav=False):
         proc, _rec_proc = _rec_proc, None
         _rec_start_ts = None
         taken = None
-        if take_wav:
-            taken = f"{WAV}.discard"
+        if take_wav is not None:
+            taken = take_wav
             try:
                 os.replace(WAV, taken)
             except OSError:
+                # rec 가 파일을 아직/전혀 만들지 못한 경우
                 taken = None
         return True, proc, taken
 
@@ -179,30 +182,33 @@ def _terminate_rec(proc):
 
 
 def _stop_and_transcribe():
-    global _wav_seq
-    claimed, proc, _ = _claim_stop()
-    if not claimed:
-        return
-    _terminate_rec(proc)
-
-    # 오발화(짧은 brush)는 스냅샷·스레드를 만들기 전에 리스너 스레드에서 바로 거른다
-    # — 무의미한 워커가 쌓이지 않게. _wav_duration 은 헤더 청크만 읽어 즉시 반환된다.
-    dur = _wav_duration(WAV)
-    if dur < MIN_SEC:
-        print(f"  (무시: {dur:.2f}s)", flush=True)
-        return
-
-    # WAV 를 고유 스냅샷으로 옮긴 뒤 전사를 FIFO 큐에 넣는다. 두 가지를 동시에
+    # WAV 는 선점과 같은 임계구역에서 고유 스냅샷으로 떼어 온다. 세 가지를 함께
     # 해결한다: (1) pynput 리스너 콜백 스레드를 즉시 풀어, 전사(최대 timeout 초)
     # 동안 다음 키 입력·녹음이 막히거나 macOS 이벤트 탭이 비활성화되지 않게 한다.
     # (2) 다음 녹음이 같은 WAV 경로를 덮어써 전사 중인 파일을 훼손하는 race 를 막는다.
+    # (3) 아래 rec 종료 대기(최대 REC_EXIT_TIMEOUT 초) 동안 새 녹음이 시작돼도
+    #     이 세대의 작업이 그 새 파일을 채 가거나 그 길이를 읽지 않는다.
+    global _wav_seq
     _wav_seq += 1
-    snapshot = f"{WAV}.{_wav_seq}"
-    try:
-        os.replace(WAV, snapshot)
-    except OSError:
+    claimed, proc, snapshot = _claim_stop(take_wav=f"{WAV}.{_wav_seq}")
+    if not claimed:
+        return
+    _terminate_rec(proc)
+    if snapshot is None:
         # rec 가 파일을 못 만든 경우(장치 점유/권한 오류 등) — 조용히 종료
         return
+
+    # 오발화(짧은 brush)는 스레드를 만들기 전에 리스너 스레드에서 바로 거른다
+    # — 무의미한 워커가 쌓이지 않게. _wav_duration 은 헤더 청크만 읽어 즉시 반환된다.
+    dur = _wav_duration(snapshot)
+    if dur < MIN_SEC:
+        print(f"  (무시: {dur:.2f}s)", flush=True)
+        try:
+            os.remove(snapshot)   # 고유 이름이라 다음 녹음이 덮어쓰지 않는다 — 직접 지운다
+        except OSError:
+            pass
+        return
+
     _transcribe_q.put((snapshot, dur))
 
 
@@ -229,7 +235,8 @@ def _watchdog():
             # expected_ts 로 '방금 관찰한 그 녹음'만 선점한다. take_wav 로 WAV 를
             # 선점과 같은 임계구역에서 떼어 와, 아래 느린 정리가 그 사이 시작된
             # 새 녹음의 파일을 건드리지 못하게 한다 (근거는 _claim_stop 참고).
-            claimed, proc, discarded = _claim_stop(expected_ts=started, take_wav=True)
+            claimed, proc, discarded = _claim_stop(expected_ts=started,
+                                                   take_wav=f"{WAV}.discard")
             if not claimed:
                 continue  # 정상 정지가 먼저 선점했거나 다른 녹음으로 바뀜 — no-op
             _terminate_rec(proc)

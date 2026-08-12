@@ -41,6 +41,10 @@ LANG = "auto"          # ko / en / auto
 PROMPT = "오늘 회의에서 project 일정을 확인했고 3시에 다시 meeting을 했습니다."
 TRIGGER = keyboard.Key.alt_r   # 오른쪽 Option
 MIN_SEC = 0.3          # 이보다 짧은 녹음은 오발화로 간주, 무시
+MAX_REC_SEC = 180.0     # 최대 녹음 시간(초) — 도달 시 정지 후 폐기(전사 안 함). release
+                         # 이벤트가 아예 유실되거나 리스너 자체가 멈추는 경우까지 잡아야 하므로,
+                         # 리스너 콜백이 아니라 리스너와 무관한 독립 watchdog 스레드로 감시한다
+                         # (아래 _watchdog).
 # rec 녹음 포맷 — whisper 친화적인 컴팩트 s16 PCM 으로 고정한다. _wav_duration
 # 은 더 이상 이 값에 의존하지 않고(WAV `fmt ` 청크에서 실제 포맷을 읽음) 포맷이
 # 드리프트해도 길이가 조용히 틀어지지 않으므로, 아래 -b/-e 고정은 정확성의
@@ -59,51 +63,83 @@ KEEP_DIR = None
 
 _rec_proc = None
 _recording = False
+_rec_start_ts = None   # time.monotonic() 녹음 시작 시각 — watchdog 의 경과 판정 기준
+                        # (wall clock 은 시각 조정으로 점프할 수 있어 monotonic 사용)
+_state_lock = threading.Lock()  # _recording/_rec_proc/_rec_start_ts 전이를 원자화 —
+                                 # 정상 정지(리스너)와 watchdog 폐기가 동시에 도달해도
+                                 # 정확히 하나만 선점하게 한다 (아래 _claim_stop)
 _lock_fp = None        # 단일 인스턴스 락 fd — 프로세스 수명 동안 열어 둬 락 유지
 _transcribe_q = queue.Queue()  # (snapshot, dur) FIFO 큐 — 단일 consumer 워커가 순서대로 전사
 _wav_seq = 0           # WAV 스냅샷 고유 카운터(리스너 단일 스레드에서만 증가)
 
 
 def _start_recording():
-    global _rec_proc, _recording
-    if _recording:
-        return
-    _recording = True
-    # 이전 녹음 파일을 먼저 제거 — rec 가 새 파일을 못 쓰는 상황(장치 점유/권한 오류)
-    # 에서 직전 녹음을 stale 하게 전사·붙여넣기 하는 것을 방지.
-    try:
-        os.remove(WAV)
-    except FileNotFoundError:
-        pass
-    # mono s16, 장치 네이티브 샘플레이트로 캡처 — -r 을 강제하지 *않는다*.
-    # AirPods 등 블루투스(HFP) 입력의 네이티브는 24kHz인데 -r 16000 을 강제하면
-    # SoX coreaudio 경로의 리샘플이 스트림을 잡음으로 손상시킨다(같은 AirPods를
-    # 네이티브 레이트로 받는 정상 앱에선 깨끗). whisper-cli 가 임의 입력 레이트를
-    # 내부에서 16kHz 로 리샘플하므로 네이티브 캡처를 그대로 넘기면 된다. -b/-e 는
-    # 컴팩트 s16 선호 요청일 뿐(정확성용 아님 — _wav_duration 이 `fmt ` 청크에서
-    # 실제 포맷을 읽음). SIGINT 으로 종료해야 sox 가 WAV 헤더를 정상 finalize 함.
-    _rec_proc = subprocess.Popen(
-        ["rec", "-q", "-b", str(SAMPLE_BYTES * 8), "-e", "signed-integer",
-         "-c", str(CHANNELS), WAV],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    global _rec_proc, _recording, _rec_start_ts
+    with _state_lock:
+        if _recording:
+            return
+        _recording = True
+        _rec_start_ts = time.monotonic()
+        # 이전 녹음 파일을 먼저 제거 — rec 가 새 파일을 못 쓰는 상황(장치 점유/권한 오류)
+        # 에서 직전 녹음을 stale 하게 전사·붙여넣기 하는 것을 방지.
+        try:
+            os.remove(WAV)
+        except FileNotFoundError:
+            pass
+        # mono s16, 장치 네이티브 샘플레이트로 캡처 — -r 을 강제하지 *않는다*.
+        # AirPods 등 블루투스(HFP) 입력의 네이티브는 24kHz인데 -r 16000 을 강제하면
+        # SoX coreaudio 경로의 리샘플이 스트림을 잡음으로 손상시킨다(같은 AirPods를
+        # 네이티브 레이트로 받는 정상 앱에선 깨끗). whisper-cli 가 임의 입력 레이트를
+        # 내부에서 16kHz 로 리샘플하므로 네이티브 캡처를 그대로 넘기면 된다. -b/-e 는
+        # 컴팩트 s16 선호 요청일 뿐(정확성용 아님 — _wav_duration 이 `fmt ` 청크에서
+        # 실제 포맷을 읽음). SIGINT 으로 종료해야 sox 가 WAV 헤더를 정상 finalize 함.
+        _rec_proc = subprocess.Popen(
+            ["rec", "-q", "-b", str(SAMPLE_BYTES * 8), "-e", "signed-integer",
+             "-c", str(CHANNELS), WAV],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
     print("● 녹음…", flush=True)
 
 
-def _stop_and_transcribe():
-    global _rec_proc, _recording, _wav_seq
-    if not _recording:
+def _claim_stop():
+    """_recording→False 전이를 원자적으로 선점한다.
+
+    정상 정지(리스너 release)와 watchdog 폐기(상한 도달)가 동시에 도달해도 정확히
+    하나만 (True, proc) 를 받고 나머지는 (False, None) 로 즉시 반환된다 — 이중
+    정지·이중 reap·이미 지운 파일을 전사하는 race 를 막는다. 실제 종료·전사·삭제
+    같은 느린 작업은 이 함수가 반환한 뒤 락 밖에서 수행한다.
+    """
+    global _recording, _rec_proc, _rec_start_ts
+    with _state_lock:
+        if not _recording:
+            return False, None
+        _recording = False
+        proc, _rec_proc = _rec_proc, None
+        _rec_start_ts = None
+        return True, proc
+
+
+def _terminate_rec(proc):
+    """rec 자식을 SIGINT 로 먼저 종료 — sox 가 CoreAudio 입력 장치를 정상 반납해야
+    마이크 표시등이 꺼진다(SIGKILL 만 쓰면 표시등이 켜진 채 남을 수 있음). 타임아웃
+    시에만 SIGKILL 로 폴백."""
+    if proc is None:
         return
-    _recording = False
-    if _rec_proc is not None:
-        _rec_proc.send_signal(signal.SIGINT)
-        try:
-            _rec_proc.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            _rec_proc.kill()
-            _rec_proc.wait()   # SIGKILL 후 reap — 미종료 writer 의 파일을 전사하지 않게
-        _rec_proc = None
+    proc.send_signal(signal.SIGINT)
+    try:
+        proc.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()   # SIGKILL 후 reap — 미종료 writer 의 파일을 건드리지 않게
+
+
+def _stop_and_transcribe():
+    global _wav_seq
+    claimed, proc = _claim_stop()
+    if not claimed:
+        return
+    _terminate_rec(proc)
 
     # 오발화(짧은 brush)는 스냅샷·스레드를 만들기 전에 리스너 스레드에서 바로 거른다
     # — 무의미한 워커가 쌓이지 않게. _wav_duration 은 헤더 청크만 읽어 즉시 반환된다.
@@ -124,6 +160,42 @@ def _stop_and_transcribe():
         # rec 가 파일을 못 만든 경우(장치 점유/권한 오류 등) — 조용히 종료
         return
     _transcribe_q.put((snapshot, dur))
+
+
+def _watchdog():
+    """정지 이벤트가 리스너에서 오지 않아도 녹음을 강제 종료하는 독립 스레드.
+
+    리스너 콜백 안에 심는 타이머는 리스너 자체가 멈춰 있으면 함께 죽어 무용하다 —
+    이 스레드는 리스너와 완전히 별개로, 자체 폴링만으로 MAX_REC_SEC 도달을 감지한다.
+    도달 시 정지 후 폐기(전사하지 않음) — 방치된 녹음을 몇 분 뒤 아무 창에나 붙여
+    넣는 것은, 사용자가 자리를 비웠을 때 가장 위험한 동작이라 선택하지 않는다.
+    폴링 간격을 짧게(1s) 잡아 상한 도달 후 오래 방치되지 않게 한다.
+    """
+    while True:
+        time.sleep(1.0)
+        if not _recording or _rec_start_ts is None:
+            continue
+        if time.monotonic() - _rec_start_ts < MAX_REC_SEC:
+            continue
+        claimed, proc = _claim_stop()
+        if not claimed:
+            continue  # 그 사이 정상 정지가 먼저 선점 — no-op
+        _terminate_rec(proc)
+        try:
+            os.remove(WAV)
+        except OSError:
+            pass
+        print(f"⏱ 최대 녹음 시간({MAX_REC_SEC:.0f}s) 도달 — 정지 후 폐기(전사 생략)",
+              flush=True)
+        try:
+            subprocess.run(
+                ["osascript", "-e",
+                 f'display notification "최대 {MAX_REC_SEC:.0f}초 도달, 녹음을 버렸습니다" '
+                 'with title "voice-dictation"'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        except OSError:
+            pass
 
 
 def _save_debug_sample(wav_path, text, dur):
@@ -374,6 +446,9 @@ def main():
     threading.Thread(target=_transcribe_worker, daemon=True).start()
     # 콜드 스타트 비용을 백그라운드 기동 시점으로 흡수 — 키 리스너는 즉시 활성.
     threading.Thread(target=_warmup, daemon=True).start()
+    # 리스너와 무관한 최대 녹음 시간 감시 — 리스너 자체가 죽어도 동작해야 하므로
+    # 리스너 콜백에 얹지 않고 별도 스레드로 둔다.
+    threading.Thread(target=_watchdog, daemon=True).start()
     with keyboard.Listener(on_press=_on_press, on_release=_on_release) as listener:
         listener.join()
 

@@ -172,30 +172,39 @@ def _watchdog():
     폴링 간격을 짧게(1s) 잡아 상한 도달 후 오래 방치되지 않게 한다.
     """
     while True:
-        time.sleep(1.0)
-        if not _recording or _rec_start_ts is None:
-            continue
-        if time.monotonic() - _rec_start_ts < MAX_REC_SEC:
-            continue
-        claimed, proc = _claim_stop()
-        if not claimed:
-            continue  # 그 사이 정상 정지가 먼저 선점 — no-op
-        _terminate_rec(proc)
+        time.sleep(1.0)   # try 밖 — 어떤 경로로 돌아와도 폴링 간격이 보장된다
         try:
-            os.remove(WAV)
-        except OSError:
-            pass
-        print(f"⏱ 최대 녹음 시간({MAX_REC_SEC:.0f}s) 도달 — 정지 후 폐기(전사 생략)",
-              flush=True)
-        try:
-            subprocess.run(
-                ["osascript", "-e",
-                 f'display notification "최대 {MAX_REC_SEC:.0f}초 도달, 녹음을 버렸습니다" '
-                 'with title "voice-dictation"'],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            )
-        except OSError:
-            pass
+            # 두 값을 한 번만 읽어 지역에 고정한다. 전역을 두 번 읽으면 그 사이에
+            # 정상 정지가 _rec_start_ts 를 None 으로 만들 수 있고, 뺄셈이 TypeError
+            # 로 터지면서 이 스레드가 죽는다 — 그 순간 상한이 조용히 사라진다.
+            rec, started = _recording, _rec_start_ts
+            if not rec or started is None:
+                continue
+            if time.monotonic() - started < MAX_REC_SEC:
+                continue
+            claimed, proc = _claim_stop()
+            if not claimed:
+                continue  # 그 사이 정상 정지가 먼저 선점 — no-op
+            _terminate_rec(proc)
+            try:
+                os.remove(WAV)
+            except OSError:
+                pass
+            print(f"⏱ 최대 녹음 시간({MAX_REC_SEC:.0f}s) 도달 — 정지 후 폐기(전사 생략)",
+                  flush=True)
+            try:
+                subprocess.run(
+                    ["osascript", "-e",
+                     f'display notification "최대 {MAX_REC_SEC:.0f}초 도달, 녹음을 버렸습니다" '
+                     'with title "voice-dictation"'],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+            except OSError:
+                pass
+        except Exception:   # noqa: BLE001
+            # 다른 경로가 죽는 것을 잡으라고 있는 스레드가 자기 루프 때문에 죽으면
+            # 안 된다. 한 틱을 거르는 편이 감시자를 영영 잃는 것보다 낫다.
+            continue
 
 
 def _save_debug_sample(wav_path, text, dur):

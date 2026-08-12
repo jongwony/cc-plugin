@@ -15,6 +15,7 @@
 중지: Ctrl+C
 """
 import argparse
+import atexit
 import fcntl
 import glob
 import os
@@ -56,6 +57,11 @@ SAMPLE_BYTES = 2       # rec -b 16 -e signed-integer 선호 포맷 s16(16-bit si
 # Metal 셰이더 컴파일(첫 호출 수십 초 가능) 비용을 짧은 발화에서도 흡수해야 한다.
 WHISPER_MIN_TIMEOUT = 40.0
 WHISPER_TIMEOUT_FACTOR = 4.0  # 실제 오디오 길이 대비 타임아웃 배수
+# 알림(osascript) 상한 — 감시 스레드가 이 호출에서 무한정 막히면 상한 자체가
+# 사라지므로(그 스레드가 유일한 감시자다), 알림은 반드시 시간 제한을 건다.
+NOTIFY_TIMEOUT = 10.0
+# rec 자식 종료를 기다리는 상한 — SIGINT 응답분과 SIGKILL 후 reap 에 각각 적용.
+REC_EXIT_TIMEOUT = 2.0
 WAV = os.path.join(tempfile.gettempdir(), "voice_dictation.wav")
 LOCK = os.path.join(tempfile.gettempdir(), "voice_dictation.lock")
 DEBUG = False
@@ -93,31 +99,62 @@ def _start_recording():
         # 내부에서 16kHz 로 리샘플하므로 네이티브 캡처를 그대로 넘기면 된다. -b/-e 는
         # 컴팩트 s16 선호 요청일 뿐(정확성용 아님 — _wav_duration 이 `fmt ` 청크에서
         # 실제 포맷을 읽음). SIGINT 으로 종료해야 sox 가 WAV 헤더를 정상 finalize 함.
-        _rec_proc = subprocess.Popen(
-            ["rec", "-q", "-b", str(SAMPLE_BYTES * 8), "-e", "signed-integer",
-             "-c", str(CHANNELS), WAV],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        try:
+            _rec_proc = subprocess.Popen(
+                ["rec", "-q", "-b", str(SAMPLE_BYTES * 8), "-e", "signed-integer",
+                 "-c", str(CHANNELS), WAV],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError as exc:
+            # rec 를 띄우지 못한 경우(미설치·fd 고갈 등) 위에서 세운 상태를 되돌린다.
+            # 되돌리지 않으면 _recording 이 True 로 남아 이후 모든 누름이 조용히
+            # no-op 이 되고, 감시자가 상한 시간 뒤 초기화할 때까지 받아쓰기가 죽는다.
+            _recording = False
+            _rec_start_ts = None
+            _rec_proc = None
+            print(f"  (녹음 시작 실패: {exc})", flush=True)
+            return
     print("● 녹음…", flush=True)
 
 
-def _claim_stop():
+def _claim_stop(expected_ts=None, take_wav=False):
     """_recording→False 전이를 원자적으로 선점한다.
 
     정상 정지(리스너 release)와 watchdog 폐기(상한 도달)가 동시에 도달해도 정확히
-    하나만 (True, proc) 를 받고 나머지는 (False, None) 로 즉시 반환된다 — 이중
-    정지·이중 reap·이미 지운 파일을 전사하는 race 를 막는다. 실제 종료·전사·삭제
-    같은 느린 작업은 이 함수가 반환한 뒤 락 밖에서 수행한다.
+    하나만 (True, proc, wav) 를 받고 나머지는 (False, None, None) 으로 즉시
+    반환된다 — 이중 정지·이중 reap·이미 지운 파일을 전사하는 race 를 막는다.
+    실제 종료·전사·삭제 같은 느린 작업은 이 함수가 반환한 뒤 락 밖에서 수행한다.
+
+    expected_ts — 호출자가 앞서 관찰한 _rec_start_ts. 넘기면 락 안에서 동일성을
+      재확인하고, 다르면 선점하지 않는다. 관찰과 선점 사이는 락 밖이라 그 틈에
+      '정상 정지 + 새 누름'이 끼어들 수 있고, 그때 선점을 그대로 진행하면 상한과
+      무관한 *갓 시작한* 녹음을 대신 끊게 된다. 관찰한 녹음이 아니면 손대지 않는다.
+
+    take_wav — 선점과 같은 임계구역 안에서 WAV 를 폐기 전용 경로로 옮겨 온 뒤
+      그 경로를 돌려준다. 선점 직후 _recording 은 이미 False 라 다음 누름이 곧바로
+      새 녹음을 같은 WAV 경로에 시작할 수 있는데, 락 밖에서 WAV 를 지우면 그 새
+      녹음의 파일을 지우게 된다(새 녹음은 계속 녹음 중이라 믿지만 파일은 사라진
+      상태). 경로 자체를 선점 시점에 떼어 오면 이후 정리는 항상 자기 세대의
+      파일만 건드린다.
     """
     global _recording, _rec_proc, _rec_start_ts
     with _state_lock:
         if not _recording:
-            return False, None
+            return False, None, None
+        if expected_ts is not None and _rec_start_ts != expected_ts:
+            return False, None, None
         _recording = False
         proc, _rec_proc = _rec_proc, None
         _rec_start_ts = None
-        return True, proc
+        taken = None
+        if take_wav:
+            taken = f"{WAV}.discard"
+            try:
+                os.replace(WAV, taken)
+            except OSError:
+                taken = None
+        return True, proc, taken
 
 
 def _terminate_rec(proc):
@@ -128,15 +165,22 @@ def _terminate_rec(proc):
         return
     proc.send_signal(signal.SIGINT)
     try:
-        proc.wait(timeout=2)
+        proc.wait(timeout=REC_EXIT_TIMEOUT)
     except subprocess.TimeoutExpired:
         proc.kill()
-        proc.wait()   # SIGKILL 후 reap — 미종료 writer 의 파일을 건드리지 않게
+        try:
+            proc.wait(timeout=REC_EXIT_TIMEOUT)   # SIGKILL 후 reap
+        except subprocess.TimeoutExpired:
+            # 커널 대기(중단 불가 I/O)에 걸린 자식은 SIGKILL 로도 즉시 사라지지
+            # 않는다. 무한정 기다리면 이 함수를 부른 감시 스레드가 그대로 멎어
+            # 상한이 사라지므로, 좀비 하나를 남기더라도 감시자를 살려 둔다
+            # (좀비는 데몬이 끝날 때 정리된다).
+            pass
 
 
 def _stop_and_transcribe():
     global _wav_seq
-    claimed, proc = _claim_stop()
+    claimed, proc, _ = _claim_stop()
     if not claimed:
         return
     _terminate_rec(proc)
@@ -182,24 +226,33 @@ def _watchdog():
                 continue
             if time.monotonic() - started < MAX_REC_SEC:
                 continue
-            claimed, proc = _claim_stop()
+            # expected_ts 로 '방금 관찰한 그 녹음'만 선점한다. take_wav 로 WAV 를
+            # 선점과 같은 임계구역에서 떼어 와, 아래 느린 정리가 그 사이 시작된
+            # 새 녹음의 파일을 건드리지 못하게 한다 (근거는 _claim_stop 참고).
+            claimed, proc, discarded = _claim_stop(expected_ts=started, take_wav=True)
             if not claimed:
-                continue  # 그 사이 정상 정지가 먼저 선점 — no-op
+                continue  # 정상 정지가 먼저 선점했거나 다른 녹음으로 바뀜 — no-op
             _terminate_rec(proc)
-            try:
-                os.remove(WAV)
-            except OSError:
-                pass
+            if discarded is not None:
+                try:
+                    os.remove(discarded)
+                except OSError:
+                    pass
             print(f"⏱ 최대 녹음 시간({MAX_REC_SEC:.0f}s) 도달 — 정지 후 폐기(전사 생략)",
                   flush=True)
             try:
+                # timeout 필수 — 알림이 멎으면(Notification Center 지연, GUI 세션
+                # 부재 등) 시간 제한 없는 호출은 이 스레드를 영구히 멈춰 세우고,
+                # 그 순간부터 상한은 아무 신호 없이 사라진다. 아래 except 는
+                # 예외만 잡을 수 있을 뿐 멈춤은 잡지 못한다.
                 subprocess.run(
                     ["osascript", "-e",
                      f'display notification "최대 {MAX_REC_SEC:.0f}초 도달, 녹음을 버렸습니다" '
                      'with title "voice-dictation"'],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    timeout=NOTIFY_TIMEOUT,
                 )
-            except OSError:
+            except (OSError, subprocess.SubprocessError):
                 pass
         except Exception:   # noqa: BLE001
             # 다른 경로가 죽는 것을 잡으라고 있는 스레드가 자기 루프 때문에 죽으면
@@ -398,14 +451,44 @@ def _inject(text):
     subprocess.run(["pbcopy"], input=old, text=True)
 
 
+# 콜백에서 예외가 새어 나가면 pynput 리스너가 그대로 정지한다 — 그 순간부터 누름도
+# 뗌도 전달되지 않아 받아쓰기가 조용히 죽고, 마침 녹음 중이었다면 정지 이벤트가 영영
+# 오지 않는다(이 기능이 생긴 원인 그 상황). 어떤 예외든 여기서 삼키고 로그만 남긴다.
+def _guarded(fn, what):
+    try:
+        fn()
+    except Exception as exc:   # noqa: BLE001
+        print(f"  ({what} 처리 오류 — 리스너 유지, 건너뜀: {exc})", flush=True)
+
+
 def _on_press(key):
     if key == TRIGGER:
-        _start_recording()
+        _guarded(_start_recording, "누름")
 
 
 def _on_release(key):
     if key == TRIGGER:
-        _stop_and_transcribe()
+        _guarded(_stop_and_transcribe, "뗌")
+
+
+def _shutdown_rec():
+    """프로세스가 끝날 때 rec 자식을 반드시 정리한다.
+
+    상한을 지키는 것은 감시 스레드인데 그 스레드는 프로세스와 함께 사라진다 —
+    데몬이 먼저 끝나면(예외·SIGTERM·Ctrl+C) 남겨진 rec 는 아무도 멈추지 않아
+    마이크를 쥔 채 WAV 를 무한정 키운다. 상한이 닿을 수 없는 그 구간을 닫는다.
+    SIGKILL 즉사는 여전히 덮지 못한다(핸들러가 실행되지 않음) — 그 경우는
+    toggle.sh 가 rec 를 따로 SIGINT 로 거둔다.
+    """
+    claimed, proc, _ = _claim_stop()
+    if claimed:
+        _terminate_rec(proc)
+
+
+def _on_term(signum, frame):
+    # 기본 SIGTERM 처리는 즉시 종료라 atexit 이 실행되지 않는다 — 정상 종료 경로로
+    # 내려보내 위 정리가 돌게 한다(SIGINT 은 이미 KeyboardInterrupt 로 그 경로를 탄다).
+    raise SystemExit(128 + signum)
 
 
 def _acquire_singleton_lock():
@@ -437,6 +520,10 @@ def main():
         KEEP_DIR = os.path.expanduser("~/voice-dictation-debug")
         os.makedirs(KEEP_DIR, exist_ok=True)
     _acquire_singleton_lock()
+    # 데몬이 어떤 이유로 끝나든 rec 를 남기지 않는다 — 상한을 지키는 감시 스레드는
+    # 프로세스와 함께 사라지므로, 프로세스 종료 자체가 상한의 사각지대다.
+    atexit.register(_shutdown_rec)
+    signal.signal(signal.SIGTERM, _on_term)
     # 이전 비정상 종료(전사 중 프로세스 kill)로 남은 전사 스냅샷 정리. 단일 인스턴스
     # 락 획득 후이므로 다른 인스턴스의 진행 중 스냅샷을 건드리지 않는다.
     for stale in glob.glob(f"{WAV}.*"):

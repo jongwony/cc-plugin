@@ -78,6 +78,7 @@ _dying = set()         # 종료 진행 중인 rec 자식. _claim_stop 이 _rec_p
                         # 순간부터 종료가 끝날 때까지 이 자식은 전역 어디에도 없어,
                         # 그 사이 프로세스가 끝나면 정리 담당 스레드와 함께 사라지며
                         # 마이크를 쥔 채 남는다 — 그 구간을 여기서 붙잡아 둔다.
+_last_watchdog_error = None   # 감시 루프의 마지막 오류 메시지 — 같은 오류 반복 시 로그 억제
 _lock_fp = None        # 단일 인스턴스 락 fd — 프로세스 수명 동안 열어 둬 락 유지
 _transcribe_q = queue.Queue()  # (snapshot, dur) FIFO 큐 — 단일 consumer 워커가 순서대로 전사
 _wav_seq = 0           # WAV 스냅샷 고유 카운터(리스너 단일 스레드에서만 증가)
@@ -90,12 +91,6 @@ def _start_recording():
             return
         _recording = True
         _rec_start_ts = time.monotonic()
-        # 이전 녹음 파일을 먼저 제거 — rec 가 새 파일을 못 쓰는 상황(장치 점유/권한 오류)
-        # 에서 직전 녹음을 stale 하게 전사·붙여넣기 하는 것을 방지.
-        try:
-            os.remove(WAV)
-        except FileNotFoundError:
-            pass
         # mono s16, 장치 네이티브 샘플레이트로 캡처 — -r 을 강제하지 *않는다*.
         # AirPods 등 블루투스(HFP) 입력의 네이티브는 24kHz인데 -r 16000 을 강제하면
         # SoX coreaudio 경로의 리샘플이 스트림을 잡음으로 손상시킨다(같은 AirPods를
@@ -104,6 +99,14 @@ def _start_recording():
         # 컴팩트 s16 선호 요청일 뿐(정확성용 아님 — _wav_duration 이 `fmt ` 청크에서
         # 실제 포맷을 읽음). SIGINT 으로 종료해야 sox 가 WAV 헤더를 정상 finalize 함.
         try:
+            # 이전 녹음 파일을 먼저 제거 — rec 가 새 파일을 못 쓰는 상황(장치 점유/권한
+            # 오류)에서 직전 녹음을 stale 하게 전사·붙여넣기 하는 것을 방지. 지우지
+            # *못한* 경우도 같은 위험이므로(남은 파일이 그대로 스냅샷돼 전사된다)
+            # FileNotFoundError 만 넘기고 나머지 OSError 는 아래 롤백으로 보낸다.
+            try:
+                os.remove(WAV)
+            except FileNotFoundError:
+                pass
             _rec_proc = subprocess.Popen(
                 ["rec", "-q", "-b", str(SAMPLE_BYTES * 8), "-e", "signed-integer",
                  "-c", str(CHANNELS), WAV],
@@ -111,9 +114,10 @@ def _start_recording():
                 stderr=subprocess.DEVNULL,
             )
         except OSError as exc:
-            # rec 를 띄우지 못한 경우(미설치·fd 고갈 등) 위에서 세운 상태를 되돌린다.
-            # 되돌리지 않으면 _recording 이 True 로 남아 이후 모든 누름이 조용히
-            # no-op 이 되고, 감시자가 상한 시간 뒤 초기화할 때까지 받아쓰기가 죽는다.
+            # rec 를 띄우지 못했거나(미설치·fd 고갈) 직전 파일을 지우지 못한 경우,
+            # 위에서 세운 상태를 되돌린다. 되돌리지 않으면 _recording 이 True 로 남아
+            # 이후 모든 누름이 조용히 no-op 이 되고, 감시자가 상한 시간 뒤 초기화할
+            # 때까지 받아쓰기가 죽는다.
             _recording = False
             _rec_start_ts = None
             _rec_proc = None
@@ -152,6 +156,12 @@ def _claim_stop(expected_ts=None, take_wav=None):
             return False, None, None
         _recording = False
         proc, _rec_proc = _rec_proc, None
+        if proc is not None:
+            # 전역에서 사라지는 바로 그 순간 추적 목록에 넣는다. 종료를 맡은 쪽이
+            # 넣게 두면 선점과 등록 사이에 자식이 어디에도 없는 틈이 생기고, 그
+            # 틈에 프로세스가 끝나면 종료 정리가 자식을 찾지 못한다. 이 대입 이후
+            # rec 자식은 언제나 _rec_proc 이거나 _dying 둘 중 하나에서 발견된다.
+            _dying.add(proc)
         _rec_start_ts = None
         taken = None
         if take_wav is not None:
@@ -175,25 +185,23 @@ def _terminate_rec(proc):
     """
     if proc is None:
         return True
-    _dying.add(proc)
+    _dying.add(proc)   # 보통은 _claim_stop 이 이미 넣어 뒀다 — 재시도 경로를 위해 멱등
+    proc.send_signal(signal.SIGINT)
     try:
-        proc.send_signal(signal.SIGINT)
+        proc.wait(timeout=REC_EXIT_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        proc.kill()
         try:
-            proc.wait(timeout=REC_EXIT_TIMEOUT)
-            return True
+            proc.wait(timeout=REC_EXIT_TIMEOUT)   # SIGKILL 후 reap
         except subprocess.TimeoutExpired:
-            proc.kill()
-            try:
-                proc.wait(timeout=REC_EXIT_TIMEOUT)   # SIGKILL 후 reap
-                return True
-            except subprocess.TimeoutExpired:
-                # SIGKILL 을 보내고도 시간 안에 거두지 못했다는 것은 자식이 중단 불가
-                # 커널 대기에 걸려 아직 살아 있다는 뜻이다. 여기서 무한정 기다리면
-                # 이 함수를 부른 감시 스레드가 그대로 멎어 상한이 사라지므로 포기하고
-                # 돌아가되, 확인하지 못했다는 사실을 그대로 올려보낸다.
-                return False
-    finally:
-        _dying.discard(proc)
+            # SIGKILL 을 보내고도 시간 안에 거두지 못했다는 것은 자식이 중단 불가
+            # 커널 대기에 걸려 아직 살아 있다는 뜻이다. 여기서 무한정 기다리면 이
+            # 함수를 부른 감시 스레드가 그대로 멎어 상한이 사라지므로 포기하고
+            # 돌아가되 — 추적 목록에서는 빼지 않는다. 빼 버리면 마이크를 쥔 채로
+            # 살아 있는 자식을 아무도 다시 찾지 못한다. 종료 정리가 재시도한다.
+            return False
+    _dying.discard(proc)
+    return True
 
 
 def _stop_and_transcribe():
@@ -240,6 +248,7 @@ def _watchdog():
     넣는 것은, 사용자가 자리를 비웠을 때 가장 위험한 동작이라 선택하지 않는다.
     폴링 간격을 짧게(1s) 잡아 상한 도달 후 오래 방치되지 않게 한다.
     """
+    global _last_watchdog_error
     while True:
         time.sleep(1.0)   # try 밖 — 어떤 경로로 돌아와도 폴링 간격이 보장된다
         try:
@@ -285,9 +294,16 @@ def _watchdog():
                 )
             except (OSError, subprocess.SubprocessError):
                 pass
-        except Exception:   # noqa: BLE001
+        except Exception as exc:   # noqa: BLE001
             # 다른 경로가 죽는 것을 잡으라고 있는 스레드가 자기 루프 때문에 죽으면
-            # 안 된다. 한 틱을 거르는 편이 감시자를 영영 잃는 것보다 낫다.
+            # 안 된다. 한 틱을 거르는 편이 감시자를 영영 잃는 것보다 낫다. 다만
+            # 조용히 넘기면 안 된다 — 선점에 성공한 뒤 실패한 경우 녹음은 이미
+            # 멈췄는데 사용자는 아무 메시지도 받지 못하고, 반복 실패는 아무 흔적
+            # 없이 돌기만 한다. 같은 오류로 로그가 넘치지 않게 메시지가 바뀔 때만 남긴다.
+            msg = f"{type(exc).__name__}: {exc}"
+            if msg != _last_watchdog_error:
+                _last_watchdog_error = msg
+                print(f"  (감시 스레드 오류 — 감시는 계속함: {msg})", flush=True)
             continue
 
 

@@ -23,7 +23,10 @@ It prints `backgrounded · <jobId> · <name>`. Report that back. The four flags 
 independent and each earns its place: `--bg` detaches without a PTY, `--worktree`
 cuts a branch `worktree-<unit>` from `origin/<default>`, `--remote-control` registers
 the app bridge, `-n` pins a permanent name (without it the name is regenerated every
-launch). Drop `--worktree` to run in the project directory itself.
+launch). Dropping `--worktree` does not opt out of isolation — it only gives up the named
+branch. A backgrounded session starts in the project directory but is held out of the
+shared checkout: edits there are rejected until the session isolates itself under
+`.claude/worktrees/`. The one opt-out is `worktree.bgIsolation: "none"` in settings.
 
 **The `cd` is what picks the project.** There is no flag for it — `--add-dir` grants tool
 access to extra paths but does not set the session's project; the spawned session simply
@@ -65,7 +68,12 @@ round trip and survives the other hazard: names collide heavily here, and a targ
 restarts changes both its ref and its auto-derived name. So read it, do not cache it.
 
 A worker keeps its socket after finishing a turn: it goes idle and resident, so
-follow-up instructions still reach it.
+follow-up instructions still reach it — but not indefinitely. The supervisor
+eventually reaps an idle worker's process, and a reaped worker keeps its row in
+`claude agents --json` while dropping out of `ListAgents` altogether: still listed,
+no longer addressable. So read addressability from `ListAgents` at send time, never
+from the fleet row. Pinning the session in agent view (`Ctrl+T`) keeps its process
+alive while it sits idle.
 
 ## Reporting contract — put it in the initial prompt
 
@@ -102,6 +110,16 @@ claude rm  <jobId>     # retires it: removes worktree and job state
 `stop` alone is not retirement — the job stays in `claude agents --json --all`. Use `rm`
 to close out a work unit, the same lease discipline a worktree gets.
 
+Retiring is not a loss to be weighed against keeping the row. Ending the process and
+taking the row out of the fleet is the point: a list of finished-looking rows is the
+cost that accumulates, and it is paid by whoever has to read the list. The
+conversation survives `rm` — the transcript stays on disk and `claude --resume
+<sessionId>` still reaches it. What does not survive is anything whose only copy sits
+on the worktree, so audit that first. Sources disagree on how far `rm` reaches there:
+`claude rm --help` says it deletes the session and its worktree outright, while the
+published docs say a worktree with uncommitted changes is kept and unpushed commits
+block deletion. Audit rather than rely on either.
+
 ## Resuming
 
 ```bash
@@ -121,7 +139,16 @@ one next time. `jobId` is the first 8 hex characters of `sessionId`, so the two 
 without a separate key.
 
 Notes to pass on when relevant:
-- No auto-restart by design — nothing revives a crashed worker (see the `rc-pool` skill for
-  the keep-alive case).
+- Nothing revives a *crashed* worker on its own, but restarts do happen: `claude respawn
+  <jobId>` (or `--all`) restarts a session onto the current binary, and the supervisor
+  restarts sessions from their transcript on a binary update or on the next attach. What
+  comes back is a fresh process, and both the messaging socket and the app bridge are
+  decided at launch — whether a restarted worker returns addressable and app-reachable is
+  untested, so re-read `ListAgents` before relying on it. For a keep-alive host, see the
+  `rc-pool` skill.
 - An already-running session cannot become addressable later; the socket is decided once at
   launch, so an old session must be restarted to join.
+- `claude daemon status` reports on the supervisor that hosts every background session;
+  `claude daemon stop --any --keep-workers` stops the supervisor while leaving the workers
+  running. Neither is wanted in normal use — they are the handles for when the fleet itself
+  misbehaves.

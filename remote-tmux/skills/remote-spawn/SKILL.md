@@ -16,7 +16,7 @@ app-reachable, and message-addressable:
 
 ```bash
 ( cd <project-dir> && claude --bg --worktree <unit> --remote-control <unit> -n <unit> \
-                             --dangerously-skip-permissions -- "<brief + reporting contract>" )
+                             --permission-mode auto -- "<brief + reporting contract>" )
 ```
 
 It prints `backgrounded · <jobId> · <name>`. Report that back. The four flags are
@@ -36,10 +36,17 @@ starts with a dash, or that follows `--remote-control` (whose name argument is o
 will happily swallow it), is consumed silently — `claude` prints `(idle — send a prompt to
 start)`, no error, no transcript, and a worker sits there having been told nothing.
 
-**The permission mode must match the supervisor's.** A cross-session message from a
-sender in a different permission class is not delivered — it opens a dialog the worker
-never answers, so the instruction silently never arrives. Spawn workers in the same
-class as whoever will be messaging them.
+**The permission mode must match the supervisor's**, and `--permission-mode auto` is what
+that resolves to from an auto-mode supervisor. Two constraints close on the same value.
+A cross-session message from a sender in a different permission class is not delivered —
+it opens a dialog the worker never answers, so the instruction silently never arrives, which
+is why the worker takes the supervisor's class rather than the most permissive one available.
+And from that class the permissive one is not available anyway: `--dangerously-skip-permissions`
+in a spawn command is refused by auto mode's own permission classifier, so the spawn is denied
+before any worker exists. Pass the supervisor's own class explicitly — it is the one part of
+this command that cannot be copied from a sibling. The session registry does not carry it;
+the supervisor's transcript does, as `{"type":"permission-mode","permissionMode":…}` records
+written on every mode change.
 
 ## Talking to it
 
@@ -99,7 +106,7 @@ to close out a work unit, the same lease discipline a worktree gets.
 
 ```bash
 ( cd <its-cwd> && claude --bg --remote-control <name> -n <name> --resume <sessionId> \
-                         --dangerously-skip-permissions -- "<next instruction>" )
+                         --permission-mode auto -- "<next instruction>" )
 ```
 
 Carry `--remote-control` through the resume too. It composes, and dropping it costs the

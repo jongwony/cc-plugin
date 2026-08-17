@@ -15,7 +15,7 @@ app-reachable, and addressable by `SendMessage` from other sessions:
 
 ```bash
 ( cd ~/src/foo && claude --bg --worktree foo --remote-control foo -n foo \
-                         --dangerously-skip-permissions -- "<brief>" )
+                         --permission-mode auto -- "<brief>" )
 
 claude agents --json     # fleet view (no TTY needed)
 claude logs   <jobId>    # recent output
@@ -51,9 +51,13 @@ session is addressable by `SendMessage`, so a supervisor can direct it instead o
 launching it. A tmux pane could do neither.
 
 Two caveats worth knowing:
-- **Permission classes must match.** A cross-session message from a different permission
-  class is not delivered — it opens a dialog the worker never answers, so the instruction
-  silently never arrives.
+- **Permission classes must match**, which is why the command above passes `--permission-mode
+  auto` rather than a bypass flag. A cross-session message from a different permission class is
+  not delivered — it opens a dialog the worker never answers, so the instruction silently never
+  arrives. From an auto-mode supervisor the bypass flag is not an option regardless:
+  `--dangerously-skip-permissions` inside a spawn command is refused by auto mode's own
+  classifier, denying the spawn before a worker exists. Pass whatever class the supervisor is
+  actually in — the registry does not record it, but the supervisor's transcript does.
 - `status: "waiting"` in the registry means an unanswered dialog exists, **not** that the
   session is stuck; it still takes app input and peer messages. Judge by how long
   `statusUpdatedAt` has been frozen.

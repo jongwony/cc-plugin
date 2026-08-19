@@ -153,20 +153,23 @@ const renderPreview = async (slug: string) => {
   // real script elements — a slug is a filename minus its extension, and a filename may contain
   // `<!--<script` — so each is JSON-stringified and then run through escapeForScriptTag;
   // JSON.parse and the JS parser reverse it losslessly.
-  const titleValue = escapeHtml(slug);
-  const slugValue = escapeForScriptTag(JSON.stringify(slug));
-  const modeValue = JSON.stringify(renderMode);
-  const bodyValue = escapeForScriptTag(JSON.stringify(body));
-  // Function replacements, not string ones. In a replacement STRING, `$&`, `$\``, `$'` and
-  // `$1` are expansion syntax, so artifact text or a filename carrying them is rewritten on
-  // its way into the page — silently, and into content the source never contained. The
-  // function form returns its value verbatim. Every slot goes through it, including the
-  // server-derived one, so no later reader has to re-derive which slots were safe.
-  return template
-    .replaceAll("__TITLE_PLACEHOLDER__", () => titleValue)
-    .replaceAll("__SLUG_PLACEHOLDER__", () => slugValue)
-    .replace("__RENDER_MODE_PLACEHOLDER__", () => modeValue)
-    .replace("__MARKDOWN_CONTENT_PLACEHOLDER__", () => bodyValue);
+  const values: Record<string, string> = {
+    __TITLE_PLACEHOLDER__: escapeHtml(slug),
+    __SLUG_PLACEHOLDER__: escapeForScriptTag(JSON.stringify(slug)),
+    __RENDER_MODE_PLACEHOLDER__: JSON.stringify(renderMode),
+    __MARKDOWN_CONTENT_PLACEHOLDER__: escapeForScriptTag(JSON.stringify(body)),
+  };
+  // One pass over the template, so a value is never re-entered into the substitution it was
+  // the output of. Sequential replaces failed twice on these same few lines before this:
+  // once because `$&` in a replacement string is expansion syntax, and once because an
+  // inserted slug carried a later slot's placeholder, which left that slot bare and killed
+  // the client script. Both are the same shape — a value being read as syntax by the step
+  // that placed it. The function form also keeps `$` inert, so this subsumes the earlier
+  // repair rather than sitting beside it.
+  return template.replace(
+    /__(?:TITLE|SLUG|RENDER_MODE|MARKDOWN_CONTENT)_PLACEHOLDER__/g,
+    (match) => values[match],
+  );
 };
 
 interface FeedbackBody {

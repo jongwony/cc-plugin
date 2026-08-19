@@ -214,11 +214,14 @@ rewrites the queue, and it does so under the constraint in **Apply step** below.
 
 **Apply step**:
 
-1. **Read `feedback-{slug}.jsonl` afresh at the start of the apply step** — any prior
-   in-session Read of this file (the pre-round queue-size prose, say) is informational only
-   and does not substitute for this Read, since the browser may have appended lines between
-   that prose and the user's turn. Skip lines superseded by a later entry for the same `id`,
-   and lines whose latest entry is a tombstone.
+1. **Read this artifact's queues afresh at the start of the apply step** —
+   `feedback-{slug}.jsonl` and any queue Phase 0 found beside the source under an earlier
+   slug, identified by its entries carrying this artifact's path. Phase 0 surfaces those;
+   consuming them is what makes surfacing them mean anything. Any prior in-session Read is
+   informational only and does not substitute for this one, since the browser may have
+   appended lines in between. Skip lines superseded by a later entry for the same `id`, and
+   lines whose latest entry is a tombstone — `id` dedup runs across all of these files
+   together, not per file.
 2. **Record the intent before touching the source** — write the ids about to be applied,
    with the artifact path, to `feedback-{slug}.inflight.json`. This file is what makes the
    exactly-once guarantee in Rule 2 true rather than hoped for: editing the source and
@@ -229,8 +232,10 @@ rewrites the queue, and it does so under the constraint in **Apply step** below.
    that cannot be translated faithfully — ambiguous, conflicting, or resting on something the
    AI would have to guess — is left in the queue rather than guessed at, and surfaced in the
    round-complete prose as deferred.
-4. Archive the consumed lines to `feedback-{slug}-{timestamp}.consumed.jsonl` to prevent
-   re-ingestion, then rewrite the queue to hold exactly the lines that were *not* consumed.
+4. Archive the consumed lines to `{queue-filename}-{timestamp}.consumed.jsonl` — each queue
+   under its own name, so a queue found under an earlier slug is archived beside itself
+   rather than folded into the current slug's — then rewrite each queue to hold exactly the
+   lines that were *not* consumed.
    Re-read the queue immediately before that rewrite and carry forward anything the browser
    appended since the fresh Read of step 1: the server stays live throughout the apply, and a
    rewrite computed from the earlier Read would drop a comment made while the edits were
@@ -254,16 +259,17 @@ pre-round prose; the materialized view is the audit summary.
 ```
 Rounds:                  {N}
 Comments processed:      {C_in} queued → {E} edits landed, {Df} deferred
-Channel state at exit:   {C_unc} unconsumed comments in feedback-{slug}.jsonl (preserved, not archived)
+Channel state at exit:   {C_unc} unconsumed comments across this artifact's queue file(s), named
+                          (preserved, not archived)
                           -- includes never-processed comments AND apply-deferred ones
 Artifact(s):             {list of paths}
 ```
 
 ## Error Recovery
 
-- **Feedback consumption**: `feedback-{slug}.jsonl` is consumed at the start of every apply
-  step and archived to `feedback-{slug}-{timestamp}.consumed.jsonl` to prevent stale comments
-  re-entering later rounds. When the archive write fails (disk full, permission denied),
+- **Feedback consumption**: this artifact's queue file(s) — the current slug's, plus any
+  earlier-slug queue Phase 0 found — are consumed at the start of every apply step and each
+  archived under its own name to prevent stale comments re-entering later rounds. When the archive write fails (disk full, permission denied),
   surface the failure — do not silently retry — and halt consumption until the cause is
   resolved; a silent retry would re-translate identical comments. The same applies to the
   rewrite that follows: the queue is re-read immediately before it, so a comment appended
@@ -300,7 +306,7 @@ Artifact(s):             {list of paths}
    then exit) — there is no degraded-mode fallback, because `/comment-review` without the
    channel would be a different skill.
 2. **Feedback consumption is single-shot per comment, on a fresh Read each apply** — the
-   apply step's input is a Read of `feedback-{slug}.jsonl` taken when the user marks the
+   apply step's input is a Read of this artifact's queue file(s) taken when the user marks the
    round complete; any earlier in-session Read is informational and does not seed
    consumption, since the browser may have appended lines in between. Each comment is
    consumed exactly once across the loop's lifetime. Entries sharing an `id` keep only the

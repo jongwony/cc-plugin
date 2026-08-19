@@ -1,0 +1,272 @@
+---
+name: comment-review
+description: "Review a markdown or HTML artifact in a live browser preview: right-click any element to anchor a comment by CSS selector, then have those comments applied back as edits to the source file. Markdown renders through marked into the light DOM; HTML is served raw through a Shadow DOM. Comments queue to feedback-{slug}.jsonl and the page hot-reloads whenever the source changes. User-invoked via /comment-review."
+---
+
+# Comment Review
+
+Open an artifact in a browser as it will actually be read, annotate it in place, and get
+those annotations back as edits to the source. That loop is the whole skill.
+
+The render substrate is keyed off the file extension: markdown (`.md`) renders through
+marked; HTML (`.html`/`.htm`) is served raw through a Shadow DOM. Anchoring does not branch
+on the extension — either way you right-click an element and the browser records that
+element's unique CSS selector.
+
+The skill is agnostic about *what kind of artifact* is under review: blog drafts, plan
+documents, handoffs, design docs, and changeset descriptions are all valid targets. It also
+supplies no judgment of its own. It carries comments in one direction and edits back in the
+other; deciding what is worth commenting on stays with the user.
+
+## Caller Signature
+
+```
+/comment-review(artifact_path)
+
+artifact_path : String | List<String>   -- markdown or HTML file(s); render substrate keys off the extension
+```
+
+Write the artifact under review to the session scratchpad and point the skill at it there.
+No path under a harness config directory is referenced: where such a directory sits varies
+by substrate, and pinning an inference rule to one substrate's layout would make the rule
+wrong everywhere else.
+
+## Loop Overview
+
+```
+Phase 0  : channel open (browser, rendered preview)
+Phase L  : round k
+             user right-clicks elements in the browser and leaves comments
+             user says so in chat → AI applies the queued comments as edits
+             source changes → browser hot-reloads → round k+1
+free-exit : the user may end the review at any time by saying so (Phase 0 prose declares this once)
+```
+
+## When to Use
+
+- Any markdown or HTML artifact you want to read as rendered before editing it
+- Editorial iteration over multiple turns is expected
+- Asynchronous comment-style feedback fits the review rhythm better than chat-gate dispositions
+- Layout, cadence, and typography matter to the judgment — they are only visible rendered
+
+## When NOT to Use
+
+- Trivial artifacts (single sentence, typo, comment fix) — direct Edit suffices
+- One-shot artifacts the user does not intend to revise
+
+## Phase 0: Channel Open
+
+1. **Bun preflight** — verify `bun --version` ≥ 1.0. If absent, print the install hint
+   (`curl -fsSL https://bun.sh/install | bash`) and exit. The channel is the skill's
+   identity; running without it would change what `/comment-review` *is*, not just degrade
+   the experience.
+2. **Termination prose (declared once)** — announce *before opening the browser*: *"I'll
+   open a browser preview. You can end this review at any time by saying so; on exit I will
+   produce the materialized view and stop the channel server."* This is the free-response
+   pathway for termination. Announcing it first puts the exit affordance in view before the
+   first session artifact (the rendered preview) is.
+3. **Channel open** — launching the channel server is a write/exec action. When the harness
+   restricts non-read-only actions behind a permission gate, surface that gate for approval
+   before launching; proceed once it is cleared. Then start
+   `bun scripts/serve.ts <artifact.md|artifact.html> [...]`; the browser auto-opens to the
+   rendered preview.
+4. **Round 1 entry** — surface the queue size when `feedback-{slug}.jsonl` exists from a
+   prior session, or "No prior comments — fresh start." otherwise, so the carryover (or lack
+   of it) is recognizable before the round begins.
+
+## Phase L: Round Loop
+
+Each round is the same three beats: the user comments in the browser, says so in chat, and
+the AI applies the queue as edits. There is no branch gate — the loop has one shape.
+
+**Pre-round prose** (per round) — surface the round counter and the apply load, so the user
+always knows where they are:
+
+```
+Round 1 — browser preview opened. {N comments in queue from prior session. | No prior comments — fresh start.}
+
+Round {k} complete — {X} applied{, {Y} deferred}.    -- Y omitted when 0
+Browser preview reflects the latest edits.
+```
+
+**Round signal**: the user's chat turn *is* the round-complete signal. No separate browser
+button is needed — the browser collects comments, chat marks the boundary. "Wait, I'm still
+commenting" is implicit in not yet sending that turn; the queue is consumed only when the
+user says so.
+
+Between rounds the user is free to run any separate review of the artifact they want; this
+skill runs none of its own.
+
+## Channel Modality
+
+The browser channel is opened once in Phase 0 and stays live across every round until the
+user terminates the review. It is the **default review modality**, not an augmentation: the
+rendered preview is the user's first input layer and stays the medium where layout-level
+problems (font, heading rhythm, link presentation, line-break-driven cadence) become visible
+at all.
+
+### Server + Browser Behavior
+
+The Bun server renders each artifact on demand, accepts comment POSTs, and broadcasts
+file-change notifications over a WebSocket. Each artifact slug is its filename without
+extension; comments append to `feedback-{slug}.jsonl` next to the source. The server picks
+the render substrate from the file extension (`.html`/`.htm` → HTML; everything else →
+markdown) and injects it into the preview page. For HTML, relative subresource URLs (sibling
+CSS, images, fonts) resolve under `/preview/...` and are served read-only, **scoped to the
+artifact's own directory** — the requested path is canonicalized and anything escaping that
+directory (path traversal, symlink) is rejected with 404. See `scripts/serve.ts` for
+endpoint and watcher details.
+
+**Render substrates**:
+
+- **Markdown** (marked) — the source markdown renders into the **light DOM** as a
+  published-style artifact; frontmatter is stripped so only the body shows. Light DOM is
+  deliberate: the preview page's stylesheet carries that published typography, and a shadow
+  boundary would cut it off. Anchoring does not need the boundary.
+- **HTML** (Shadow DOM) — the raw `.html` file is served *as the artifact itself* through an
+  open Shadow DOM (`attachShadow({mode:'open'})`, `shadowRoot.innerHTML = rawHtml`). The
+  Shadow DOM gives CSS isolation from the review chrome and keeps selector anchoring working
+  because it is the same document. `innerHTML` does not execute `<script>` tags, but it is
+  **not** a JS sandbox: inline event handlers (`onerror`/`onload`), `<iframe>`, and active
+  subresources still execute/load in the same-origin preview page, and any JS that runs can
+  reach the review chrome and the `/feedback` endpoint. **Review only HTML you trust.** In
+  HTML mode the markdown reading-width box and the top nav chrome are dropped so the page
+  renders at its authored full viewport; full-page `100vh`/fixed-position fidelity is still
+  bounded by Shadow-DOM rendering. (Deferred hardening: a sandboxed iframe — for
+  untrusted-HTML isolation *and* a true nested viewport — compatible with selector
+  anchoring, out of scope here since raw render fidelity is the channel's identity.) marked
+  is not used in HTML mode; the file passes through raw and untouched.
+
+In the browser (one tab per artifact):
+
+- The artifact renders as above — no raw markdown syntax in markdown mode; the page rendered
+  as authored in HTML mode
+- **Anchor a comment**: right-click any element. Left-click stays free for the artifact's own
+  links and buttons. On hover the target element is outlined and its CSS selector shows live
+  in a chip at the bottom-left, so what the right-click will anchor is visible before you
+  commit.
+- Type a comment, ⌘Enter (or Submit) sends it as `{slug, selector, comment}`
+- The anchored element is marked in place: an outline + 💬
+- A right-side panel lists this round's comments; click a row to scroll to and pulse its
+  element. It stays off-screen until the comment count in the status bar is clicked, so an
+  HTML artifact still renders full-bleed.
+- When the source file changes (a round applied edits), the page auto-reloads while
+  preserving scroll position. Comment marks are **not** re-applied on reload — comments are
+  consumed at the apply step (the edit-back that changed the source and triggered the
+  reload), so the reload renders the post-edit artifact without them.
+
+### Element Anchoring
+
+The anchor is a single element, identified by a unique CSS selector. `preview.html` computes
+it as a unique `#id` where one exists, otherwise a `tag:nth-of-type(n)` child chain up to the
+render root (the shadow root in HTML mode, `#content` in markdown mode). The same function
+serves both substrates — it takes the root as a parameter.
+
+The comment unit is therefore a **block**, not a sentence. A comment names a paragraph, a
+list item, a heading, a table cell; it does not name a phrase inside one. Say which part of
+the block you mean in the comment text when it matters.
+
+### Locating the Anchor in the Source
+
+The right-clicked element *is* the edit scope. Where what it points at could be read more
+than one way — an item inside a nested list, a paragraph inside a blockquote — take the whole
+region that was outlined immediately before the right-click. In markdown, find that element
+in the source by counting which block of its kind it is.
+
+Nothing in the code implements this traceback. The AI reads the source at apply time and
+counts. For HTML the selector applies to the source file directly, since the `.html` under
+review *is* the rendered artifact.
+
+### JSONL Consumption Timing
+
+Each JSONL line: `{id, slug, selector, comment, timestamp}`. A deletion appends a tombstone
+line — same `id`, empty `comment`, `deleted: true` — rather than rewriting the file, so the
+log stays append-only. Entries sharing an `id` are an edit history: the latest timestamp
+wins.
+
+**Apply step**:
+
+1. **Read `feedback-{slug}.jsonl` afresh at the start of the apply step** — any prior
+   in-session Read of this file (the pre-round queue-size prose, say) is informational only
+   and does not substitute for this Read, since the browser may have appended lines between
+   that prose and the user's turn. Skip lines superseded by a later entry for the same `id`,
+   and lines whose latest entry is a tombstone.
+2. For each surviving line, locate the anchor in the source artifact per **Locating the
+   Anchor in the Source** above, and translate the comment into an Edit/Write call. A comment
+   that cannot be translated faithfully — ambiguous, conflicting, or resting on something the
+   AI would have to guess — is left in the queue rather than guessed at, and surfaced in the
+   round-complete prose as deferred.
+3. Archive consumed lines to `feedback-{slug}-{timestamp}.consumed.jsonl` to prevent
+   re-ingestion; deferred lines remain in the queue.
+4. After edits land, the browser auto-reloads.
+
+Apply-step tools are Edit / Write. The skill introduces no other write path.
+
+**Empty-queue degenerate**: an apply on an empty queue completes as a no-op — the round
+counter advances, the pre-round prose surfaces `Round {k} complete — 0 applied`, and the
+browser does not reload because no edit landed. Recovery is implicit: the user comments in
+the browser before marking the next round.
+
+## Materialized View
+
+On user-explicit termination (free-response exit), present the transformation trace as
+aggregated totals — not a per-round breakdown. Round-level visibility belongs to the in-loop
+pre-round prose; the materialized view is the audit summary.
+
+```
+Rounds:                  {N}
+Comments processed:      {C_in} queued → {E} edits landed, {Df} deferred
+Channel state at exit:   {C_unc} unconsumed comments in feedback-{slug}.jsonl (preserved, not archived)
+                          -- includes never-processed comments AND apply-deferred ones
+Artifact(s):             {list of paths}
+```
+
+## Error Recovery
+
+- **Feedback consumption**: `feedback-{slug}.jsonl` is consumed at the start of every apply
+  step and archived to `feedback-{slug}-{timestamp}.consumed.jsonl` to prevent stale comments
+  re-entering later rounds. When the archive write fails (disk full, permission denied),
+  surface the failure — do not silently retry — and halt consumption until the cause is
+  resolved; a silent retry would re-translate identical comments.
+- **Anchor not found on apply**: when a prior edit removed or restructured the block a queued
+  comment points at, its selector no longer resolves. Leave the line in the queue, tagged
+  `status="anchor-missing"`, and surface it so the user can judge whether the intent still
+  applies. Do not silently drop it, and do not pick a nearby block on a guess — a selector
+  that stopped resolving is evidence the target moved, not a hint about where it moved to.
+- **Bun server crash mid-loop**: surface it with two options — restart the channel and resume
+  (the accumulated JSONL is preserved) / terminate the review with a materialized view of the
+  completed rounds.
+
+## Rules
+
+1. **Channel is the skill's identity** — opened in Phase 0, persisted across rounds. The
+   rendered artifact is the user's first input layer; the render substrate is the artifact as
+   it will be consumed — marked for markdown, direct Shadow-DOM render for HTML — and that
+   rendered surface is itself a review surface, not merely a feedback collection mechanism.
+   Rendering visibility (markdown cadence, HTML layout/CSS) is where layout-level problems
+   become visible at all. A missing bun runtime is a hard prerequisite failure (install hint,
+   then exit) — there is no degraded-mode fallback, because `/comment-review` without the
+   channel would be a different skill.
+2. **Feedback consumption is single-shot per comment, on a fresh Read each apply** — the
+   apply step's input is a Read of `feedback-{slug}.jsonl` taken when the user marks the
+   round complete; any earlier in-session Read is informational and does not seed
+   consumption, since the browser may have appended lines in between. Each comment is
+   consumed exactly once across the loop's lifetime. Entries sharing an `id` keep only the
+   latest timestamp at the moment of consumption.
+3. **Termination is user-explicit and free-response** — the review ends when the user says
+   so, at any time; the affordance is declared once in Phase 0 and never surfaced as an
+   option in a list.
+4. **Multi-artifact variants are first-class** — when several artifacts are supplied, each
+   gets its own preview page, feedback file, and round counter; comments are namespaced per
+   artifact and one artifact's pacing does not block another.
+
+## Bundled Resources
+
+- `scripts/serve.ts` — Bun-based live server; `bun scripts/serve.ts <artifact.md|artifact.html> [more...]`.
+  Picks the render substrate from the file extension and injects it into the preview; handles
+  GET/POST/DELETE/WebSocket; `node:fs.watch` triggers reload broadcasts.
+- `templates/preview.html` — interactive preview with right-click element anchoring (hover
+  outline + live selector chip), anchored comment popup, comment sidebar, WebSocket
+  hot-reload client, dark-mode support.
+- `templates/marked.min.js` — bundled marked.js markdown renderer (markdown mode only; not
+  used in HTML mode).

@@ -1,0 +1,867 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>__TITLE_PLACEHOLDER__ — preview</title>
+<script src="/marked.min.js"></script>
+<style>
+  :root {
+    --accent: #2c7be5;
+    --highlight-edge: #d4a017;
+    --muted: #666;
+    --bg: #fafafa;
+    --sidebar-width: 320px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo", sans-serif;
+    margin: 0;
+    padding: 0;
+    line-height: 1.7;
+    color: #222;
+    background: white;
+  }
+
+  /* Layout — main content + right sidebar */
+  #layout {
+    display: flex;
+    min-height: 100vh;
+  }
+  #main {
+    flex: 1;
+    min-width: 0;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 2.5em 1.5em 5em;
+  }
+  header {
+    border-bottom: 1px solid #eee;
+    padding-bottom: 1em;
+    margin-bottom: 2em;
+    color: var(--muted);
+    font-size: .9em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  header a { color: var(--accent); text-decoration: none; }
+  header a:hover { text-decoration: underline; }
+  #content { font-size: 17px; }
+  #content h1 { font-size: 2em; margin-top: 1.5em; }
+  #content h2 { font-size: 1.5em; margin-top: 1.4em; }
+  #content h3 { font-size: 1.2em; margin-top: 1.2em; }
+  #content blockquote {
+    border-left: 3px solid #ddd;
+    padding-left: 1em;
+    color: #555;
+    margin: 1em 0;
+  }
+  #content code {
+    background: #f3f3f3;
+    padding: .1em .35em;
+    border-radius: 3px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: .92em;
+  }
+  #content pre {
+    background: #f3f3f3;
+    padding: 1em;
+    border-radius: 4px;
+    overflow-x: auto;
+  }
+  #content pre code { background: transparent; padding: 0; }
+  #content table {
+    border-collapse: collapse;
+    margin: 1em 0;
+  }
+  #content th, #content td {
+    border: 1px solid #ddd;
+    padding: .4em .7em;
+  }
+  #content th { background: #f7f7f7; }
+
+  /* Popup */
+  #popup {
+    position: absolute;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.15);
+    padding: .8em;
+    z-index: 1000;
+    width: 340px;
+    display: none;
+  }
+  #popup.show { display: block; }
+  #popup-anchor-preview {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: .8em;
+    color: var(--muted);
+    margin-bottom: .5em;
+    padding: .4em .5em;
+    background: var(--bg);
+    border-left: 3px solid var(--highlight-edge);
+    border-radius: 3px;
+    max-height: 4.5em;
+    overflow: hidden;
+    line-height: 1.4;
+  }
+  #popup textarea {
+    width: 100%;
+    min-height: 80px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: .5em;
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+  }
+  #popup textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  #popup-actions {
+    display: flex;
+    gap: .5em;
+    align-items: center;
+    margin-top: .5em;
+  }
+  #popup-cancel { margin-left: auto; }
+  #popup button.danger {
+    background: #c0392b;
+    color: white;
+    border-color: #c0392b;
+  }
+  #popup button.danger:hover { background: #e74c3c; border-color: #e74c3c; }
+  #popup-delete { display: none; }
+  #popup.edit-mode #popup-delete { display: inline-block; }
+  #popup button {
+    padding: .4em .9em;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    font-size: .9em;
+  }
+  #popup button.primary {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+  #popup button:hover { filter: brightness(.95); }
+  #popup-hint {
+    font-size: .75em;
+    color: var(--muted);
+    margin-top: .35em;
+    text-align: right;
+  }
+
+  /* Sidebar — right panel listing all comments */
+  #sidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 2.4em; /* clear status bar */
+    width: var(--sidebar-width);
+    background: var(--bg);
+    border-left: 1px solid #eee;
+    transform: translateX(100%);
+    transition: transform .2s ease;
+    z-index: 400;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  body.sidebar-open #sidebar { transform: translateX(0); }
+  /* HTML renders at the authored viewport: drop the 760px reading-width box + all #main padding,
+     and hide the top nav chrome (it pushed the artifact down and broke 100vh / top-aligned /
+     fixed layouts). Full-page 100vh / fixed-position fidelity is still bounded by Shadow-DOM
+     rendering — a sandboxed iframe (see Deferred hardening) would give a true nested viewport;
+     the bottom status pill remains a minimal fixed overlay. */
+  body.cr-html-mode #main { max-width: none; padding: 0; }
+  body.cr-html-mode header { display: none; }
+  /* HTML artifacts are authored against the browser default (white page, dark text), not the
+     review app's OS-driven dark theme. Force a light base for the rendered artifact regardless of
+     prefers-color-scheme, so a transparent-bodied page shows white (not the dark canvas) and
+     inherited text stays dark and readable. The body element is dropped by the Shadow-DOM fragment
+     injection, so the artifact's own body colors do not apply; a light base makes the fallback
+     match the browser default. (Pages that style body/html explicitly still need the deferred
+     iframe rendering for full fidelity.) */
+  body.cr-html-mode { background: #fff; color: #1a2233; }
+  #sidebar-header {
+    padding: .75em 1em;
+    border-bottom: 1px solid #eee;
+    background: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: .9em;
+    color: var(--muted);
+  }
+  #sidebar-header strong { color: #222; }
+  #sidebar-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: .5em 0;
+  }
+  #sidebar-empty {
+    padding: 2em 1em;
+    color: var(--muted);
+    font-size: .85em;
+    text-align: center;
+    font-style: italic;
+  }
+  .sidebar-item {
+    padding: .65em 1em;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    transition: background .12s ease;
+  }
+  .sidebar-item:hover { background: #f0f4f8; }
+  .sidebar-item-anchor {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: .78em;
+    color: #444;
+    border-left: 3px solid var(--highlight-edge);
+    padding-left: .55em;
+    margin-bottom: .35em;
+    line-height: 1.35;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .sidebar-item-comment {
+    font-size: .9em;
+    color: #222;
+    line-height: 1.4;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+  }
+
+  /* Status bar */
+  #status {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: white;
+    border-top: 1px solid #eee;
+    padding: .55em 1.5em;
+    font-size: .85em;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 500;
+  }
+  #status-conn::before {
+    content: "●";
+    color: #52c41a;
+    margin-right: .35em;
+  }
+  #status-conn.disconnected::before { color: #aaa; }
+  #status-count {
+    background: transparent;
+    border: none;
+    padding: .15em .55em;
+    margin: -.15em -.55em;
+    border-radius: 4px;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    transition: background .12s ease;
+  }
+  #status-count:hover { background: rgba(44, 123, 229, .1); color: #222; }
+  body.sidebar-open #status-count { background: rgba(44, 123, 229, .14); color: #222; }
+  #status-count strong { color: #222; }
+
+  /* Toast — confirms each submit silently append to disk, since popup close alone is ambiguous */
+  #toast {
+    position: fixed;
+    bottom: 3.2em;
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    background: #222;
+    color: white;
+    padding: .5em 1em;
+    border-radius: 20px;
+    font-size: .85em;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+    z-index: 1500;
+    box-shadow: 0 4px 14px rgba(0,0,0,.2);
+  }
+  #toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  #toast.error { background: #c0392b; }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a1a; color: #e0e0e0; }
+    header { border-bottom-color: #333; color: #888; }
+    #content blockquote { border-left-color: #444; color: #aaa; }
+    #content code, #content pre { background: #2a2a2a; }
+    #content th, #content td { border-color: #333; }
+    #content th { background: #252525; }
+    #popup { background: #222; border-color: #444; }
+    #popup-anchor-preview { background: #2a2a2a; color: #aaa; }
+    #popup textarea { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+    #popup button { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+    #status { background: #1a1a1a; border-top-color: #333; }
+    #status-count strong { color: #e0e0e0; }
+    #status-count:hover { background: rgba(255,255,255,.06); color: #e0e0e0; }
+    body.sidebar-open #status-count { background: rgba(255,255,255,.1); color: #e0e0e0; }
+    #sidebar { background: #1f1f1f; border-left-color: #333; }
+    #sidebar-header { background: #1a1a1a; border-bottom-color: #333; }
+    #sidebar-header strong { color: #e0e0e0; }
+    .sidebar-item { border-bottom-color: #333; }
+    .sidebar-item:hover { background: #2a2a2a; }
+    .sidebar-item-anchor { color: #aaa; }
+    .sidebar-item-comment { color: #e0e0e0; }
+  }
+
+</style>
+</head>
+<body>
+
+<div id="layout">
+  <div id="main">
+    <header>
+      <span><a href="/">← all drafts</a></span>
+      <span><strong>__TITLE_PLACEHOLDER__</strong></span>
+    </header>
+
+    <div id="content"></div>
+  </div>
+</div>
+
+<aside id="sidebar" aria-label="Comments panel">
+  <div id="sidebar-header">
+    <span><strong id="sidebar-count">0</strong> comments</span>
+    <span style="font-size:.78em;">click to focus</span>
+  </div>
+  <div id="sidebar-list">
+    <div id="sidebar-empty">No comments yet — right-click an element to add one.</div>
+  </div>
+</aside>
+
+<div id="popup">
+  <div id="popup-anchor-preview"></div>
+  <textarea id="popup-textarea" placeholder="Comment on this element…"></textarea>
+  <div id="popup-actions">
+    <button id="popup-delete" class="danger" type="button" aria-label="Delete comment">Delete</button>
+    <button id="popup-cancel">Cancel</button>
+    <button id="popup-copy" type="button">Copy</button>
+    <button id="popup-submit" class="primary">Submit</button>
+  </div>
+  <div id="popup-hint">⌘Enter to submit · Esc to cancel · right-click a 💬 element to edit</div>
+</div>
+
+<div id="status">
+  <span id="status-conn">live</span>
+  <button id="status-count" type="button" aria-label="Toggle comment list" aria-controls="sidebar" aria-expanded="false">
+    <strong id="count">0</strong> comments
+  </button>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script type="application/json" id="md-source">__MARKDOWN_CONTENT_PLACEHOLDER__</script>
+
+<script>
+const SLUG = __SLUG_PLACEHOLDER__;
+// Render substrate, keyed off the artifact's extension: "markdown" → marked.parse into the
+// light DOM; "html" → the raw file through an open Shadow DOM (CSS-isolated from this review
+// chrome; scripts inserted via innerHTML are inert). Anchoring does NOT branch on this —
+// both substrates anchor by right-clicking an element and recording its unique CSS selector.
+// What the substrate decides is only where the artifact is rendered.
+const RENDER_MODE = __RENDER_MODE_PLACEHOLDER__;
+
+// Comment-mark visuals. Injected into the light DOM always, and additionally into the shadow
+// root in html mode — the light-DOM stylesheet does not pierce the shadow boundary, so the
+// same rules must exist on both sides. One source string keeps the two copies from drifting.
+// Outline-based marks avoid re-flowing the artifact: nothing wraps or splits its text.
+const MARK_CSS =
+  ".cr-anno{outline:2px solid #d4a017;outline-offset:1px;cursor:help;}" +
+  '.cr-anno::after{content:"💬";font-size:.7em;vertical-align:super;margin-left:2px;}' +
+  // Declared after cr-anno so it wins while hovering an already-marked element; thin
+  // dashed blue is distinct from the solid mark outline.
+  ".cr-hover{outline:1px dashed #2c7be5;outline-offset:1px;cursor:context-menu;}" +
+  ".cr-pulse{box-shadow:0 0 0 4px rgba(44,123,229,.45);}";
+
+const lightMarkStyle = document.createElement("style");
+lightMarkStyle.textContent = MARK_CSS;
+document.head.appendChild(lightMarkStyle);
+
+// Render the artifact. `root` is the query/anchor surface: the light-DOM #content in markdown
+// mode, the shadow root in html mode. Every anchoring path takes `root` as a parameter, so one
+// code path serves both substrates.
+// The body is transported as a JSON string (escapeForScriptTag-protected): JSON.parse reverses
+// it losslessly — a real <\/script> in the artifact survives, and a literal <\/script> already
+// present in the source is not corrupted.
+const sourceText = JSON.parse(document.getElementById("md-source").textContent);
+const content = document.getElementById("content");
+let shadowRoot = null;
+let root = content;
+if (RENDER_MODE === "html") {
+  // Raw HTML served through an open Shadow DOM: CSS-isolated from the review chrome,
+  // selector anchoring works because it is the same document. innerHTML does not run script
+  // elements, but this is NOT a JS sandbox — inline event handlers (onerror/onload), iframes,
+  // and active subresources still execute/load in this same-origin page; review trusted
+  // HTML only. marked is not used in html mode.
+  shadowRoot = content.attachShadow({ mode: "open" });
+  shadowRoot.innerHTML = sourceText;
+  root = shadowRoot;
+  document.body.classList.add("cr-html-mode");
+  const shadowStyle = document.createElement("style");
+  shadowStyle.textContent = MARK_CSS;
+  shadowRoot.appendChild(shadowStyle);
+} else {
+  // Markdown renders into the LIGHT DOM deliberately: this page's stylesheet carries the
+  // published-artifact typography (the #content rules), which a shadow boundary would cut
+  // off. Anchoring does not need the boundary — cssPath() takes the root as a parameter.
+  content.innerHTML = marked.parse(sourceText);
+}
+
+// Popup state
+const popup = document.getElementById("popup");
+const popupPreview = document.getElementById("popup-anchor-preview");
+const popupTextarea = document.getElementById("popup-textarea");
+const popupSubmit = document.getElementById("popup-submit");
+const popupCancel = document.getElementById("popup-cancel");
+const popupDelete = document.getElementById("popup-delete");
+const countEl = document.getElementById("count");
+
+// Sidebar state
+const sidebar = document.getElementById("sidebar");
+const sidebarList = document.getElementById("sidebar-list");
+const sidebarEmpty = document.getElementById("sidebar-empty");
+const sidebarCount = document.getElementById("sidebar-count");
+const statusCount = document.getElementById("status-count");
+
+let pending = null;  // { selector, targetEl, editingMark }
+let hoverEl = null;  // element currently outlined under the cursor
+// The chip lives in the light DOM so a shadow boundary cannot clip it.
+const selectorChip = document.createElement("div");
+selectorChip.id = "cr-selector-chip";
+selectorChip.style.cssText =
+  "position:fixed;bottom:10px;left:10px;z-index:1400;max-width:60vw;padding:.3em .6em;" +
+  "border-radius:4px;background:rgba(20,30,50,.92);color:#cfe3ff;font:12px ui-monospace,Menlo,monospace;" +
+  "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;display:none;" +
+  "box-shadow:0 2px 8px rgba(0,0,0,.25);";
+document.body.appendChild(selectorChip);
+
+// Right-click is the comment trigger so left-click stays free for the artifact's own
+// interactivity (links, buttons). A right-click inside the shadow root still sees the real
+// target — events retarget to the host only after they cross the boundary.
+root.addEventListener("contextmenu", handleContextMenu);
+root.addEventListener("mouseover", handleHover);
+content.addEventListener("mouseleave", clearHover);
+
+function setPopupMode(isEdit) {
+  popupSubmit.textContent = isEdit ? "Update" : "Submit";
+  popup.classList.toggle("edit-mode", !!isEdit);
+}
+
+function positionPopupNear(rect) {
+  const popupWidth = 340;
+  const left = Math.min(window.scrollX + rect.left, window.scrollX + window.innerWidth - popupWidth - 16);
+  popup.style.top = (window.scrollY + rect.bottom + 8) + "px";
+  popup.style.left = Math.max(16, left) + "px";
+}
+
+function truncateForPopup(text) {
+  if (!text) return "";
+  return text.length > 200 ? text.slice(0, 200) + "…" : text;
+}
+
+// Common popup-opening tail shared by both entry points (new comment, edit) — single point
+// where mode toggle + show class + focus ordering are guaranteed consistent.
+function showPopup({ rect, previewText, textareaValue, isEdit, selectAfterFocus }) {
+  positionPopupNear(rect);
+  popupPreview.textContent = truncateForPopup(previewText);
+  popupTextarea.value = textareaValue;
+  setPopupMode(!!isEdit);
+  popup.classList.add("show");
+  popupTextarea.focus();
+  if (selectAfterFocus) popupTextarea.select();
+}
+
+// ── Element anchoring (selector-based, both substrates) ──
+// All marks are in-place class toggles on the artifact's own elements; nothing wraps or
+// re-flows the artifact.
+
+const pulseSlot = { id: null };
+
+// CSS.escape with a conservative fallback for ids carrying special chars.
+function cssEscape(s) {
+  return (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+}
+
+// Compute a unique CSS selector for `el` within `r` (a shadow root or an element).
+// Prefers a unique #id; otherwise builds a tag:nth-of-type(n) child chain up to the root.
+function cssPath(el, r) {
+  if (!el || el.nodeType !== Node.ELEMENT_NODE) return "";
+  if (el.id && r.querySelectorAll("#" + cssEscape(el.id)).length === 1) return "#" + cssEscape(el.id);
+  const parts = [];
+  let cur = el;
+  while (cur && cur.nodeType === Node.ELEMENT_NODE && cur !== r) {
+    if (cur.id && r.querySelectorAll("#" + cssEscape(cur.id)).length === 1) {
+      parts.unshift("#" + cssEscape(cur.id));
+      break;
+    }
+    const tag = cur.tagName.toLowerCase();
+    const parent = cur.parentNode;
+    const sibs = parent ? Array.from(parent.children).filter((s) => s.tagName === cur.tagName) : [cur];
+    parts.unshift(sibs.length > 1 ? tag + ":nth-of-type(" + (sibs.indexOf(cur) + 1) + ")" : tag);
+    if (!parent || parent === r || parent.nodeType !== Node.ELEMENT_NODE) break;
+    cur = parent;
+  }
+  return parts.join(" > ");
+}
+
+// Scroll an element into view and pulse it (clearing any stale pulse first).
+function pulseElement(el) {
+  if (!el || !el.isConnected) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (pulseSlot.id) clearTimeout(pulseSlot.id);
+  root.querySelectorAll(".cr-pulse").forEach((e) => e.classList.remove("cr-pulse"));
+  void el.offsetWidth;
+  el.classList.add("cr-pulse");
+  pulseSlot.id = setTimeout(() => el.classList.remove("cr-pulse"), 800);
+}
+
+// Mark an element as a saved comment anchor (outline + 💬), carrying the dataset the
+// sidebar and the edit/delete flows read.
+function markElement(el, selector, comment, id) {
+  if (!el) return;
+  el.classList.add("cr-anno");
+  el.dataset.selector = selector;
+  el.dataset.comment = comment;
+  el.dataset.id = id || "";
+  el.title = comment;
+}
+
+// New-comment popup for a freshly right-clicked element; the selector is the anchor.
+function openSelectorPopup(el, selector) {
+  pending = { selector, targetEl: el, editingMark: null };
+  showPopup({ rect: el.getBoundingClientRect(), previewText: selector, textareaValue: "" });
+}
+
+// Edit popup for an already-annotated element.
+function openEditPopup(el) {
+  pending = { selector: el.dataset.selector || "", targetEl: el, editingMark: el };
+  showPopup({
+    rect: el.getBoundingClientRect(),
+    previewText: pending.selector,
+    textareaValue: el.dataset.comment || "",
+    isEdit: true,
+    selectAfterFocus: true,
+  });
+}
+
+// Right-click router: suppress the native menu, then edit an existing comment, else start a
+// new one. Left-click is intentionally left free for the artifact.
+function handleContextMenu(e) {
+  e.preventDefault(); // suppress the native context menu — right-click is the comment trigger
+  const target = e.target;
+  if (!target || target.nodeType !== Node.ELEMENT_NODE) return;
+  const annoEl = target.closest(".cr-anno");
+  if (annoEl) {
+    e.stopPropagation();
+    openEditPopup(annoEl);
+    return;
+  }
+  const selector = cssPath(target, root);
+  if (!selector) return;
+  e.stopPropagation();
+  openSelectorPopup(target, selector);
+}
+
+// Hover preview: outline the element under the cursor and show its live selector, so what
+// the right-click will anchor is visible before committing. An element with no computable
+// selector (the root container itself) is skipped rather than outlined — right-click would
+// not anchor it either.
+function handleHover(e) {
+  const t = e.target;
+  if (!t || t.nodeType !== Node.ELEMENT_NODE || t === hoverEl) return;
+  const selector = cssPath(t, root);
+  if (!selector) { clearHover(); return; }
+  if (hoverEl) hoverEl.classList.remove("cr-hover");
+  hoverEl = t;
+  hoverEl.classList.add("cr-hover");
+  selectorChip.textContent = selector;
+  selectorChip.style.display = "block";
+}
+
+// Clear the hover outline + chip when the cursor leaves the artifact.
+function clearHover() {
+  if (hoverEl) hoverEl.classList.remove("cr-hover");
+  hoverEl = null;
+  selectorChip.style.display = "none";
+}
+
+function dismissPopup() {
+  popup.classList.remove("show");
+  popup.classList.remove("edit-mode");
+  pending = null;
+}
+
+popupCancel.addEventListener("click", dismissPopup);
+popupSubmit.addEventListener("click", submitFeedback);
+popupDelete.addEventListener("click", deleteFeedback);
+
+async function copyTextToClipboard(text) {
+  // Secure context (https / localhost): use the async Clipboard API.
+  if (navigator.clipboard && window.isSecureContext) {
+    try { await navigator.clipboard.writeText(text); return true; } catch (e) {}
+  }
+  // Insecure context (http over LAN / tailnet IP): clipboard API is undefined, fall back to
+  // the legacy execCommand path via a transient textarea.
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch (e) { return false; }
+}
+
+document.getElementById("popup-copy").addEventListener("click", async () => {
+  if (!(pending && pending.selector)) return;
+  const ok = await copyTextToClipboard(pending.selector);
+  const b = document.getElementById("popup-copy");
+  const prev = b.textContent;
+  b.textContent = ok ? "Copied" : "Failed";
+  setTimeout(() => { b.textContent = prev; }, 1000);
+});
+
+popupTextarea.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    submitFeedback();
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    e.stopPropagation(); // prevent the document-level Esc handler from also firing
+    dismissPopup();
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if (!popup.contains(e.target) && !content.contains(e.target) && !sidebar.contains(e.target) && !statusCount.contains(e.target)) {
+    dismissPopup();
+  }
+});
+
+const toastEl = document.getElementById("toast");
+let toastTimer = null;
+function showToast(msg, isError) {
+  toastEl.textContent = msg;
+  toastEl.classList.toggle("error", !!isError);
+  toastEl.classList.add("show");
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1800);
+}
+
+// Single-source fetch wrapper — all /feedback writes (POST + DELETE) share URL, headers, and
+// JSON body shape. Per-site response/error handling stays at the call site.
+function feedbackFetch(method, body) {
+  return fetch("/feedback", {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+async function submitFeedback() {
+  if (!pending) return dismissPopup();
+  const comment = popupTextarea.value.trim();
+  if (!comment) return dismissPopup();
+
+  const captured = pending; // capture before dismiss
+
+  // Edit case: send the original id so the new entry shares the dedup key with the previous
+  // version. Create case: omit id so the server mints a UUID.
+  const reqBody = { slug: SLUG, selector: captured.selector, comment };
+  if (captured.editingMark && captured.editingMark.dataset.id) {
+    reqBody.id = captured.editingMark.dataset.id;
+  }
+
+  try {
+    const resp = await feedbackFetch("POST", reqBody);
+    if (!resp.ok) throw new Error("server " + resp.status);
+    const result = await resp.json();
+    const id = result.id;
+
+    // The annotated element itself is the mark — create or update it in place.
+    markElement(captured.targetEl, captured.selector, comment, id || (captured.editingMark && captured.editingMark.dataset.id));
+    showToast(captured.editingMark ? "✓ updated" : "✓ saved");
+    dismissPopup();
+    renderSidebar();
+  } catch (e) {
+    // Preserve comment text on failure (5xx, network error) so the user can retry — don't dismiss.
+    showToast(`✗ save failed: ${e.message} — comment preserved, press ⌘Enter to retry`, true);
+  }
+}
+
+async function deleteFeedback() {
+  if (!pending || !pending.editingMark) {
+    showToast("✗ delete unavailable", true);
+    return;
+  }
+  const captured = pending;
+  const editedMark = captured.editingMark;
+  const id = editedMark.dataset.id;
+
+  if (!id) {
+    showToast("✗ delete unavailable (no id — pre-update mark)", true);
+    return;
+  }
+
+  try {
+    const resp = await feedbackFetch("DELETE", { slug: SLUG, id });
+    if (!resp.ok) {
+      let reason = "HTTP " + resp.status;
+      try {
+        const errBody = await resp.json();
+        if (errBody && errBody.reason) reason = errBody.reason;
+      } catch {
+        // non-JSON body — keep HTTP status as reason
+      }
+      throw new Error(reason);
+    }
+    const result = await resp.json();
+    if (!result.deleted) {
+      throw new Error(result.reason || "server did not confirm deletion");
+    }
+
+    // Drop the annotation class + dataset, leaving the artifact's element itself intact.
+    editedMark.classList.remove("cr-anno");
+    delete editedMark.dataset.comment;
+    delete editedMark.dataset.selector;
+    delete editedMark.dataset.id;
+    editedMark.removeAttribute("title");
+
+    dismissPopup();
+    renderSidebar();
+    showToast("✓ deleted");
+  } catch (e) {
+    showToast("✗ delete failed: " + e.message, true);
+  }
+}
+
+// ── Sidebar: this round's comments + click-to-focus ──
+
+function renderSidebar() {
+  const marks = Array.from(root.querySelectorAll(".cr-anno"));
+  const n = marks.length;
+  sidebarCount.textContent = String(n);
+  countEl.textContent = String(n);
+
+  // Clear list (preserve the sidebarEmpty node by removing all children, then re-adding it
+  // only when the list is empty).
+  while (sidebarList.firstChild) sidebarList.removeChild(sidebarList.firstChild);
+
+  if (n === 0) {
+    sidebarList.appendChild(sidebarEmpty);
+    return;
+  }
+
+  for (const mark of marks) {
+    const item = document.createElement("div");
+    item.className = "sidebar-item";
+    item.setAttribute("role", "button");
+    item.setAttribute("tabindex", "0");
+
+    const anchorEl = document.createElement("div");
+    anchorEl.className = "sidebar-item-anchor";
+    anchorEl.textContent = mark.dataset.selector || "";
+
+    const commentEl = document.createElement("div");
+    commentEl.className = "sidebar-item-comment";
+    commentEl.textContent = mark.dataset.comment || "";
+
+    item.appendChild(anchorEl);
+    item.appendChild(commentEl);
+    const openEdit = () => { pulseElement(mark); openEditPopup(mark); };
+    item.addEventListener("click", openEdit);
+    item.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openEdit();
+      }
+    });
+    sidebarList.appendChild(item);
+  }
+}
+
+statusCount.addEventListener("click", () => {
+  const opened = document.body.classList.toggle("sidebar-open");
+  statusCount.setAttribute("aria-expanded", opened ? "true" : "false");
+});
+
+// Document-level Esc: dismiss the popup if open, otherwise close the sidebar. The popup
+// textarea handler runs first and its stopPropagation prevents this from also firing when
+// the textarea has focus.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (popup.classList.contains("show")) {
+    dismissPopup();
+  } else if (document.body.classList.contains("sidebar-open")) {
+    document.body.classList.remove("sidebar-open");
+    statusCount.setAttribute("aria-expanded", "false");
+  }
+});
+
+renderSidebar();
+
+// WebSocket hot reload
+function connectWS() {
+  const conn = document.getElementById("status-conn");
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  const ws = new WebSocket(`${proto}//${location.host}/ws`);
+
+  ws.onopen = () => {
+    conn.classList.remove("disconnected");
+    conn.textContent = "live";
+  };
+  ws.onclose = () => {
+    conn.classList.add("disconnected");
+    conn.textContent = "reconnecting…";
+    setTimeout(connectWS, 2000);
+  };
+  ws.onerror = (e) => {
+    // Surface handshake / protocol errors instead of swallowing them into the reconnect loop.
+    conn.classList.add("disconnected");
+    conn.textContent = "ws error";
+    console.error("[ws] error:", e);
+    // onclose fires next and triggers the reconnect timer; no manual action needed here.
+  };
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.slug === SLUG) {
+        sessionStorage.setItem("scrollY", String(window.scrollY));
+        location.reload();
+      }
+    } catch {
+      // ignore non-JSON frames
+    }
+  };
+}
+connectWS();
+
+// Restore scroll on reload
+const savedScroll = sessionStorage.getItem("scrollY");
+if (savedScroll) {
+  window.scrollTo(0, parseInt(savedScroll, 10));
+  sessionStorage.removeItem("scrollY");
+}
+</script>
+</body>
+</html>

@@ -100,6 +100,11 @@
       "description": "Linear loop moment router — unfold the whole picture, next unblocked actions, runbook invariants, decision log, and roadmap from Linear; write only structure and decisions, never state"
     },
     {
+      "name": "comment-review",
+      "source": "./comment-review",
+      "description": "Browser-preview comment loop for markdown/HTML artifacts — right-click an element to anchor a comment by CSS selector, apply the queue back as edits, hot-reload"
+    },
+    {
       "name": "agent-device-preflight",
       "source": "./agent-device-preflight",
       "description": "Resolve agent-device attachment prerequisites before `open` — device lock state, signing team from the certificate OU, developer-account device registration, developer disk image mount, macOS DevToolsSecurity, stale runner cache and daemon environment, and physical-vs-virtual device selection"

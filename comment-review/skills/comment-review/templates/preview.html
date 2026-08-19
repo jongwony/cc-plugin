@@ -721,7 +721,10 @@ function feedbackFetch(method, body) {
   });
 }
 
+let submitInFlight = false;
+
 async function submitFeedback() {
+  if (submitInFlight) return;   // a repeat ⌘Enter/click while the first POST is still open
   if (!pending) return dismissPopup();
   const comment = popupTextarea.value.trim();
   if (!comment) return dismissPopup();
@@ -735,9 +738,20 @@ async function submitFeedback() {
     reqBody.id = captured.editingMark.dataset.id;
   }
 
+  // `pending` is not cleared until the response lands, so without this guard a repeated
+  // submit re-enters and POSTs the same new comment again. A new comment carries no id, so
+  // the server mints a second UUID: one visible mark, two directives in the queue, and the
+  // apply step edits the source twice.
+  submitInFlight = true;
   try {
     const resp = await feedbackFetch("POST", reqBody);
-    if (!resp.ok) throw new Error("server " + resp.status);
+    if (!resp.ok) {
+      // Every /feedback error body is plain text, so read it as text rather than JSON: the
+      // server's own sentence ("unknown slug", "name too long") is the only part of a
+      // failure the user can act on, and `server 500` tells them nothing.
+      const detail = await resp.text().then((t) => t.trim()).catch(() => "");
+      throw new Error(detail ? detail.slice(0, 200) : `server ${resp.status}`);
+    }
     const result = await resp.json();
     const id = result.id;
 
@@ -747,8 +761,13 @@ async function submitFeedback() {
     dismissPopup();
     renderSidebar();
   } catch (e) {
-    // Preserve comment text on failure (5xx, network error) so the user can retry — don't dismiss.
-    showToast(`✗ save failed: ${e.message} — comment preserved, press ⌘Enter to retry`, true);
+    // The affordance is stated as a fact about the editor, not as a promise about the
+    // outcome. A stale slug after a channel restart, and a path too long to name a feedback
+    // file, both fail identically however many times they are resent — saying "retry" told
+    // the user the opposite of what was true.
+    showToast(`✗ not saved: ${e.message} — your text is still here; ⌘Enter resends`, true);
+  } finally {
+    submitInFlight = false;
   }
 }
 

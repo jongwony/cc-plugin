@@ -68,8 +68,11 @@ free-exit : the user may end the review at any time by saying so (Phase 0 prose 
 3. **Channel open** — launching the channel server is a write/exec action. When the harness
    restricts non-read-only actions behind a permission gate, surface that gate for approval
    before launching; proceed once it is cleared. Then start
-   `bun scripts/serve.ts <artifact.md|artifact.html> [...]`; the browser auto-opens to the
-   rendered preview.
+   `bun "${CLAUDE_PLUGIN_ROOT}/skills/comment-review/scripts/serve.ts" <artifact.md|artifact.html> [...]`;
+   the browser auto-opens to the rendered preview. The path goes through
+   `CLAUDE_PLUGIN_ROOT` because this runs with the user's project as the working directory,
+   not the skill directory — a bare `scripts/serve.ts` resolves against the caller and is not
+   found.
 4. **Round 1 entry** — surface the queue size when `feedback-{slug}.jsonl` exists from a
    prior session, or "No prior comments — fresh start." otherwise, so the carryover (or lack
    of it) is recognizable before the round begins.
@@ -278,7 +281,8 @@ Artifact(s):             {list of paths}
 
 ## Bundled Resources
 
-- `scripts/serve.ts` — Bun-based live server; `bun scripts/serve.ts <artifact.md|artifact.html> [more...]`.
+- `scripts/serve.ts` — Bun-based live server;
+  `bun "${CLAUDE_PLUGIN_ROOT}/skills/comment-review/scripts/serve.ts" <artifact.md|artifact.html> [more...]`.
   Picks the render substrate from the file extension and injects it into the preview; handles
   GET/POST/DELETE/WebSocket; `node:fs.watch` triggers reload broadcasts.
 - `templates/preview.html` — interactive preview with right-click element anchoring (hover

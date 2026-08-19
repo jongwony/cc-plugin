@@ -152,11 +152,20 @@ const renderPreview = async (slug: string) => {
   // real script elements — a slug is a filename minus its extension, and a filename may contain
   // `<!--<script` — so each is JSON-stringified and then run through escapeForScriptTag;
   // JSON.parse and the JS parser reverse it losslessly.
+  const titleValue = escapeHtml(slug);
+  const slugValue = escapeForScriptTag(JSON.stringify(slug));
+  const modeValue = JSON.stringify(renderMode);
+  const bodyValue = escapeForScriptTag(JSON.stringify(body));
+  // Function replacements, not string ones. In a replacement STRING, `$&`, `$\``, `$'` and
+  // `$1` are expansion syntax, so artifact text or a filename carrying them is rewritten on
+  // its way into the page — silently, and into content the source never contained. The
+  // function form returns its value verbatim. Every slot goes through it, including the
+  // server-derived one, so no later reader has to re-derive which slots were safe.
   return template
-    .replaceAll("__TITLE_PLACEHOLDER__", escapeHtml(slug))
-    .replaceAll("__SLUG_PLACEHOLDER__", escapeForScriptTag(JSON.stringify(slug)))
-    .replace("__RENDER_MODE_PLACEHOLDER__", JSON.stringify(renderMode))
-    .replace("__MARKDOWN_CONTENT_PLACEHOLDER__", escapeForScriptTag(JSON.stringify(body)));
+    .replaceAll("__TITLE_PLACEHOLDER__", () => titleValue)
+    .replaceAll("__SLUG_PLACEHOLDER__", () => slugValue)
+    .replace("__RENDER_MODE_PLACEHOLDER__", () => modeValue)
+    .replace("__MARKDOWN_CONTENT_PLACEHOLDER__", () => bodyValue);
 };
 
 interface FeedbackBody {

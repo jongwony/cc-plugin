@@ -15,7 +15,8 @@ One command spawns a worker that is background-resident, worktree-isolated,
 app-reachable, and message-addressable:
 
 ```bash
-( cd <project-dir> && claude --bg --worktree <unit> --remote-control <unit> -n <unit> \
+( cd <project-dir> && claude --bg --worktree <unit> --remote-control stint::<constituent>::<relation> \
+                             -n stint::<constituent>::<relation> \
                              --permission-mode auto -- "<brief + reporting contract>" )
 ```
 
@@ -27,6 +28,14 @@ launch). Dropping `--worktree` does not opt out of isolation — it only gives u
 branch. A backgrounded session starts in the project directory but is held out of the
 shared checkout: edits there are rejected until the session isolates itself under
 `.claude/worktrees/`. The one opt-out is `worktree.bgIsolation: "none"` in settings.
+
+**`<unit>` and the session name are separate tokens on purpose.** `--worktree` cuts a
+branch, so its argument stays a plain hyphenated surface token — `:` is not legal in a
+git refname, and the session name below is built on `::`, so the two cannot share a
+value. Nor should they, independent of the refname constraint: several sessions can
+share one worktree (a build pass and a review pass on the same surface), and one unit of
+work can span several worktrees (a change landing in two repos) — neither direction
+supports a fixed mapping from branch to session name.
 
 **The `cd` is what picks the project.** There is no flag for it — `--add-dir` grants tool
 access to extra paths but does not set the session's project; the spawned session simply
@@ -50,6 +59,33 @@ before any worker exists. Pass the supervisor's own class explicitly — it is t
 this command that cannot be copied from a sibling. The session registry does not carry it;
 the supervisor's transcript does, as `{"type":"permission-mode","permissionMode":…}` records
 written on every mode change.
+
+## Naming a spawned session
+
+When the spawning session is an orchestrator and this session is a **Stint** — a worker
+whose scope exceeds one context lifecycle; smaller work goes to a subagent instead — name
+it:
+
+    stint::<constituent>::<relation>
+
+`stint` is the fixed first segment marking the row as orchestrator-spawned. `::` is the
+namespace connector, used at every boundary, not just the last one. `<constituent>` names
+the unit this session belongs to: the conducting session where one exists, or the session
+itself where none does — one field, not two, because a conductor also refers to itself,
+so the name always has exactly three segments. `<relation>` is this session's place
+*within* that unit (`port`, `review`, …) — a role inside the unit, not a forward pointer
+to a session that does not exist yet, which matters because `-n` fixes the name at launch
+time, before any such session could be known. Two Stints sharing one unit:
+`stint::comment-review::port` and `stint::comment-review::review`.
+
+The orchestrator derives both tokens from accumulated context and the user's utterance
+and reports them with the spawn line — there is no separate per-spawn confirmation step.
+The first Stint of a unit fixes `<constituent>`; every later Stint in that unit reuses it
+verbatim (read the live names off `claude agents --json` rather than re-deriving).
+
+Stints chain — one hands off to the next — but never nest: a worker must not spawn or
+supervise sub-workers, since only the orchestrator holds that role. That caps the spawn
+graph at one supervised level.
 
 ## Talking to it
 

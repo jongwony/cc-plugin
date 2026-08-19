@@ -1,7 +1,7 @@
 {
   "name": "remote-tmux",
   "description": "`claude remote-control` toolkit: spawn backgrounded worker sessions that are app-reachable and addressable by SendMessage (remote-spawn skill), or keep a self-restarting --spawn-worktree pool host alive per project for CLI-free session origination (rc-pool skill)",
-  "version": "5.0.4",
+  "version": "5.0.5",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

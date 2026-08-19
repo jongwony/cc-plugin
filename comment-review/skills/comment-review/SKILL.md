@@ -216,11 +216,34 @@ the *rendered* text of the anchored element as it read when the comment was made
 300 characters). It is rendered text, not source text, so it will not match the source
 character for character — inline markup is gone from it. It exists so the apply step can tell
 a selector that still resolves to the right block from one that resolves to a different block
-that has since moved into its position. A deletion appends a tombstone
-line — same `id`, empty `comment`, `deleted: true` — rather than rewriting the file, so the
-log stays append-only **for as long as the browser channel owns it**. Entries sharing an
-`id` are an edit history: the latest timestamp wins. The apply step is the one writer that
-rewrites the queue, and it does so under the constraint in **Apply step** below.
+that has since moved into its position. A deletion appends a tombstone line — same `id`,
+empty `comment`, `deleted: true` — rather than rewriting the file, and the apply step records
+what it consumed by appending a marker rather than rewriting either, so the log is append-only
+without qualification. Nothing overwrites it, so there is nothing for a concurrent write to
+lose. Entries sharing an `id` are an edit history: the latest timestamp wins.
+
+A consumed-marker line is `{id, artifact, consumed: true, consumedThrough, timestamp}`, where
+`consumedThrough` is the timestamp of the entry the apply step actually consumed.
+
+A line is live when its latest non-marker entry is not a tombstone and no consumed-marker for
+that `id` carries a `consumedThrough` at or after that entry's timestamp. Keying the marker to
+the timestamp it consumed, rather than to the `id` alone, is what lets a comment edited after
+it was applied count as the new instruction it is: the edit carries a later timestamp than the
+marker, so it is live again. A marker keyed on `id` alone would swallow it.
+
+Timestamps are millisecond-resolution, so two entries of different kinds can share the latest
+one — a tab editing and another deleting need only finish in the same millisecond, which
+measurement shows is common rather than exotic. **Where a tie is between entries of different
+kinds, the one that produces no edit wins.** This is the same asymmetry the anchor guard runs
+on: a comment that fails to apply shows up as a source that did not change, while a comment
+applied against a retraction edits the artifact the user was trying to protect.
+
+This deliberately disagrees with the server. `serve.ts`'s DELETE existence check breaks the
+same tie by file order — its comparison is strict, so the earlier line stays. That check asks a
+different question (is there a live entry to tombstone?), and the worst its disagreement
+produces is one redundant tombstone line, never a wrong edit. Do not reconcile the two by
+changing this rule to match: the reason this one leans the other way is written directly
+above.
 
 **Apply step**:
 
@@ -229,9 +252,8 @@ rewrites the queue, and it does so under the constraint in **Apply step** below.
    slug, identified by its entries carrying this artifact's path. Phase 0 surfaces those;
    consuming them is what makes surfacing them mean anything. Any prior in-session Read is
    informational only and does not substitute for this one, since the browser may have
-   appended lines in between. Skip lines superseded by a later entry for the same `id`, and
-   lines whose latest entry is a tombstone — `id` dedup runs across all of these files
-   together, not per file.
+   appended lines in between. Keep the lines that are live by the rule above — `id` dedup and
+   marker resolution run across all of these files together, not per file.
 2. **Record the intent before touching the source** — write the ids about to be applied,
    with the artifact path, to `feedback-{slug}.inflight.json`. This file is what makes the
    exactly-once guarantee in Rule 2 true rather than hoped for: editing the source and
@@ -242,15 +264,18 @@ rewrites the queue, and it does so under the constraint in **Apply step** below.
    that cannot be translated faithfully — ambiguous, conflicting, or resting on something the
    AI would have to guess — is left in the queue rather than guessed at, and surfaced in the
    round-complete prose as deferred.
-4. Archive the consumed lines to `{queue-filename}-{timestamp}.consumed.jsonl` — each queue
-   under its own name, so a queue found under an earlier slug is archived beside itself
-   rather than folded into the current slug's — then rewrite each queue to hold exactly the
-   lines that were *not* consumed.
-   Re-read the queue immediately before that rewrite and carry forward anything the browser
-   appended since the fresh Read of step 1: the server stays live throughout the apply, and a
-   rewrite computed from the earlier Read would drop a comment made while the edits were
-   landing. Archive by `id`, never by truncating the file to the lines step 1 happened to see.
-   Delete the `.inflight` file last, once the rewrite has landed.
+4. Append one consumed-marker per consumed line to the queue it came from, carrying the
+   `consumedThrough` timestamp of the entry that was consumed. Do **not** rewrite the queue:
+   the server stays live throughout the apply, and a rewrite computed from an earlier Read
+   would silently overwrite a comment that arrived while the edits were landing. Re-reading
+   just before the rewrite would narrow that window without closing it — read-then-write is
+   not atomic — whereas appending has nothing to overwrite. A comment that lands mid-apply
+   simply gets no marker this round and is live again next round.
+   Copy the consumed lines to `{queue-filename}-{timestamp}.consumed.jsonl` — each queue under
+   its own name, so a queue found under an earlier slug is archived beside itself rather than
+   folded into the current slug's. The copy is an audit record, not the re-ingestion guard:
+   the markers are that now, so nothing is truncated.
+   Delete the `.inflight` file last, once the markers have landed.
 5. After edits land, the browser auto-reloads.
 
 Apply-step tools are Edit / Write. The skill introduces no other write path.
@@ -269,8 +294,8 @@ pre-round prose; the materialized view is the audit summary.
 ```
 Rounds:                  {N}
 Comments processed:      {C_in} queued → {E} edits landed, {Df} deferred
-Channel state at exit:   {C_unc} unconsumed comments across this artifact's queue file(s), named
-                          (preserved, not archived)
+Channel state at exit:   {C_unc} still-live comments across this artifact's queue file(s), named
+                          -- live by the rule in JSONL Consumption Timing: no marker reaches them
                           -- includes never-processed comments AND apply-deferred ones
 Artifact(s):             {list of paths}
 ```
@@ -278,12 +303,11 @@ Artifact(s):             {list of paths}
 ## Error Recovery
 
 - **Feedback consumption**: this artifact's queue file(s) — the current slug's, plus any
-  earlier-slug queue Phase 0 found — are consumed at the start of every apply step and each
-  archived under its own name to prevent stale comments re-entering later rounds. When the archive write fails (disk full, permission denied),
-  surface the failure — do not silently retry — and halt consumption until the cause is
-  resolved; a silent retry would re-translate identical comments. The same applies to the
-  rewrite that follows: the queue is re-read immediately before it, so a comment appended
-  during the apply survives instead of being silently overwritten.
+  earlier-slug queue Phase 0 found — are consumed at the start of every apply step, and each
+  consumed line gets a marker appended to the queue it came from. When the marker write fails
+  (disk full, permission denied), surface the failure — do not silently retry — and halt
+  consumption until the cause is resolved: without its marker a consumed line is still live,
+  and the next round would re-translate it. The archive copy carries the same rule.
 - **Anchor no longer trustworthy on apply**: a queued comment's selector may fail to resolve,
   or resolve to a block that is no longer the one it was written about — a positional selector
   like `p:nth-of-type(2)` keeps resolving while the block underneath it changes. Compare the

@@ -521,27 +521,42 @@ for (const [slug, path] of drafts) {
     try { const s = statSync(path); return `${s.mtimeMs}:${s.ino}`; } catch { return null; }
   };
   let lastIdentity = identity();
+  let trailing: ReturnType<typeof setTimeout> | null = null;
+
+  const fire = () => {
+    // Identity is checked at fire time, not at event time: this directory also carries the
+    // artifact's feedback JSONL, its consumed-archive, and any temp file an atomic writer
+    // leaves behind, and none of those change the artifact's own identity. That check is
+    // what keeps a comment from reloading the page out from under the user still typing.
+    const cur = identity();
+    if (cur === null || cur === lastIdentity) return;
+    lastIdentity = cur;
+    lastFire.set(slug, Date.now());
+    console.error(`[watch] ${slug} changed → publish reload`);
+    server.publish("reload", JSON.stringify({ slug }));
+  };
+
   const watcher = watch(dir, (_event, filename) => {
     // The event type is deliberately NOT consulted. macOS reports an in-place append as
     // "rename" too, so narrowing to "change" would put this watcher straight back to the
     // silent-death this directory watch exists to fix.
     // A platform that supplies no filename falls through the name test on purpose; the
-    // identity check below is what decides there, so there is no second code path to keep
-    // working.
+    // identity check inside fire() is what decides there, so there is no second code path
+    // to keep working.
     if (filename && filename !== name) return;
     const now = Date.now();
     const prev = lastFire.get(slug) ?? 0;
-    if (now - prev < WATCH_DEBOUNCE_MS) return;
-    // The directory also carries this artifact's feedback JSONL, its consumed-archive, and
-    // any temp file an atomic writer leaves behind. None of them touch the artifact's own
-    // identity, so checking it here is what keeps a comment from reloading the page out from
-    // under the user who is still typing.
-    const cur = identity();
-    if (cur === null || cur === lastIdentity) return;
-    lastIdentity = cur;
-    lastFire.set(slug, now);
-    console.error(`[watch] ${slug} changed → publish reload`);
-    server.publish("reload", JSON.stringify({ slug }));
+    if (now - prev < WATCH_DEBOUNCE_MS) {
+      // Suppressed, not dropped. A save landing inside the window is still a real change,
+      // and with a leading-edge-only debounce its content would never reach the browser:
+      // the page would sit on the previous save with nothing further scheduled, and the
+      // user would keep commenting on a render that no longer matches the source.
+      if (trailing === null) {
+        trailing = setTimeout(() => { trailing = null; fire(); }, WATCH_DEBOUNCE_MS - (now - prev));
+      }
+      return;
+    }
+    fire();
   });
   watcher.on("error", (err: NodeJS.ErrnoException) => {
     console.error(`[watch] error on ${dir}: ${err.message} (code=${err.code ?? "unknown"})`);

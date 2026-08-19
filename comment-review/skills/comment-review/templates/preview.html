@@ -788,14 +788,13 @@ async function deleteFeedback() {
   try {
     const resp = await feedbackFetch("DELETE", { slug: SLUG, id });
     if (!resp.ok) {
-      let reason = "HTTP " + resp.status;
-      try {
-        const errBody = await resp.json();
-        if (errBody && errBody.reason) reason = errBody.reason;
-      } catch {
-        // non-JSON body — keep HTTP status as reason
-      }
-      throw new Error(reason);
+      // The 404 carries JSON with a `reason`; the existence-check and tombstone-write
+      // failures carry their cause as plain text. Read the body once as text and try JSON on
+      // that, so a plain-text cause reaches the user instead of a bare status.
+      const raw = (await resp.text().catch(() => "")).trim();
+      let reason = raw;
+      try { const j = JSON.parse(raw); if (j && j.reason) reason = j.reason; } catch { /* plain text body */ }
+      throw new Error(reason ? reason.slice(0, 200) : `HTTP ${resp.status}`);
     }
     const result = await resp.json();
     if (!result.deleted) {

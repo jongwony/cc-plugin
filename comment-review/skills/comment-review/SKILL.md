@@ -97,8 +97,14 @@ always knows where they are:
 Round 1 — browser preview opened. {N comments in queue from prior session. | No prior comments — fresh start.}
 
 Round {k} complete — {X} applied{, {Y} deferred}.    -- Y omitted when 0
+  deferred: {selector} — {why} (× Y)                 -- one line each; omitted when Y is 0
 Browser preview reflects the latest edits.
 ```
+
+Name each deferred line rather than only counting it. The browser cannot show a queued
+comment once the page has reloaded — the mark is gone with the render it belonged to — so
+this prose is the only place it still appears. A bare count leaves the user knowing something
+was held back without knowing what, and nowhere to look it up.
 
 **Round signal**: the user's chat turn *is* the round-complete signal. No separate browser
 button is needed — the browser collects comments, chat marks the boundary. "Wait, I'm still
@@ -172,9 +178,13 @@ is one click away, rather than a tab being forced open per artifact:
   cursor approaches, or from the comment count in the status bar; Esc closes it. It stays
   off-screen otherwise, so an HTML artifact still renders full-bleed.
 - When the source file changes (a round applied edits), the page auto-reloads while
-  preserving scroll position. Comment marks are **not** re-applied on reload — comments are
-  consumed at the apply step (the edit-back that changed the source and triggered the
-  reload), so the reload renders the post-edit artifact without them.
+  preserving scroll position. Comment marks are **not** re-applied on reload: the marks live
+  in the page, not in the queue, so anything still queued — a deferred line, or one appended
+  while the apply was running — survives in `feedback-{slug}.jsonl` but has no mark and is
+  not counted by the sidebar, which reads only what is on the page. Those lines are carried
+  in the round-complete prose instead, named there so a queued comment the browser can no
+  longer show is still visible to you. Re-anchoring them in the page is not something this
+  channel does.
 
 ### Element Anchoring
 

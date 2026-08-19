@@ -41,9 +41,16 @@ see the current shape.
 
 ## Conventions
 
-- **Python = PEP 723 + uv.** Inline script metadata (`# /// script … ///`);
-  invoke via `uv run scripts/x.py` (sidesteps the `python` vs `python3`
-  ambiguity). Declare `dependencies = []` even when empty.
+- **Helper scripts: Python by default; Bun TypeScript when the other half runs
+  in a browser.** *Python* = PEP 723 + uv — inline script metadata (`# ///
+  script … ///`), invoked as `uv run scripts/x.py` (sidesteps the `python` vs
+  `python3` ambiguity), with `dependencies = []` declared even when empty.
+  *Bun TypeScript* — `bun scripts/x.ts` — when the script's counterpart is a
+  page the plugin ships, such as a preview server driving its own browser
+  client: one language spans the wire, and HTTP + WebSocket + file-watch come
+  from the runtime instead of a dependency list. Both are prerequisites rather
+  than vendored artifacts; a skill that needs one says so, and says how to
+  install it.
 - **Agent vs Skill.** Agent = how to behave (principles, boundaries, error
   philosophy). Skill = what to do (workflow, procedures, commands). A
   `skills:`-loaded skill is the single home for its workflow; the agent adds only

@@ -319,12 +319,13 @@ Artifact(s):             {list of paths}
   symmetric: a needless return is visible and cheap, while a wrong match edits a region the
   comment was never about, silently. Do not silently drop it, and do not pick a nearby block
   on a guess.
-- **An `.inflight` file is present at apply time**: a previous apply was interrupted between
-  editing the source and archiving its queue lines. Do not replay those ids and do not drop
-  them. Read the source and establish, per id, whether its edit is already present; archive
-  the ones that landed, return the ones that did not to the queue, and say which was which in
-  the round-complete prose. Deciding this by reading is the point — the ids alone cannot say
-  whether the write happened.
+- **An `.inflight` record is present at apply time**: a previous apply was interrupted between
+  editing the source and marking its queue lines consumed. Do not replay those ids and do not
+  drop them. Read the source and establish, per id, whether its edit is already present; append
+  a consumed-marker for each one that landed, leave the rest alone — they are still live, so
+  nothing has to be returned — and say which was which in the round-complete prose. Deciding
+  this by reading is the point: the ids alone cannot say whether the write happened. Archiving
+  is not what stops a replay here; the marker is.
 - **Bun server crash mid-loop**: surface it with two options — restart the channel and resume
   (the accumulated JSONL is preserved) / terminate the review with a materialized view of the
   completed rounds.

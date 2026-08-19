@@ -778,14 +778,28 @@ async function submitFeedback() {
     // The annotated element itself is the mark — create or update it in place.
     markElement(captured.targetEl, captured.selector, comment, id || (captured.editingMark && captured.editingMark.dataset.id));
     showToast(captured.editingMark ? "✓ updated" : "✓ saved");
-    dismissPopup();
+    // Only touch the popup if it is still the one this response belongs to. The in-flight
+    // guard stops a second submit, not a second anchor: a right-click during the request
+    // swaps `pending` for a comment the user has not sent yet, and dismissing then would
+    // discard it. Anchoring elsewhere mid-request is left allowed on purpose — blocking it
+    // would be simpler and would stall the user whenever the network is slow.
+    if (pending === captured) dismissPopup();
     renderSidebar();
   } catch (e) {
     // The affordance is stated as a fact about the editor, not as a promise about the
     // outcome. A stale slug after a channel restart, and a path too long to name a feedback
     // file, both fail identically however many times they are resent — saying "retry" told
     // the user the opposite of what was true.
-    showToast(`✗ not saved: ${e.message} — your text is still here; ⌘Enter resends`, true);
+    // And it is a fact about the editor only while the editor still holds this comment. If a
+    // right-click moved it on while the request was open, ⌘Enter would send the new comment,
+    // not resend this one — so that sentence is only said where it is still true.
+    const stillMine = pending === captured;
+    showToast(
+      stillMine
+        ? `✗ not saved: ${e.message} — your text is still here; ⌘Enter resends`
+        : `✗ not saved: ${e.message} — that comment was not saved`,
+      true,
+    );
   } finally {
     submitInFlight = false;
   }

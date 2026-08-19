@@ -381,8 +381,10 @@ const server = Bun.serve({
       });
     }
 
-    // Server is tag-agnostic: persists every comment as one JSONL line; the apply
-    // step interprets `[disposition: …] [task: …]` tags downstream (see SKILL.md).
+    // Server is tag-agnostic: it persists every comment as one JSONL line and interprets
+    // nothing in it. What a comment's text means is settled at apply time by the AI reading
+    // it, not by any tag vocabulary here — the layer that once parsed such tags was removed
+    // when this plugin was ported, and nothing replaced it.
     if (url.pathname === "/feedback" && req.method === "POST") {
       let body: FeedbackBody;
       try {

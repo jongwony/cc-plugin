@@ -190,8 +190,9 @@ review *is* the rendered artifact.
 Each JSONL line: `{id, slug, artifact, selector, comment, timestamp}`, where `artifact` is
 the absolute path of the source file the comment belongs to. A deletion appends a tombstone
 line — same `id`, empty `comment`, `deleted: true` — rather than rewriting the file, so the
-log stays append-only. Entries sharing an `id` are an edit history: the latest timestamp
-wins.
+log stays append-only **for as long as the browser channel owns it**. Entries sharing an
+`id` are an edit history: the latest timestamp wins. The apply step is the one writer that
+rewrites the queue, and it does so under the constraint in **Apply step** below.
 
 **Apply step**:
 

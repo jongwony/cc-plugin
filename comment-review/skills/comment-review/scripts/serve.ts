@@ -40,13 +40,26 @@ if (unknownFlags.length > 0) {
 // narrowest name no other artifact could also take, so a name that is already unique is
 // kept exactly as before and only a colliding pair widens.
 const SLUG_SEP = "-";
+// Doubling the separator inside a component stops a directory literally named `a-b` from
+// flattening to the same string as the pair `a/b` — the case that made two real artifacts
+// exhaust every candidate between them, so the server refused to start and left BOTH
+// unreviewable rather than silently dropping one.
+// It does not make the join injective, and the comment on the guard below must not be read
+// as saying it does: a run of separators at a component boundary is still ambiguous, since
+// `["a-", "b"]` and `["a", "-b"]` both flatten to `a---b`. The guard stays load-bearing.
+const escapeComponent = (c: string) => c.replaceAll(SLUG_SEP, SLUG_SEP + SLUG_SEP);
 const slugCandidates = (abs: string): string[] => {
   const parts = abs.split(sep).filter(Boolean);
+  // The first two rungs stay unescaped: an artifact with no collision must keep the exact
+  // bare name it has today. Only a widened rung — which exists solely to separate a
+  // collision — pays the escaping.
   const cands = [basename(abs, extname(abs)), parts[parts.length - 1]];
   // Widen by one leading path component at a time. Joined with SLUG_SEP rather than `sep`:
   // the slug becomes part of `feedback-{slug}.jsonl`, and a separator there would name a
   // subdirectory that does not exist.
-  for (let i = parts.length - 2; i >= 0; i--) cands.push(parts.slice(i).join(SLUG_SEP));
+  for (let i = parts.length - 2; i >= 0; i--) {
+    cands.push(parts.slice(i).map(escapeComponent).join(SLUG_SEP));
+  }
   return cands;
 };
 
@@ -56,10 +69,9 @@ for (const abs of paths) {
   const others = paths.filter((p) => p !== abs).map(slugCandidates);
   const slug = slugCandidates(abs).find((c) => !others.some((o) => o.includes(c)));
   if (!slug) {
-    // Reachable, not merely defensive: joining path components with SLUG_SEP cannot tell a
-    // directory named `a-b` from the pair `a/b`, so every candidate of `x/a-b/f.md` also
-    // appears in `x/a/b/f.md`'s list and the first of the two exhausts its options. Failing
-    // loudly here is the point — the alternative is the silent drop this block removes.
+    // Kept because the escaped join above is still not injective, so exhaustion cannot be
+    // argued away — only made harder. Failing loudly here is the point: the alternative is
+    // the silent drop this whole block removes.
     console.error(`fatal: cannot derive a unique preview name for ${abs}`);
     process.exit(1);
   }
@@ -349,11 +361,18 @@ const server = Bun.serve({
       if (body.selector.length === 0 || body.comment.length === 0) {
         return new Response("selector and comment must be non-empty", { status: 400 });
       }
+      // Identify the slug before measuring it, so an unrecognized slug is refused as
+      // unrecognized rather than as oversized.
+      // This ordering does NOT exempt a server-derived slug from the cap below, and the
+      // difference was measured rather than reasoned about: a slug widened past
+      // MAX_SLUG_LEN by a deep collision still takes a 413 here, which leaves that user
+      // unable to comment at all with nothing they can do about it from their side.
+      // Standing open — the cap itself is what would have to move.
+      const draft = drafts.get(body.slug);
+      if (!draft) return new Response("unknown slug", { status: 400 });
       if (body.slug.length > MAX_SLUG_LEN) return new Response(`slug exceeds ${MAX_SLUG_LEN} chars`, { status: 413 });
       if (body.selector.length > MAX_SELECTOR_LEN) return new Response(`selector exceeds ${MAX_SELECTOR_LEN} chars`, { status: 413 });
       if (body.comment.length > MAX_COMMENT_LEN) return new Response(`comment exceeds ${MAX_COMMENT_LEN} chars`, { status: 413 });
-      const draft = drafts.get(body.slug);
-      if (!draft) return new Response("unknown slug", { status: 400 });
       // Edit case: client supplies the original id so the new entry shares the dedup key
       // (latest-timestamp wins). New case: server mints a UUID — guarantees uniqueness so
       // two comments on the same element never collide.
@@ -403,10 +422,12 @@ const server = Bun.serve({
         return new Response("missing or non-string fields (slug, id)", { status: 400 });
       }
       if (body.id.length === 0) return new Response("id must be non-empty", { status: 400 });
-      if (body.slug.length > MAX_SLUG_LEN) return new Response(`slug exceeds ${MAX_SLUG_LEN} chars`, { status: 413 });
-      if (body.id.length > MAX_ID_LEN) return new Response(`id exceeds ${MAX_ID_LEN} chars`, { status: 413 });
+      // Same ordering as POST, and the same open issue: identifying first only changes
+      // which refusal an unrecognized slug gets, not whether the cap fires.
       const draft = drafts.get(body.slug);
       if (!draft) return new Response("unknown slug", { status: 400 });
+      if (body.slug.length > MAX_SLUG_LEN) return new Response(`slug exceeds ${MAX_SLUG_LEN} chars`, { status: 413 });
+      if (body.id.length > MAX_ID_LEN) return new Response(`id exceeds ${MAX_ID_LEN} chars`, { status: 413 });
       const feedbackPath = resolve(dirname(draft), `feedback-${body.slug}.jsonl`);
 
       // Existence check: scan JSONL, find latest entry for this id, ensure it is a live

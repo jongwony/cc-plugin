@@ -1,7 +1,7 @@
 {
   "name": "comment-review",
   "description": "Review a markdown or HTML artifact in a live browser preview: right-click any element to anchor a comment by CSS selector, then have those comments applied back as edits to the source. Markdown renders through marked, HTML is served raw through a Shadow DOM; comments queue to a JSONL sidecar and the page hot-reloads whenever the source changes.",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

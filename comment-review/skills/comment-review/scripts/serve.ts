@@ -106,6 +106,8 @@ const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
 // Validation caps: protect disk + JSONL schema integrity
+// Retained without a current call site: no code path takes a slug from a client today, so
+// there is nothing to cap. It is here as the value to reach for if one ever does.
 const MAX_SLUG_LEN = 200;
 const MAX_SELECTOR_LEN = 500;
 const MAX_COMMENT_LEN = 5000;
@@ -361,16 +363,12 @@ const server = Bun.serve({
       if (body.selector.length === 0 || body.comment.length === 0) {
         return new Response("selector and comment must be non-empty", { status: 400 });
       }
-      // Identify the slug before measuring it, so an unrecognized slug is refused as
-      // unrecognized rather than as oversized.
-      // This ordering does NOT exempt a server-derived slug from the cap below, and the
-      // difference was measured rather than reasoned about: a slug widened past
-      // MAX_SLUG_LEN by a deep collision still takes a 413 here, which leaves that user
-      // unable to comment at all with nothing they can do about it from their side.
-      // Standing open — the cap itself is what would have to move.
       const draft = drafts.get(body.slug);
       if (!draft) return new Response("unknown slug", { status: 400 });
-      if (body.slug.length > MAX_SLUG_LEN) return new Response(`slug exceeds ${MAX_SLUG_LEN} chars`, { status: 413 });
+      // No length cap on the slug: the lookup above already rejects anything the server did
+      // not derive, so a cap here restrains only the server's own value. A path deep enough
+      // to overflow the filesystem's name limit surfaces as a caught ENAMETOOLONG below.
+      // selector and comment stay capped — those are genuinely client-supplied.
       if (body.selector.length > MAX_SELECTOR_LEN) return new Response(`selector exceeds ${MAX_SELECTOR_LEN} chars`, { status: 413 });
       if (body.comment.length > MAX_COMMENT_LEN) return new Response(`comment exceeds ${MAX_COMMENT_LEN} chars`, { status: 413 });
       // Edit case: client supplies the original id so the new entry shares the dedup key
@@ -422,11 +420,9 @@ const server = Bun.serve({
         return new Response("missing or non-string fields (slug, id)", { status: 400 });
       }
       if (body.id.length === 0) return new Response("id must be non-empty", { status: 400 });
-      // Same ordering as POST, and the same open issue: identifying first only changes
-      // which refusal an unrecognized slug gets, not whether the cap fires.
       const draft = drafts.get(body.slug);
       if (!draft) return new Response("unknown slug", { status: 400 });
-      if (body.slug.length > MAX_SLUG_LEN) return new Response(`slug exceeds ${MAX_SLUG_LEN} chars`, { status: 413 });
+      // No length cap on the slug, for the same reason as POST above.
       if (body.id.length > MAX_ID_LEN) return new Response(`id exceeds ${MAX_ID_LEN} chars`, { status: 413 });
       const feedbackPath = resolve(dirname(draft), `feedback-${body.slug}.jsonl`);
 

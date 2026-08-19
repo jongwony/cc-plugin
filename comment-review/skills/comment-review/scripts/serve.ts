@@ -110,6 +110,7 @@ const escapeHtml = (s: string) =>
 // there is nothing to cap. It is here as the value to reach for if one ever does.
 const MAX_SLUG_LEN = 200;
 const MAX_SELECTOR_LEN = 500;
+const MAX_ANCHOR_TEXT_LEN = 300;
 const MAX_COMMENT_LEN = 5000;
 
 const renderIndex = () => {
@@ -172,6 +173,7 @@ interface FeedbackBody {
   slug: string;
   selector: string; // unique CSS selector / DOM path of the right-clicked element
   comment: string;
+  anchorText?: string; // rendered text of that element when the comment was made
   id?: string; // optional on POST: present for edits (re-uses original id), absent for new entries
 }
 
@@ -398,6 +400,9 @@ const server = Bun.serve({
         // artifact it belongs to is carried explicitly — the apply step edits this path.
         artifact: draft,
         selector: body.selector,
+        // Client-supplied, so capped here: a positional selector outlives the block it was
+        // written about, and this is what the apply step compares against to notice.
+        anchorText: isStr(body.anchorText) ? body.anchorText.slice(0, MAX_ANCHOR_TEXT_LEN) : "",
         comment: body.comment,
         timestamp: new Date().toISOString(),
       };
@@ -475,6 +480,7 @@ const server = Bun.serve({
         slug: body.slug,
         artifact: draft,
         selector: liveEntry.selector ?? "",
+        anchorText: typeof liveEntry.anchorText === "string" ? liveEntry.anchorText : "",
         comment: "",
         deleted: true,
         timestamp: new Date().toISOString(),
@@ -563,9 +569,14 @@ for (const [slug, path] of drafts) {
   });
 }
 
+// Open the artifact itself when there is only one — Phase 0 promises the browser opens to
+// the rendered preview, and the index is not that. With several, the index is the entry
+// point: auto-opening a tab per artifact is intrusive, and Rule 4's promise is each artifact
+// having its own preview page, which it does either way.
+const openPath = drafts.size === 1 ? `preview/${encodeURIComponent([...drafts.keys()][0])}` : "";
 // Bound to the tailnet IP, the device reaches its own address locally, so this
 // URL also opens on this machine — no separate localhost URL needed.
-const url = `http://${bindHost}:${server.port}/`;
+const url = `http://${bindHost}:${server.port}/${openPath}`;
 console.error(`serving at ${url}`);
 console.error(`drafts: ${[...drafts.keys()].join(", ")}`);
 if (tailnet) {

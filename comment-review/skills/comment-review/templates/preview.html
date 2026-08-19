@@ -733,7 +733,15 @@ async function submitFeedback() {
 
   // Edit case: send the original id so the new entry shares the dedup key with the previous
   // version. Create case: omit id so the server mints a UUID.
-  const reqBody = { slug: SLUG, selector: captured.selector, comment };
+  const reqBody = {
+    slug: SLUG,
+    selector: captured.selector,
+    comment,
+    // What the anchored element read as at capture time. A positional selector can still
+    // resolve after later edits and land on a different block; the guard only ever asked
+    // whether it resolved. This is what lets the apply step tell those apart.
+    anchorText: (captured.targetEl.textContent || "").replace(/\s+/g, " ").trim().slice(0, 300),
+  };
   if (captured.editingMark && captured.editingMark.dataset.id) {
     reqBody.id = captured.editingMark.dataset.id;
   }

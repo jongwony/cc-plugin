@@ -73,9 +73,17 @@ free-exit : the user may end the review at any time by saying so (Phase 0 prose 
    `CLAUDE_PLUGIN_ROOT` because this runs with the user's project as the working directory,
    not the skill directory — a bare `scripts/serve.ts` resolves against the caller and is not
    found.
-4. **Round 1 entry** — surface the queue size when `feedback-{slug}.jsonl` exists from a
-   prior session, or "No prior comments — fresh start." otherwise, so the carryover (or lack
-   of it) is recognizable before the round begins.
+   Launch it in the background and keep the process handle (or PID) for the session: the
+   server runs until the review ends, so a foreground launch blocks the agent for the whole
+   review. Treat the `serving at …` line on stdout as the start confirmation. On termination,
+   stop the server through that handle — the exit promise in step 2 is only keepable if
+   something was kept to stop it with.
+4. **Round 1 entry** — surface the queue size for this artifact, or "No prior comments —
+   fresh start." A slug widens when two artifacts would otherwise share one, so the same
+   artifact can have left a queue under a different name in an earlier session: look beside
+   the source for any `feedback-*.jsonl` whose entries carry this artifact's path, not only
+   the current slug's file. Name any queue found under an earlier slug when you surface it,
+   so a carryover the current name would have hidden is visible rather than silently absent.
 
 ## Phase L: Round Loop
 
@@ -145,7 +153,9 @@ endpoint and watcher details.
   anchoring, out of scope here since raw render fidelity is the channel's identity.) marked
   is not used in HTML mode; the file passes through raw and untouched.
 
-In the browser (one tab per artifact):
+In the browser — each artifact has its own preview page at `/preview/{slug}`. A single
+artifact opens straight to its page; with several, the browser opens the index and each page
+is one click away, rather than a tab being forced open per artifact:
 
 - The artifact renders as above — no raw markdown syntax in markdown mode; the page rendered
   as authored in HTML mode
@@ -190,8 +200,13 @@ review *is* the rendered artifact.
 
 ### JSONL Consumption Timing
 
-Each JSONL line: `{id, slug, artifact, selector, comment, timestamp}`, where `artifact` is
-the absolute path of the source file the comment belongs to. A deletion appends a tombstone
+Each JSONL line: `{id, slug, artifact, selector, anchorText, comment, timestamp}`, where
+`artifact` is the absolute path of the source file the comment belongs to and `anchorText` is
+the *rendered* text of the anchored element as it read when the comment was made (capped at
+300 characters). It is rendered text, not source text, so it will not match the source
+character for character — inline markup is gone from it. It exists so the apply step can tell
+a selector that still resolves to the right block from one that resolves to a different block
+that has since moved into its position. A deletion appends a tombstone
 line — same `id`, empty `comment`, `deleted: true` — rather than rewriting the file, so the
 log stays append-only **for as long as the browser channel owns it**. Entries sharing an
 `id` are an edit history: the latest timestamp wins. The apply step is the one writer that
@@ -204,18 +219,24 @@ rewrites the queue, and it does so under the constraint in **Apply step** below.
    and does not substitute for this Read, since the browser may have appended lines between
    that prose and the user's turn. Skip lines superseded by a later entry for the same `id`,
    and lines whose latest entry is a tombstone.
-2. For each surviving line, locate the anchor in the source artifact per **Locating the
+2. **Record the intent before touching the source** — write the ids about to be applied,
+   with the artifact path, to `feedback-{slug}.inflight.json`. This file is what makes the
+   exactly-once guarantee in Rule 2 true rather than hoped for: editing the source and
+   archiving its queue lines cannot be one atomic act, so an interruption between them would
+   otherwise leave applied ids sitting in the queue for the next round to apply a second time.
+3. For each surviving line, locate the anchor in the source artifact per **Locating the
    Anchor in the Source** above, and translate the comment into an Edit/Write call. A comment
    that cannot be translated faithfully — ambiguous, conflicting, or resting on something the
    AI would have to guess — is left in the queue rather than guessed at, and surfaced in the
    round-complete prose as deferred.
-3. Archive the consumed lines to `feedback-{slug}-{timestamp}.consumed.jsonl` to prevent
+4. Archive the consumed lines to `feedback-{slug}-{timestamp}.consumed.jsonl` to prevent
    re-ingestion, then rewrite the queue to hold exactly the lines that were *not* consumed.
    Re-read the queue immediately before that rewrite and carry forward anything the browser
    appended since the fresh Read of step 1: the server stays live throughout the apply, and a
    rewrite computed from the earlier Read would drop a comment made while the edits were
    landing. Archive by `id`, never by truncating the file to the lines step 1 happened to see.
-4. After edits land, the browser auto-reloads.
+   Delete the `.inflight` file last, once the rewrite has landed.
+5. After edits land, the browser auto-reloads.
 
 Apply-step tools are Edit / Write. The skill introduces no other write path.
 
@@ -247,11 +268,23 @@ Artifact(s):             {list of paths}
   resolved; a silent retry would re-translate identical comments. The same applies to the
   rewrite that follows: the queue is re-read immediately before it, so a comment appended
   during the apply survives instead of being silently overwritten.
-- **Anchor not found on apply**: when a prior edit removed or restructured the block a queued
-  comment points at, its selector no longer resolves. Leave the line in the queue and surface
-  it in the round-complete prose so the user can judge whether the intent still applies. Do
-  not silently drop it, and do not pick a nearby block on a guess — a selector that stopped
-  resolving is evidence the target moved, not a hint about where it moved to.
+- **Anchor no longer trustworthy on apply**: a queued comment's selector may fail to resolve,
+  or resolve to a block that is no longer the one it was written about — a positional selector
+  like `p:nth-of-type(2)` keeps resolving while the block underneath it changes. Compare the
+  resolved block against the entry's `anchorText`, which records how the anchored element read
+  when the comment was made; it is rendered text, so it will not match the source character
+  for character, and judging whether it is the same block is the point rather than an
+  obstacle. Where they are the same block, apply. Where they are not, or where it is unclear,
+  leave the line in the queue and surface it so the user can judge — the two errors are not
+  symmetric: a needless return is visible and cheap, while a wrong match edits a region the
+  comment was never about, silently. Do not silently drop it, and do not pick a nearby block
+  on a guess.
+- **An `.inflight` file is present at apply time**: a previous apply was interrupted between
+  editing the source and archiving its queue lines. Do not replay those ids and do not drop
+  them. Read the source and establish, per id, whether its edit is already present; archive
+  the ones that landed, return the ones that did not to the queue, and say which was which in
+  the round-complete prose. Deciding this by reading is the point — the ids alone cannot say
+  whether the write happened.
 - **Bun server crash mid-loop**: surface it with two options — restart the channel and resume
   (the accumulated JSONL is preserved) / terminate the review with a materialized view of the
   completed rounds.

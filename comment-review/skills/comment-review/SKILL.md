@@ -92,7 +92,10 @@ Browser preview reflects the latest edits.
 **Round signal**: the user's chat turn *is* the round-complete signal. No separate browser
 button is needed — the browser collects comments, chat marks the boundary. "Wait, I'm still
 commenting" is implicit in not yet sending that turn; the queue is consumed only when the
-user says so.
+user says so. With several artifacts open, that turn also says *which* one it completes:
+name the artifact to advance its counter alone, or say nothing to complete every artifact
+whose queue is non-empty. Each named artifact's counter advances on its own, so one
+artifact's round can close while another stays mid-comment.
 
 Between rounds the user is free to run any separate review of the artifact they want; this
 skill runs none of its own.
@@ -109,12 +112,14 @@ at all.
 
 The Bun server renders each artifact on demand, accepts comment POSTs, and broadcasts
 file-change notifications over a WebSocket. Each artifact slug is its filename without
-extension; comments append to `feedback-{slug}.jsonl` next to the source. The server picks
-the render substrate from the file extension (`.html`/`.htm` → HTML; everything else →
-markdown) and injects it into the preview page. For HTML, relative subresource URLs (sibling
-CSS, images, fonts) resolve under `/preview/...` and are served read-only, **scoped to the
-artifact's own directory** — the requested path is canonicalized and anything escaping that
-directory (path traversal, symlink) is rejected with 404. See `scripts/serve.ts` for
+extension, widened only where two artifacts would otherwise share one — enough of the
+extension or leading path to tell them apart. Comments append to `feedback-{slug}.jsonl`
+next to the source. The server picks the render substrate from the file extension
+(`.html`/`.htm` → HTML; everything else → markdown) and injects it into the preview page.
+For HTML, relative subresource URLs (sibling CSS, images, fonts) resolve under
+`/preview/...` and are served read-only, **scoped to the artifact's own directory** — the
+requested path is canonicalized and anything escaping that directory (path traversal,
+symlink) is rejected with 404. See `scripts/serve.ts` for
 endpoint and watcher details.
 
 **Render substrates**:
@@ -182,7 +187,8 @@ review *is* the rendered artifact.
 
 ### JSONL Consumption Timing
 
-Each JSONL line: `{id, slug, selector, comment, timestamp}`. A deletion appends a tombstone
+Each JSONL line: `{id, slug, artifact, selector, comment, timestamp}`, where `artifact` is
+the absolute path of the source file the comment belongs to. A deletion appends a tombstone
 line — same `id`, empty `comment`, `deleted: true` — rather than rewriting the file, so the
 log stays append-only. Entries sharing an `id` are an edit history: the latest timestamp
 wins.
@@ -199,8 +205,12 @@ wins.
    that cannot be translated faithfully — ambiguous, conflicting, or resting on something the
    AI would have to guess — is left in the queue rather than guessed at, and surfaced in the
    round-complete prose as deferred.
-3. Archive consumed lines to `feedback-{slug}-{timestamp}.consumed.jsonl` to prevent
-   re-ingestion; deferred lines remain in the queue.
+3. Archive the consumed lines to `feedback-{slug}-{timestamp}.consumed.jsonl` to prevent
+   re-ingestion, then rewrite the queue to hold exactly the lines that were *not* consumed.
+   Re-read the queue immediately before that rewrite and carry forward anything the browser
+   appended since the fresh Read of step 1: the server stays live throughout the apply, and a
+   rewrite computed from the earlier Read would drop a comment made while the edits were
+   landing. Archive by `id`, never by truncating the file to the lines step 1 happened to see.
 4. After edits land, the browser auto-reloads.
 
 Apply-step tools are Edit / Write. The skill introduces no other write path.
@@ -230,12 +240,14 @@ Artifact(s):             {list of paths}
   step and archived to `feedback-{slug}-{timestamp}.consumed.jsonl` to prevent stale comments
   re-entering later rounds. When the archive write fails (disk full, permission denied),
   surface the failure — do not silently retry — and halt consumption until the cause is
-  resolved; a silent retry would re-translate identical comments.
+  resolved; a silent retry would re-translate identical comments. The same applies to the
+  rewrite that follows: the queue is re-read immediately before it, so a comment appended
+  during the apply survives instead of being silently overwritten.
 - **Anchor not found on apply**: when a prior edit removed or restructured the block a queued
-  comment points at, its selector no longer resolves. Leave the line in the queue, tagged
-  `status="anchor-missing"`, and surface it so the user can judge whether the intent still
-  applies. Do not silently drop it, and do not pick a nearby block on a guess — a selector
-  that stopped resolving is evidence the target moved, not a hint about where it moved to.
+  comment points at, its selector no longer resolves. Leave the line in the queue and surface
+  it in the round-complete prose so the user can judge whether the intent still applies. Do
+  not silently drop it, and do not pick a nearby block on a guess — a selector that stopped
+  resolving is evidence the target moved, not a hint about where it moved to.
 - **Bun server crash mid-loop**: surface it with two options — restart the channel and resume
   (the accumulated JSONL is preserved) / terminate the review with a materialized view of the
   completed rounds.

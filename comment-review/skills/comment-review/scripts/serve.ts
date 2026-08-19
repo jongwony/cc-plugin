@@ -17,6 +17,7 @@ import { closeSync, constants, existsSync, fstatSync, openSync, readFileSync, st
 import { appendFile, readFile, realpath } from "node:fs/promises";
 import { basename, dirname, extname, resolve, sep } from "node:path";
 import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 
 const args = process.argv.slice(2);
 if (args.length === 0) {
@@ -32,14 +33,44 @@ if (unknownFlags.length > 0) {
   process.exit(1);
 }
 
+// An artifact's slug names both its URL and its feedback file. Two artifacts can yield the
+// same bare filename — `draft.md` beside `draft.html`, or `a/draft.md` and `b/draft.md` —
+// and a Map keyed on it silently dropped one: the user reviewed an artifact they never
+// opened while their comments landed next to the survivor. Each artifact now takes the
+// narrowest name no other artifact could also take, so a name that is already unique is
+// kept exactly as before and only a colliding pair widens.
+const SLUG_SEP = "-";
+const slugCandidates = (abs: string): string[] => {
+  const parts = abs.split(sep).filter(Boolean);
+  const cands = [basename(abs, extname(abs)), parts[parts.length - 1]];
+  // Widen by one leading path component at a time. Joined with SLUG_SEP rather than `sep`:
+  // the slug becomes part of `feedback-{slug}.jsonl`, and a separator there would name a
+  // subdirectory that does not exist.
+  for (let i = parts.length - 2; i >= 0; i--) cands.push(parts.slice(i).join(SLUG_SEP));
+  return cands;
+};
+
 const drafts = new Map<string, string>(); // slug -> absolute path
-for (const arg of args) {
-  const abs = resolve(arg);
-  const slug = basename(abs, extname(abs));
+const paths = [...new Set(args.map((a) => resolve(a)))]; // same file twice is one artifact
+for (const abs of paths) {
+  const others = paths.filter((p) => p !== abs).map(slugCandidates);
+  const slug = slugCandidates(abs).find((c) => !others.some((o) => o.includes(c)));
+  if (!slug) {
+    // Reachable, not merely defensive: joining path components with SLUG_SEP cannot tell a
+    // directory named `a-b` from the pair `a/b`, so every candidate of `x/a-b/f.md` also
+    // appears in `x/a/b/f.md`'s list and the first of the two exhausts its options. Failing
+    // loudly here is the point — the alternative is the silent drop this block removes.
+    console.error(`fatal: cannot derive a unique preview name for ${abs}`);
+    process.exit(1);
+  }
   drafts.set(slug, abs);
 }
 
-const SCRIPT_DIR = new URL(".", import.meta.url).pathname;
+// fileURLToPath, not URL.pathname: pathname keeps percent-escapes, so an install path
+// carrying a space or a non-ASCII character resolves to a literal %20 path that does not
+// exist — and the failure surfaces as the template-missing message below, which points at
+// the wrong cause.
+const SCRIPT_DIR = fileURLToPath(new URL(".", import.meta.url));
 const TEMPLATES_DIR = resolve(SCRIPT_DIR, "..", "templates");
 const TEMPLATE_PATH = resolve(TEMPLATES_DIR, "preview.html");
 const MARKED_PATH = resolve(TEMPLATES_DIR, "marked.min.js");
@@ -53,7 +84,12 @@ try {
   process.exit(1);
 }
 
-const escapeForScriptTag = (s: string) => s.replace(/<\/(script)/gi, "<\\/$1");
+// Every `<` is neutralized, not just `</script`: inside a script element, `<!--` followed by
+// `<script` drives the tokenizer into script-data-double-escaped state, where `</script>` no
+// longer closes the element and the rest of the document is swallowed. \u003C is a valid
+// escape in both JSON and JS string literals and decodes back to `<`, so the parsed value
+// is unchanged.
+const escapeForScriptTag = (s: string) => s.replace(/</g, "\\u003C");
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
@@ -98,11 +134,13 @@ const renderPreview = async (slug: string) => {
   const renderMode = ext === ".html" || ext === ".htm" ? "html" : "markdown";
   const raw = await readFile(path, "utf8");
   const body = renderMode === "markdown" ? stripFrontmatter(raw) : raw;
-  // title goes into HTML context (escape & < > " '); slug goes into JS string literal context (JSON.stringify)
-  // body goes into JS context (JSON.stringify + script-tag-safe escaping; client JSON.parse reverses it losslessly)
+  // title goes into HTML context, where escapeHtml handles `<`. Slug and body both land inside
+  // real script elements — a slug is a filename minus its extension, and a filename may contain
+  // `<!--<script` — so each is JSON-stringified and then run through escapeForScriptTag;
+  // JSON.parse and the JS parser reverse it losslessly.
   return template
     .replaceAll("__TITLE_PLACEHOLDER__", escapeHtml(slug))
-    .replaceAll("__SLUG_PLACEHOLDER__", JSON.stringify(slug))
+    .replaceAll("__SLUG_PLACEHOLDER__", escapeForScriptTag(JSON.stringify(slug)))
     .replace("__RENDER_MODE_PLACEHOLDER__", JSON.stringify(renderMode))
     .replace("__MARKDOWN_CONTENT_PLACEHOLDER__", escapeForScriptTag(JSON.stringify(body)));
 };
@@ -330,6 +368,9 @@ const server = Bun.serve({
       const entry = {
         id,
         slug: body.slug,
+        // The slug widens on collision and then no longer maps back to a filename, so the
+        // artifact it belongs to is carried explicitly — the apply step edits this path.
+        artifact: draft,
         selector: body.selector,
         comment: body.comment,
         timestamp: new Date().toISOString(),
@@ -406,6 +447,7 @@ const server = Bun.serve({
       const tombstone = {
         id: body.id,
         slug: body.slug,
+        artifact: draft,
         selector: liveEntry.selector ?? "",
         comment: "",
         deleted: true,
@@ -442,16 +484,41 @@ const server = Bun.serve({
 const lastFire = new Map<string, number>();
 const WATCH_DEBOUNCE_MS = 150;
 for (const [slug, path] of drafts) {
-  const watcher = watch(path, () => {
+  // Watch the containing directory, not the file. `watch(path)` binds the inode, so a single
+  // atomic save (write-temp + rename) leaves the watcher on the replaced inode: it goes silent
+  // for the rest of the session while the status pill still reads "live", and the user keeps
+  // commenting on a render that no longer matches the source.
+  const dir = dirname(path);
+  const name = basename(path);
+  // mtime + inode, so a replacement that happened to preserve the timestamp still registers.
+  const identity = () => {
+    try { const s = statSync(path); return `${s.mtimeMs}:${s.ino}`; } catch { return null; }
+  };
+  let lastIdentity = identity();
+  const watcher = watch(dir, (_event, filename) => {
+    // The event type is deliberately NOT consulted. macOS reports an in-place append as
+    // "rename" too, so narrowing to "change" would put this watcher straight back to the
+    // silent-death this directory watch exists to fix.
+    // A platform that supplies no filename falls through the name test on purpose; the
+    // identity check below is what decides there, so there is no second code path to keep
+    // working.
+    if (filename && filename !== name) return;
     const now = Date.now();
     const prev = lastFire.get(slug) ?? 0;
     if (now - prev < WATCH_DEBOUNCE_MS) return;
+    // The directory also carries this artifact's feedback JSONL, its consumed-archive, and
+    // any temp file an atomic writer leaves behind. None of them touch the artifact's own
+    // identity, so checking it here is what keeps a comment from reloading the page out from
+    // under the user who is still typing.
+    const cur = identity();
+    if (cur === null || cur === lastIdentity) return;
+    lastIdentity = cur;
     lastFire.set(slug, now);
     console.error(`[watch] ${slug} changed → publish reload`);
     server.publish("reload", JSON.stringify({ slug }));
   });
   watcher.on("error", (err: NodeJS.ErrnoException) => {
-    console.error(`[watch] error on ${path}: ${err.message} (code=${err.code ?? "unknown"})`);
+    console.error(`[watch] error on ${dir}: ${err.message} (code=${err.code ?? "unknown"})`);
   });
 }
 

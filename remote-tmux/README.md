@@ -14,7 +14,8 @@ No script. One command gives a session that is background-resident, worktree-iso
 app-reachable, and addressable by `SendMessage` from other sessions:
 
 ```bash
-( cd ~/src/foo && claude --bg --worktree foo --remote-control foo -n foo \
+( cd ~/src/foo && claude --bg --worktree foo \
+                         --remote-control stint::foo::build -n stint::foo::build \
                          --permission-mode auto -- "<brief>" )
 
 claude agents --json     # fleet view (no TTY needed)
@@ -27,7 +28,8 @@ claude rm     <jobId>    # retire it: removes worktree and job state
 Each flag is load-bearing: `--bg` detaches without a PTY, `--worktree` cuts a branch from
 `origin/<default>`, `--remote-control` registers the app bridge, `-n` pins a permanent name
 (otherwise it is regenerated every launch, along with the peer ref other sessions address it
-by — so neither is safe to cache).
+by — so neither is safe to cache). The worktree token and the session name are separate on
+purpose — see the skill's naming section.
 
 The two pieces of shell around them are load-bearing as well. The **`cd` is what selects the
 project** — there is no flag for it, the session inherits the launching shell's directory, and

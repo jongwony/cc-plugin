@@ -147,9 +147,12 @@ In the browser (one tab per artifact):
   commit.
 - Type a comment, ⌘Enter (or Submit) sends it as `{slug, selector, comment}`
 - The anchored element is marked in place: an outline + 💬
-- A right-side panel lists this round's comments; click a row to scroll to and pulse its
-  element. It stays off-screen until the comment count in the status bar is clicked, so an
-  HTML artifact still renders full-bleed.
+- A right-side panel indexes where this round's comments are: one row per commented
+  element, showing its selector, and clicking a row scrolls to that element and pulses it.
+  It is an index of positions, not a second copy of the comments — the comment text lives
+  on the element itself. Open it from the handle that appears at the right edge when the
+  cursor approaches, or from the comment count in the status bar; Esc closes it. It stays
+  off-screen otherwise, so an HTML artifact still renders full-bleed.
 - When the source file changes (a round applied edits), the page auto-reloads while
   preserving scroll position. Comment marks are **not** re-applied on reload — comments are
   consumed at the apply step (the edit-back that changed the source and triggered the
@@ -266,7 +269,8 @@ Artifact(s):             {list of paths}
   Picks the render substrate from the file extension and injects it into the preview; handles
   GET/POST/DELETE/WebSocket; `node:fs.watch` triggers reload broadcasts.
 - `templates/preview.html` — interactive preview with right-click element anchoring (hover
-  outline + live selector chip), anchored comment popup, comment sidebar, WebSocket
-  hot-reload client, dark-mode support.
+  outline + live selector chip), anchored comment popup, a sidebar indexing where the
+  round's comments sit (selector per row, click to jump), WebSocket hot-reload client,
+  dark-mode support.
 - `templates/marked.min.js` — bundled marked.js markdown renderer (markdown mode only; not
   used in HTML mode).

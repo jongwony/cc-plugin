@@ -13,8 +13,8 @@
 //
 // Stop with Ctrl-C. No port collision: Bun.serve(port: 0) lets the OS pick.
 
-import { closeSync, constants, existsSync, fstatSync, openSync, readFileSync, statSync, watch } from "node:fs";
-import { appendFile, readFile, realpath } from "node:fs/promises";
+import { closeSync, constants, existsSync, fstatSync, openSync, readFileSync, statSync, watch, writeSync } from "node:fs";
+import { readFile, realpath } from "node:fs/promises";
 import { basename, dirname, extname, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -101,6 +101,27 @@ try {
 // longer closes the element and the rest of the document is swallowed. \u003C is a valid
 // escape in both JSON and JS string literals and decodes back to `<`, so the parsed value
 // is unchanged.
+// Append through a handle opened O_NOFOLLOW. `appendFile` follows a symlink at this path, so
+// a reviewed checkout carrying a `feedback-{slug}.jsonl` symlink could redirect an ordinary
+// comment append to any file the user can write — silently, with a 200 going back. The asset
+// read path below deliberately allows a symlink that stays inside the artifact directory,
+// because following one to read it is harmless; that argument does not carry to a write, so
+// this side refuses to follow at all. O_CREAT still creates the file when it is absent —
+// NOFOLLOW only fails when the final component is already a symlink — and an ELOOP surfaces
+// through the existing catch, which reports the cause rather than swallowing it.
+const appendNoFollow = (path: string, line: string) => {
+  const fd = openSync(
+    path,
+    constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW,
+    0o644,
+  );
+  try {
+    writeSync(fd, line);
+  } finally {
+    closeSync(fd);
+  }
+};
+
 const escapeForScriptTag = (s: string) => s.replace(/</g, "\\u003C");
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -412,7 +433,7 @@ const server = Bun.serve({
       const feedbackPath = resolve(dirname(draft), `feedback-${body.slug}.jsonl`);
       // surface I/O failures (disk full, permission denied) instead of silent loss
       try {
-        await appendFile(feedbackPath, JSON.stringify(entry) + "\n", "utf8");
+        appendNoFollow(feedbackPath, JSON.stringify(entry) + "\n");
       } catch (e) {
         const msg = (e as Error).message;
         console.error(`[feedback] FAILED to append ${feedbackPath}: ${msg}`);
@@ -489,7 +510,7 @@ const server = Bun.serve({
         timestamp: new Date().toISOString(),
       };
       try {
-        await appendFile(feedbackPath, JSON.stringify(tombstone) + "\n", "utf8");
+        appendNoFollow(feedbackPath, JSON.stringify(tombstone) + "\n");
       } catch (e) {
         const msg = (e as Error).message;
         console.error(`[feedback] FAILED to append tombstone ${feedbackPath}: ${msg}`);

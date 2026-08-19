@@ -223,7 +223,12 @@ without qualification. Nothing overwrites it, so there is nothing for a concurre
 lose. Entries sharing an `id` are an edit history: the latest timestamp wins.
 
 A consumed-marker line is `{id, artifact, consumed: true, consumedThrough, timestamp}`, where
-`consumedThrough` is the timestamp of the entry the apply step actually consumed.
+`consumedThrough` is the timestamp of the entry the apply step actually consumed. An
+intent line is `{id, artifact, intent: true, timestamp}`, appended before the source is
+touched so an interrupted apply is recoverable. Neither is a content entry: intent lines
+assert nothing about what the artifact should say, and are read only during interruption
+recovery. **They do not enter the liveness judgement below**, and the tie rule does not reach
+them either — an intent line makes no claim about whether an edit should happen.
 
 A line is live when its latest non-marker entry is not a tombstone and no consumed-marker for
 that `id` carries a `consumedThrough` at or after that entry's timestamp. Keying the marker to
@@ -254,11 +259,17 @@ above.
    informational only and does not substitute for this one, since the browser may have
    appended lines in between. Keep the lines that are live by the rule above — `id` dedup and
    marker resolution run across all of these files together, not per file.
-2. **Record the intent before touching the source** — write the ids about to be applied,
-   with the artifact path, to `feedback-{slug}.inflight.json`. This file is what makes the
-   exactly-once guarantee in Rule 2 true rather than hoped for: editing the source and
-   archiving its queue lines cannot be one atomic act, so an interruption between them would
-   otherwise leave applied ids sitting in the queue for the next round to apply a second time.
+2. **Record the intent before touching the source** — append one intent line per id about to
+   be applied, to the queue that id came from. This is what makes the exactly-once guarantee
+   in Rule 2 true rather than hoped for: editing the source and marking its queue lines
+   consumed cannot be one atomic act, so an interruption between them would otherwise leave
+   applied ids live for the next round to apply a second time.
+   The record lives in the queue rather than in a sidecar file because the apply step's tools
+   are Edit / Write — see below — and neither can delete a file. A sidecar would have to be
+   removed on the happy path, so a compliant run would leave one behind every round and every
+   later round would enter interruption recovery. When writing an apply-step procedure, check
+   it against that tool constraint: this defect existed because the procedure was written
+   without looking at it.
 3. For each surviving line, locate the anchor in the source artifact per **Locating the
    Anchor in the Source** above, and translate the comment into an Edit/Write call. A comment
    that cannot be translated faithfully — ambiguous, conflicting, or resting on something the
@@ -275,7 +286,8 @@ above.
    its own name, so a queue found under an earlier slug is archived beside itself rather than
    folded into the current slug's. The copy is an audit record, not the re-ingestion guard:
    the markers are that now, so nothing is truncated.
-   Delete the `.inflight` file last, once the markers have landed.
+   The intent lines need no cleanup: a consumed-marker later than an id's intent line is what
+   marks that id complete, so the pair is self-describing and nothing has to be removed.
 5. After edits land, the browser auto-reloads.
 
 Apply-step tools are Edit / Write. The skill introduces no other write path.
@@ -308,6 +320,10 @@ Artifact(s):             {list of paths}
   (disk full, permission denied), surface the failure — do not silently retry — and halt
   consumption until the cause is resolved: without its marker a consumed line is still live,
   and the next round would re-translate it. The archive copy carries the same rule.
+  A write refused with `ELOOP` means the sidecar path is a symlink. That is not a
+  misconfiguration to work around: the server declines to follow it so a comment cannot be
+  appended outside the artifact's own directory. Move or remove the symlink rather than
+  looking for a way past the refusal.
 - **Anchor no longer trustworthy on apply**: a queued comment's selector may fail to resolve,
   or resolve to a block that is no longer the one it was written about — a positional selector
   like `p:nth-of-type(2)` keeps resolving while the block underneath it changes. Compare the
@@ -319,13 +335,14 @@ Artifact(s):             {list of paths}
   symmetric: a needless return is visible and cheap, while a wrong match edits a region the
   comment was never about, silently. Do not silently drop it, and do not pick a nearby block
   on a guess.
-- **An `.inflight` record is present at apply time**: a previous apply was interrupted between
-  editing the source and marking its queue lines consumed. Do not replay those ids and do not
-  drop them. Read the source and establish, per id, whether its edit is already present; append
-  a consumed-marker for each one that landed, leave the rest alone — they are still live, so
-  nothing has to be returned — and say which was which in the round-complete prose. Deciding
-  this by reading is the point: the ids alone cannot say whether the write happened. Archiving
-  is not what stops a replay here; the marker is.
+- **An intent line has no later consumed-marker**: that id's previous apply was interrupted
+  between editing the source and marking the line consumed, and the two together name exactly
+  the interrupted set. Do not replay those ids and do not drop them. Read the source and
+  establish, per id, whether its edit is already present; append a consumed-marker for each
+  one that landed, leave the rest alone — they are still live, so nothing has to be returned —
+  and say which was which in the round-complete prose. Deciding this by reading is the point:
+  the ids alone cannot say whether the write happened. Archiving is not what stops a replay
+  here; the marker is.
 - **Bun server crash mid-loop**: surface it with two options — restart the channel and resume
   (the accumulated JSONL is preserved) / terminate the review with a materialized view of the
   completed rounds.

@@ -1,6 +1,6 @@
 ---
 name: comment-review
-description: "Review a markdown or HTML artifact in a live browser preview: right-click any element to anchor a comment by CSS selector, then have those comments applied back as edits to that same file. Markdown renders through marked into the light DOM; HTML is served raw through a Shadow DOM. Comments queue to feedback-{slug}.jsonl and the page hot-reloads whenever the source changes. User-invoked via /comment-review."
+description: "Review a markdown or HTML artifact in a live browser preview: right-click any element to anchor a comment by CSS selector, then have those comments applied back as edits to that same file. Markdown renders through marked into the light DOM and is sanitized before it is inserted; HTML is served raw through a Shadow DOM and is not. Comments queue to feedback-{slug}.jsonl and the page hot-reloads whenever the source changes. User-invoked via /comment-review."
 ---
 
 # Comment Review
@@ -9,9 +9,9 @@ Open an artifact in a browser as it will actually be read, annotate it in place,
 those annotations back as edits to the source. That loop is the whole skill.
 
 The render substrate is keyed off the file extension: markdown (`.md`) renders through
-marked; HTML (`.html`/`.htm`) is served raw through a Shadow DOM. Anchoring does not branch
-on the extension — either way you right-click an element and the browser records that
-element's unique CSS selector.
+marked and is sanitized on the way into the page; HTML (`.html`/`.htm`) is served raw through
+a Shadow DOM and is not. Anchoring does not branch on the extension — either way you
+right-click an element and the browser records that element's unique CSS selector.
 
 The skill is agnostic about *what kind of artifact* is under review: blog drafts, plan
 documents, handoffs, design docs, and changeset descriptions are all valid targets. It also
@@ -148,10 +148,25 @@ endpoint and watcher details.
 
 **Render substrates**:
 
-- **Markdown** (marked) — the source markdown renders into the **light DOM** as a
-  published-style artifact; frontmatter is stripped so only the body shows. Light DOM is
+- **Markdown** (marked, then DOMPurify) — the source markdown renders into the **light DOM**
+  as a published-style artifact; frontmatter is stripped so only the body shows. Light DOM is
   deliberate: the preview page's stylesheet carries that published typography, and a shadow
   boundary would cut it off. Anchoring does not need the boundary.
+  marked passes raw HTML through untouched, so the rendered result is sanitized before it is
+  inserted. This is not defence against a hypothetical: the preview page can write to
+  `/feedback`, and the apply step turns what is in that queue into edits to the user's own
+  file — so an `<img onerror>` in a markdown document is a path from *reading* a document to
+  *editing* a file, and it needs no click, only that the preview opened. A markdown file is
+  treated as data here, never as a program. Dropped: inline event handlers, `javascript:`
+  URLs, `<script>`, `<iframe>`, `<object>`, `<embed>`, and `<style>` elements (a stylesheet
+  reaches other elements — it can hide the comment popup — and `url(...)` in one is an active
+  subresource load). The `style` *attribute* is kept: it can load a subresource too, but it
+  cannot reach past its own element, and markdown that sets a width on an image is ordinary.
+  Separately from execution, the artifact cannot impersonate the review chrome: every id,
+  class, and dataset key the preview owns is namespaced under `cr-`, and artifact attributes
+  in that namespace are dropped. Without that, a plain `<div id="cr-popup">` — inert markup —
+  would capture the chrome's own element, because `getElementById` answers with whichever
+  comes first in document order and the artifact renders above the chrome.
 - **HTML** (Shadow DOM) — the raw `.html` file is served *as the artifact itself* through an
   open Shadow DOM (`attachShadow({mode:'open'})`, `shadowRoot.innerHTML = rawHtml`). The
   Shadow DOM gives CSS isolation from the review chrome and keeps selector anchoring working
@@ -165,6 +180,11 @@ endpoint and watcher details.
   untrusted-HTML isolation *and* a true nested viewport — compatible with selector
   anchoring, out of scope here since raw render fidelity is the channel's identity.) marked
   is not used in HTML mode; the file passes through raw and untouched.
+  **The asymmetry with markdown is deliberate, and it is the one place this skill asks for
+  trust.** Sanitizing here would defeat the mode: rendering the file exactly as authored is
+  what makes an HTML artifact reviewable at all. So markdown is sanitized because nothing is
+  lost by it, and HTML is not because everything would be — which is why the warning above
+  lives on this bullet and not the other one.
 
 In the browser — each artifact has its own preview page at `/preview/{slug}`. A single
 artifact opens straight to its page; with several, the browser opens the index and each page
@@ -197,7 +217,7 @@ is one click away, rather than a tab being forced open per artifact:
 
 The anchor is a single element, identified by a unique CSS selector. `preview.html` computes
 it as a unique `#id` where one exists, otherwise a `tag:nth-of-type(n)` child chain up to the
-render root (the shadow root in HTML mode, `#content` in markdown mode). The same function
+render root (the shadow root in HTML mode, `#cr-content` in markdown mode). The same function
 serves both substrates — it takes the root as a parameter.
 
 The comment unit is therefore a **block**, not a sentence. A comment names a paragraph, a
@@ -415,3 +435,5 @@ Artifact(s):             {list of paths}
   dark-mode support.
 - `templates/marked.min.js` — bundled marked.js markdown renderer (markdown mode only; not
   used in HTML mode).
+- `templates/purify.min.js` — bundled DOMPurify, applied to marked's output before it is
+  inserted (markdown mode only; HTML mode is deliberately unsanitized, see above).

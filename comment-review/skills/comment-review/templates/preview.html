@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>__TITLE_PLACEHOLDER__ — preview</title>
 <script src="/marked.min.js"></script>
+<script src="/purify.min.js"></script>
 <style>
   :root {
     --accent: #2c7be5;
@@ -23,11 +24,11 @@
   }
 
   /* Layout — main content + right sidebar */
-  #layout {
+  #cr-layout {
     display: flex;
     min-height: 100vh;
   }
-  #main {
+  #cr-main {
     flex: 1;
     min-width: 0;
     max-width: 760px;
@@ -46,42 +47,42 @@
   }
   header a { color: var(--accent); text-decoration: none; }
   header a:hover { text-decoration: underline; }
-  #content { font-size: 17px; }
-  #content h1 { font-size: 2em; margin-top: 1.5em; }
-  #content h2 { font-size: 1.5em; margin-top: 1.4em; }
-  #content h3 { font-size: 1.2em; margin-top: 1.2em; }
-  #content blockquote {
+  #cr-content { font-size: 17px; }
+  #cr-content h1 { font-size: 2em; margin-top: 1.5em; }
+  #cr-content h2 { font-size: 1.5em; margin-top: 1.4em; }
+  #cr-content h3 { font-size: 1.2em; margin-top: 1.2em; }
+  #cr-content blockquote {
     border-left: 3px solid #ddd;
     padding-left: 1em;
     color: #555;
     margin: 1em 0;
   }
-  #content code {
+  #cr-content code {
     background: #f3f3f3;
     padding: .1em .35em;
     border-radius: 3px;
     font-family: ui-monospace, "SF Mono", Menlo, monospace;
     font-size: .92em;
   }
-  #content pre {
+  #cr-content pre {
     background: #f3f3f3;
     padding: 1em;
     border-radius: 4px;
     overflow-x: auto;
   }
-  #content pre code { background: transparent; padding: 0; }
-  #content table {
+  #cr-content pre code { background: transparent; padding: 0; }
+  #cr-content table {
     border-collapse: collapse;
     margin: 1em 0;
   }
-  #content th, #content td {
+  #cr-content th, #cr-content td {
     border: 1px solid #ddd;
     padding: .4em .7em;
   }
-  #content th { background: #f7f7f7; }
+  #cr-content th { background: #f7f7f7; }
 
   /* Popup */
-  #popup {
+  #cr-popup {
     position: absolute;
     background: white;
     border: 1px solid #ddd;
@@ -92,8 +93,8 @@
     width: 340px;
     display: none;
   }
-  #popup.show { display: block; }
-  #popup-anchor-preview {
+  #cr-popup.show { display: block; }
+  #cr-popup-anchor-preview {
     font-family: ui-monospace, "SF Mono", Menlo, monospace;
     font-size: .8em;
     color: var(--muted);
@@ -106,7 +107,7 @@
     overflow: hidden;
     line-height: 1.4;
   }
-  #popup textarea {
+  #cr-popup textarea {
     width: 100%;
     min-height: 80px;
     border: 1px solid #ccc;
@@ -116,23 +117,23 @@
     font-size: 14px;
     resize: vertical;
   }
-  #popup textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-  #popup-actions {
+  #cr-popup textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  #cr-popup-actions {
     display: flex;
     gap: .5em;
     align-items: center;
     margin-top: .5em;
   }
-  #popup-cancel { margin-left: auto; }
-  #popup button.danger {
+  #cr-popup-cancel { margin-left: auto; }
+  #cr-popup button.danger {
     background: #c0392b;
     color: white;
     border-color: #c0392b;
   }
-  #popup button.danger:hover { background: #e74c3c; border-color: #e74c3c; }
-  #popup-delete { display: none; }
-  #popup.edit-mode #popup-delete { display: inline-block; }
-  #popup button {
+  #cr-popup button.danger:hover { background: #e74c3c; border-color: #e74c3c; }
+  #cr-popup-delete { display: none; }
+  #cr-popup.edit-mode #cr-popup-delete { display: inline-block; }
+  #cr-popup button {
     padding: .4em .9em;
     border: 1px solid #ccc;
     border-radius: 4px;
@@ -140,13 +141,13 @@
     cursor: pointer;
     font-size: .9em;
   }
-  #popup button.primary {
+  #cr-popup button.primary {
     background: var(--accent);
     color: white;
     border-color: var(--accent);
   }
-  #popup button:hover { filter: brightness(.95); }
-  #popup-hint {
+  #cr-popup button:hover { filter: brightness(.95); }
+  #cr-popup-hint {
     font-size: .75em;
     color: var(--muted);
     margin-top: .35em;
@@ -154,7 +155,7 @@
   }
 
   /* Sidebar — right panel listing all comments */
-  #sidebar {
+  #cr-sidebar {
     position: fixed;
     top: 0;
     right: 0;
@@ -169,13 +170,13 @@
     flex-direction: column;
     overflow: hidden;
   }
-  body.sidebar-open #sidebar { transform: translateX(0); }
-  /* HTML renders at the authored viewport: drop the 760px reading-width box + all #main padding,
+  body.cr-sidebar-open #cr-sidebar { transform: translateX(0); }
+  /* HTML renders at the authored viewport: drop the 760px reading-width box + all #cr-main padding,
      and hide the top nav chrome (it pushed the artifact down and broke 100vh / top-aligned /
      fixed layouts). Full-page 100vh / fixed-position fidelity is still bounded by Shadow-DOM
      rendering — a sandboxed iframe (see Deferred hardening) would give a true nested viewport;
      the bottom status pill remains a minimal fixed overlay. */
-  body.cr-html-mode #main { max-width: none; padding: 0; }
+  body.cr-html-mode #cr-main { max-width: none; padding: 0; }
   body.cr-html-mode header { display: none; }
   /* HTML artifacts are authored against the browser default (white page, dark text), not the
      review app's OS-driven dark theme. Force a light base for the rendered artifact regardless of
@@ -185,7 +186,7 @@
      match the browser default. (Pages that style body/html explicitly still need the deferred
      iframe rendering for full fidelity.) */
   body.cr-html-mode { background: #fff; color: #1a2233; }
-  #sidebar-header {
+  #cr-sidebar-header {
     padding: .75em 1em;
     border-bottom: 1px solid #eee;
     background: white;
@@ -195,27 +196,27 @@
     font-size: .9em;
     color: var(--muted);
   }
-  #sidebar-header strong { color: #222; }
-  #sidebar-list {
+  #cr-sidebar-header strong { color: #222; }
+  #cr-sidebar-list {
     flex: 1;
     overflow-y: auto;
     padding: .5em 0;
   }
-  #sidebar-empty {
+  #cr-sidebar-empty {
     padding: 2em 1em;
     color: var(--muted);
     font-size: .85em;
     text-align: center;
     font-style: italic;
   }
-  .sidebar-item {
+  .cr-sidebar-item {
     padding: .65em 1em;
     border-bottom: 1px solid #eee;
     cursor: pointer;
     transition: background .12s ease;
   }
-  .sidebar-item:hover { background: #f0f4f8; }
-  .sidebar-item-anchor {
+  .cr-sidebar-item:hover { background: #f0f4f8; }
+  .cr-sidebar-item-anchor {
     font-family: ui-monospace, "SF Mono", Menlo, monospace;
     font-size: .78em;
     color: #444;
@@ -234,7 +235,7 @@
      then the affordance for closing it, and the panel already covers what it would
      otherwise obscure). Never permanently on top of a full-bleed HTML artifact — the same
      reason the top nav is dropped in html mode. */
-  #sidebar-handle {
+  #cr-sidebar-handle {
     position: fixed;
     top: 50%;
     right: 0;
@@ -259,14 +260,14 @@
   }
   /* Focus reveals it too, so the control is reachable by keyboard rather than
      mouse-position-gated. */
-  #sidebar-handle.visible, #sidebar-handle:focus-visible { opacity: 1; pointer-events: auto; }
-  #sidebar-handle:hover { color: #222; }
-  /* Rides the panel: same property and duration as #sidebar's own transform, so the two
+  #cr-sidebar-handle.visible, #cr-sidebar-handle:focus-visible { opacity: 1; pointer-events: auto; }
+  #cr-sidebar-handle:hover { color: #222; }
+  /* Rides the panel: same property and duration as #cr-sidebar's own transform, so the two
      move as one piece. */
-  body.sidebar-open #sidebar-handle { transform: translateY(-50%) translateX(calc(-1 * var(--sidebar-width))); }
+  body.cr-sidebar-open #cr-sidebar-handle { transform: translateY(-50%) translateX(calc(-1 * var(--sidebar-width))); }
 
   /* Status bar */
-  #status {
+  #cr-status {
     position: fixed;
     bottom: 0; left: 0; right: 0;
     background: white;
@@ -279,13 +280,13 @@
     align-items: center;
     z-index: 500;
   }
-  #status-conn::before {
+  #cr-status-conn::before {
     content: "●";
     color: #52c41a;
     margin-right: .35em;
   }
-  #status-conn.disconnected::before { color: #aaa; }
-  #status-count {
+  #cr-status-conn.disconnected::before { color: #aaa; }
+  #cr-status-count {
     background: transparent;
     border: none;
     padding: .15em .55em;
@@ -296,12 +297,12 @@
     cursor: pointer;
     transition: background .12s ease;
   }
-  #status-count:hover { background: rgba(44, 123, 229, .1); color: #222; }
-  body.sidebar-open #status-count { background: rgba(44, 123, 229, .14); color: #222; }
-  #status-count strong { color: #222; }
+  #cr-status-count:hover { background: rgba(44, 123, 229, .1); color: #222; }
+  body.cr-sidebar-open #cr-status-count { background: rgba(44, 123, 229, .14); color: #222; }
+  #cr-status-count strong { color: #222; }
 
   /* Toast — confirms each submit silently append to disk, since popup close alone is ambiguous */
-  #toast {
+  #cr-toast {
     position: fixed;
     bottom: 3.2em;
     left: 50%;
@@ -317,86 +318,86 @@
     z-index: 1500;
     box-shadow: 0 4px 14px rgba(0,0,0,.2);
   }
-  #toast.show {
+  #cr-toast.show {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
-  #toast.error { background: #c0392b; }
+  #cr-toast.error { background: #c0392b; }
 
   @media (prefers-color-scheme: dark) {
     body { background: #1a1a1a; color: #e0e0e0; }
     header { border-bottom-color: #333; color: #888; }
-    #content blockquote { border-left-color: #444; color: #aaa; }
-    #content code, #content pre { background: #2a2a2a; }
-    #content th, #content td { border-color: #333; }
-    #content th { background: #252525; }
-    #popup { background: #222; border-color: #444; }
-    #popup-anchor-preview { background: #2a2a2a; color: #aaa; }
-    #popup textarea { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
-    #popup button { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
-    #status { background: #1a1a1a; border-top-color: #333; }
-    #status-count strong { color: #e0e0e0; }
-    #status-count:hover { background: rgba(255,255,255,.06); color: #e0e0e0; }
-    body.sidebar-open #status-count { background: rgba(255,255,255,.1); color: #e0e0e0; }
-    #sidebar { background: #1f1f1f; border-left-color: #333; }
-    #sidebar-header { background: #1a1a1a; border-bottom-color: #333; }
-    #sidebar-header strong { color: #e0e0e0; }
-    .sidebar-item { border-bottom-color: #333; }
-    .sidebar-item:hover { background: #2a2a2a; }
-    .sidebar-item-anchor { color: #aaa; }
-    #sidebar-handle { background: #1f1f1f; border-color: #333; }
-    #sidebar-handle:hover { color: #e0e0e0; }
+    #cr-content blockquote { border-left-color: #444; color: #aaa; }
+    #cr-content code, #cr-content pre { background: #2a2a2a; }
+    #cr-content th, #cr-content td { border-color: #333; }
+    #cr-content th { background: #252525; }
+    #cr-popup { background: #222; border-color: #444; }
+    #cr-popup-anchor-preview { background: #2a2a2a; color: #aaa; }
+    #cr-popup textarea { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+    #cr-popup button { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+    #cr-status { background: #1a1a1a; border-top-color: #333; }
+    #cr-status-count strong { color: #e0e0e0; }
+    #cr-status-count:hover { background: rgba(255,255,255,.06); color: #e0e0e0; }
+    body.cr-sidebar-open #cr-status-count { background: rgba(255,255,255,.1); color: #e0e0e0; }
+    #cr-sidebar { background: #1f1f1f; border-left-color: #333; }
+    #cr-sidebar-header { background: #1a1a1a; border-bottom-color: #333; }
+    #cr-sidebar-header strong { color: #e0e0e0; }
+    .cr-sidebar-item { border-bottom-color: #333; }
+    .cr-sidebar-item:hover { background: #2a2a2a; }
+    .cr-sidebar-item-anchor { color: #aaa; }
+    #cr-sidebar-handle { background: #1f1f1f; border-color: #333; }
+    #cr-sidebar-handle:hover { color: #e0e0e0; }
   }
 
 </style>
 </head>
 <body>
 
-<div id="layout">
-  <div id="main">
+<div id="cr-layout">
+  <div id="cr-main">
     <header>
       <span><a href="/">← all drafts</a></span>
       <span><strong>__TITLE_PLACEHOLDER__</strong></span>
     </header>
 
-    <div id="content"></div>
+    <div id="cr-content"></div>
   </div>
 </div>
 
-<aside id="sidebar" aria-label="Comments panel">
-  <div id="sidebar-header">
-    <span><strong id="sidebar-count">0</strong> comments</span>
+<aside id="cr-sidebar" aria-label="Comments panel">
+  <div id="cr-sidebar-header">
+    <span><strong id="cr-sidebar-count">0</strong> comments</span>
     <span style="font-size:.78em;">click to focus</span>
   </div>
-  <div id="sidebar-list">
-    <div id="sidebar-empty">No comments yet — right-click an element to add one.</div>
+  <div id="cr-sidebar-list">
+    <div id="cr-sidebar-empty">No comments yet — right-click an element to add one.</div>
   </div>
 </aside>
 
-<button id="sidebar-handle" type="button" aria-label="Toggle comment list" aria-controls="sidebar" aria-expanded="false">◀</button>
+<button id="cr-sidebar-handle" type="button" aria-label="Toggle comment list" aria-controls="cr-sidebar" aria-expanded="false">◀</button>
 
-<div id="popup">
-  <div id="popup-anchor-preview"></div>
-  <textarea id="popup-textarea" placeholder="Comment on this element…"></textarea>
-  <div id="popup-actions">
-    <button id="popup-delete" class="danger" type="button" aria-label="Delete comment">Delete</button>
-    <button id="popup-cancel">Cancel</button>
-    <button id="popup-copy" type="button">Copy</button>
-    <button id="popup-submit" class="primary">Submit</button>
+<div id="cr-popup">
+  <div id="cr-popup-anchor-preview"></div>
+  <textarea id="cr-popup-textarea" placeholder="Comment on this element…"></textarea>
+  <div id="cr-popup-actions">
+    <button id="cr-popup-delete" class="danger" type="button" aria-label="Delete comment">Delete</button>
+    <button id="cr-popup-cancel">Cancel</button>
+    <button id="cr-popup-copy" type="button">Copy</button>
+    <button id="cr-popup-submit" class="primary">Submit</button>
   </div>
-  <div id="popup-hint">⌘Enter to submit · Esc to cancel · right-click a 💬 element to edit</div>
+  <div id="cr-popup-hint">⌘Enter to submit · Esc to cancel · right-click a 💬 element to edit</div>
 </div>
 
-<div id="status">
-  <span id="status-conn">live</span>
-  <button id="status-count" type="button" aria-label="Toggle comment list" aria-controls="sidebar" aria-expanded="false">
-    <strong id="count">0</strong> comments
+<div id="cr-status">
+  <span id="cr-status-conn">live</span>
+  <button id="cr-status-count" type="button" aria-label="Toggle comment list" aria-controls="cr-sidebar" aria-expanded="false">
+    <strong id="cr-count">0</strong> comments
   </button>
 </div>
 
-<div id="toast" role="status" aria-live="polite"></div>
+<div id="cr-toast" role="status" aria-live="polite"></div>
 
-<script type="application/json" id="md-source">__MARKDOWN_CONTENT_PLACEHOLDER__</script>
+<script type="application/json" id="cr-md-source">__MARKDOWN_CONTENT_PLACEHOLDER__</script>
 
 <script>
 const SLUG = __SLUG_PLACEHOLDER__;
@@ -423,14 +424,41 @@ const lightMarkStyle = document.createElement("style");
 lightMarkStyle.textContent = MARK_CSS;
 document.head.appendChild(lightMarkStyle);
 
-// Render the artifact. `root` is the query/anchor surface: the light-DOM #content in markdown
+// What the artifact may not do, on top of DOMPurify's defaults (which already drop script,
+// iframe, object, embed, inline handlers, and javascript: URLs).
+//
+// `style` elements go because they are the one artifact construct that reaches other
+// elements: `#cr-popup{display:none}` hides the comment popup and the channel silently stops
+// working, and `url(...)` inside a stylesheet is an active subresource load. The style
+// *attribute* is kept — it can load a subresource too, but it cannot reach past its own
+// element, and markdown that sets a width on an image is ordinary rather than hostile. That
+// exclusion is deliberate and stated here so the surface is not invisible.
+const MD_SANITIZE = { FORBID_TAGS: ["style"] };
+
+// Impersonation is a separate axis from execution, and sanitizing does not cover it: a
+// plain `<div id="cr-popup">` is inert markup that nonetheless captures the chrome's own
+// element, because getElementById answers with whichever comes first in document order and
+// the artifact is rendered above the chrome. Every id, class, and dataset key this page owns
+// is namespaced under `cr-`, so one rule — drop artifact attributes in that namespace —
+// covers all of them and keeps covering them as the chrome grows.
+DOMPurify.addHook("uponSanitizeAttribute", (node, data) => {
+  if (data.attrName === "class") {
+    data.attrValue = data.attrValue.split(/\s+/).filter((c) => c && !c.startsWith("cr-")).join(" ");
+  } else if (data.attrName === "id" && data.attrValue.startsWith("cr-")) {
+    data.keepAttr = false;
+  } else if (data.attrName.startsWith("data-cr-")) {
+    data.keepAttr = false;
+  }
+});
+
+// Render the artifact. `root` is the query/anchor surface: the light-DOM #cr-content in markdown
 // mode, the shadow root in html mode. Every anchoring path takes `root` as a parameter, so one
 // code path serves both substrates.
 // The body is transported as a JSON string (escapeForScriptTag-protected): JSON.parse reverses
 // it losslessly — a real <\/script> in the artifact survives, and a literal <\/script> already
 // present in the source is not corrupted.
-const sourceText = JSON.parse(document.getElementById("md-source").textContent);
-const content = document.getElementById("content");
+const sourceText = JSON.parse(document.getElementById("cr-md-source").textContent);
+const content = document.getElementById("cr-content");
 let shadowRoot = null;
 let root = content;
 if (RENDER_MODE === "html") {
@@ -448,26 +476,34 @@ if (RENDER_MODE === "html") {
   shadowRoot.appendChild(shadowStyle);
 } else {
   // Markdown renders into the LIGHT DOM deliberately: this page's stylesheet carries the
-  // published-artifact typography (the #content rules), which a shadow boundary would cut
+  // published-artifact typography (the #cr-content rules), which a shadow boundary would cut
   // off. Anchoring does not need the boundary — cssPath() takes the root as a parameter.
-  content.innerHTML = marked.parse(sourceText);
+  //
+  // Sanitized on the way in. marked passes raw HTML through untouched, and this is innerHTML
+  // in the same-origin review page: an `<img onerror>` in a document reaches /feedback, and
+  // the apply step then writes the document's own instruction into the user's file. That path
+  // needs no click — opening the preview is enough. So a markdown file is treated as data
+  // here, never as a program. HTML mode above is deliberately NOT sanitized: rendering the
+  // file as authored is that mode's identity, which is why it carries its own trust warning
+  // and this mode does not need one.
+  content.innerHTML = DOMPurify.sanitize(marked.parse(sourceText), MD_SANITIZE);
 }
 
 // Popup state
-const popup = document.getElementById("popup");
-const popupPreview = document.getElementById("popup-anchor-preview");
-const popupTextarea = document.getElementById("popup-textarea");
-const popupSubmit = document.getElementById("popup-submit");
-const popupCancel = document.getElementById("popup-cancel");
-const popupDelete = document.getElementById("popup-delete");
-const countEl = document.getElementById("count");
+const popup = document.getElementById("cr-popup");
+const popupPreview = document.getElementById("cr-popup-anchor-preview");
+const popupTextarea = document.getElementById("cr-popup-textarea");
+const popupSubmit = document.getElementById("cr-popup-submit");
+const popupCancel = document.getElementById("cr-popup-cancel");
+const popupDelete = document.getElementById("cr-popup-delete");
+const countEl = document.getElementById("cr-count");
 
 // Sidebar state
-const sidebar = document.getElementById("sidebar");
-const sidebarList = document.getElementById("sidebar-list");
-const sidebarEmpty = document.getElementById("sidebar-empty");
-const sidebarCount = document.getElementById("sidebar-count");
-const statusCount = document.getElementById("status-count");
+const sidebar = document.getElementById("cr-sidebar");
+const sidebarList = document.getElementById("cr-sidebar-list");
+const sidebarEmpty = document.getElementById("cr-sidebar-empty");
+const sidebarCount = document.getElementById("cr-sidebar-count");
+const statusCount = document.getElementById("cr-status-count");
 
 let pending = null;  // { selector, targetEl, editingMark }
 let hoverEl = null;  // element currently outlined under the cursor
@@ -687,10 +723,10 @@ async function copyTextToClipboard(text) {
   } catch (e) { return false; }
 }
 
-document.getElementById("popup-copy").addEventListener("click", async () => {
+document.getElementById("cr-popup-copy").addEventListener("click", async () => {
   if (!(pending && pending.selector)) return;
   const ok = await copyTextToClipboard(pending.selector);
-  const b = document.getElementById("popup-copy");
+  const b = document.getElementById("cr-popup-copy");
   const prev = b.textContent;
   b.textContent = ok ? "Copied" : "Failed";
   setTimeout(() => { b.textContent = prev; }, 1000);
@@ -713,7 +749,7 @@ document.addEventListener("click", (e) => {
   }
 });
 
-const toastEl = document.getElementById("toast");
+const toastEl = document.getElementById("cr-toast");
 let toastTimer = null;
 function showToast(msg, isError) {
   toastEl.textContent = msg;
@@ -869,12 +905,12 @@ function renderSidebar() {
 
   for (const mark of marks) {
     const item = document.createElement("div");
-    item.className = "sidebar-item";
+    item.className = "cr-sidebar-item";
     item.setAttribute("role", "button");
     item.setAttribute("tabindex", "0");
 
     const anchorEl = document.createElement("div");
-    anchorEl.className = "sidebar-item-anchor";
+    anchorEl.className = "cr-sidebar-item-anchor";
     anchorEl.textContent = mark.dataset.selector || "";
 
     // The row is an index entry, not a copy of the comment — the comment text lives on
@@ -897,17 +933,17 @@ function renderSidebar() {
 
 // ── Sidebar open/close, shared by the status pill, the edge handle, and Esc ──
 
-const sidebarHandle = document.getElementById("sidebar-handle");
+const sidebarHandle = document.getElementById("cr-sidebar-handle");
 const EDGE_ZONE_PX = 48;
 let cursorNearEdge = false;
 
 function syncHandle() {
-  const open = document.body.classList.contains("sidebar-open");
+  const open = document.body.classList.contains("cr-sidebar-open");
   sidebarHandle.classList.toggle("visible", cursorNearEdge || open);
 }
 
 function setSidebarOpen(open) {
-  document.body.classList.toggle("sidebar-open", open);
+  document.body.classList.toggle("cr-sidebar-open", open);
   statusCount.setAttribute("aria-expanded", open ? "true" : "false");
   sidebarHandle.setAttribute("aria-expanded", open ? "true" : "false");
   sidebarHandle.textContent = open ? "▶" : "◀";
@@ -930,11 +966,11 @@ document.addEventListener("mousemove", (e) => {
 }, { passive: true });
 
 statusCount.addEventListener("click", () => {
-  setSidebarOpen(!document.body.classList.contains("sidebar-open"));
+  setSidebarOpen(!document.body.classList.contains("cr-sidebar-open"));
 });
 
 sidebarHandle.addEventListener("click", () => {
-  setSidebarOpen(!document.body.classList.contains("sidebar-open"));
+  setSidebarOpen(!document.body.classList.contains("cr-sidebar-open"));
 });
 
 // While visible, the handle does sit over the artifact's right edge. Hand a right-click
@@ -962,7 +998,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (popup.classList.contains("show")) {
     dismissPopup();
-  } else if (document.body.classList.contains("sidebar-open")) {
+  } else if (document.body.classList.contains("cr-sidebar-open")) {
     setSidebarOpen(false);
   }
 });
@@ -971,7 +1007,7 @@ renderSidebar();
 
 // WebSocket hot reload
 function connectWS() {
-  const conn = document.getElementById("status-conn");
+  const conn = document.getElementById("cr-status-conn");
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const ws = new WebSocket(`${proto}//${location.host}/ws`);
 

@@ -85,7 +85,13 @@ for (const abs of paths) {
 const SCRIPT_DIR = fileURLToPath(new URL(".", import.meta.url));
 const TEMPLATES_DIR = resolve(SCRIPT_DIR, "..", "templates");
 const TEMPLATE_PATH = resolve(TEMPLATES_DIR, "preview.html");
-const MARKED_PATH = resolve(TEMPLATES_DIR, "marked.min.js");
+// Vendored browser-side dependencies, served by name. marked renders markdown; DOMPurify
+// sanitizes what it produced before it reaches innerHTML — see the markdown branch in
+// preview.html for why that step is not optional.
+const VENDOR_ASSETS: Record<string, string> = {
+  "/marked.min.js": resolve(TEMPLATES_DIR, "marked.min.js"),
+  "/purify.min.js": resolve(TEMPLATES_DIR, "purify.min.js"),
+};
 
 let template: string;
 try {
@@ -375,8 +381,9 @@ const server = Bun.serve({
       return await serveSiblingAsset(seg, req.headers.get("referer"));
     }
 
-    if (url.pathname === "/marked.min.js") {
-      return new Response(Bun.file(MARKED_PATH), {
+    const vendorPath = VENDOR_ASSETS[url.pathname];
+    if (vendorPath) {
+      return new Response(Bun.file(vendorPath), {
         headers: { "Content-Type": "application/javascript; charset=utf-8" },
       });
     }

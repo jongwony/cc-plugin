@@ -153,7 +153,20 @@ const appendNoFollow = (path: string, line: string) => {
     0o644,
   );
   try {
-    writeSync(fd, line);
+    // writeSync is one write(2): it reports how many bytes went out and does not retry the
+    // rest. Dropping that number means a short write appends a truncated JSONL line while the
+    // handler still answers 200 {ok:true} — and a truncated line is then skipped as malformed
+    // by both the apply step and the DELETE existence check, so the comment is gone while the
+    // user has been told it saved.
+    // Buffer rather than the string overload: resuming by offset on a string counts UTF-16
+    // code units, which splits a multi-byte character. Korean comments are the normal case
+    // here, not the edge one.
+    // The resumed part is a second append, so a line is only guaranteed contiguous while the
+    // server is the sole appender — which it is. Not looping does not buy that guarantee
+    // back; it trades a rare split line for a guaranteed truncated one.
+    const buf = Buffer.from(line, "utf8");
+    let off = 0;
+    while (off < buf.length) off += writeSync(fd, buf, off, buf.length - off);
   } finally {
     closeSync(fd);
   }

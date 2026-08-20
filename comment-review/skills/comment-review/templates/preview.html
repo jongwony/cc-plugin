@@ -927,7 +927,11 @@ async function deleteFeedback() {
     // before the mark borrowed it.
     unmarkElement(editedMark);
 
-    dismissPopup();
+    // Same guard, same reason, as the submit path above: the in-flight flag stops a second
+    // write, not a second anchor. A right-click while the DELETE is open swaps `pending` for
+    // a comment the user has not sent yet, and closing then throws it away. Unmarking stays
+    // unconditional — the mark has to go whatever the popup is holding now.
+    if (pending === captured) dismissPopup();
     renderSidebar();
     showToast("✓ deleted");
   } catch (e) {

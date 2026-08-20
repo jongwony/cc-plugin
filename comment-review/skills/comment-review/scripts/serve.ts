@@ -329,6 +329,16 @@ const ASSET_MIME: Record<string, string> = {
   ".svg": "image/svg+xml", ".webp": "image/webp", ".avif": "image/avif", ".ico": "image/x-icon",
   ".woff": "font/woff", ".woff2": "font/woff2", ".ttf": "font/ttf", ".otf": "font/otf",
   ".json": "application/json", ".map": "application/json", ".txt": "text/plain", ".csv": "text/csv",
+  // `.html` here turns a sibling page from a download into a rendered top-level document, which
+  // is what makes a multi-page artifact navigable. It also puts that page on the preview's own
+  // ORIGIN — so a script inside it passes the cross-origin check on /feedback and can write to
+  // the queue, which the next apply round turns into edits to the user's file. Neither of the
+  // two guards nearby reaches this: the markdown sanitizer only cleans markdown, and the origin
+  // check only refuses OTHER origins. This one is same-origin by construction.
+  // That is accepted deliberately, on the user's stated premise that they only ever open
+  // artifacts they wrote themselves — the risk needs an untrusted HTML file sitting in the
+  // artifact's own directory. If that premise stops holding, this line is where to look first.
+  ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8",
   ".mp4": "video/mp4", ".webm": "video/webm", ".mp3": "audio/mpeg", ".pdf": "application/pdf",
 };
 

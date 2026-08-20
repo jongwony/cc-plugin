@@ -13,7 +13,7 @@
 //
 // Stop with Ctrl-C. No port collision: Bun.serve(port: 0) lets the OS pick.
 
-import { closeSync, constants, existsSync, fstatSync, openSync, statSync, watch, writeSync } from "node:fs";
+import { accessSync, closeSync, constants, existsSync, fstatSync, openSync, statSync, watch, writeSync } from "node:fs";
 import { readFile, realpath } from "node:fs/promises";
 import { basename, dirname, extname, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
@@ -131,6 +131,35 @@ try {
   console.error(`fatal: cannot read template ${TEMPLATE_PATH}: ${(e as Error).message}`);
   console.error("the skill installation may be incomplete; verify templates/preview.html ships with the skill.");
   process.exit(1);
+}
+
+// The browser-side dependencies are checked here, beside the template, instead of being left to
+// fail at request time. preview.html loads BOTH scripts unconditionally, and calls
+// DOMPurify.addHook at module top level — ahead of the render-mode branch — so one missing file
+// throws before anything renders, whichever mode the artifact is.
+// What earns this a startup check rather than a 404 is how the failure LOOKS. The page still
+// paints its static shell, and the status pill's markup already says "live", so a page whose
+// whole inline script died is indistinguishable at a glance from a working one. The only report
+// is in the browser console, which is where the person who launched this is not looking.
+// Checked unconditionally, not per render mode. Conditioning on "does any artifact render as
+// markdown" was considered and rejected on two grounds: the template's two <script> tags do not
+// branch, so a mode-aware check would mirror a condition that does not exist and could drift
+// from it; and one server serves several artifacts at once, so `a.html b.md` with marked absent
+// leaves the HTML page working and the markdown page dead behind a single "serving at" line —
+// the hardest shape of all to diagnose. An incomplete install is a fact about the install rather
+// than about this invocation, which is the same reason the template above is read before
+// anything has asked for it.
+for (const vendorPath of Object.values(VENDOR_ASSETS)) {
+  try {
+    if (!statSync(vendorPath).isFile()) throw new Error("not a regular file");
+    accessSync(vendorPath, constants.R_OK);
+  } catch (e) {
+    console.error(`fatal: cannot read vendored browser dependency: ${vendorPath}`);
+    console.error(`  ${(e as Error).message}`);
+    console.error("the skill installation is incomplete; verify templates/marked.min.js and templates/purify.min.js ship with the skill.");
+    console.error("without them the preview page's inline script dies while the page still looks alive, and the only other report is in the browser console.");
+    process.exit(1);
+  }
 }
 
 // Every `<` is neutralized, not just `</script`: inside a script element, `<!--` followed by

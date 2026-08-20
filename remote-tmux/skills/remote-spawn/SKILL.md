@@ -15,7 +15,7 @@ One command spawns a worker that is background-resident, worktree-isolated,
 app-reachable, and message-addressable:
 
 ```bash
-( cd <project-dir> && claude --bg --worktree <unit> \
+( cd <project-dir> && claude --bg --worktree <surface> \
                              --remote-control "stint::<constituent>::<relation>" \
                              -n "stint::<constituent>::<relation>" \
                              --permission-mode auto -- "<brief + reporting contract>" )
@@ -23,27 +23,26 @@ app-reachable, and message-addressable:
 
 It prints `backgrounded · <jobId> · <name>`. Report that back. The four flags are
 independent and each earns its place: `--bg` detaches without a PTY, `--worktree`
-cuts branch `worktree-<unit>` from `origin/<default>` (or reuses it, below),
-`--remote-control` registers
-the app bridge, `-n` pins a permanent name (without it the name is regenerated every
-launch). Dropping `--worktree` does not opt out of isolation — it only gives up the named
+cuts branch `worktree-<surface>` from `origin/<default>` (or reuses it, below),
+`--remote-control` registers the app bridge, `-n` pins a permanent name (without it the
+name is regenerated every launch). Dropping `--worktree` does not opt out of isolation — it only gives up the named
 branch. A backgrounded session starts in the project directory but is held out of the
 shared checkout: edits there are rejected until the session isolates itself under
 `.claude/worktrees/`. The one opt-out is `worktree.bgIsolation: "none"` in settings.
 
-**`<unit>` and the session name are separate tokens on purpose.** `--worktree` puts its
+**`<surface>` and the session name are separate tokens on purpose.** `--worktree` puts its
 argument through `claude`'s own worktree-name validator, which is stricter than git's
 refname rules: each `/`-separated segment may hold only letters, digits, dots,
 underscores and dashes, to 64 characters total. Reason from git's rules instead and you
 will mispredict — `a+b`, `a,b` and `a@b` are all legal refnames and all rejected here.
-So `<unit>` stays a plain hyphenated token, and the `::` the session name is built on is
+So `<surface>` stays a plain hyphenated token, and the `::` the session name is built on is
 not available to it.
 
 Nor should the two share a value, independent of that constraint: several Stints can
 share one worktree (a build pass and a review pass on the same surface), and one unit of
 work can span several worktrees (a change landing in two repos) — neither direction
 supports a fixed mapping from branch to session name. Sharing needs no special form:
-`--worktree <unit>` is find-or-create, so a second Stint passing a name that already
+`--worktree <surface>` is find-or-create, so a second Stint passing a name that already
 exists joins that worktree and its branch rather than colliding.
 
 **The `cd` is what picks the project.** There is no flag for it — `--add-dir` grants tool
@@ -90,15 +89,18 @@ time, before any such session could be known. Two Stints sharing one unit:
 `<relation>` has to be unique inside its unit — it is the only thing separating two
 Stints that share a `<constituent>`, so reusing one collides on the whole name. Where two
 Stints genuinely hold the same role, the distinguishing coordinate goes into the relation
-itself: `review-137` and `review-153`, two review Stints on one unit.
+itself rather than anywhere else in the name.
 
 Neither segment may carry whitespace, which is why both substitutions are quoted in the
-command above. The asymmetry is the part worth holding on to: `<unit>` is covered by the
-validator, which rejects a bad token loudly before anything gets created, while the
-session name passes through no validator at all. There a space is not an error but a
-truncation — `--remote-control stint::my unit::build` registers `stint::my` and leaves
-the rest as a stray positional, so the worker comes up under a name nobody can address it
-by. The same free derivation that is safe on one token fails silently on the other.
+command above. That bars the character, not the phrase: a multi-word name stays
+multi-word, hyphenated — `comment-review`, not `commentreview`. Compressing a title into
+a single token to make it fit throws away the reading the token was chosen for. The
+asymmetry is the part worth holding on to: `<surface>` is covered by the validator,
+which rejects a bad token loudly before anything gets created, while the session name
+passes through no validator at all. There a space is not an error but a truncation —
+`--remote-control stint::my unit::build` registers `stint::my` and leaves the rest as a
+stray positional, so the worker comes up under a name nobody can address it by. The same
+free derivation that is safe on one token fails silently on the other.
 
 `claude` does ship `--remote-control-session-name-prefix`, and this convention does not
 use it: it prefixes auto-generated names only, while every name here is pinned explicitly

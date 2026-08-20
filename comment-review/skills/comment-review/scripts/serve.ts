@@ -519,6 +519,12 @@ const writeOriginAllowed = (req: Request, port: number): boolean => {
   return allowed.includes(origin);
 };
 
+// Which artifacts' watchers have died, for the life of this process. A death is a fact about
+// the session, not about whichever socket happened to be connected when it happened, and the
+// publish below reaches only the latter. Recorded here so `websocket.open` can tell a page
+// that arrives afterwards — including the page the notice itself asked the user to open.
+const deadWatchers = new Set<string>();
+
 const server = Bun.serve({
   hostname: bindHost,
   port: 0,
@@ -722,6 +728,21 @@ const server = Bun.serve({
   websocket: {
     open(ws) {
       ws.subscribe("reload");
+      // Replay the watcher deaths already seen, TO THIS SOCKET ONLY.
+      //
+      // Without this the notice is erased by the action it asks for. It says "reload
+      // manually"; a reload builds a fresh page whose `watchStale` starts false and whose
+      // `onopen` writes "live" back, so the warning vanishes while the watcher stays dead and
+      // the page stays permanently stale. Instructing the user to perform the one action that
+      // destroys the warning is worse than not warning them at all.
+      // A second path needs it too: a watcher that dies before any page has connected
+      // publishes to zero subscribers, and the fact is then gone for the whole session.
+      //
+      // Sent per socket rather than through publishToSlug, because a broadcast would mark
+      // every OTHER artifact's page as dead as well — watchers are per artifact. The frame is
+      // byte-identical to what the publish path sends: the client already drops frames whose
+      // slug is not its own, so one wire format and one client branch cover both deliveries.
+      for (const slug of deadWatchers) ws.send(JSON.stringify({ slug, type: "watch-error" }));
     },
     message() {
       // no inbound traffic expected
@@ -792,6 +813,10 @@ for (const [slug, path] of drafts) {
     // over a page that could never update again, which is the one state where that indicator
     // is not merely unhelpful but actively wrong. Scoped to this artifact's slug: watchers are
     // per artifact and one dying says nothing about the others.
+    // Two deliveries, because neither one alone covers the session: the publish reaches the
+    // pages open at this instant, and the set reaches every page that connects after it. Drop
+    // either and a real case goes unwarned — see the note in `websocket.open`.
+    deadWatchers.add(slug);
     publishToSlug(slug, "watch-error");
   });
 }

@@ -1176,6 +1176,12 @@ const conn = document.getElementById("cr-status-conn");
 // That exception is load-bearing. Tidying it into setConn for consistency deletes the only
 // signal this whole arrangement exists to produce, and deletes it silently — the pill simply
 // goes on reading "live" over a page that can no longer update.
+// This flag is page-scoped and cannot be otherwise: a reload starts a new page with it false.
+// What carries the fact ACROSS a reload is the server, which keeps a set of dead slugs and
+// replays them to each socket as it connects (see `websocket.open` in serve.ts). So a fresh
+// page briefly shows "live" and is corrected a moment later, and that is the arrangement
+// working rather than a race — do not try to make this flag survive the reload instead, since
+// a client-side store cannot know about a watcher that died before this page ever existed.
 let watchStale = false;
 function setConn(text, disconnected) {
   if (watchStale) return;

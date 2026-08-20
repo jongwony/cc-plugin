@@ -15,27 +15,36 @@ One command spawns a worker that is background-resident, worktree-isolated,
 app-reachable, and message-addressable:
 
 ```bash
-( cd <project-dir> && claude --bg --worktree <unit> --remote-control stint::<constituent>::<relation> \
-                             -n stint::<constituent>::<relation> \
+( cd <project-dir> && claude --bg --worktree <unit> \
+                             --remote-control "stint::<constituent>::<relation>" \
+                             -n "stint::<constituent>::<relation>" \
                              --permission-mode auto -- "<brief + reporting contract>" )
 ```
 
 It prints `backgrounded · <jobId> · <name>`. Report that back. The four flags are
 independent and each earns its place: `--bg` detaches without a PTY, `--worktree`
-cuts a branch `worktree-<unit>` from `origin/<default>`, `--remote-control` registers
+cuts branch `worktree-<unit>` from `origin/<default>` (or reuses it, below),
+`--remote-control` registers
 the app bridge, `-n` pins a permanent name (without it the name is regenerated every
 launch). Dropping `--worktree` does not opt out of isolation — it only gives up the named
 branch. A backgrounded session starts in the project directory but is held out of the
 shared checkout: edits there are rejected until the session isolates itself under
 `.claude/worktrees/`. The one opt-out is `worktree.bgIsolation: "none"` in settings.
 
-**`<unit>` and the session name are separate tokens on purpose.** `--worktree` cuts a
-branch, so its argument stays a plain hyphenated surface token — `:` is not legal in a
-git refname, and the session name below is built on `::`, so the two cannot share a
-value. Nor should they, independent of the refname constraint: several sessions can
+**`<unit>` and the session name are separate tokens on purpose.** `--worktree` puts its
+argument through `claude`'s own worktree-name validator, which is stricter than git's
+refname rules: each `/`-separated segment may hold only letters, digits, dots,
+underscores and dashes, to 64 characters total. Reason from git's rules instead and you
+will mispredict — `a+b`, `a,b` and `a@b` are all legal refnames and all rejected here.
+So `<unit>` stays a plain hyphenated token, and the `::` the session name is built on is
+not available to it.
+
+Nor should the two share a value, independent of that constraint: several Stints can
 share one worktree (a build pass and a review pass on the same surface), and one unit of
 work can span several worktrees (a change landing in two repos) — neither direction
-supports a fixed mapping from branch to session name.
+supports a fixed mapping from branch to session name. Sharing needs no special form:
+`--worktree <unit>` is find-or-create, so a second Stint passing a name that already
+exists joins that worktree and its branch rather than colliding.
 
 **The `cd` is what picks the project.** There is no flag for it — `--add-dir` grants tool
 access to extra paths but does not set the session's project; the spawned session simply
@@ -78,10 +87,34 @@ to a session that does not exist yet, which matters because `-n` fixes the name 
 time, before any such session could be known. Two Stints sharing one unit:
 `stint::comment-review::port` and `stint::comment-review::review`.
 
+`<relation>` has to be unique inside its unit — it is the only thing separating two
+Stints that share a `<constituent>`, so reusing one collides on the whole name. Where two
+Stints genuinely hold the same role, the distinguishing coordinate goes into the relation
+itself: `review-137` and `review-153`, two review Stints on one unit.
+
+Neither segment may carry whitespace, which is why both substitutions are quoted in the
+command above. The asymmetry is the part worth holding on to: `<unit>` is covered by the
+validator, which rejects a bad token loudly before anything gets created, while the
+session name passes through no validator at all. There a space is not an error but a
+truncation — `--remote-control stint::my unit::build` registers `stint::my` and leaves
+the rest as a stray positional, so the worker comes up under a name nobody can address it
+by. The same free derivation that is safe on one token fails silently on the other.
+
+`claude` does ship `--remote-control-session-name-prefix`, and this convention does not
+use it: it prefixes auto-generated names only, while every name here is pinned explicitly
+with `-n`. `-n` and `--remote-control` then deliberately take the same value — they are
+independent flags, one naming the session and one registering the app bridge, and holding
+them equal is what makes the name printed at spawn the same string peers address.
+
 The orchestrator derives both tokens from accumulated context and the user's utterance
 and reports them with the spawn line — there is no separate per-spawn confirmation step.
 The first Stint of a unit fixes `<constituent>`; every later Stint in that unit reuses it
-verbatim (read the live names off `claude agents --json` rather than re-deriving).
+verbatim, carried forward on the handoff itself — the parked task the outgoing Stint
+leaves behind. Do not plan on reading it back off `claude agents --json`: the default
+listing drops retired sessions (`--all` still holds them), and because Stints chain,
+retire-then-spawn is the ordinary path — so by the time the next Stint needs the token,
+the row it would have read is already gone and the token gets re-derived instead of
+reused.
 
 Stints chain — one hands off to the next — but never nest: a worker must not spawn or
 supervise sub-workers, since only the orchestrator holds that role. That caps the spawn
@@ -90,7 +123,7 @@ graph at one supervised level.
 ## Talking to it
 
 ```bash
-claude agents --json          # fleet view: kind, state, status, id, sessionId, cwd
+claude agents --json          # fleet view: name, kind, state, status, id, pid, sessionId, cwd, startedAt
 claude logs <jobId>           # recent output (TUI frames; prefer the transcript)
 claude attach <jobId>         # open it in this terminal
 ```
@@ -121,7 +154,8 @@ A spawned session never reads this file. Carry the contract in the brief itself:
 > request unless it carries the ref, and names collide. Send (a) an ACK on start,
 > (b) your state whenever you are blocked on a decision you cannot make alone, and
 > (c) a completion report. Do not wait for a reply — durable output (PR, parked task)
-> ships regardless of the channel.
+> ships regardless of the channel. Do not spawn or supervise workers of your own: hand
+> work back to your supervisor instead, since only it holds that role.
 
 ## Observing
 

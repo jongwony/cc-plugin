@@ -15,7 +15,7 @@ app-reachable, and addressable by `SendMessage` from other sessions:
 
 ```bash
 ( cd ~/src/foo && claude --bg --worktree foo \
-                         --remote-control stint::foo::build -n stint::foo::build \
+                         --remote-control "stint::foo::build" -n "stint::foo::build" \
                          --permission-mode auto -- "<brief>" )
 
 claude agents --json     # fleet view (no TTY needed)

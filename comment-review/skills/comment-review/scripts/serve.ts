@@ -14,7 +14,7 @@
 // Stop with Ctrl-C. No port collision: Bun.serve(port: 0) lets the OS pick.
 
 import { accessSync, closeSync, constants, existsSync, fstatSync, openSync, statSync, watch, writeSync } from "node:fs";
-import { readFile, realpath } from "node:fs/promises";
+import { readdir, readFile, realpath } from "node:fs/promises";
 import { basename, dirname, extname, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
@@ -563,6 +563,95 @@ const writeOriginAllowed = (req: Request, port: number): boolean => {
   return allowed.includes(origin);
 };
 
+// ── The live queue, computed the way the APPLY step computes it ─────────────────────────────
+//
+// WHICH RULE THIS IS, AND WHY IT IS NOT THE DELETE CHECK'S. The sidebar this feeds is a preview
+// of what the apply step will act on, so it has to agree with the apply step. Agreeing with the
+// tombstone guard below instead would let the list and the edit disagree — the same "two
+// screens, two facts" failure this endpoint exists to end, moved one layer down. The DELETE
+// existence check keeps its own tie-break because it asks a different question (is there a live
+// entry to tombstone?) and SKILL.md states why that divergence is safe there. Two rules, not
+// three: this one and the DELETE check. Do not add a third by inventing a display rule.
+//
+// The rule, from SKILL.md "The Queue File": entries sharing an `id` are an edit history and the
+// latest timestamp wins; a line is live when its latest non-marker entry is not a tombstone AND
+// no consumed-marker for that `id` carries a `consumedThrough` at or after that entry's
+// timestamp. Where the latest timestamp is a tie between entries of DIFFERENT KINDS, the one
+// that produces no edit wins — a tombstone beats an edit of the same millisecond.
+type QueueEntry = { id: string; selector: string; anchorText: string; comment: string; timestamp: string };
+
+const liveQueueEntries = async (slug: string, draft: string): Promise<QueueEntry[]> => {
+  const dir = dirname(draft);
+  const entries: any[] = [];
+  try {
+    const content = await readFile(resolve(dir, `feedback-${slug}.jsonl`), "utf8");
+    for (const line of content.split("\n")) {
+      if (!line.trim()) continue;
+      // Malformed lines are skipped rather than fatal, matching the DELETE scan — the queue is
+      // a file a person may have edited by hand.
+      try { entries.push(JSON.parse(line)); } catch { }
+    }
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+  }
+
+  const latest = new Map<string, any>();
+  for (const e of entries) {
+    if (typeof e?.id !== "string" || e.consumed === true) continue; // a marker is not an entry
+    const prev = latest.get(e.id);
+    if (!prev) { latest.set(e.id, e); continue; }
+    const a = typeof e.timestamp === "string" ? e.timestamp : "";
+    const b = typeof prev.timestamp === "string" ? prev.timestamp : "";
+    if (a > b) latest.set(e.id, e);
+    // The tie, and the only place this differs from a plain "latest wins": same timestamp,
+    // different kinds → the tombstone. See the note above for why it leans this way.
+    else if (a === b && e.deleted === true && prev.deleted !== true) latest.set(e.id, e);
+  }
+
+  // Consumed markers retire lines an apply round already turned into edits. Without this the
+  // sidebar re-lists applied comments as if they were still pending, which is worse than the
+  // empty list it replaces. Every `feedback-*.markers.jsonl` in the directory is read, not just
+  // this slug's: markers are keyed by `id`, ids are unique, and a carried-over queue's markers
+  // can sit under an earlier slug's name.
+  const consumedThrough = new Map<string, string>();
+  try {
+    for (const name of await readdir(dir)) {
+      if (!name.startsWith("feedback-") || !name.endsWith(".markers.jsonl")) continue;
+      let text: string;
+      try { text = await readFile(resolve(dir, name), "utf8"); } catch { continue; }
+      for (const line of text.split("\n")) {
+        if (!line.trim()) continue;
+        try {
+          const m = JSON.parse(line);
+          if (m?.consumed !== true || typeof m.id !== "string") continue;
+          const t = typeof m.consumedThrough === "string" ? m.consumedThrough : "";
+          const prev = consumedThrough.get(m.id);
+          if (!prev || t > prev) consumedThrough.set(m.id, t);
+        } catch { }
+      }
+    }
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+  }
+
+  const live: QueueEntry[] = [];
+  for (const [id, e] of latest) {
+    if (e.deleted === true) continue;
+    const t = typeof e.timestamp === "string" ? e.timestamp : "";
+    const through = consumedThrough.get(id);
+    if (through !== undefined && through >= t) continue; // retired by an apply round
+    live.push({
+      id,
+      selector: typeof e.selector === "string" ? e.selector : "",
+      anchorText: typeof e.anchorText === "string" ? e.anchorText : "",
+      comment: typeof e.comment === "string" ? e.comment : "",
+      timestamp: t,
+    });
+  }
+  live.sort((a, b) => (a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0));
+  return live;
+};
+
 // Which artifacts' watchers have died, for the life of this process. A death is a fact about
 // the session, not about whichever socket happened to be connected when it happened, and the
 // publish below reaches only the latter. Recorded here so `websocket.open` can tell a page
@@ -613,6 +702,38 @@ const server = Bun.serve({
       return new Response(Bun.file(vendorPath), {
         headers: { "Content-Type": "application/javascript; charset=utf-8" },
       });
+    }
+
+    // Reading the queue. No Origin allow-list here, and that is a decision rather than an
+    // omission on the write guard's part:
+    //   Against a hostile PAGE, the browser already refuses to hand the response body to a
+    //   cross-origin script, because no CORS header is sent. An allow-list would be a second
+    //   lock on a door the browser holds shut, and would suggest a protection this endpoint
+    //   does not otherwise have.
+    //   Against anything that can simply REACH the port — which is the exposure the tailnet
+    //   bind creates — an Origin check does nothing at all: a client that omits the header is
+    //   treated as "not a browser write" and allowed, so the check is not a barrier there.
+    // What it DOES change, measured: the same bytes are already served from
+    // /preview/feedback-{slug}.jsonl as a sibling asset, but only for a request carrying a
+    // Referer that names a known slug. With one artifact there is a single-draft fallback, so
+    // that file already answers a request with no Referer at all and this endpoint adds no
+    // reach. With several artifacts it does not, so this endpoint IS newly readable without a
+    // Referer. That step was never a security control — any client can send any Referer — but
+    // it is a real difference and saying "no new exposure" flatly would be false.
+    if (url.pathname === "/feedback" && (req.method === "GET" || req.method === "HEAD")) {
+      const slug = url.searchParams.get("slug") ?? "";
+      const draft = drafts.get(slug);
+      if (!draft) return new Response("unknown slug", { status: 400 });
+      try {
+        const live = await liveQueueEntries(slug, draft);
+        return new Response(JSON.stringify({ ok: true, slug, entries: live }), {
+          headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
+        });
+      } catch (e) {
+        const msg = (e as Error).message;
+        console.error(`[feedback] queue read failed for ${slug}: ${msg}`);
+        return new Response(`queue read failed: ${msg}`, { status: 500 });
+      }
     }
 
     // Server is tag-agnostic: it persists every comment as one JSONL line and interprets
@@ -679,6 +800,11 @@ const server = Bun.serve({
         return new Response(`feedback write failed: ${msg}`, { status: 500 });
       }
       console.error(`[feedback] ${body.slug} id=${id.slice(0, 8)}… ← "${body.selector.slice(0, 50)}${body.selector.length > 50 ? "…" : ""}"`);
+      // Every page on this slug re-reads the queue. Scoped to the slug for the same reason the
+      // watcher notice is: another artifact's page has no business changing because this one's
+      // queue moved. NOT a reload — a reload would destroy a comment being written on the other
+      // device, which is the failure this whole endpoint is downstream of.
+      publishToSlug(body.slug, "queue-changed");
       return Response.json({ ok: true, id, path: feedbackPath });
     }
 
@@ -759,6 +885,7 @@ const server = Bun.serve({
         return new Response(`tombstone write failed: ${msg}`, { status: 500 });
       }
       console.error(`[feedback] DELETE ${body.slug} id=${body.id.slice(0, 8)}… ← "${(liveEntry.selector ?? "").slice(0, 50)}${(liveEntry.selector ?? "").length > 50 ? "…" : ""}"`);
+      publishToSlug(body.slug, "queue-changed");
       return Response.json({ ok: true, id: body.id, deleted: true, path: feedbackPath });
     }
 
@@ -799,7 +926,7 @@ const WATCH_DEBOUNCE_MS = 150;
 // Both notices to the page go out through here. Keeping one publish path means the reload
 // regression exercises the wiring the watcher-death notice also travels on, and what differs
 // between them is a single argument rather than a second call site that can rot unnoticed.
-const publishToSlug = (slug: string, type: "reload" | "watch-error") =>
+const publishToSlug = (slug: string, type: "reload" | "watch-error" | "queue-changed") =>
   server.publish("reload", JSON.stringify({ slug, type }));
 for (const [slug, path] of drafts) {
   // Watch the containing directory, not the file. `watch(path)` binds the inode, so a single

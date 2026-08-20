@@ -235,6 +235,7 @@
     transition: background .12s ease;
   }
   .cr-sidebar-item:hover { background: #f0f4f8; }
+  .cr-sidebar-item.cr-unconfirmed .cr-sidebar-item-anchor { color: #b26b00; }
   .cr-sidebar-item-anchor {
     font-family: ui-monospace, "SF Mono", Menlo, monospace;
     font-size: .78em;
@@ -1017,7 +1018,18 @@ async function submitFeedback() {
     // discard it. Anchoring elsewhere mid-request is left allowed on purpose — blocking it
     // would be simpler and would stall the user whenever the network is slow.
     if (pending === captured) dismissPopup();
+    // The server has confirmed this line, so put it in the list NOW rather than after another
+    // round trip. This is not a second source of truth — it is the same fact, applied without
+    // waiting, and the read below reconciles it. Leaving the list to lag would mean the mark
+    // appears and the row does not, which on a phone over a tailnet is a visible second of the
+    // screen disagreeing with itself: the state this whole change exists to remove.
+    const entryId = id || (captured.editingMark && captured.editingMark.dataset.crId);
+    queueEntries = queueEntries.filter((e) => e.id !== entryId).concat([{
+      id: entryId, selector: captured.selector, anchorText: reqBody.anchorText,
+      comment, timestamp: new Date().toISOString(),
+    }]);
     renderSidebar();
+    refreshQueue();
   } catch (e) {
     // The affordance is stated as a fact about the editor, not as a promise about the
     // outcome. A stale slug after a channel restart, and a path too long to name a feedback
@@ -1085,7 +1097,12 @@ async function deleteFeedback() {
     // a comment the user has not sent yet, and closing then throws it away. Unmarking stays
     // unconditional — the mark has to go whatever the popup is holding now.
     if (pending === captured) dismissPopup();
+    // Same reason as the submit path: the tombstone is confirmed, so the row goes now. The
+    // element was already unmarked above; leaving its row up until a read returns would show a
+    // comment that is gone.
+    queueEntries = queueEntries.filter((e) => e.id !== id);
     renderSidebar();
+    refreshQueue();
     showToast("✓ deleted");
   } catch (e) {
     showToast("✗ delete failed: " + e.message, true);
@@ -1096,9 +1113,91 @@ async function deleteFeedback() {
 
 // ── Sidebar: this round's comments + click-to-focus ──
 
+// The queue is the SERVER's, and this page reads it. It used to be inferred from the marks in
+// this page's own DOM, which meant a reload showed `0 comments` over a queue that was not empty,
+// and a second device never learned what the first one wrote. Both symptoms were one cause:
+// every screen was drawing from private state.
+let queueEntries = [];
+
+const markForId = (id) => {
+  for (const m of root.querySelectorAll(".cr-anno")) if (m.dataset.crId === id) return m;
+  return null;
+};
+
+// Produced exactly the way the POST produces anchorText — collapse whitespace, trim, cap at 300
+// — because the comparison is only meaningful against the same transformation. A longer
+// paragraph is stored truncated, so comparing the untruncated text would fail every time.
+const anchorTextOf = (el) => (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 300);
+
+// Put marks back on the page for entries that are not marked yet.
+//
+// THE GUARD, AND WHY IT ARRIVES WITH THIS FUNCTION. The recorded selector is a path, not a
+// unique address (see "Element Anchoring" in SKILL.md) — resolving it can land on a different
+// element that happens to repeat the same shape. Until now nothing in this page ever resolved a
+// stored selector, which is what made that tolerable. This function is the thing that changes
+// it, so the guard is part of it rather than a later hardening.
+// `anchorText` is the field kept for exactly this comparison. Where it matches, the mark goes
+// on. Where it does not — or where there is nothing to compare against — the mark stays OFF and
+// the row is listed as unconfirmed. That turns the failure from "silently annotates the wrong
+// paragraph, and a later apply round edits it" into "a visible row the user can re-place".
+// An entry with no anchorText is not evidence that the anchor is right; it is the absence of
+// the evidence, and it is treated as such.
+function resolveQueueAnchors() {
+  const liveIds = new Set(queueEntries.map((e) => e.id));
+  // A mark whose entry is gone — deleted from another screen, or retired by an apply round —
+  // comes off, restoring the artifact element exactly as it was found.
+  for (const m of Array.from(root.querySelectorAll(".cr-anno"))) {
+    if (!liveIds.has(m.dataset.crId)) unmarkElement(m);
+  }
+  for (const entry of queueEntries) {
+    // Already marked: leave it. The element under a mark this page placed itself is the exact
+    // one that was right-clicked, which is stronger than anything re-resolving the path could
+    // establish. Re-resolving here would let an ambiguous selector MOVE a correct mark.
+    if (markForId(entry.id)) continue;
+    if (!entry.selector || !entry.anchorText) continue;
+    let el = null;
+    try { el = root.querySelector(entry.selector); } catch { el = null; }
+    if (!el) continue;
+    if (anchorTextOf(el) !== entry.anchorText) continue;
+    markElement(el, entry.selector, entry.comment, entry.id);
+  }
+}
+
+// One path for every change: this page's own write, another device's write, and a fresh load all
+// end here. Deliberately touches nothing but the list and the marks — not the popup, not the
+// textarea, not `pending`. Those hold a comment being written, and a notice that destroys one is
+// worse than no notice.
+// Reads are sequenced, and a superseded one is dropped rather than applied. Without this a slow
+// read applies a list from before a change that has since landed, and `resolveQueueAnchors`
+// then unmarks the element the user just commented on — the comment is in the queue, the mark
+// is gone from the page. Measured: hold a read open, submit a comment, let the held read land,
+// and the new mark disappears. It takes a slow link, which is exactly the tailnet-from-a-phone
+// case this endpoint was built for.
+let queueSeq = 0;
+async function refreshQueue() {
+  const mine = ++queueSeq;
+  let data;
+  try {
+    const resp = await fetch("/feedback?slug=" + encodeURIComponent(SLUG), { cache: "no-store" });
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    data = await resp.json();
+  } catch (e) {
+    // Say so. An empty sidebar that actually means "the read failed" is the same confident
+    // wrong answer this whole change exists to remove. Unless a newer read is already running,
+    // in which case that one owns the outcome and this failure is not the user's problem.
+    if (mine !== queueSeq) return;
+    console.error("[queue] read failed:", e);
+    showToast("✗ could not read the comment queue — this list may be out of date", true);
+    return;
+  }
+  if (mine !== queueSeq) return; // a newer read started while this one was in flight
+  queueEntries = Array.isArray(data.entries) ? data.entries : [];
+  resolveQueueAnchors();
+  renderSidebar();
+}
+
 function renderSidebar() {
-  const marks = Array.from(root.querySelectorAll(".cr-anno"));
-  const n = marks.length;
+  const n = queueEntries.length;
   sidebarCount.textContent = String(n);
   countEl.textContent = String(n);
 
@@ -1111,23 +1210,33 @@ function renderSidebar() {
     return;
   }
 
-  for (const mark of marks) {
+  for (const entry of queueEntries) {
+    const mark = markForId(entry.id);
     const item = document.createElement("div");
-    item.className = "cr-sidebar-item";
+    item.className = mark ? "cr-sidebar-item" : "cr-sidebar-item cr-unconfirmed";
     item.setAttribute("role", "button");
     item.setAttribute("tabindex", "0");
 
     const anchorEl = document.createElement("div");
     anchorEl.className = "cr-sidebar-item-anchor";
-    anchorEl.textContent = mark.dataset.crSelector || "";
+    // An unconfirmed entry still gets a row. Showing it is the whole point: the user can see
+    // the comment exists and put it back, which a silently missing row denies them.
+    anchorEl.textContent = mark ? (entry.selector || "") : "⚠ anchor not confirmed — " + (entry.selector || "");
 
     // The row is an index entry, not a copy of the comment — the comment text lives on
     // the element itself (title + popup). Keep the full comment as the row's tooltip so
     // hovering the list still tells you which one it is.
-    item.title = mark.dataset.crComment || "";
+    item.title = entry.comment || "";
 
     item.appendChild(anchorEl);
-    const openEdit = () => { pulseElement(mark); openEditPopup(mark); };
+    const openEdit = () => {
+      if (!mark) {
+        showToast("⚠ this comment's anchor is not on the page — re-anchor it by commenting again", true);
+        return;
+      }
+      pulseElement(mark);
+      openEditPopup(mark);
+    };
     item.addEventListener("click", openEdit);
     item.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") {
@@ -1211,7 +1320,9 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-renderSidebar();
+// First paint reads the server. This is what makes a reload — and a second device — show the
+// comments that actually exist rather than the ones this page happens to have made.
+refreshQueue();
 
 // WebSocket hot reload
 const conn = document.getElementById("cr-status-conn");
@@ -1255,6 +1366,13 @@ function handleWsMessage(e) {
     // in front of. See the note there before changing it.
     conn.classList.add("disconnected");
     conn.textContent = "file watch stopped — reload manually";
+    return;
+  }
+  if (msg.type === "queue-changed") {
+    // Re-read the list only. NOT a reload: a reload destroys a comment being written here, and
+    // the queue moves precisely when someone else is working — which is when this page is most
+    // likely to be mid-comment.
+    refreshQueue();
     return;
   }
   if (msg.type === "reload") {

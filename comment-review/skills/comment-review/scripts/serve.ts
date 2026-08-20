@@ -13,7 +13,7 @@
 //
 // Stop with Ctrl-C. No port collision: Bun.serve(port: 0) lets the OS pick.
 
-import { closeSync, constants, existsSync, fstatSync, openSync, readFileSync, readSync, statSync, watch, writeSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, openSync, readFileSync, statSync, watch, writeSync } from "node:fs";
 import { readFile, realpath } from "node:fs/promises";
 import { basename, dirname, extname, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
@@ -405,16 +405,30 @@ const serveSiblingAsset = async (assetPath: string, referer: string | null, rang
   if (canonFile !== canonDir && !canonFile.startsWith(canonDir + sep)) {
     return new Response("not found", { status: 404 }); // escaped the artifact directory
   }
-  // Close the time-of-check/time-of-use window by verifying the OPENED object's identity, not a
-  // re-resolved path string. Capture the contained file's identity (device + inode) now, open a
-  // handle, then require the fd's identity to match — a swap of canonFile between the check and
-  // the read yields a different fd identity → 404, instead of letting the read follow the swapped
-  // path outside the directory. We read from the pinned fd, never by re-resolving the path.
-  // O_NOFOLLOW is defense-in-depth for the final component (a swapped-in symlink fails with ELOOP).
-  // A legitimate symlink that was already inside the dir at check time still works, because
-  // realpath() resolved it to its real in-dir target — that target is what we stat and open.
-  // A post-check swap of an *intermediate* directory is also caught: the opened object's inode would
-  // differ from the captured one → 404. The only residual is dev+ino reuse, which is not attacker-controllable.
+  // Open the file and verify the OPENED object rather than trusting the path string alone:
+  // capture the contained file's identity (device + inode), open a handle, require the fd's
+  // identity to match. O_NOFOLLOW covers the final component (a swapped-in symlink fails with
+  // ELOOP). A legitimate symlink that was already inside the dir at check time still works,
+  // because realpath() resolved it to its real in-dir target — that target is what is stat'd and
+  // opened. A swapped *intermediate* directory is caught too: the opened object's inode would
+  // differ from the captured one.
+  //
+  // WHAT THIS NO LONGER BUYS. An earlier revision read the bytes out of this pinned fd, and said
+  // so: "we read from the pinned fd, never by re-resolving the path". That sentence is now false
+  // and has been removed rather than left to authorise a wrong reading of the code below. The
+  // body is produced by Bun.file(canonFile), which opens the path a second time. So what survives
+  // is: at the moment of the check, this path resolved to a regular file inside the artifact
+  // directory, reached without following a symlink out of it. What does NOT survive is any
+  // guarantee that the bytes sent are that same object's — a swap of canonFile between this check
+  // and Bun's own open is no longer excluded.
+  //
+  // That was traded knowingly. Reading the whole file into a buffer holds it resident for the
+  // length of the transfer (+201 MiB for a 200 MiB asset, per concurrent request), and every
+  // form that both streams and manages its own descriptor names a path. The trade rests on the
+  // user's stated premise that they only ever open artifacts they wrote themselves: the window
+  // needs someone else able to swap files in the artifact's own directory mid-request, so a
+  // directory the user controls is one where this guards against itself. If that premise stops
+  // holding, this is the second place to look — the first is the .html entry in ASSET_MIME.
   let id: { dev: number; ino: number };
   try {
     const s0 = statSync(canonFile);
@@ -429,8 +443,8 @@ const serveSiblingAsset = async (assetPath: string, referer: string | null, rang
   } catch {
     return new Response("not found", { status: 404 }); // missing, or final component is now a symlink
   }
-  // The fd is closed here, on every path, because nothing outside this scope holds it — see the
-  // note on the body below for why it is not handed to a stream.
+  // The fd is the verification handle, not the read source — see the note above. Nothing outside
+  // this scope holds it, so it closes here on every path.
   try {
     const s1 = fstatSync(fd);
     if (!s1.isFile() || s1.dev !== id.dev || s1.ino !== id.ino) {
@@ -445,46 +459,22 @@ const serveSiblingAsset = async (assetPath: string, referer: string | null, rang
         headers: { "Content-Range": `bytes */${size}`, "Cache-Control": "no-store" },
       });
     }
-    // A whole-file read holds the whole file resident FOR THE DURATION OF THE TRANSFER: a
-    // 200 MiB asset peaks at +201 MiB while it is going out, and falls back within a MiB once it
-    // has gone. Sampling after the response completes therefore reports the same near-zero
-    // number whether the body was buffered or streamed, which is why an earlier revision of this
-    // comment claimed the opposite. It is a real cost, per concurrent request, and it is not
-    // fixed here — every alternative measured so far is worse or unusable:
-    //   a hand-built ReadableStream over readSync peaks at +979 MiB, and a BYOB byte stream at
-    //   +1015 MiB, because the runtime queues a script-driven body without effective
-    //   backpressure. Over loopback both look fine — the transfer ends before the queue can
-    //   build — so a harness has to bind the same interface the server does AND sample during
-    //   the transfer, not after it.
-    //   Bun.file(fd) is genuinely zero-copy, +0 MiB, and never closes the descriptor it was
-    //   handed: 100 requests leave 100 open descriptors and a forced full GC reclaims none.
-    //   Bun.file(path) is +0 MiB and leaks nothing, but names a path — which re-resolves what
-    //   the identity check above went to some trouble to pin, so it is not a free swap.
-    //   Bun.file("/dev/fd/N") would name the pinned object rather than the path, but the file is
-    //   opened lazily, so the descriptor would have to stay open for an unbounded time or risk
-    //   being recycled onto an unrelated file. That is a worse failure than the one it fixes.
-    // What is here is the original whole-file read, plus a positional read so a range costs only
-    // the range. Do not replace it with a manual stream on the assumption that chunking must use
-    // less memory; that assumption was measured and it is false on this runtime.
+    // Bun.file streams: the body never becomes a resident copy of the file. Reading it into a
+    // buffer instead peaked at +201 MiB for a 200 MiB asset while the response was in flight —
+    // per concurrent request. Measuring that requires sampling DURING the transfer against a
+    // throttled consumer on a real interface; after it completes, buffered and streamed report
+    // the same near-zero number, and an earlier revision of this file drew the wrong conclusion
+    // from exactly that.
+    // Hand-built streams are not the alternative: a push-based ReadableStream peaked at
+    // +979 MiB and a BYOB byte stream at +1015 MiB, because this runtime pulls a script-driven
+    // body ahead regardless of the source's backpressure signal. Bun.file(fd) would keep the
+    // pinned descriptor and costs +0 MiB, but never closes the descriptor it is handed — 100
+    // requests, 100 open descriptors, none reclaimed by a forced GC.
     const start = range ? range.start : 0;
     const end = range ? range.end : size - 1;
-    let payload: Uint8Array;
-    if (range) {
-      // Only the requested window is read. Seeking in a large video must not re-read the file.
-      const len = end - start + 1;
-      const buf = Buffer.allocUnsafe(len);
-      let got = 0;
-      // readSync is one read(2) and can return short, exactly as writeSync can.
-      while (got < len) {
-        const n = readSync(fd, buf, got, len - got, start + got);
-        if (n <= 0) break; // truncated under us; send what is really there
-        got += n;
-      }
-      payload = got === len ? buf : buf.subarray(0, got);
-    } else {
-      payload = readFileSync(fd);
-    }
-    return new Response(payload, {
+    const file = Bun.file(canonFile);
+    const body = range ? file.slice(start, end + 1) : file;
+    return new Response(body, {
       status: range ? 206 : 200,
       headers: {
         "Content-Type": ct,

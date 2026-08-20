@@ -264,12 +264,9 @@ without qualification. Nothing overwrites it, so there is nothing for a concurre
 lose. Entries sharing an `id` are an edit history: the latest timestamp wins.
 
 A consumed-marker line is `{id, artifact, consumed: true, consumedThrough, timestamp}`, where
-`consumedThrough` is the timestamp of the entry the apply step actually consumed. An
-intent line is `{id, artifact, intent: true, timestamp}`, appended before the source is
-touched so an interrupted apply is recoverable. Neither is a content entry: intent lines
-assert nothing about what the artifact should say, and are read only during interruption
-recovery. **They do not enter the liveness judgement below**, and the tie rule does not reach
-them either — an intent line makes no claim about whether an edit should happen.
+`consumedThrough` is the timestamp of the entry the apply step actually consumed. It asserts
+nothing about what the artifact should say, so it does not enter the liveness judgement below
+as an entry — it only retires one.
 
 A line is live when its latest non-marker entry is not a tombstone and no consumed-marker for
 that `id` carries a `consumedThrough` at or after that entry's timestamp. Keying the marker to
@@ -284,12 +281,15 @@ kinds, the one that produces no edit wins.** This is the same asymmetry the anch
 on: a comment that fails to apply shows up as a source that did not change, while a comment
 applied against a retraction edits the artifact the user was trying to protect.
 
-This deliberately disagrees with the server. `serve.ts`'s DELETE existence check breaks the
-same tie by file order — its comparison is strict, so the earlier line stays. That check asks a
-different question (is there a live entry to tombstone?), and the worst its disagreement
-produces is one redundant tombstone line, never a wrong edit. Do not reconcile the two by
-changing this rule to match: the reason this one leans the other way is written directly
-above.
+This deliberately disagrees with the server. `serve.ts`'s DELETE existence check breaks the same
+tie by file order — its comparison is strict, so the earlier line stays. That check asks a
+different question (is there a live entry to tombstone?), and the worst its disagreement produces
+is one redundant tombstone line, never a wrong edit. Do not reconcile the two by changing this
+rule to match: the reason this one leans the other way is written directly above.
+
+A marker is what retires a line, and reading the source cannot stand in for it — because the
+browser offers no way to retract a comment from an earlier round. Why that makes the marker
+load-bearing, and what breaks without it, is in the commit that settled it.
 
 **Apply step**:
 
@@ -303,58 +303,35 @@ above.
    live by the rule above: `id` dedup and marker resolution run across all of these files
    together, never per file, and the rule keys on entry timestamps alone, so neither which
    file an entry sits in nor the order the files are read can change a verdict.
-2. **Record the intent before touching the source** — create this round's own marker file,
-   `feedback-{slug}-{timestamp}.markers.jsonl`, holding one intent line per id about to be
-   applied. This is what makes the exactly-once guarantee in Rule 2 true rather than hoped
-   for: editing the source and marking its queue lines consumed cannot be one atomic act, so
-   an interruption between them would otherwise leave applied ids live for the next round to
-   apply a second time.
-   Every write the apply step makes is a **new file**; the only writer that appends to a
-   shared queue is the server. This holds because creating a file with Write is not a
-   read-modify-write: nothing is read first, so nothing can be clobbered. The apply step's
-   tools are Edit and Write (see below), and neither performs an atomic append — so a marker
-   written into the shared queue would be a read-modify-write of a file the server is still
-   appending to, which is the very window this arrangement exists to remove. Writing the
-   round's own file removes it instead of narrowing it.
-   Nothing has to be deleted afterwards either, which matters for the same reason: neither
-   tool can delete a file, so a procedure that needed cleanup on the happy path would leave a
-   record behind every round and send every later round into interruption recovery. When
-   writing an apply-step procedure, check each of its verbs against what Edit and Write can
-   actually do — both of the defects this arrangement replaced came from writing a step
-   without looking.
-3. For each surviving line, locate the anchor in the source artifact per **Locating the
-   Anchor in the Source** above, and translate the comment into an Edit/Write call. A comment
-   that cannot be translated faithfully — ambiguous, conflicting, or resting on something the
-   AI would have to guess — is left in the queue rather than guessed at, and surfaced in the
-   round-complete prose as deferred.
-   Before each edit, re-read that id's current state from the queue and its marker files: the
-   set was computed at step 1 and the browser stays live, so a retraction can arrive in
-   between. Where a tombstone has appeared for an id since step 1, skip it — it is a
-   retraction that simply arrived while the apply was running. This narrows the window to one
-   id's worth of work rather than the whole round; it does not close it, because re-reading
-   and then editing is still two acts. What remains is named in the round-complete prose
-   rather than left silent.
-   This is not what the tie rule handles. That rule governs the liveness judgement — which
-   entry for an id wins when two share a timestamp — and says nothing about the interval
-   between reading a set and editing against it. The two answer different questions and
-   neither substitutes for the other.
-4. Write one consumed-marker per consumed line into **this round's marker file** — the same
-   file step 2 created — carrying the `consumedThrough` timestamp of the entry that was
-   consumed. That file belongs to this round, so rewriting it is not touching shared state.
-   Do **not** write markers into a queue: the server stays live throughout the apply, and for
-   the server appending has nothing to overwrite, but the apply step has no atomic append —
-   its write of a shared queue would be a read-modify-write against a file the server is
-   still appending to. A comment that lands mid-apply simply gets no marker this round and is
-   live again next round.
+2. For each surviving line, locate the anchor in the source artifact per **Locating the
+   Anchor in the Source** above, then **read the source before editing it**. Two questions are
+   settled by that read, and both are ordinary rather than exceptional:
+   - Is this still the block the comment was written about? Compare against `anchorText`. Where
+     it is not, or where it is unclear, leave the line and surface it — see Error Recovery.
+   - Is this edit already present? Then a previous round was interrupted between editing the
+     source and writing its marker. Record the marker and move on; do not apply it twice.
+   Otherwise translate the comment into an Edit/Write call. A comment that cannot be
+   translated faithfully — ambiguous, conflicting, or resting on something the AI would have
+   to guess — is left in the queue rather than guessed at, and surfaced as deferred.
+   Immediately before each edit, re-read that id's current state: the set was computed at
+   step 1 and the browser stays live, so a retraction can arrive in between. Where a tombstone
+   has appeared since step 1, skip it. This narrows the window to one id's worth of work
+   rather than the whole round; it does not close it, because re-reading and then editing is
+   still two acts, and what remains is named in the round-complete prose. This is not what the
+   tie rule handles — that rule governs which entry wins, not the interval between reading a
+   set and editing against it.
+3. Write one consumed-marker per consumed line into **this round's own file**,
+   `feedback-{slug}-{timestamp}.markers.jsonl`, carrying the `consumedThrough` timestamp of the
+   entry consumed. Every write the apply step makes is a **new file**; the only writer that
+   appends to a shared queue is the server. The tools force this — Edit and Write are both
+   read-modify-write and neither can delete, so a marker written into the shared queue would be
+   a read-modify-write against a file the server is still appending to, while creating a file
+   with Write reads nothing first and so has nothing to clobber. A comment that lands mid-apply
+   simply gets no marker this round and is live again next round.
    Copy the consumed lines to `{queue-filename}-{timestamp}.consumed.jsonl` — each queue under
-   its own name, so a queue found under an earlier slug is archived beside itself rather than
-   folded into the current slug's. The copy is an audit record, not the re-ingestion guard:
-   the markers are that now, so nothing is truncated.
-   The intent lines need no cleanup: a consumed-marker later than an id's intent line is what
-   marks that id complete, so the pair is self-describing and nothing has to be removed. The
-   pair does not have to sit in the same round's file either — an interrupted round's intent
-   is closed by a later round's marker, because the rule reads every marker file together.
-5. After edits land, the browser auto-reloads.
+   its own name, so a queue found under an earlier slug is archived beside itself. The copy is
+   an audit record, not the re-ingestion guard: the markers are that.
+4. After edits land, the browser auto-reloads.
 
 Apply-step tools are Edit / Write. The skill introduces no other write path.
 
@@ -382,7 +359,7 @@ Artifact(s):             {list of paths}
 
 - **Feedback consumption**: this artifact's queue file(s) — the current slug's, plus any
   earlier-slug queue Phase 0 found — are consumed at the start of every apply step, and each
-  consumed line gets a marker appended to the queue it came from. When the marker write fails
+  consumed line gets a marker written into this round's own marker file. When that write fails
   (disk full, permission denied), surface the failure — do not silently retry — and halt
   consumption until the cause is resolved: without its marker a consumed line is still live,
   and the next round would re-translate it. The archive copy carries the same rule.
@@ -401,19 +378,13 @@ Artifact(s):             {list of paths}
   symmetric: a needless return is visible and cheap, while a wrong match edits a region the
   comment was never about, silently. Do not silently drop it, and do not pick a nearby block
   on a guess.
-- **An intent line has no later consumed-marker**: read across every `*.markers.jsonl` beside
-  the source, not just this round's — that id's previous apply was interrupted between editing
-  the source and marking the line consumed, and the two together name exactly the interrupted
-  set. Do not replay those ids and do not drop them. Read the source and
-  establish, per id, whether its edit is already present; append a consumed-marker for each
-  one that landed, leave the rest alone — they are still live, so nothing has to be returned —
-  and say which was which in the round-complete prose. Deciding this by reading is the point:
-  the ids alone cannot say whether the write happened. Archiving is not what stops a replay
-  here; the marker is.
+- **An apply was interrupted**: there is no separate recovery path. The apply step reads the
+  source before every edit anyway, so an id whose edit is already present is a previous round
+  that stopped between editing and marking — it gets its marker and is not applied again.
+  Nothing needs to be replayed and nothing needs to be dropped.
 - **Bun server crash mid-loop**: surface it with two options — restart the channel and resume
   (the accumulated JSONL is preserved) / terminate the review with a materialized view of the
   completed rounds.
-
 ## Rules
 
 1. **Channel is the skill's identity** — opened in Phase 0, persisted across rounds. The

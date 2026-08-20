@@ -300,6 +300,53 @@
   #cr-status-count:hover { background: rgba(44, 123, 229, .1); color: #222; }
   body.cr-sidebar-open #cr-status-count { background: rgba(44, 123, 229, .14); color: #222; }
   #cr-status-count strong { color: #222; }
+  /* Frontmatter notice. Lives in the status bar, never in #cr-content: anchors are
+     `p:nth-of-type(n)` over the rendered body, so a single extra node inside the artifact
+     would shift every selector the queue already holds. */
+  #cr-frontmatter-pill {
+    background: transparent;
+    border: none;
+    padding: .15em .55em;
+    margin: -.15em .5em;
+    border-radius: 4px;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    max-width: 46vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: none;
+    transition: background .12s ease;
+  }
+  #cr-frontmatter-pill.visible { display: inline-block; }
+  #cr-frontmatter-pill:hover { background: rgba(212, 160, 23, .14); color: #222; }
+  #cr-frontmatter-panel {
+    position: fixed;
+    bottom: 2.6em; left: 1.5em;
+    z-index: 600;
+    display: none;
+    max-width: min(70vw, 720px);
+    max-height: 40vh;
+    overflow: auto;
+    background: white;
+    border: 1px solid #ddd;
+    border-left: 3px solid var(--highlight-edge);
+    border-radius: 4px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.15);
+    padding: .7em .9em;
+  }
+  #cr-frontmatter-panel.show { display: block; }
+  #cr-frontmatter-panel pre {
+    margin: .4em 0 0;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: .8em;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: #222;
+  }
+  #cr-frontmatter-panel .cr-fm-head { font-size: .78em; color: var(--muted); }
 
   /* Toast — confirms each submit silently append to disk, since popup close alone is ambiguous */
   #cr-toast {
@@ -388,8 +435,14 @@
   <div id="cr-popup-hint">⌘Enter to submit · Esc to cancel · right-click a 💬 element to edit</div>
 </div>
 
+<div id="cr-frontmatter-panel">
+  <div class="cr-fm-head">Removed before rendering — not shown in the page above:</div>
+  <pre id="cr-frontmatter-text"></pre>
+</div>
+
 <div id="cr-status">
   <span id="cr-status-conn">live</span>
+  <button id="cr-frontmatter-pill" type="button" aria-controls="cr-frontmatter-panel" aria-expanded="false"></button>
   <button id="cr-status-count" type="button" aria-label="Toggle comment list" aria-controls="cr-sidebar" aria-expanded="false">
     <strong id="cr-count">0</strong> comments
   </button>
@@ -398,6 +451,7 @@
 <div id="cr-toast" role="status" aria-live="polite"></div>
 
 <script type="application/json" id="cr-md-source">__MARKDOWN_CONTENT_PLACEHOLDER__</script>
+<script type="application/json" id="cr-frontmatter-source">__FRONTMATTER_PLACEHOLDER__</script>
 
 <script>
 const SLUG = __SLUG_PLACEHOLDER__;
@@ -487,6 +541,31 @@ if (RENDER_MODE === "html") {
   // file as authored is that mode's identity, which is why it carries its own trust warning
   // and this mode does not need one.
   content.innerHTML = DOMPurify.sanitize(marked.parse(sourceText), MD_SANITIZE);
+}
+
+// ── What the frontmatter strip removed ──
+// A boolean would be useless here: it reads identically on a document with real frontmatter,
+// where nothing is wrong, and on one that merely opened with a thematic break, where a
+// paragraph has silently gone. So the notice carries the removed text — a line count and the
+// first content line at a glance, the block itself one click away. That is what lets someone
+// recognise their own prose sitting in the "frontmatter".
+// Placed in the status bar. Adding it to #cr-content would shift every `p:nth-of-type(n)`
+// anchor in the queue by one, which is a far worse failure than the one being reported.
+const strippedFrontmatter = JSON.parse(document.getElementById("cr-frontmatter-source").textContent);
+if (strippedFrontmatter) {
+  const fmLines = strippedFrontmatter.replace(/\r?\n$/, "").split(/\r?\n/);
+  // The `---` fences are not informative; the first line that is neither a fence nor blank is.
+  const firstContent = fmLines.find((l) => l.trim() && l.trim() !== "---") || "";
+  const fmPill = document.getElementById("cr-frontmatter-pill");
+  const fmPanel = document.getElementById("cr-frontmatter-panel");
+  document.getElementById("cr-frontmatter-text").textContent = strippedFrontmatter;
+  fmPill.textContent = `⚑ ${fmLines.length} lines removed as front matter: ${firstContent}`;
+  fmPill.title = strippedFrontmatter;
+  fmPill.classList.add("visible");
+  fmPill.addEventListener("click", () => {
+    const open = fmPanel.classList.toggle("show");
+    fmPill.setAttribute("aria-expanded", open ? "true" : "false");
+  });
 }
 
 // Popup state

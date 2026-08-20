@@ -205,9 +205,17 @@ appends to <code>feedback-{slug}.jsonl</code> next to the source file. The next
 
 // Strip YAML frontmatter so marked.js renders body only. Anchors are element selectors
 // computed over the rendered body, so stripped frontmatter never enters a selector path.
-const stripFrontmatter = (md: string) => {
+//
+// The match is returned alongside the body because this pattern also matches a document that
+// merely OPENS with a thematic break: `---`, a blank line, a paragraph, `---` is a leading
+// horizontal rule and prose, not frontmatter, and everything up to the second `---` is taken.
+// The page names what was taken instead of tightening the pattern, so a reader who is about to
+// comment on a truncated document can see the piece that is missing and recognise it as their
+// own prose. A pattern narrow enough to never misfire is a different change with its own
+// trade-offs; being visible when it does misfire is not.
+const stripFrontmatter = (md: string): { body: string; stripped: string } => {
   const m = md.match(/^---\r?\n[\s\S]*?\r?\n---\r?(?:\n|$)/);
-  return m ? md.slice(m[0].length) : md;
+  return m ? { body: md.slice(m[0].length), stripped: m[0] } : { body: md, stripped: "" };
 };
 
 const renderPreview = async (slug: string) => {
@@ -219,7 +227,8 @@ const renderPreview = async (slug: string) => {
   const ext = extname(path).toLowerCase();
   const renderMode = ext === ".html" || ext === ".htm" ? "html" : "markdown";
   const raw = await readFile(path, "utf8");
-  const body = renderMode === "markdown" ? stripFrontmatter(raw) : raw;
+  const { body, stripped } =
+    renderMode === "markdown" ? stripFrontmatter(raw) : { body: raw, stripped: "" };
   // title goes into HTML context, where escapeHtml handles `<`. Slug and body both land inside
   // real script elements — a slug is a filename minus its extension, and a filename may contain
   // `<!--<script` — so each is JSON-stringified and then run through escapeForScriptTag;
@@ -229,6 +238,7 @@ const renderPreview = async (slug: string) => {
     __SLUG_PLACEHOLDER__: escapeForScriptTag(JSON.stringify(slug)),
     __RENDER_MODE_PLACEHOLDER__: JSON.stringify(renderMode),
     __MARKDOWN_CONTENT_PLACEHOLDER__: escapeForScriptTag(JSON.stringify(body)),
+    __FRONTMATTER_PLACEHOLDER__: escapeForScriptTag(JSON.stringify(stripped)),
   };
   // One pass over the template, so a value is never re-entered into the substitution it was
   // the output of. Sequential replaces failed twice on these same few lines before this:
@@ -238,7 +248,7 @@ const renderPreview = async (slug: string) => {
   // that placed it. The function form also keeps `$` inert, so this subsumes the earlier
   // repair rather than sitting beside it.
   return template.replace(
-    /__(?:TITLE|SLUG|RENDER_MODE|MARKDOWN_CONTENT)_PLACEHOLDER__/g,
+    /__(?:TITLE|SLUG|RENDER_MODE|MARKDOWN_CONTENT|FRONTMATTER)_PLACEHOLDER__/g,
     (match) => values[match],
   );
 };

@@ -13,7 +13,7 @@
 //
 // Stop with Ctrl-C. No port collision: Bun.serve(port: 0) lets the OS pick.
 
-import { closeSync, constants, existsSync, fstatSync, openSync, readFileSync, statSync, watch, writeSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, openSync, statSync, watch, writeSync } from "node:fs";
 import { readFile, realpath } from "node:fs/promises";
 import { basename, dirname, extname, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";

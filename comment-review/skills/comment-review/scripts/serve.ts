@@ -358,16 +358,30 @@ const ASSET_MIME: Record<string, string> = {
   ".svg": "image/svg+xml", ".webp": "image/webp", ".avif": "image/avif", ".ico": "image/x-icon",
   ".woff": "font/woff", ".woff2": "font/woff2", ".ttf": "font/ttf", ".otf": "font/otf",
   ".json": "application/json", ".map": "application/json", ".txt": "text/plain", ".csv": "text/csv",
-  // `.html` here turns a sibling page from a download into a rendered top-level document, which
-  // is what makes a multi-page artifact navigable. It also puts that page on the preview's own
-  // ORIGIN — so a script inside it passes the cross-origin check on /feedback and can write to
-  // the queue, which the next apply round turns into edits to the user's file. Neither of the
-  // two guards nearby reaches this: the markdown sanitizer only cleans markdown, and the origin
-  // check only refuses OTHER origins. This one is same-origin by construction.
-  // That is accepted deliberately, on the user's stated premise that they only ever open
-  // artifacts they wrote themselves — the risk needs an untrusted HTML file sitting in the
-  // artifact's own directory. If that premise stops holding, this line is where to look first.
-  ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8",
+  // THERE IS NO `.html` / `.htm` ENTRY, AND THAT IS THE DECISION — not an oversight.
+  // An earlier revision added them, which turned a sibling page from a download into a rendered
+  // top-level document and was meant to make a multi-page artifact navigable. It was reverted.
+  // Two costs, and the second is what settled it:
+  //
+  // EXECUTION BOUNDARY. A rendered sibling sits on the preview's own ORIGIN, so a script inside
+  // it passes the cross-origin check on /feedback and can write to the queue — which the next
+  // apply round turns into edits to the user's file. Neither guard nearby reaches that path:
+  // the markdown sanitizer only cleans markdown, and the origin check only refuses OTHER
+  // origins. This one would be same-origin by construction.
+  //
+  // IT WIDENS THE REFERER GAP. A sibling asset is located from the Referer page's slug, and a
+  // rendered sibling's own URL is not a slug. So every relative asset ON such a page 404s, and
+  // with more than one artifact open there is no single-draft fallback to cover it. Rendering
+  // the page therefore delivers a navigable dead end rather than a navigable artifact: the
+  // thing the entry was added for is the thing it does not actually give.
+  //
+  // What did NOT change: the user's premise that they only ever open artifacts they wrote
+  // themselves still stands. This revert is a second cost landing on this side of the ledger,
+  // not the premise falling. The Bun.file(path) streaming below trades that same premise for a
+  // memory bound and is unaffected — do not read this line as a reason to revisit it too.
+  //
+  // Putting these entries back means fixing the Referer-based lookup first, which is a change
+  // to the URL structure and does not live on this line.
   ".mp4": "video/mp4", ".webm": "video/webm", ".mp3": "audio/mpeg", ".pdf": "application/pdf",
 };
 
@@ -457,7 +471,8 @@ const serveSiblingAsset = async (assetPath: string, referer: string | null, rang
   // user's stated premise that they only ever open artifacts they wrote themselves: the window
   // needs someone else able to swap files in the artifact's own directory mid-request, so a
   // directory the user controls is one where this guards against itself. If that premise stops
-  // holding, this is the second place to look — the first is the .html entry in ASSET_MIME.
+  // holding, this is where to look. (An earlier revision named the .html entry in ASSET_MIME as
+  // the first place; that entry has since been reverted, so this is now the only one.)
   let id: { dev: number; ino: number };
   try {
     const s0 = statSync(canonFile);

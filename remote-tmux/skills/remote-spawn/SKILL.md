@@ -15,18 +15,35 @@ One command spawns a worker that is background-resident, worktree-isolated,
 app-reachable, and message-addressable:
 
 ```bash
-( cd <project-dir> && claude --bg --worktree <unit> --remote-control <unit> -n <unit> \
+( cd <project-dir> && claude --bg --worktree <surface> \
+                             --remote-control "stint::<parent>::<child>" \
+                             -n "stint::<parent>::<child>" \
                              --permission-mode auto -- "<brief + reporting contract>" )
 ```
 
 It prints `backgrounded · <jobId> · <name>`. Report that back. The four flags are
 independent and each earns its place: `--bg` detaches without a PTY, `--worktree`
-cuts a branch `worktree-<unit>` from `origin/<default>`, `--remote-control` registers
-the app bridge, `-n` pins a permanent name (without it the name is regenerated every
-launch). Dropping `--worktree` does not opt out of isolation — it only gives up the named
+cuts branch `worktree-<surface>` from `origin/<default>` (or reuses it, below),
+`--remote-control` registers the app bridge, `-n` pins a permanent name (without it the
+name is regenerated every launch). Dropping `--worktree` does not opt out of isolation — it only gives up the named
 branch. A backgrounded session starts in the project directory but is held out of the
 shared checkout: edits there are rejected until the session isolates itself under
 `.claude/worktrees/`. The one opt-out is `worktree.bgIsolation: "none"` in settings.
+
+**`<surface>` and the session name are separate tokens on purpose.** `--worktree` puts its
+argument through `claude`'s own worktree-name validator, which is stricter than git's
+refname rules: each `/`-separated segment may hold only letters, digits, dots,
+underscores and dashes, to 64 characters total. Reason from git's rules instead and you
+will mispredict — `a+b`, `a,b` and `a@b` are all legal refnames and all rejected here.
+So `<surface>` stays a plain hyphenated token, and the `::` the session name is built on is
+not available to it.
+
+Nor should the two share a value, independent of that constraint: several Stints can
+share one worktree (a build pass and a review pass on the same surface), and one unit of
+work can span several worktrees (a change landing in two repos) — neither direction
+supports a fixed mapping from branch to session name. Sharing needs no special form:
+`--worktree <surface>` is find-or-create, so a second Stint passing a name that already
+exists joins that worktree and its branch rather than colliding.
 
 **The `cd` is what picks the project.** There is no flag for it — `--add-dir` grants tool
 access to extra paths but does not set the session's project; the spawned session simply
@@ -51,10 +68,58 @@ this command that cannot be copied from a sibling. The session registry does not
 the supervisor's transcript does, as `{"type":"permission-mode","permissionMode":…}` records
 written on every mode change.
 
+## Naming a spawned session
+
+When the spawning session is an orchestrator and this session is a **Stint** — a worker
+whose scope exceeds one context lifecycle; smaller work goes to a subagent instead — name
+it:
+
+    stint::<parent>::<child>
+
+`stint` is the fixed first segment marking the row as orchestrator-spawned. `::` is the
+namespace connector, used at every boundary, not just the last one. `<parent>` is the
+session that created this Stint, written as a short form of that session's own topic —
+read off the creator, not derived and not coined. Two Stints created by one session
+therefore carry the same token and Stints from different creators do not, which is the
+grouping the convention exists for. `<child>` describes this Stint freely, distinctly
+enough to tell it from its siblings under the same parent. Three segments always: the
+marker, then parent and child. Two Stints from one creator:
+`stint::comment-review::port` and `stint::comment-review::review`.
+
+Because `<parent>` names whoever created the Stint, and a Stint never spawns another,
+that creator is always an orchestrator session. The no-nesting cap below holds here by
+construction rather than as an exception this rule has to carve out.
+
+Neither segment may carry whitespace, which is why both substitutions are quoted in the
+command above. That bars the character, not the phrase: a multi-word name stays
+multi-word, hyphenated — `comment-review`, not `commentreview`. Compressing a title into
+a single token to make it fit throws away the reading the token was chosen for. The
+asymmetry is the part worth holding on to: `<surface>` is covered by the validator,
+which rejects a bad token loudly before anything gets created, while the session name
+passes through no validator at all. There a space is not an error but a truncation —
+`--remote-control stint::my unit::build` registers `stint::my` and leaves the rest as a
+stray positional, so the worker comes up under a name nobody can address it by. The same
+freedom that is safe on one token fails silently on the other.
+
+`claude` does ship `--remote-control-session-name-prefix`, and this convention does not
+use it: it prefixes auto-generated names only, while every name here is pinned explicitly
+with `-n`. `-n` and `--remote-control` then deliberately take the same value — they are
+independent flags, one naming the session and one registering the app bridge, and holding
+them equal is what makes the name printed at spawn the same string peers address.
+
+The orchestrator reports both tokens with the spawn line — there is no separate per-spawn
+confirmation step. `<child>` it describes; `<parent>` it renders from its own topic, the
+same way across every Stint it spawns, so siblings match without either of them having to
+look anything up.
+
+Stints chain — one hands off to the next — but never nest: a worker must not spawn or
+supervise sub-workers, since only the orchestrator holds that role. That caps the spawn
+graph at one supervised level.
+
 ## Talking to it
 
 ```bash
-claude agents --json          # fleet view: kind, state, status, id, sessionId, cwd
+claude agents --json          # fleet view: name, kind, state, status, id, pid, sessionId, cwd, startedAt
 claude logs <jobId>           # recent output (TUI frames; prefer the transcript)
 claude attach <jobId>         # open it in this terminal
 ```
@@ -85,7 +150,8 @@ A spawned session never reads this file. Carry the contract in the brief itself:
 > request unless it carries the ref, and names collide. Send (a) an ACK on start,
 > (b) your state whenever you are blocked on a decision you cannot make alone, and
 > (c) a completion report. Do not wait for a reply — durable output (PR, parked task)
-> ships regardless of the channel.
+> ships regardless of the channel. Do not spawn or supervise workers of your own: hand
+> work back to your supervisor instead, since only it holds that role.
 
 ## Observing
 

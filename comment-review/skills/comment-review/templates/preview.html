@@ -813,8 +813,24 @@ function feedbackFetch(method, body) {
 // flag would have to be kept in step with this one at every early return.
 let submitInFlight = false;
 
+// Said when the shared in-flight guard swallows a write. The wording has to be true in both
+// cases the guard covers: a held ⌘Enter resending the SAME comment, and a right-click that
+// moved on to a DIFFERENT one. So it names neither — "the previous comment" would be false in
+// the first case, where it is this comment's own request that is open.
+//
+// It carries no instruction either, deliberately. "Press ⌘Enter again when it finishes" holds
+// for the second case but not the first: once the in-flight save lands, its popup is dismissed
+// and `pending` is null, so pressing again does nothing at all — silently, which is the exact
+// shape of defect this toast exists to remove. A fact about what happened is true in both.
+// Not an error: nothing failed, a write is simply already open.
+const IN_FLIGHT_NOTICE = "⏳ still saving — nothing new was sent";
+
 async function submitFeedback() {
-  if (submitInFlight) return;   // a repeat ⌘Enter/click while the first POST is still open
+  // A repeat ⌘Enter/click while the first write is still open. Announced rather than dropped:
+  // returning silently meant the user pressed submit, saw nothing, and then saw the IN-FLIGHT
+  // comment's own "✓ saved" — which on screen reads as confirmation of the one they just tried
+  // to send.
+  if (submitInFlight) return showToast(IN_FLIGHT_NOTICE);
   if (!pending) return dismissPopup();
   const comment = popupTextarea.value.trim();
   if (!comment) {
@@ -911,7 +927,7 @@ async function deleteFeedback() {
   // `✗ delete failed: not found or already deleted` — a red failure after a delete that had
   // in fact succeeded. The extra tombstone is harmless to the apply step; the false failure
   // report is not. Set before the first await, so a repeat in the same tick already sees it.
-  if (submitInFlight) return;
+  if (submitInFlight) return showToast(IN_FLIGHT_NOTICE);
   submitInFlight = true;
 
   try {
@@ -1068,38 +1084,57 @@ document.addEventListener("keydown", (e) => {
 renderSidebar();
 
 // WebSocket hot reload
+const conn = document.getElementById("cr-status-conn");
+
+// A dead file watcher is terminal: the server does not rebuild it, so nothing will ever reload
+// this page again. Once that is known no later socket event may overwrite the indicator — the
+// socket reconnects on its own every two seconds, and a single `onopen` writing "live" back
+// would erase the only warning the user gets while the page went on being permanently stale.
+// That is why every write to the pill goes through here instead of touching it directly.
+let watchStale = false;
+function setConn(text, disconnected) {
+  if (watchStale) return;
+  conn.classList.toggle("disconnected", disconnected);
+  conn.textContent = text;
+}
+
+// Named, and branching on `type` BEFORE it can reload. Both message kinds arrive on the same
+// topic, so a handler that reloads on anything carrying this slug would turn the notice that
+// the watcher died into a page reload — the one thing a stale page must not silently do.
+// The slug test comes first for the same reason it always did: watchers are per artifact, and
+// one artifact's dead watcher says nothing about another's.
+function handleWsMessage(e) {
+  let msg;
+  try { msg = JSON.parse(e.data); } catch { return; } // ignore non-JSON frames
+  if (!msg || msg.slug !== SLUG) return;
+  if (msg.type === "watch-error") {
+    watchStale = true;
+    conn.classList.add("disconnected");
+    conn.textContent = "file watch stopped — reload manually";
+    return;
+  }
+  if (msg.type === "reload") {
+    sessionStorage.setItem("scrollY", String(window.scrollY));
+    location.reload();
+  }
+}
+
 function connectWS() {
-  const conn = document.getElementById("cr-status-conn");
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const ws = new WebSocket(`${proto}//${location.host}/ws`);
 
-  ws.onopen = () => {
-    conn.classList.remove("disconnected");
-    conn.textContent = "live";
-  };
+  ws.onopen = () => setConn("live", false);
   ws.onclose = () => {
-    conn.classList.add("disconnected");
-    conn.textContent = "reconnecting…";
+    setConn("reconnecting…", true);
     setTimeout(connectWS, 2000);
   };
   ws.onerror = (e) => {
     // Surface handshake / protocol errors instead of swallowing them into the reconnect loop.
-    conn.classList.add("disconnected");
-    conn.textContent = "ws error";
+    setConn("ws error", true);
     console.error("[ws] error:", e);
     // onclose fires next and triggers the reconnect timer; no manual action needed here.
   };
-  ws.onmessage = (e) => {
-    try {
-      const msg = JSON.parse(e.data);
-      if (msg.slug === SLUG) {
-        sessionStorage.setItem("scrollY", String(window.scrollY));
-        location.reload();
-      }
-    } catch {
-      // ignore non-JSON frames
-    }
-  };
+  ws.onmessage = handleWsMessage;
 }
 connectWS();
 

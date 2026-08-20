@@ -639,6 +639,11 @@ const server = Bun.serve({
 
 const lastFire = new Map<string, number>();
 const WATCH_DEBOUNCE_MS = 150;
+// Both notices to the page go out through here. Keeping one publish path means the reload
+// regression exercises the wiring the watcher-death notice also travels on, and what differs
+// between them is a single argument rather than a second call site that can rot unnoticed.
+const publishToSlug = (slug: string, type: "reload" | "watch-error") =>
+  server.publish("reload", JSON.stringify({ slug, type }));
 for (const [slug, path] of drafts) {
   // Watch the containing directory, not the file. `watch(path)` binds the inode, so a single
   // atomic save (write-temp + rename) leaves the watcher on the replaced inode: it goes silent
@@ -663,7 +668,7 @@ for (const [slug, path] of drafts) {
     lastIdentity = cur;
     lastFire.set(slug, Date.now());
     console.error(`[watch] ${slug} changed → publish reload`);
-    server.publish("reload", JSON.stringify({ slug }));
+    publishToSlug(slug, "reload");
   };
 
   const watcher = watch(dir, (_event, filename) => {
@@ -690,6 +695,12 @@ for (const [slug, path] of drafts) {
   });
   watcher.on("error", (err: NodeJS.ErrnoException) => {
     console.error(`[watch] error on ${dir}: ${err.message} (code=${err.code ?? "unknown"})`);
+    // The watcher is not rebuilt — but the page must stop claiming it is live, because from
+    // here on no edit will ever reach it. Logging alone left the status pill reading "live"
+    // over a page that could never update again, which is the one state where that indicator
+    // is not merely unhelpful but actively wrong. Scoped to this artifact's slug: watchers are
+    // per artifact and one dying says nothing about the others.
+    publishToSlug(slug, "watch-error");
   });
 }
 

@@ -552,12 +552,14 @@ if (RENDER_MODE === "html") {
 // Placed in the status bar. Adding it to #cr-content would shift every `p:nth-of-type(n)`
 // anchor in the queue by one, which is a far worse failure than the one being reported.
 const strippedFrontmatter = JSON.parse(document.getElementById("cr-frontmatter-source").textContent);
+// Held outside the block below because the click listener needs them either way. Both elements
+// are in the template unconditionally; the block only decides whether the pill becomes visible.
+const fmPill = document.getElementById("cr-frontmatter-pill");
+const fmPanel = document.getElementById("cr-frontmatter-panel");
 if (strippedFrontmatter) {
   const fmLines = strippedFrontmatter.replace(/\r?\n$/, "").split(/\r?\n/);
   // The `---` fences are not informative; the first line that is neither a fence nor blank is.
   const firstContent = fmLines.find((l) => l.trim() && l.trim() !== "---") || "";
-  const fmPill = document.getElementById("cr-frontmatter-pill");
-  const fmPanel = document.getElementById("cr-frontmatter-panel");
   document.getElementById("cr-frontmatter-text").textContent = strippedFrontmatter;
   fmPill.textContent = `⚑ ${fmLines.length} lines removed as front matter: ${firstContent}`;
   fmPill.title = strippedFrontmatter;
@@ -859,10 +861,23 @@ popupTextarea.addEventListener("keydown", (e) => {
 // explicitly: it is a sibling of #cr-sidebar, not a child, so `sidebar.contains` is false for
 // it. Opening the panel from the handle used to throw away whatever was being typed, while
 // opening it from the status-bar count did not — and that asymmetry was an oversight, not a
-// design. Anything added later that toggles the panel belongs in this list too.
+// design.
+//
+// The front-matter pill and its panel are the case this comment predicted and then arrived
+// after it was written. Neither is reached by anything above: the pill is a SIBLING of
+// #cr-status-count inside #cr-status, and the panel is a top-level div. So clicking the pill
+// to check what was stripped silently discarded whatever was being written — which is the
+// worst possible pairing, because the pill exists to be clicked mid-review when a paragraph
+// has gone missing and that is exactly when someone is part-way through commenting on it.
+// The panel body is listed for the same reason at one remove: reading the block, or dragging
+// across it to copy, must not cost the comment either.
+//
+// This list stays narrow on purpose. Everything on it is chrome this review drew itself;
+// a click anywhere else still discards, and that is the behaviour the whole listener is for.
 document.addEventListener("click", (e) => {
   if (!popup.contains(e.target) && !content.contains(e.target) && !sidebar.contains(e.target)
-      && !statusCount.contains(e.target) && !sidebarHandle.contains(e.target)) {
+      && !statusCount.contains(e.target) && !sidebarHandle.contains(e.target)
+      && !fmPill.contains(e.target) && !fmPanel.contains(e.target)) {
     dismissPopup();
   }
 });

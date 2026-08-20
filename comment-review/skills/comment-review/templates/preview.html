@@ -801,13 +801,25 @@ function feedbackFetch(method, body) {
   });
 }
 
+// Guards both /feedback writes, not just POST. One flag rather than two because the two
+// cannot overlap by construction — a popup is either submitting or deleting — and a second
+// flag would have to be kept in step with this one at every early return.
 let submitInFlight = false;
 
 async function submitFeedback() {
   if (submitInFlight) return;   // a repeat ⌘Enter/click while the first POST is still open
   if (!pending) return dismissPopup();
   const comment = popupTextarea.value.trim();
-  if (!comment) return dismissPopup();
+  if (!comment) {
+    // Clearing an existing comment and submitting is a delete, not a no-op. This is a short
+    // reach, not an exotic one: openEditPopup opens with the text already selected, so
+    // Backspace + ⌘Enter lands here. Returning silently left the mark, the stored comment and
+    // the queue line all in place, with no toast to say otherwise — and the apply step would
+    // then edit the source with the comment the user had just erased.
+    // A NEW comment has nothing to delete, so an empty one still just closes.
+    if (pending.editingMark) return deleteFeedback();
+    return dismissPopup();
+  }
 
   const captured = pending; // capture before dismiss
 
@@ -887,6 +899,14 @@ async function deleteFeedback() {
     return;
   }
 
+  // ⌘Enter on an emptied edit routes here, and a held ⌘Enter repeats. Measured without this
+  // guard: three keydowns in one tick wrote two tombstone lines and left the user looking at
+  // `✗ delete failed: not found or already deleted` — a red failure after a delete that had
+  // in fact succeeded. The extra tombstone is harmless to the apply step; the false failure
+  // report is not. Set before the first await, so a repeat in the same tick already sees it.
+  if (submitInFlight) return;
+  submitInFlight = true;
+
   try {
     const resp = await feedbackFetch("DELETE", { slug: SLUG, id });
     if (!resp.ok) {
@@ -912,6 +932,8 @@ async function deleteFeedback() {
     showToast("✓ deleted");
   } catch (e) {
     showToast("✗ delete failed: " + e.message, true);
+  } finally {
+    submitInFlight = false;
   }
 }
 

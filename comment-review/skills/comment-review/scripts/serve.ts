@@ -435,18 +435,27 @@ const serveSiblingAsset = async (assetPath: string, referer: string | null, rang
         headers: { "Content-Range": `bytes */${size}`, "Cache-Control": "no-store" },
       });
     }
-    // Two shapes were tried before this one and both were measured worse; the numbers are in
-    // the commit that made this change.
-    //   A hand-built ReadableStream over readSync — the shape "stream it instead of buffering
-    //   it" asks for — costs ~4.6x the file in RESIDENT memory over a real network interface,
-    //   because the runtime queues a script-driven body without effective backpressure. Over
-    //   loopback it looks fine, which is why the harness has to bind the same interface the
-    //   server does.
-    //   Bun.file(fd) streams beautifully and never closes the descriptor it was handed: one
-    //   leaked fd per asset request, which an image-heavy artifact reaches the process limit on.
-    // What is left is what was already here, plus a positional read for ranges. A whole-file
-    // read does NOT hold the file resident — measured at a few MiB for 200 MiB — so the premise
-    // that this path needed streaming to bound memory does not hold on this runtime.
+    // A whole-file read holds the whole file resident FOR THE DURATION OF THE TRANSFER: a
+    // 200 MiB asset peaks at +201 MiB while it is going out, and falls back within a MiB once it
+    // has gone. Sampling after the response completes therefore reports the same near-zero
+    // number whether the body was buffered or streamed, which is why an earlier revision of this
+    // comment claimed the opposite. It is a real cost, per concurrent request, and it is not
+    // fixed here — every alternative measured so far is worse or unusable:
+    //   a hand-built ReadableStream over readSync peaks at +979 MiB, and a BYOB byte stream at
+    //   +1015 MiB, because the runtime queues a script-driven body without effective
+    //   backpressure. Over loopback both look fine — the transfer ends before the queue can
+    //   build — so a harness has to bind the same interface the server does AND sample during
+    //   the transfer, not after it.
+    //   Bun.file(fd) is genuinely zero-copy, +0 MiB, and never closes the descriptor it was
+    //   handed: 100 requests leave 100 open descriptors and a forced full GC reclaims none.
+    //   Bun.file(path) is +0 MiB and leaks nothing, but names a path — which re-resolves what
+    //   the identity check above went to some trouble to pin, so it is not a free swap.
+    //   Bun.file("/dev/fd/N") would name the pinned object rather than the path, but the file is
+    //   opened lazily, so the descriptor would have to stay open for an unbounded time or risk
+    //   being recycled onto an unrelated file. That is a worse failure than the one it fixes.
+    // What is here is the original whole-file read, plus a positional read so a range costs only
+    // the range. Do not replace it with a manual stream on the assumption that chunking must use
+    // less memory; that assumption was measured and it is false on this runtime.
     const start = range ? range.start : 0;
     const end = range ? range.end : size - 1;
     let payload: Uint8Array;

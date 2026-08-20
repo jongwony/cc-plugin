@@ -66,6 +66,19 @@ const slugCandidates = (abs: string): string[] => {
 const drafts = new Map<string, string>(); // slug -> absolute path
 const paths = [...new Set(args.map((a) => resolve(a)))]; // same file twice is one artifact
 for (const abs of paths) {
+  // resolve() accepts any string, so a mistyped path registers a slug and the index links it.
+  // Phase 0 reads the "serving at" line as the start confirmation, which means the typo is
+  // relayed to the user as a successful start and the real cause only appears later, as a 500
+  // when they click. The watcher never fires for that path either — its identity() returns
+  // null forever — so the channel is silently dead rather than visibly broken. Fail here.
+  // isFile(), not mere existence: a directory argument registers and fails exactly the same
+  // way, and the guard costs nothing extra.
+  let readable = false;
+  try { readable = statSync(abs).isFile(); } catch { /* missing, or unreadable parent */ }
+  if (!readable) {
+    console.error(`fatal: not a readable file: ${abs}`);
+    process.exit(1);
+  }
   const others = paths.filter((p) => p !== abs).map(slugCandidates);
   const slug = slugCandidates(abs).find((c) => !others.some((o) => o.includes(c)));
   if (!slug) {
@@ -363,7 +376,17 @@ const server = Bun.serve({
     }
 
     if (url.pathname.startsWith("/preview/")) {
-      const seg = decodeURIComponent(url.pathname.slice("/preview/".length));
+      // Guarded the same way the Referer twin in artifactDirFromReferer is. A bare `%` in a
+      // path is not a server fault — an HTML artifact referencing `chart 50%.png` sends one,
+      // and some editors emit that unencoded. Unguarded, decodeURIComponent throws out of the
+      // handler, so a request that should have been a plain 404 comes back 500 with a stack
+      // trace and serveSiblingAsset never runs.
+      let seg: string;
+      try {
+        seg = decodeURIComponent(url.pathname.slice("/preview/".length));
+      } catch {
+        return new Response("not found", { status: 404 });
+      }
       // A known slug renders the artifact preview; anything else under /preview/ is a sibling
       // asset request from a rendered HTML page (relative URLs resolve here) — served read-only,
       // scoped to that artifact's own directory.

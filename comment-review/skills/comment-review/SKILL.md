@@ -88,8 +88,14 @@ free-exit : the user may end the review at any time by saying so (Phase 0 prose 
    fresh start." A slug widens when two artifacts would otherwise share one, so the same
    artifact can have left a queue under a different name in an earlier session: look beside
    the source for any `feedback-*.jsonl` whose entries carry this artifact's path, not only
-   the current slug's file. Name any queue found under an earlier slug when you surface it,
-   so a carryover the current name would have hidden is visible rather than silently absent.
+   the current slug's file. Exclude names ending `.markers.jsonl` or `.consumed.jsonl` — the
+   apply step writes both beside the source and both match that glob, so counting them would
+   report retired markers and archived copies back to the user as queued comments. (The
+   discriminator is the dotted suffix, so a slug merely ending in `-markers` is unaffected;
+   an artifact whose own name ends `.markers` or `.consumed` would be excluded here, which
+   costs only this carryover search — its current-slug queue is still read by name in the
+   apply step.) Name any queue found under an earlier slug when you surface it, so a
+   carryover the current name would have hidden is visible rather than silently absent.
 
 ## Phase L: Round Loop
 

@@ -81,7 +81,12 @@ free-exit : the user may end the review at any time by saying so (Phase 0 prose 
    found.
    Launch it in the background and keep the process handle (or PID) for the session: the
    server runs until the review ends, so a foreground launch blocks the agent for the whole
-   review. Treat the `serving at …` line on stdout as the start confirmation. On termination,
+   review. Treat the `serving at …` line as the start confirmation — it arrives on **stderr**,
+   as does every other line this server writes: the `drafts:` and tailnet lines relayed below,
+   and the `fatal:` line a bad artifact path exits on. Whatever redirection is assembled around
+   the launch above must therefore keep stderr. One that keeps only stdout captures nothing at
+   all — not the confirmation, and not the failure — so polling it waits forever on a server
+   that is already up, or reports one that never started as running. On termination,
    stop the server through that handle — the exit promise in step 2 is only keepable if
    something was kept to stop it with.
    **Read that line before relaying it, and say where the channel actually opened.** If the

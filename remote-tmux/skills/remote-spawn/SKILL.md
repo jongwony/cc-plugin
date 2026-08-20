@@ -16,8 +16,8 @@ app-reachable, and message-addressable:
 
 ```bash
 ( cd <project-dir> && claude --bg --worktree <surface> \
-                             --remote-control "stint::<constituent>::<relation>" \
-                             -n "stint::<constituent>::<relation>" \
+                             --remote-control "stint::<parent>::<child>" \
+                             -n "stint::<parent>::<child>" \
                              --permission-mode auto -- "<brief + reporting contract>" )
 ```
 
@@ -74,22 +74,21 @@ When the spawning session is an orchestrator and this session is a **Stint** —
 whose scope exceeds one context lifecycle; smaller work goes to a subagent instead — name
 it:
 
-    stint::<constituent>::<relation>
+    stint::<parent>::<child>
 
 `stint` is the fixed first segment marking the row as orchestrator-spawned. `::` is the
-namespace connector, used at every boundary, not just the last one. `<constituent>` names
-the unit this session belongs to: the conducting session where one exists, or the session
-itself where none does — one field, not two, because a conductor also refers to itself,
-so the name always has exactly three segments. `<relation>` is this session's place
-*within* that unit (`port`, `review`, …) — a role inside the unit, not a forward pointer
-to a session that does not exist yet, which matters because `-n` fixes the name at launch
-time, before any such session could be known. Two Stints sharing one unit:
+namespace connector, used at every boundary, not just the last one. `<parent>` is the
+session that created this Stint, written as a short form of that session's own topic —
+read off the creator, not derived and not coined. Two Stints created by one session
+therefore carry the same token and Stints from different creators do not, which is the
+grouping the convention exists for. `<child>` describes this Stint freely, distinctly
+enough to tell it from its siblings under the same parent. Three segments always: the
+marker, then parent and child. Two Stints from one creator:
 `stint::comment-review::port` and `stint::comment-review::review`.
 
-`<relation>` has to be unique inside its unit — it is the only thing separating two
-Stints that share a `<constituent>`, so reusing one collides on the whole name. Where two
-Stints genuinely hold the same role, the distinguishing coordinate goes into the relation
-itself rather than anywhere else in the name.
+Because `<parent>` names whoever created the Stint, and a Stint never spawns another,
+that creator is always an orchestrator session. The no-nesting cap below holds here by
+construction rather than as an exception this rule has to carve out.
 
 Neither segment may carry whitespace, which is why both substitutions are quoted in the
 command above. That bars the character, not the phrase: a multi-word name stays
@@ -100,7 +99,7 @@ which rejects a bad token loudly before anything gets created, while the session
 passes through no validator at all. There a space is not an error but a truncation —
 `--remote-control stint::my unit::build` registers `stint::my` and leaves the rest as a
 stray positional, so the worker comes up under a name nobody can address it by. The same
-free derivation that is safe on one token fails silently on the other.
+freedom that is safe on one token fails silently on the other.
 
 `claude` does ship `--remote-control-session-name-prefix`, and this convention does not
 use it: it prefixes auto-generated names only, while every name here is pinned explicitly
@@ -108,15 +107,10 @@ with `-n`. `-n` and `--remote-control` then deliberately take the same value —
 independent flags, one naming the session and one registering the app bridge, and holding
 them equal is what makes the name printed at spawn the same string peers address.
 
-The orchestrator derives both tokens from accumulated context and the user's utterance
-and reports them with the spawn line — there is no separate per-spawn confirmation step.
-The first Stint of a unit fixes `<constituent>`; every later Stint in that unit reuses it
-verbatim, carried forward on the handoff itself — the parked task the outgoing Stint
-leaves behind. Do not plan on reading it back off `claude agents --json`: the default
-listing drops retired sessions (`--all` still holds them), and because Stints chain,
-retire-then-spawn is the ordinary path — so by the time the next Stint needs the token,
-the row it would have read is already gone and the token gets re-derived instead of
-reused.
+The orchestrator reports both tokens with the spawn line — there is no separate per-spawn
+confirmation step. `<child>` it describes; `<parent>` it renders from its own topic, the
+same way across every Stint it spawns, so siblings match without either of them having to
+look anything up.
 
 Stints chain — one hands off to the next — but never nest: a worker must not spawn or
 supervise sub-workers, since only the orchestrator holds that role. That caps the spawn

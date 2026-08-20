@@ -13,7 +13,7 @@
 //
 // Stop with Ctrl-C. No port collision: Bun.serve(port: 0) lets the OS pick.
 
-import { closeSync, constants, existsSync, fstatSync, openSync, readFileSync, statSync, watch, writeSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, openSync, readFileSync, readSync, statSync, watch, writeSync } from "node:fs";
 import { readFile, realpath } from "node:fs/promises";
 import { basename, dirname, extname, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
@@ -349,7 +349,32 @@ const artifactDirFromReferer = (referer: string | null): string | null => {
   return slug ? dirname(drafts.get(slug)!) : null;
 };
 
-const serveSiblingAsset = async (assetPath: string, referer: string | null): Promise<Response> => {
+// `bytes=start-end`, plus the open-ended and suffix forms a media element actually sends.
+// A multi-range request (comma-separated) is deliberately not answered as multipart: returning
+// the whole file with 200 is a valid answer to a Range request, and a half-built multipart
+// encoder is worse than not offering one.
+const parseRange = (header: string | null, size: number): { start: number; end: number } | "invalid" | null => {
+  if (!header) return null;
+  const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!m) return null; // unparseable or multi-range → ignore it and send the whole file
+  const [, rawStart, rawEnd] = m;
+  if (rawStart === "" && rawEnd === "") return null;
+  let start: number;
+  let end: number;
+  if (rawStart === "") {
+    const suffix = Number(rawEnd); // last N bytes
+    if (!Number.isFinite(suffix) || suffix === 0) return "invalid";
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = Number(rawStart);
+    end = rawEnd === "" ? size - 1 : Math.min(Number(rawEnd), size - 1);
+  }
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= size) return "invalid";
+  return { start, end };
+};
+
+const serveSiblingAsset = async (assetPath: string, referer: string | null, rangeHeader: string | null): Promise<Response> => {
   const dir = artifactDirFromReferer(referer);
   if (!dir) return new Response("not found", { status: 404 });
   // Fast-fail traversal/NUL defense before any filesystem access.
@@ -394,13 +419,61 @@ const serveSiblingAsset = async (assetPath: string, referer: string | null): Pro
   } catch {
     return new Response("not found", { status: 404 }); // missing, or final component is now a symlink
   }
+  // The fd is closed here, on every path, because nothing outside this scope holds it — see the
+  // note on the body below for why it is not handed to a stream.
   try {
     const s1 = fstatSync(fd);
     if (!s1.isFile() || s1.dev !== id.dev || s1.ino !== id.ino) {
       return new Response("not found", { status: 404 }); // swapped between check and open
     }
+    const size = s1.size;
     const ct = ASSET_MIME[extname(canonFile).toLowerCase()] || "application/octet-stream";
-    return new Response(readFileSync(fd), { headers: { "Content-Type": ct, "Cache-Control": "no-store" } });
+    const range = parseRange(rangeHeader, size);
+    if (range === "invalid") {
+      return new Response("range not satisfiable", {
+        status: 416,
+        headers: { "Content-Range": `bytes */${size}`, "Cache-Control": "no-store" },
+      });
+    }
+    // Two shapes were tried before this one and both were measured worse; the numbers are in
+    // the commit that made this change.
+    //   A hand-built ReadableStream over readSync — the shape "stream it instead of buffering
+    //   it" asks for — costs ~4.6x the file in RESIDENT memory over a real network interface,
+    //   because the runtime queues a script-driven body without effective backpressure. Over
+    //   loopback it looks fine, which is why the harness has to bind the same interface the
+    //   server does.
+    //   Bun.file(fd) streams beautifully and never closes the descriptor it was handed: one
+    //   leaked fd per asset request, which an image-heavy artifact reaches the process limit on.
+    // What is left is what was already here, plus a positional read for ranges. A whole-file
+    // read does NOT hold the file resident — measured at a few MiB for 200 MiB — so the premise
+    // that this path needed streaming to bound memory does not hold on this runtime.
+    const start = range ? range.start : 0;
+    const end = range ? range.end : size - 1;
+    let payload: Uint8Array;
+    if (range) {
+      // Only the requested window is read. Seeking in a large video must not re-read the file.
+      const len = end - start + 1;
+      const buf = Buffer.allocUnsafe(len);
+      let got = 0;
+      // readSync is one read(2) and can return short, exactly as writeSync can.
+      while (got < len) {
+        const n = readSync(fd, buf, got, len - got, start + got);
+        if (n <= 0) break; // truncated under us; send what is really there
+        got += n;
+      }
+      payload = got === len ? buf : buf.subarray(0, got);
+    } else {
+      payload = readFileSync(fd);
+    }
+    return new Response(payload, {
+      status: range ? 206 : 200,
+      headers: {
+        "Content-Type": ct,
+        "Cache-Control": "no-store",
+        "Accept-Ranges": "bytes",
+        ...(range ? { "Content-Range": `bytes ${start}-${end}/${size}` } : {}),
+      },
+    });
   } finally {
     closeSync(fd);
   }
@@ -473,7 +546,7 @@ const server = Bun.serve({
         }
       }
       if (req.method !== "GET" && req.method !== "HEAD") return new Response("method not allowed", { status: 405 });
-      return await serveSiblingAsset(seg, req.headers.get("referer"));
+      return await serveSiblingAsset(seg, req.headers.get("referer"), req.headers.get("range"));
     }
 
     const vendorPath = VENDOR_ASSETS[url.pathname];

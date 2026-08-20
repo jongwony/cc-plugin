@@ -1090,7 +1090,13 @@ const conn = document.getElementById("cr-status-conn");
 // this page again. Once that is known no later socket event may overwrite the indicator — the
 // socket reconnects on its own every two seconds, and a single `onopen` writing "live" back
 // would erase the only warning the user gets while the page went on being permanently stale.
-// That is why every write to the pill goes through here instead of touching it directly.
+// That is why every write to the pill AFTER that point goes through here. There is exactly one
+// write that does not, and cannot: the one that sets the terminal state, in handleWsMessage
+// below. It runs immediately after `watchStale = true`, so routing it through this function
+// would meet the early return and the warning would never appear at all.
+// That exception is load-bearing. Tidying it into setConn for consistency deletes the only
+// signal this whole arrangement exists to produce, and deletes it silently — the pill simply
+// goes on reading "live" over a page that can no longer update.
 let watchStale = false;
 function setConn(text, disconnected) {
   if (watchStale) return;
@@ -1109,6 +1115,8 @@ function handleWsMessage(e) {
   if (!msg || msg.slug !== SLUG) return;
   if (msg.type === "watch-error") {
     watchStale = true;
+    // Written directly rather than through setConn: this is the write the gate above closes
+    // in front of. See the note there before changing it.
     conn.classList.add("disconnected");
     conn.textContent = "file watch stopped — reload manually";
     return;

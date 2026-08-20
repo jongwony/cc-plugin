@@ -255,7 +255,7 @@ const renderPreview = async (slug: string) => {
 
 interface FeedbackBody {
   slug: string;
-  selector: string; // unique CSS selector / DOM path of the right-clicked element
+  selector: string; // CSS path down to the right-clicked element — a path, not a unique address
   comment: string;
   anchorText?: string; // rendered text of that element when the comment was made
   id?: string; // optional on POST: present for edits (re-uses original id), absent for new entries

@@ -458,7 +458,7 @@ const SLUG = __SLUG_PLACEHOLDER__;
 // Render substrate, keyed off the artifact's extension: "markdown" → marked.parse into the
 // light DOM; "html" → the raw file through an open Shadow DOM (CSS-isolated from this review
 // chrome; scripts inserted via innerHTML are inert). Anchoring does NOT branch on this —
-// both substrates anchor by right-clicking an element and recording its unique CSS selector.
+// both substrates anchor by right-clicking an element and recording a CSS path down to it.
 // What the substrate decides is only where the artifact is rendered.
 const RENDER_MODE = __RENDER_MODE_PLACEHOLDER__;
 
@@ -652,8 +652,25 @@ function cssEscape(s) {
   return (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
 }
 
-// Compute a unique CSS selector for `el` within `r` (a shadow root or an element).
-// Prefers a unique #id; otherwise builds a tag:nth-of-type(n) child chain up to the root.
+// Build a CSS path from `r` (a shadow root or an element) down to `el`.
+//
+// An #id that is unique within `r` is used where there is one, and that check below is real —
+// its result does address a single element. Otherwise the tag:nth-of-type(n) chain is joined
+// with " > " and NOTHING is prefixed, so what comes out is a path rather than a root-anchored
+// address. querySelector matches such a string anywhere in the tree, so where a document
+// repeats a shape at two depths — a list inside a list, a paragraph inside a blockquote — the
+// same chain matches more than one element, and the first match is not always the one that was
+// right-clicked.
+//
+// Left as it is, deliberately. A `:scope > ` prefix is NOT the repair: inside a shadow root it
+// makes querySelector return null and throws nothing, so a merely ambiguous anchor would become
+// no anchor at all, silently. (It does work when the root is an element, which is the markdown
+// case — half a fix is what makes it tempting.)
+//
+// What carries the weight instead: nothing here re-resolves this string, because the element
+// itself is what gets held in `pending` and handed to markElement; the person commenting sees
+// the path in the selector chip before they confirm it; and at apply time the source is read
+// and compared against anchorText. See "Element Anchoring" in SKILL.md.
 function cssPath(el, r) {
   if (!el || el.nodeType !== Node.ELEMENT_NODE) return "";
   if (el.id && r.querySelectorAll("#" + cssEscape(el.id)).length === 1) return "#" + cssEscape(el.id);

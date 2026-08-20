@@ -11,7 +11,7 @@ those annotations back as edits to the source. That loop is the whole skill.
 The render substrate is keyed off the file extension: markdown (`.md`) renders through
 marked and is sanitized on the way into the page; HTML (`.html`/`.htm`) is served raw through
 a Shadow DOM and is not. Anchoring does not branch on the extension — either way you
-right-click an element and the browser records that element's unique CSS selector.
+right-click an element and the browser records a CSS path down to that element.
 
 The skill is agnostic about *what kind of artifact* is under review: blog drafts, plan
 documents, handoffs, design docs, and changeset descriptions are all valid targets. It also
@@ -243,10 +243,17 @@ is one click away, rather than a tab being forced open per artifact:
 
 ### Element Anchoring
 
-The anchor is a single element, identified by a unique CSS selector. `preview.html` computes
-it as a unique `#id` where one exists, otherwise a `tag:nth-of-type(n)` child chain up to the
-render root (the shadow root in HTML mode, `#cr-content` in markdown mode). The same function
-serves both substrates — it takes the root as a parameter.
+The anchor is a single element, recorded as a CSS path down to it. `preview.html` computes it
+as an `#id` where one is unique within the render root, otherwise a `tag:nth-of-type(n)` child
+chain up to that root (the shadow root in HTML mode, `#cr-content` in markdown mode). The same
+function serves both substrates — it takes the root as a parameter.
+
+The chain carries no root prefix, so it says where the element sits rather than naming it
+uniquely: the same chain can match at another depth wherever a document repeats a shape — a
+list inside a list, a paragraph inside a blockquote. Nothing re-resolves it in the browser,
+which holds the element itself, so this lands entirely at apply time, where **Locating the
+Anchor in the Source** and the `anchorText` comparison already govern. Read the path as a
+description to check, never as a lookup key to trust.
 
 The comment unit is therefore a **block**, not a sentence. A comment names a paragraph, a
 list item, a heading, a table cell; it does not name a phrase inside one. Say which part of

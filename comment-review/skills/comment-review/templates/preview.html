@@ -775,8 +775,15 @@ popupTextarea.addEventListener("keydown", (e) => {
   }
 });
 
+// Clicking away discards the comment in progress — but only a click on something that is
+// not part of this review's own chrome. The edge handle is chrome and has to be listed
+// explicitly: it is a sibling of #cr-sidebar, not a child, so `sidebar.contains` is false for
+// it. Opening the panel from the handle used to throw away whatever was being typed, while
+// opening it from the status-bar count did not — and that asymmetry was an oversight, not a
+// design. Anything added later that toggles the panel belongs in this list too.
 document.addEventListener("click", (e) => {
-  if (!popup.contains(e.target) && !content.contains(e.target) && !sidebar.contains(e.target) && !statusCount.contains(e.target)) {
+  if (!popup.contains(e.target) && !content.contains(e.target) && !sidebar.contains(e.target)
+      && !statusCount.contains(e.target) && !sidebarHandle.contains(e.target)) {
     dismissPopup();
   }
 });

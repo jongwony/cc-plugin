@@ -84,6 +84,16 @@ free-exit : the user may end the review at any time by saying so (Phase 0 prose 
    review. Treat the `serving at …` line on stdout as the start confirmation. On termination,
    stop the server through that handle — the exit promise in step 2 is only keepable if
    something was kept to stop it with.
+   **Read that line before relaying it, and say where the channel actually opened.** If the
+   machine is on a tailnet, the server binds the tailnet interface rather than loopback, and
+   the preview — and the `/feedback` endpoint that writes into the queue — is reachable from
+   the user's other tailnet devices. That is deliberate: it is what lets a draft be read on a
+   phone. It is also not something the user can be assumed to know, and there is no way to
+   turn it off — no flag and no environment variable disables it, so do not imply one exists.
+   Where the bind is loopback (no tailnet), say that instead; the startup lines are what
+   distinguish the two, so read them rather than guessing. The server refuses writes carrying
+   a cross-origin `Origin` header, which stops another *web page* from writing into the
+   queue — it is not authentication and does not bear on tailnet reachability at all.
 4. **Round 1 entry** — surface the queue size for this artifact, or "No prior comments —
    fresh start." A slug widens when two artifacts would otherwise share one, so the same
    artifact can have left a queue under a different name in an earlier session: look beside

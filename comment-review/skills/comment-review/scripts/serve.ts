@@ -396,6 +396,37 @@ const serveSiblingAsset = async (assetPath: string, referer: string | null): Pro
   }
 };
 
+// Cross-origin writes are refused. `text/plain` makes a POST a CORS simple request, so no
+// preflight is sent and any page the user happens to have open can reach this port while a
+// review channel is up: it drops an instruction into the queue, and the next apply round turns
+// that into an edit of the user's own file. Measured before this guard: a POST carrying
+// `Origin: https://evil.example` returned 200 and appended, and the matching DELETE tombstoned
+// a real comment — so the write side was open in both directions.
+//
+// What this buys: the browser sets `Origin` itself and page script cannot forge it, so a page
+// on another origin cannot write here.
+//
+// What it does NOT buy: this is not authentication. A client that sends no `Origin` at all —
+// curl, a script, anything that is not a browser — still writes, deliberately, because that is
+// the local-tooling path. The tailnet exposure recorded as H9 is therefore UNCHANGED by this
+// check; do not read it as having closed that. Read paths (/preview/, sibling assets, vendored
+// assets) are untouched on purpose: what was decided here was the write side.
+//
+// `Origin: null` — a sandboxed iframe, or a page loaded from file:// — arrives as the literal
+// string "null" rather than as an absent header, so it falls outside the allow-list and is
+// refused. That is the intended answer for it.
+const writeOriginAllowed = (req: Request, port: number): boolean => {
+  const origin = req.headers.get("origin");
+  if (origin === null) return true; // not a browser write — see above
+  const allowed = [`http://${bindHost}:${port}`, `http://localhost:${port}`];
+  // The startup banner advertises the MagicDNS name alongside the IP, and a phone that opens
+  // THAT url sends it as its origin. An allow-list built from the IP alone would refuse
+  // exactly the path the tailnet bind exists to serve, and the only symptom would be that
+  // saving quietly stopped working.
+  if (tailnet?.dnsName) allowed.push(`http://${tailnet.dnsName}:${port}`);
+  return allowed.includes(origin);
+};
+
 const server = Bun.serve({
   hostname: bindHost,
   port: 0,
@@ -447,6 +478,9 @@ const server = Bun.serve({
     // it, not by any tag vocabulary here — the layer that once parsed such tags was removed
     // when this plugin was ported, and nothing replaced it.
     if (url.pathname === "/feedback" && req.method === "POST") {
+      if (!writeOriginAllowed(req, srv.port)) {
+        return new Response("cross-origin write refused", { status: 403 });
+      }
       let body: FeedbackBody;
       try {
         body = (await req.json()) as FeedbackBody;
@@ -507,6 +541,9 @@ const server = Bun.serve({
     }
 
     if (url.pathname === "/feedback" && req.method === "DELETE") {
+      if (!writeOriginAllowed(req, srv.port)) {
+        return new Response("cross-origin write refused", { status: 403 });
+      }
       // Tombstone strategy keyed by stable id. Existence check guards against ghost
       // tombstones (DELETE for non-matching key would silently no-op under the prior
       // tuple-based contract). Append-only invariant preserved.

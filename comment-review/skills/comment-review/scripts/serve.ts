@@ -15,7 +15,7 @@
 
 import { accessSync, closeSync, constants, existsSync, fstatSync, openSync, statSync, watch, writeSync } from "node:fs";
 import { readdir, readFile, realpath } from "node:fs/promises";
-import { basename, dirname, extname, resolve, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -583,16 +583,64 @@ type QueueEntry = { id: string; selector: string; anchorText: string; comment: s
 const liveQueueEntries = async (slug: string, draft: string): Promise<QueueEntry[]> => {
   const dir = dirname(draft);
   const entries: any[] = [];
+
+  // Every queue file beside the source, not only the one named for the current slug. A slug
+  // widens when two artifacts would otherwise share one, so THIS artifact can have left a queue
+  // under a different name in an earlier session — Phase 0 surfaces it and the apply step acts
+  // on it, and a sidebar reading one filename would show 0 over a queue that is not empty. That
+  // is the same "two screens, two facts" this endpoint exists to end, and the markers loop below
+  // already handles the identical case for its own files.
+  //
+  // TWO KINDS OF EVIDENCE, because SKILL.md's Phase 0 uses two clauses. The current slug's file
+  // is read BY NAME — the filename is what says the lines are this artifact's, which is why a
+  // line in it with no `artifact` field is kept rather than dropped: it shows today, and nothing
+  // about it changed. Any OTHER file is selected by its entries carrying this artifact's path,
+  // so there a missing `artifact` field is not weak evidence of membership but none at all, and
+  // the line is skipped. Same reasoning the anchor guard runs on: absence of the field is the
+  // absence of the evidence, not a reason to assume the answer.
+  // An `artifact` field that disagrees excludes the line wherever it sits, own file included —
+  // it is a positive statement that the line belongs somewhere else. That test only means
+  // anything for an ABSOLUTE path, which is what this server writes. A relative one makes no
+  // statement this code can evaluate: it is relative to a working directory the line does not
+  // record, and resolving it against the artifact's own directory would be a guess dressed as a
+  // comparison. So a relative path is treated like a missing one — unevaluable, falling back to
+  // the filename. Only a hand-edited queue produces one, and dropping a hand-written line in
+  // silence is precisely the failure this endpoint exists to remove.
+  const ownQueue = `feedback-${slug}.jsonl`;
+  let queueFiles: string[] = [];
   try {
-    const content = await readFile(resolve(dir, `feedback-${slug}.jsonl`), "utf8");
+    queueFiles = (await readdir(dir)).filter((n) =>
+      n.startsWith("feedback-") && n.endsWith(".jsonl") &&
+      // The apply step writes both of these beside the source and both match the glob. Counting
+      // them would report retired markers and archived copies back as queued comments.
+      !n.endsWith(".markers.jsonl") && !n.endsWith(".consumed.jsonl"));
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+  }
+  // Read by name even if the directory could not be listed: losing the current queue because a
+  // readdir failed would be a far worse failure than missing a carryover.
+  if (!queueFiles.includes(ownQueue)) queueFiles.push(ownQueue);
+
+  for (const name of queueFiles) {
+    const isOwnQueue = name === ownQueue;
+    let content: string;
+    try {
+      content = await readFile(resolve(dir, name), "utf8");
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw e;
+    }
     for (const line of content.split("\n")) {
       if (!line.trim()) continue;
       // Malformed lines are skipped rather than fatal, matching the DELETE scan — the queue is
       // a file a person may have edited by hand.
-      try { entries.push(JSON.parse(line)); } catch { }
+      let e: any;
+      try { e = JSON.parse(line); } catch { continue; }
+      const claimsArtifact = typeof e?.artifact === "string" && isAbsolute(e.artifact);
+      if (claimsArtifact) { if (e.artifact !== draft) continue; }
+      else if (!isOwnQueue) continue;
+      entries.push(e);
     }
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
   }
 
   const latest = new Map<string, any>();

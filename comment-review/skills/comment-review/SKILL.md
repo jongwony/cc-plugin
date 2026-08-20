@@ -224,6 +224,20 @@ The comment unit is therefore a **block**, not a sentence. A comment names a par
 list item, a heading, a table cell; it does not name a phrase inside one. Say which part of
 the block you mean in the comment text when it matters.
 
+The anchor is the element right-clicked, exactly — never an ancestor of it. This is what the
+hover outline and the selector chip are for: they name the element under the cursor before
+the click, so the click has to act on that same element or the page has promised one thing
+and done another. It follows that **a commented element can hold commented children** — a
+comment on a blockquote and a comment on a paragraph inside it are two separate anchors, two
+ids, and two sidebar rows. That is intended, not an accident to design around: the outer
+comment is about the quote as a unit and the inner one is about that paragraph, and there is
+no reason the reviewer has to choose.
+
+Marks are attributes on the artifact's own elements, so they are namespaced (`data-cr-*`) and
+the element is left as it was found when a comment is deleted. `title` is the exception that
+cannot be namespaced — the browser's tooltip reads that exact attribute — so a mark borrows
+it and puts back whatever was there, including an empty one.
+
 ### Locating the Anchor in the Source
 
 The right-clicked element *is* the edit scope. Where what it points at could be read more

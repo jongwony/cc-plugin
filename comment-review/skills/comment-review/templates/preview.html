@@ -606,13 +606,39 @@ function pulseElement(el) {
 
 // Mark an element as a saved comment anchor (outline + 💬), carrying the dataset the
 // sidebar and the edit/delete flows read.
+//
+// The dataset keys are namespaced: an artifact element may legitimately carry `data-id` or
+// `data-comment` of its own, and writing over those would damage the artifact this page
+// exists to leave alone. `title` cannot be namespaced the same way — the browser's tooltip
+// reads that exact attribute — so it is saved and put back on unmark instead.
 function markElement(el, selector, comment, id) {
   if (!el) return;
+  // Saved once, before the first mark overwrites it, and keyed on a presence flag rather
+  // than on the value: `title=""` is a real title and has to come back as one, which a
+  // truthiness check on the saved string would lose.
+  if (!("crTitleSaved" in el.dataset)) {
+    const had = el.hasAttribute("title");
+    el.dataset.crTitleSaved = had ? "1" : "0";
+    if (had) el.dataset.crTitleOrig = el.getAttribute("title");
+  }
   el.classList.add("cr-anno");
-  el.dataset.selector = selector;
-  el.dataset.comment = comment;
-  el.dataset.id = id || "";
+  el.dataset.crSelector = selector;
+  el.dataset.crComment = comment;
+  el.dataset.crId = id || "";
   el.title = comment;
+}
+
+// Drop everything markElement added, leaving the artifact's element exactly as it was found.
+function unmarkElement(el) {
+  if (!el) return;
+  el.classList.remove("cr-anno");
+  delete el.dataset.crComment;
+  delete el.dataset.crSelector;
+  delete el.dataset.crId;
+  if (el.dataset.crTitleSaved === "1") el.setAttribute("title", el.dataset.crTitleOrig || "");
+  else el.removeAttribute("title");
+  delete el.dataset.crTitleSaved;
+  delete el.dataset.crTitleOrig;
 }
 
 // New-comment popup for a freshly right-clicked element; the selector is the anchor.
@@ -628,11 +654,11 @@ function openSelectorPopup(el, selector) {
 function openEditPopup(el) {
   // An edit reuses the mark's id, so its entry shares the dedup key with the version it
   // replaces and the latest timestamp wins.
-  pending = { selector: el.dataset.selector || "", targetEl: el, editingMark: el, id: el.dataset.id || newId() };
+  pending = { selector: el.dataset.crSelector || "", targetEl: el, editingMark: el, id: el.dataset.crId || newId() };
   showPopup({
     rect: el.getBoundingClientRect(),
     previewText: pending.selector,
-    textareaValue: el.dataset.comment || "",
+    textareaValue: el.dataset.crComment || "",
     isEdit: true,
     selectAfterFocus: true,
   });
@@ -651,9 +677,15 @@ function handleContextMenu(e) {
 // can decide what to do with the event. Also reachable from the sidebar handle, which has
 // to hand a right-click back to whatever it is covering.
 function anchorOrEdit(target) {
-  const annoEl = target.closest(".cr-anno");
-  if (annoEl) {
-    openEditPopup(annoEl);
+  // Exact match, deliberately not `closest()`. The hover outline and the selector chip name
+  // the element under the cursor; an ancestor walk made the right-click act on a different
+  // element than the one the page had just pointed at — right-clicking a <p> inside a
+  // commented <blockquote> opened the blockquote's editor while the chip still read the <p>.
+  // The promise and the action have to be the same element, and the chip is the promise.
+  // Consequence, accepted: a commented element can now hold commented children. Each is its
+  // own mark with its own id, and each gets its own sidebar row.
+  if (target.classList.contains("cr-anno")) {
+    openEditPopup(target);
     return true;
   }
   const selector = cssPath(target, root);
@@ -812,7 +844,7 @@ async function submitFeedback() {
     const id = result.id;
 
     // The annotated element itself is the mark — create or update it in place.
-    markElement(captured.targetEl, captured.selector, comment, id || (captured.editingMark && captured.editingMark.dataset.id));
+    markElement(captured.targetEl, captured.selector, comment, id || (captured.editingMark && captured.editingMark.dataset.crId));
     showToast(captured.editingMark ? "✓ updated" : "✓ saved");
     // Only touch the popup if it is still the one this response belongs to. The in-flight
     // guard stops a second submit, not a second anchor: a right-click during the request
@@ -848,7 +880,7 @@ async function deleteFeedback() {
   }
   const captured = pending;
   const editedMark = captured.editingMark;
-  const id = editedMark.dataset.id;
+  const id = editedMark.dataset.crId;
 
   if (!id) {
     showToast("✗ delete unavailable (no id — pre-update mark)", true);
@@ -871,12 +903,9 @@ async function deleteFeedback() {
       throw new Error(result.reason || "server did not confirm deletion");
     }
 
-    // Drop the annotation class + dataset, leaving the artifact's element itself intact.
-    editedMark.classList.remove("cr-anno");
-    delete editedMark.dataset.comment;
-    delete editedMark.dataset.selector;
-    delete editedMark.dataset.id;
-    editedMark.removeAttribute("title");
+    // Leave the artifact's element exactly as it was found — including a `title` it carried
+    // before the mark borrowed it.
+    unmarkElement(editedMark);
 
     dismissPopup();
     renderSidebar();
@@ -911,12 +940,12 @@ function renderSidebar() {
 
     const anchorEl = document.createElement("div");
     anchorEl.className = "cr-sidebar-item-anchor";
-    anchorEl.textContent = mark.dataset.selector || "";
+    anchorEl.textContent = mark.dataset.crSelector || "";
 
     // The row is an index entry, not a copy of the comment — the comment text lives on
     // the element itself (title + popup). Keep the full comment as the row's tooltip so
     // hovering the list still tells you which one it is.
-    item.title = mark.dataset.comment || "";
+    item.title = mark.dataset.crComment || "";
 
     item.appendChild(anchorEl);
     const openEdit = () => { pulseElement(mark); openEditPopup(mark); };

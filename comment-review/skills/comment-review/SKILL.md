@@ -86,10 +86,17 @@ free-exit : the user may end the review at any time by saying so (Phase 0 prose 
    something was kept to stop it with.
    **Read that line before relaying it, and say where the channel actually opened.** If the
    machine is on a tailnet, the server binds the tailnet interface rather than loopback, and
-   the preview — and the `/feedback` endpoint that writes into the queue — is reachable from
-   the user's other tailnet devices. That is deliberate: it is what lets a draft be read on a
-   phone. It is also not something the user can be assumed to know, and there is no way to
-   turn it off — no flag and no environment variable disables it, so do not imply one exists.
+   what becomes reachable from the user's other tailnet devices is not only the preview and
+   the `/feedback` endpoint that writes into the queue: **the unit of exposure is the
+   artifact's directory.** Files beside the artifact are served on that port too — reviewing
+   `~/Documents/plan.md` puts the rest of `~/Documents/` within reach of anything on the
+   tailnet. That is what makes an HTML artifact's own images and stylesheets load, and it is
+   not conditional on the render mode: a markdown draft opens the same door. Say the
+   directory, not just the page, because the directory is what the user chooses when they
+   decide where a draft lives.
+   That reach is deliberate: it is what lets a draft be read on a phone. It is also not
+   something the user can be assumed to know, and there is no way to turn it off — no flag
+   and no environment variable disables it, so do not imply one exists.
    Where the bind is loopback (no tailnet), say that instead; the startup lines are what
    distinguish the two, so read them rather than guessing. The server refuses writes carrying
    a cross-origin `Origin` header, which stops another *web page* from writing into the

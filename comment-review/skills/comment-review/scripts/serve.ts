@@ -16,6 +16,7 @@
 import { closeSync, constants, existsSync, fstatSync, openSync, readFileSync, statSync, watch, writeSync } from "node:fs";
 import { readFile, realpath } from "node:fs/promises";
 import { basename, dirname, extname, resolve, sep } from "node:path";
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 
@@ -60,6 +61,21 @@ const slugCandidates = (abs: string): string[] => {
   for (let i = parts.length - 2; i >= 0; i--) {
     cands.push(parts.slice(i).map(escapeComponent).join(SLUG_SEP));
   }
+  // Last rung, reached only when every rung above it is taken. The ladder above exhausts
+  // whenever one artifact's path is a tail of another's — `/tmp/draft.md` beside
+  // `~/tmp/draft.md` — because then every name the shorter path can widen to is also a name
+  // the longer one offers, and the shorter one runs out. A different trigger from the `a-b`
+  // vs `a/b` case the escaping above handles.
+  //
+  // A hash of the path, not a counter. `{bare}-1` / `{bare}-2` would be shorter and would
+  // terminate by construction, but it depends on argument order: the slug names
+  // `feedback-{slug}.jsonl`, and Phase 0's carryover search only finds an earlier session's
+  // queue if that name is stable for the same artifact. A counter gives the same artifact a
+  // different queue name depending on what it was opened alongside, and the earlier queue
+  // then goes quietly missing. This rung is a function of the absolute path alone.
+  // sha256 rather than Bun.hash for the same reason: the name has to outlive Bun upgrades,
+  // and Bun.hash carries no stability guarantee across them.
+  cands.push(`${basename(abs, extname(abs))}-${createHash("sha256").update(abs).digest("hex").slice(0, 8)}`);
   return cands;
 };
 
@@ -82,9 +98,11 @@ for (const abs of paths) {
   const others = paths.filter((p) => p !== abs).map(slugCandidates);
   const slug = slugCandidates(abs).find((c) => !others.some((o) => o.includes(c)));
   if (!slug) {
-    // Kept because the escaped join above is still not injective, so exhaustion cannot be
-    // argued away — only made harder. Failing loudly here is the point: the alternative is
-    // the silent drop this whole block removes.
+    // Still reachable, and deliberately so. The hash rung does not make the ladder unique —
+    // a truncated 32-bit digest is not injective by construction; it makes exhaustion require
+    // two paths whose digests collide there, which is a different claim and a much smaller
+    // probability, not zero. Do not rewrite this comment to say the ladder cannot exhaust.
+    // Failing loudly here is the point: the alternative is the silent drop this block removes.
     console.error(`fatal: cannot derive a unique preview name for ${abs}`);
     process.exit(1);
   }

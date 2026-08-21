@@ -1329,7 +1329,19 @@ if (tailnet) {
 }
 console.error("Ctrl-C to stop.");
 
-const opener = Bun.which("open") ?? Bun.which("xdg-open");
+// `open` only on darwin, where a browser opener is what that name means. Debian and Ubuntu ship
+// `/usr/bin/open` from util-linux as an alias for `openvt`, so looking it up first ran
+// `openvt <url>` — which wants a tty and root, failed, and said nothing, because both pipes were
+// ignored. Phase 0 relays "the browser opens to the rendered preview" while nothing opened.
+// `tailscaleBin()` above already gates its platform-specific path this way; this follows it.
+const opener = (process.platform === "darwin" ? Bun.which("open") : null) ?? Bun.which("xdg-open");
 if (opener) {
-  Bun.spawn([opener, url], { stdout: "ignore", stderr: "ignore" });
+  // stderr is kept. An opener that fails is the case this fix is about, and a silent failure is
+  // indistinguishable from a browser that opened — the one thing the relayed sentence asserts.
+  const p = Bun.spawn([opener, url], { stdout: "ignore", stderr: "inherit" });
+  p.exited.then((code) => {
+    if (code !== 0) console.error(`[open] ${opener} exited ${code} — the preview did not open; visit ${url} yourself`);
+  }).catch(() => { });
+} else {
+  console.error(`[open] no browser opener found (looked for ${process.platform === "darwin" ? "open, " : ""}xdg-open) — visit ${url} yourself`);
 }

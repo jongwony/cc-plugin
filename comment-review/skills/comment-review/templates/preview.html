@@ -648,6 +648,10 @@ function showPopup({ rect, previewText, textareaValue, isEdit, selectAfterFocus 
   positionPopupNear(rect);
   popupPreview.textContent = truncateForPopup(previewText);
   popupTextarea.value = textareaValue;
+  // What the box held before the user touched it. An edit popup opens prefilled with the comment
+  // that is already saved, and that is not writing — losing it costs nothing, because it is in
+  // the queue. Comparing against this is what tells the two apart.
+  popupOpenedWith = textareaValue;
   setPopupMode(!!isEdit);
   popup.classList.add("show");
   popupTextarea.focus();
@@ -842,10 +846,28 @@ function clearHover() {
   selectorChip.style.display = "none";
 }
 
+// A source reload held back because the editor has unsent words in it. See the reload branch in
+// handleWsMessage for why, and note the release below is the ONLY one: the popup closing is the
+// moment the words stop existing, so nothing else has to remember this is pending.
+let heldReload = false;
+let popupOpenedWith = "";
+// Written, not merely present. A prefilled edit box holds the saved comment; discarding that
+// loses nothing.
+const editorHoldsUnsentText = () =>
+  popup.classList.contains("show") && popupTextarea.value !== popupOpenedWith;
+
 function dismissPopup() {
   popup.classList.remove("show");
   popup.classList.remove("edit-mode");
   pending = null;
+  // Release here, and only here. Submit, delete, Cancel, Esc and click-away all end in this
+  // function, so this covers every way the words can stop existing without becoming a state
+  // machine that has to be kept in step with each of them.
+  if (heldReload) {
+    heldReload = false;
+    sessionStorage.setItem("scrollY", String(window.scrollY));
+    location.reload();
+  }
 }
 
 popupCancel.addEventListener("click", dismissPopup);
@@ -1461,6 +1483,30 @@ function handleWsMessage(e) {
     return;
   }
   if (msg.type === "reload") {
+    // The branch two above refuses to reload because a reload destroys a comment being written.
+    // This branch used to reload anyway — and it fires at the WORSE moment: the source changes
+    // when an apply round lands, which is exactly when the user is likely to be writing the next
+    // round's comment.
+    //
+    // The two failures are not symmetric. A comment written against a now-stale render is caught
+    // by the anchor guard at apply time — its evidence stops matching the source, the line is
+    // left and surfaced, and the user sees it. Words deleted from the box are caught by nothing;
+    // they are simply gone. So the reload waits.
+    //
+    // It waits rather than saving and restoring. Restoring the text would not restore the
+    // anchor: the element the comment was attached to may not survive the new source, and the
+    // user would face an editor full of words pointing at nothing. That is a state this page
+    // does not have today, and inventing it would be the maximal answer rather than the
+    // fundamental one.
+    if (editorHoldsUnsentText()) {
+      heldReload = true;
+      // Two surfaces on purpose. The toast is what gets noticed; the pill is what is still there
+      // two minutes later, which is how long writing a comment can take. setConn declines to
+      // write while the watcher is dead — that state is heavier than this one and keeps the pill.
+      showToast("⚠ the source changed — this page is out of date, and will refresh when you finish", true);
+      setConn("source changed — refresh held", true);
+      return;
+    }
     sessionStorage.setItem("scrollY", String(window.scrollY));
     location.reload();
   }

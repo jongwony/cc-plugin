@@ -131,20 +131,32 @@ always knows where they are:
 Round 1 — browser preview opened. {N comments in queue from prior session. | No prior comments — fresh start.}
 
 Round {k} complete — {X} applied{, {Y} deferred}{, {R} retracted mid-apply}.
+  deferred:  {selector} — {why} (× Y)    -- the REASON; the browser already lists the line itself
   retracted: {selector} — deleted while this round was applying (× R)   -- omitted when R is 0
 Browser preview reflects the latest edits.
 ```
 
-Deferred lines are counted, not named. Naming them here was required while the browser could
-not show a queued comment after a reload — this prose was then the only place one still
-appeared. The page now reads the queue from the server and lists every live entry, so a
-deferred line is visible where the user is already looking, and repeating it here would be a
-second copy that has to be kept true.
+Say why each deferred line was held back. Not because the browser cannot show it — the page
+reads the queue from the server and lists every live entry, and a deferred line is one — but
+because the browser cannot show **why the apply step declined it**. That is a judgement this
+round made while reading the source, and it is written nowhere: not in the queue, not in a
+marker, not on the page. The selector in that line is a key into the row the user is already
+looking at, not a second copy of it.
 
-Retracted lines are still named, on a reason of their own rather than by inheritance: a
-retraction leaves a tombstone, so the entry is gone from the queue and the browser has nothing
-to show. Without this line the user would not learn that a comment they deleted mid-apply was
-seen and honoured.
+Do not add a field or a file to carry the reason instead. It is a fact about this round, said
+to the person in the room, and the next round re-reads the source anyway — persisting it would
+grow the marker machinery for something that expires when the round does.
+
+**This is narrower than the requirement that used to stand here, and rests on a different
+fact.** That one said to name every queued line, because after a reload the browser could show
+none of them and this prose was the only place one still appeared. The browser now shows all of
+them, so that requirement is gone and does not come back. What is here is the reason alone,
+which the browser has no way to learn. A later reader finding the removal in the history should
+not read it as covering this line.
+
+Retracted lines are named on a reason of their own as well: a retraction leaves a tombstone, so
+the entry is gone from the queue and the browser has nothing to show. Without this line the user
+would not learn that a comment they deleted mid-apply was seen and honoured.
 
 **Round signal**: the user's chat turn *is* the round-complete signal. No separate browser
 button is needed — the browser collects comments, chat marks the boundary. "Wait, I'm still

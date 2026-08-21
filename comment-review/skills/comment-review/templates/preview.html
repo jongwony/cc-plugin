@@ -613,6 +613,9 @@ const sidebarList = document.getElementById("cr-sidebar-list");
 const sidebarEmpty = document.getElementById("cr-sidebar-empty");
 const sidebarCount = document.getElementById("cr-sidebar-count");
 const statusCount = document.getElementById("cr-status-count");
+// The bar itself, for the click-away list. Named separately from `statusCount` because they are
+// different questions: that one is a button with a handler, this one is a region to be spared.
+const statusBar = document.getElementById("cr-status");
 
 let pending = null;  // { selector, targetEl, editingMark }
 let hoverEl = null;  // element currently outlined under the cursor
@@ -940,12 +943,21 @@ popupTextarea.addEventListener("keydown", (e) => {
 // The panel body is listed for the same reason at one remove: reading the block, or dragging
 // across it to copy, must not cost the comment either.
 //
+// #cr-status is the bar the pill and the count sit in, and it was missing while both of its
+// children were listed. So a click landing on the bar's own padding — between the two buttons,
+// or beside them — went to dismissPopup and took a comment being typed with it. That is the same
+// failure the pill entry was added to fix, still present one element up: listing the children of
+// a container and not the container is how it keeps recurring.
+// Adding it does not widen the criterion. The line below already says what belongs here —
+// chrome this review drew itself — and the status bar is that; the list simply was not holding
+// what it had already admitted. A container whose children are all exempt is the shape to watch.
+//
 // This list stays narrow on purpose. Everything on it is chrome this review drew itself;
 // a click anywhere else still discards, and that is the behaviour the whole listener is for.
 document.addEventListener("click", (e) => {
   if (!popup.contains(e.target) && !content.contains(e.target) && !sidebar.contains(e.target)
-      && !statusCount.contains(e.target) && !sidebarHandle.contains(e.target)
-      && !fmPill.contains(e.target) && !fmPanel.contains(e.target)) {
+      && !statusBar.contains(e.target) && !sidebarHandle.contains(e.target)
+      && !fmPanel.contains(e.target)) {
     dismissPopup();
   }
 });

@@ -363,6 +363,17 @@ does would refuse to tombstone a line the queue lists, leaving it live for the n
 apply against the user's wish — a wrong edit, which is exactly what the sentence above promises
 cannot happen. That promise holds only while the two file sets match.
 
+**There is a third axis, and the two above are not the whole list.** The DELETE check does not
+resolve consumed markers at all — it reads the entries, and retirement is applied a layer above
+it. So a line an apply round has already turned into an edit is gone from the sidebar and still
+tombstoneable, and what that produces is one redundant tombstone: a tombstone is dropped for
+being a tombstone before markers are ever consulted, so nothing downstream reads differently.
+This is left as it is on purpose. Making the check honour markers would put retraction
+downstream of a file the apply step writes, so its failure direction would become *the user
+cannot retract what is on their screen* — the direction refused everywhere else here — where
+today's is *the user retracts something already gone*. The refusal would also have to say
+something untrue, since the entry was neither missing nor deleted but applied.
+
 A marker is what retires a line, and reading the source cannot stand in for it — because the
 browser offers no way to retract a comment from an earlier round. Why that makes the marker
 load-bearing, and what breaks without it, is in the commit that settled it.

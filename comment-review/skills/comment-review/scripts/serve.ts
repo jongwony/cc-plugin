@@ -1057,9 +1057,26 @@ const server = Bun.serve({
 
       // Existence check: find the latest entry for this id and require it to be a live
       // (non-tombstoned) annotation. Reads the SAME files the queue read does — see the note on
-      // queueEntriesFor. What stays different is the tie-break below: the comparison is strict,
-      // so an entry sharing the latest timestamp does not displace the one already held. SKILL.md
-      // says why that disagreement with the apply rule is safe, and it is not to be reconciled.
+      // queueEntriesFor.
+      // THREE AXES, not two, and an earlier version of this comment listed the first alone as
+      // though the list were finished:
+      //   1. the tie-break, which differs — the comparison below is strict, so an entry sharing
+      //      the latest timestamp does not displace the one already held. SKILL.md says why that
+      //      disagreement with the apply rule is safe, and it is not to be reconciled.
+      //   2. the file set, which does NOT differ and must not — SKILL.md says what breaks.
+      //   3. consumed markers, which this path does not resolve at all. It calls
+      //      `queueEntriesFor`; retirement is applied by `liveQueueEntries` one layer above. So a
+      //      line an apply round already turned into an edit is absent from GET /feedback and
+      //      still tombstoneable here, and the result is one redundant tombstone —
+      //      `liveQueueEntries` drops `deleted === true` before it consults markers, so the extra
+      //      line changes nothing downstream.
+      // Why 3 leans this way rather than being reconciled: consulting markers here would put the
+      // retraction path downstream of a file the APPLY step writes, and its failure direction
+      // would become "the user cannot retract what is on their screen". Today's direction is
+      // "the user retracts something already gone", which costs one line. Everywhere else in
+      // this server the first direction is the one refused. The 404 text would also be false
+      // here — the entry was neither missing nor deleted, it was applied — so honouring markers
+      // would need a failure vocabulary this path does not have.
       let liveEntry: any = null;
       try {
         let latest: any = null;

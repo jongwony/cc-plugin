@@ -1349,6 +1349,11 @@ const opener = (process.platform === "darwin" ? Bun.which("open") : null) ?? Bun
 if (opener) {
   // stderr is kept. An opener that fails is the case this fix is about, and a silent failure is
   // indistinguishable from a browser that opened — the one thing the relayed sentence asserts.
+  // ONE address here, where the banner above prints two, and that is not an omission. This line
+  // only exists because the opener on THIS machine did not run, so whoever reads it is sitting
+  // at this machine — `url` is their address. The tailnet and MagicDNS names answer a different
+  // reader on a different device, they are printed unconditionally a few lines up, and adding
+  // them here would hand someone at this keyboard two addresses they cannot use.
   const p = Bun.spawn([opener, url], { stdout: "ignore", stderr: "inherit" });
   p.exited.then((code) => {
     if (code !== 0) console.error(`[open] ${opener} exited ${code} — the preview did not open; visit ${url} yourself`);

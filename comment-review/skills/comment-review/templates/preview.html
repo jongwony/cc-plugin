@@ -1217,12 +1217,35 @@ function resolveQueueAnchors() {
     // back with a later timestamp and silently reverted somebody else's edit.
     // markElement is safe to call again: its title-saving guard tests `in` on the dataset, so a
     // second call does not overwrite the artifact's original title with the borrowed one.
+    // Set for EVERY entry, including the already-marked branch below, so the field has three
+    // values and not four. Left unset, an entry that took that branch carried `undefined` while a
+    // confirmed one carried `null` — both falsy, so both read as confirmed, but the sidebar was
+    // then reading a field that meant "not looked at" as if it meant "looked at and fine".
+    entry.unconfirmed = null;
+    entry.el = null;         // the element this entry resolves to, whether or not it holds the mark
+    entry.ownsMark = false;  // whether the mark on that element is THIS entry's
+
+    // Already marked: keep WHERE it is, take WHAT it says. Two different questions, and only the
+    // first one is settled by the existing mark. The element under a mark this page placed is
+    // the exact one that was right-clicked, which is stronger than re-resolving the path could
+    // establish — an ambiguous selector would MOVE a correct mark. But the comment TEXT on that
+    // element is just this page's copy of a line the server owns, and skipping the entry left it
+    // frozen: the sidebar re-rendered from the server while the mark and its borrowed tooltip
+    // went on showing the old words. openEditPopup fills the editor from the mark, not from the
+    // queue, so a user who right-clicked and pressed ⌘Enter without typing sent the stale text
+    // back with a later timestamp and silently reverted somebody else's edit.
+    // markElement is safe to call again: its title-saving guard tests `in` on the dataset, so a
+    // second call does not overwrite the artifact's original title with the borrowed one.
     const already = markForId(entry.id);
-    if (already) { markElement(already, entry.selector, entry.comment, entry.id); continue; }
+    if (already) {
+      markElement(already, entry.selector, entry.comment, entry.id);
+      entry.el = already;
+      entry.ownsMark = true;
+      continue;
+    }
     // Why an entry could not be confirmed, kept so the page can say which of these happened.
     // "Comment on it again" is true advice for one of them and false for another, and saying it
     // where it is false is worse than saying nothing.
-    entry.unconfirmed = null;
     if (!entry.selector) { entry.unconfirmed = "no-selector"; continue; }
     if (!entry.anchorText && !entry.anchorSig) { entry.unconfirmed = "no-evidence"; continue; }
     let el = null;
@@ -1247,9 +1270,27 @@ function resolveQueueAnchors() {
       // here would change it without being asked. Recorded rather than done.
       if (matches !== 1) { entry.unconfirmed = "ambiguous"; continue; }
     }
+    // The anchor IS confirmed from here on. Whether a mark ends up on the element is a second
+    // question, and the two used to be answered by one value.
+    entry.el = el;
+    // A mark carries one id — `markElement` overwrites — so when two live entries resolve to the
+    // same element only one can hold it. Two screens right-clicking the same unmarked paragraph
+    // is the ordinary way to get there, and it is the case the tailnet bind and the server queue
+    // exist for. The mark stays with whoever has it: taking it would move an annotation the user
+    // is looking at, and the loop would hand it to whichever entry happened to come last.
+    const occupant = el.dataset.crId;
+    if (occupant && occupant !== entry.id && liveIds.has(occupant)) continue;
     markElement(el, entry.selector, entry.comment, entry.id);
+    entry.ownsMark = true;
   }
 }
+
+// Not a confirmation failure — the anchor resolved. It says what is true instead: the element is
+// there, and another comment is holding its marker. Editing and deleting this one from the page
+// is not possible yet; that needs a mark that can carry several comments, which is a larger
+// change than this one and is recorded rather than attempted.
+const SHARED_ELEMENT_NOTE =
+  "another comment on this same element holds its marker — this row scrolls to it, but cannot open its editor";
 
 // What actually blocked confirmation, in words, for the row and for the toast.
 const UNCONFIRMED_REASON = {
@@ -1346,9 +1387,14 @@ function renderSidebar() {
   }
 
   for (const entry of queueEntries) {
-    const mark = markForId(entry.id);
+    // The row's state is the ENTRY's confirmation result, not "did a mark end up here". Reading
+    // it off the mark made a confirmed comment show as `⚠ not confirmed` whenever another
+    // comment on the same element held the marker — and then asked UNCONFIRMED_REASON for a
+    // reason that did not exist, so the row explained a failure that had not happened.
+    const confirmed = !entry.unconfirmed;
+    const el = entry.el;
     const item = document.createElement("div");
-    item.className = mark ? "cr-sidebar-item" : "cr-sidebar-item cr-unconfirmed";
+    item.className = confirmed ? "cr-sidebar-item" : "cr-sidebar-item cr-unconfirmed";
     item.setAttribute("role", "button");
     item.setAttribute("tabindex", "0");
 
@@ -1356,8 +1402,9 @@ function renderSidebar() {
     anchorEl.className = "cr-sidebar-item-anchor";
     // An unconfirmed entry still gets a row. Showing it is the whole point: the user can see
     // the comment exists and put it back, which a silently missing row denies them.
-    anchorEl.textContent = mark ? (entry.selector || "") : "⚠ not confirmed — " + (entry.selector || "");
-    if (!mark) anchorEl.title = UNCONFIRMED_REASON[entry.unconfirmed] || "this anchor could not be confirmed";
+    anchorEl.textContent = confirmed ? (entry.selector || "") : "⚠ not confirmed — " + (entry.selector || "");
+    if (!confirmed) anchorEl.title = UNCONFIRMED_REASON[entry.unconfirmed] || "this anchor could not be confirmed";
+    else if (!entry.ownsMark) anchorEl.title = SHARED_ELEMENT_NOTE;
 
     // The row is an index entry, not a copy of the comment — the comment text lives on
     // the element itself (title + popup). Keep the full comment as the row's tooltip so
@@ -1366,15 +1413,22 @@ function renderSidebar() {
 
     item.appendChild(anchorEl);
     const openEdit = () => {
-      if (!mark) {
+      if (!confirmed) {
         // Was: "re-anchor it by commenting again", said for every unconfirmed row. For an element
         // with no identifying evidence that is simply false — commenting again records the same
         // emptiness — so the reason is said instead of the remedy.
         showToast("⚠ " + (UNCONFIRMED_REASON[entry.unconfirmed] || "this anchor could not be confirmed"), true);
         return;
       }
-      pulseElement(mark);
-      openEditPopup(mark);
+      // Confirmed, so the element is known and the row can take you to it. The reference was kept
+      // when the anchor was resolved rather than resolved again here — re-resolving is what the
+      // guard above exists to avoid, and there is no need for it when the element is in hand.
+      pulseElement(el);
+      // Editing is a different matter: the editor is opened FROM the mark, so opening it here
+      // would edit whichever comment holds the marker rather than this one. Scroll, and say why
+      // the editor did not open, instead of opening the wrong one.
+      if (entry.ownsMark) openEditPopup(el);
+      else showToast("⚠ " + SHARED_ELEMENT_NOTE, true);
     };
     item.addEventListener("click", openEdit);
     item.addEventListener("keydown", (e) => {

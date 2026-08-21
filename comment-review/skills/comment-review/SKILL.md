@@ -75,7 +75,8 @@ free-exit : the user may end the review at any time by saying so (Phase 0 prose 
    restricts non-read-only actions behind a permission gate, surface that gate for approval
    before launching; proceed once it is cleared. Then start
    `bun "${CLAUDE_PLUGIN_ROOT}/skills/comment-review/scripts/serve.ts" <artifact.md|artifact.html> [...]`;
-   the browser auto-opens to the rendered preview. The path goes through
+   the server then TRIES to open a browser on the rendered preview — it can fail, and the
+   paragraph on the `[open]` line below says how to tell. The path goes through
    `CLAUDE_PLUGIN_ROOT` because this runs with the user's project as the working directory,
    not the skill directory — a bare `scripts/serve.ts` resolves against the caller and is not
    found.
@@ -83,14 +84,25 @@ free-exit : the user may end the review at any time by saying so (Phase 0 prose 
    server runs until the review ends, so a foreground launch blocks the agent for the whole
    review. Treat the `serving at …` line as the start confirmation — it arrives on **stderr**,
    as does every other line this server writes: the `drafts:` and tailnet lines relayed below,
-   and the `fatal:` line a bad artifact path exits on. Whatever redirection is assembled around
+   the `fatal:` line a bad artifact path exits on, and the `[open]` line covered further down —
+   which is the one that does NOT arrive by the time the start is confirmed. Whatever redirection is assembled around
    the launch above must therefore keep stderr. One that keeps only stdout captures nothing at
    all — not the confirmation, and not the failure — so polling it waits forever on a server
    that is already up, or reports one that never started as running. On termination,
    stop the server through that handle — the exit promise in step 2 is only keepable if
    something was kept to stop it with.
-   **Read that line before relaying it, and say where the channel actually opened.** If the
-   machine is on a tailnet, the server binds the tailnet interface rather than loopback, and
+   **The browser opening is a claim, not a given — check it before making it.** The server
+   spawns the platform's opener and writes a line beginning `[open]` to stderr when that fails
+   or when no opener exists at all. That line already carries what to tell the user, including
+   the address to visit by hand, so relay it rather than paraphrasing.
+   The awkward part, stated rather than smoothed: the line is written when the opener process
+   EXITS, so it arrives after `serving at …` — after the moment the start was confirmed. An
+   agent that stopped reading stderr at the confirmation cannot know which way it went. Then
+   the honest report is neither "the preview opened" nor "it failed": give the address and let
+   the user say. Assert the opening only when stderr was still being read and no `[open]` line
+   came; that is the only state in which the sentence is checked rather than assumed.
+   **Read the `serving at` line before relaying it, and say where the channel actually
+   opened.** If the machine is on a tailnet, the server binds the tailnet interface rather than loopback, and
    what becomes reachable from the user's other tailnet devices is not only the preview and
    the `/feedback` endpoint that writes into the queue: **the unit of exposure is the
    artifact's directory.** Files beside the artifact are served on that port too — reviewing

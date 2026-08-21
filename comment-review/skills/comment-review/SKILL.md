@@ -104,9 +104,14 @@ free-exit : the user may end the review at any time by saying so (Phase 0 prose 
    and no environment variable disables it, so do not imply one exists.
    Where the bind is loopback (no tailnet), say that instead; the startup lines are what
    distinguish the two, so read them rather than guessing. The server refuses writes AND
-   live-channel connections carrying a cross-origin `Origin` header, which stops another *web
-   page* from writing into the queue or listening to it — it is not authentication and does not
-   bear on tailnet reachability at all.
+   live-channel connections carrying a cross-origin `Origin` header, and refuses READS whose
+   `Host` is not one of the addresses the startup lines print. Together those stop another *web
+   page* from writing into the queue, listening to it, or reading the directory — including a
+   page whose DNS has been repointed at this port, which is same-origin as far as the browser is
+   concerned and is why the read side has to go by `Host` instead. None of it is authentication,
+   and none of it bears on tailnet reachability at all. One consequence to relay if it comes up:
+   an address the startup lines do NOT print — a hosts-file alias, another search domain —
+   now reads nothing rather than loading and silently failing to save.
 4. **Round 1 entry** — surface the queue size for this artifact, or "No prior comments —
    fresh start." A slug widens when two artifacts would otherwise share one, so the same
    artifact can have left a queue under a different name in an earlier session: look beside

@@ -614,32 +614,64 @@ const serveSiblingAsset = async (assetPath: string, referer: string | null, rang
 // `Origin: null` — a sandboxed iframe, or a page loaded from file:// — arrives as the literal
 // string "null" rather than as an absent header, so it falls outside the allow-list and is
 // refused. That is the intended answer for it.
+// Every name this server answers to, as `host:port`. One list because both guards below have to
+// name the same set: they differ in which HEADER they read it against, not in which names count.
+const allowedHosts = (port: number): string[] => {
+  // The startup banner advertises the MagicDNS name alongside the IP, and a phone that opens
+  // THAT url sends it. A list built from the IP alone would refuse exactly the path the tailnet
+  // bind exists to serve.
+  const names = [bindHost, "localhost"];
+  if (tailnet?.dnsName) {
+    names.push(tailnet.dnsName);
+    // MagicDNS resolves the short name as well as the FQDN, and a phone typing a host by hand
+    // gets the short one.
+    const short = tailnet.dnsName.split(".")[0];
+    if (short) names.push(short);
+  }
+  return names.map((n) => `${n.toLowerCase()}:${port}`);
+};
+
+// THE WRITE SIDE, and the live channel. Reads use the other guard below, and the two are not
+// interchangeable — see the note there for why the header differs.
+//
+// Whole origins are compared, never a part of one. Matching on the port alone would admit
+// `http://evil.example:<port>` — any page can be served on any port — which is not a weaker
+// guard but the absence of one.
+// A list, and not a comparison against this request's own `Host`, though that would need no
+// maintaining and would admit every name that reaches the server. It would also admit a rebound
+// one: a page on a hostile domain whose DNS is repointed here sends Host and Origin that agree
+// with each other, and the list is what tells them apart. So a name nobody listed is refused
+// rather than admitted — the failure this shape chooses is the recoverable one.
 const browserOriginAllowed = (req: Request, port: number): boolean => {
   const origin = req.headers.get("origin");
   if (origin === null) return true; // not a browser — see above
-  const allowed = [`http://${bindHost}:${port}`, `http://localhost:${port}`];
-  // The startup banner advertises the MagicDNS name alongside the IP, and a phone that opens
-  // THAT url sends it as its origin. An allow-list built from the IP alone would refuse
-  // exactly the path the tailnet bind exists to serve, and the only symptom would be that
-  // saving quietly stopped working.
-  if (tailnet?.dnsName) {
-    allowed.push(`http://${tailnet.dnsName}:${port}`);
-    // MagicDNS resolves the short name as well as the FQDN, and a phone typing a host by hand
-    // gets the short one. The page then loads — reads are ungated — and only saving fails, which
-    // is the same silent symptom the paragraph above was written about, arriving through the
-    // name it did not list.
-    const short = tailnet.dnsName.split(".")[0];
-    if (short) allowed.push(`http://${short}:${port}`);
-  }
-  // Whole origins are compared, never a part of one. Matching on the port alone would admit
-  // `http://evil.example:<port>` — any page can be served on any port — which is not a weaker
-  // guard but the absence of one.
-  // A list, and not a comparison against this request's own `Host`, though that would need no
-  // maintaining and would admit every name that reaches the server. It would also admit a
-  // rebound one: a page on a hostile domain whose DNS is repointed here sends Host and Origin
-  // that agree with each other, and the list is what tells them apart. So a name nobody listed
-  // is refused rather than admitted — the failure this shape chooses is the recoverable one.
-  return allowed.includes(origin);
+  return allowedHosts(port).map((h) => `http://${h}`).includes(origin.toLowerCase());
+};
+
+// THE READ SIDE, against `Host`, and the swap is not an inconsistency — it is what rebinding
+// does to each path.
+//
+// The read routes carried no check at all, on the grounds that a cross-origin script is refused
+// the response body by the browser itself. A rebound page is NOT cross-origin: its DNS name has
+// been repointed at this address, so the browser sees one origin and hands the body over. And a
+// same-origin GET sends no `Origin` header, so the list above could not act here even if it were
+// consulted. `Host` is the only thing that separates the two, which is the exact reverse of the
+// write side — there the rebound request's Origin is what gives it away, and Host is what does
+// not. One reasoning does not carry to the other route.
+// What it protected before this: the preview HTML, the queue contents, and — with a single
+// artifact, where the sibling path takes its no-Referer fallback — any readable file beside the
+// source.
+//
+// NO "not a browser" escape here, unlike the Origin guard. HTTP/1.1 requires `Host` and the
+// server answers 400 without one, so every client that reaches this code has sent one and every
+// client is bound by this list. The cost is the one 87 already established, now reaching reads:
+// a name nobody listed — a hosts-file alias, another search domain — loads nothing rather than
+// loading and failing to save. It fails closed, and the startup banner is what says which names
+// work.
+const hostAllowed = (req: Request, port: number): boolean => {
+  const host = req.headers.get("host");
+  if (host === null) return true; // not reachable in practice; see above
+  return allowedHosts(port).includes(host.toLowerCase());
 };
 
 // ── The live queue, computed the way the APPLY step computes it ─────────────────────────────
@@ -870,6 +902,22 @@ const server = Bun.serve({
   async fetch(req, srv) {
     const url = new URL(req.url);
 
+    // ONE place, ahead of the routing, and deliberately not one check per read route. 88 was a
+    // guard sitting on the far side of a branch: it covered half of what it appeared to cover,
+    // and the half it missed is what a later hand relies on. A gate here cannot miss a route,
+    // including one added after this line was written.
+    // Scoped to reads by METHOD, not by path. POST and DELETE keep the Origin guard alone: the
+    // tailnet write exposure recorded as H9 is a decision the user has made twice, and adding a
+    // second condition to it here would narrow it without being asked. A rebound page's write is
+    // already refused, because a write DOES send Origin.
+    // The vendored assets are exempt: they are this tool's own copies of public libraries, carry
+    // nothing of the user's, and a page that cannot read the preview has no use for them anyway.
+    if ((req.method === "GET" || req.method === "HEAD") &&
+        !VENDOR_ASSETS[url.pathname] && !hostAllowed(req, srv.port)) {
+      console.error(`[read] cross-host read refused for ${url.pathname} — Host: ${req.headers.get("host")}`);
+      return new Response("cross-host read refused — reach this server by the address printed at startup", { status: 403 });
+    }
+
     if (url.pathname === "/") {
       return new Response(renderIndex(), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
     }
@@ -916,8 +964,10 @@ const server = Bun.serve({
       });
     }
 
-    // Reading the queue. No Origin allow-list here, and that is a decision rather than an
-    // omission on the write guard's part:
+    // Reading the queue. No ORIGIN allow-list here — the Host gate at the top of this handler is
+    // what guards it, for the reason written at `hostAllowed`. Why the Origin list is the wrong
+    // instrument on this route, which is a decision rather than an omission on the write guard's
+    // part:
     //   Against a hostile PAGE, the browser already refuses to hand the response body to a
     //   cross-origin script, because no CORS header is sent. An allow-list would be a second
     //   lock on a door the browser holds shut, and would suggest a protection this endpoint
@@ -926,9 +976,12 @@ const server = Bun.serve({
     //   bind creates — an Origin check does nothing at all: a client that omits the header is
     //   treated as "not a browser" and allowed, so the check is not a barrier there.
     //   This argument does NOT reach `/ws`, which is checked. Its first clause is the whole
-    //   basis for leaving this route open, and it rests on CORS holding the body back from a
-    //   cross-origin script — and a WebSocket handshake is not a CORS request. Read the two
-    //   routes as differing on that fact, not as an inconsistency.
+    //   basis for leaving this route open to the ORIGIN list, and it rests on CORS holding the
+    //   body back from a cross-origin script — and a WebSocket handshake is not a CORS request.
+    //   Read the two routes as differing on that fact, not as an inconsistency.
+    //   That same first clause is also what DNS rebinding breaks, which is why this route is not
+    //   ungated after all: a rebound page is same-origin, so nothing is held back from it. The
+    //   gate that answers it reads `Host`, not `Origin`, and it sits at the top of the handler.
     // What it DOES change, measured: the same bytes are already served from
     // /preview/feedback-{slug}.jsonl as a sibling asset, but only for a request carrying a
     // Referer that names a known slug. With one artifact there is a single-draft fallback, so
@@ -1244,7 +1297,10 @@ console.error(`serving at ${url}`);
 console.error(`drafts: ${[...drafts.keys()].join(", ")}`);
 if (tailnet) {
   console.error(`tailnet: reachable from your tailnet devices (e.g. mobile) at ${url}`);
-  if (tailnet.dnsName) console.error(`  or via MagicDNS: http://${tailnet.dnsName}:${server.port}/`);
+  // `openPath`, not a bare `/`. Phase 0 relays these lines verbatim, so the line above promised
+  // the rendered preview and this one handed the draft index to whoever typed the MagicDNS name
+  // — on a phone, which is the path the tailnet bind exists for.
+  if (tailnet.dnsName) console.error(`  or via MagicDNS: http://${tailnet.dnsName}:${server.port}/${openPath}`);
 }
 console.error("Ctrl-C to stop.");
 

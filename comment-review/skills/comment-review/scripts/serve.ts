@@ -352,12 +352,39 @@ const bindHost = tailnet ? tailnet.ip : "127.0.0.1";
 //   - resolve against the artifact dir, then realpath() both and assert the canonical file stays
 //     inside the canonical artifact dir — this defeats path traversal AND symlink escape
 // Anything that resolves outside the artifact dir → 404. GET/HEAD only, no directory listing, no write.
-const ASSET_MIME: Record<string, string> = {
-  ".css": "text/css", ".js": "text/javascript", ".mjs": "text/javascript",
-  ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
-  ".svg": "image/svg+xml", ".webp": "image/webp", ".avif": "image/avif", ".ico": "image/x-icon",
-  ".woff": "font/woff", ".woff2": "font/woff2", ".ttf": "font/ttf", ".otf": "font/otf",
-  ".json": "application/json", ".map": "application/json", ".txt": "text/plain", ".csv": "text/csv",
+// Each entry says TWO things, because the table was already deciding both and only showing one:
+// what the bytes are, and whether a browser may treat them as a DOCUMENT — that is, whether
+// navigating to this asset can put script on this origin, where it passes the cross-origin check
+// on /feedback and writes into the queue the next apply round turns into edits.
+//
+// The second property is why `.html` went in and came back out, and why `.svg` sat here
+// unnoticed while it did. Adding a header to one extension would leave the shape that produced
+// both, and the next extension added would go the same way. So the property is declared per
+// entry, and the response path acts on the declaration rather than on a list of special cases.
+//
+// MEASURED, not assumed, and measured for EVERY entry rather than for one and generalised: the
+// same SVG-carrying-a-script payload was served under each type in this table and navigated to.
+// Exactly one ran. Where a `document` flag is absent below it is because that measurement said
+// so — not because the extension looked harmless.
+//
+// The measurement's limit, stated because it is a security boundary: it varies the DECLARED TYPE
+// over fixed bytes, which is the property this table controls. It does not exercise a scripting
+// facility built into a format's own bytes. `.pdf` is the one such format here, so it is flagged
+// too — not because PDF script was shown to reach this origin, but because it was not shown not
+// to, and the header costs nothing there (a real PDF still renders in the viewer with it on).
+type AssetType = { mime: string; document?: true };
+const ASSET_TYPES: Record<string, AssetType> = {
+  ".css": { mime: "text/css" }, ".js": { mime: "text/javascript" }, ".mjs": { mime: "text/javascript" },
+  ".png": { mime: "image/png" }, ".jpg": { mime: "image/jpeg" }, ".jpeg": { mime: "image/jpeg" },
+  ".gif": { mime: "image/gif" },
+  // The one that ran. A navigated SVG is an XML document and executes its own <script>; as an
+  // <img> source it does not, which is why the entry stays and the header goes on instead.
+  ".svg": { mime: "image/svg+xml", document: true },
+  ".webp": { mime: "image/webp" }, ".avif": { mime: "image/avif" }, ".ico": { mime: "image/x-icon" },
+  ".woff": { mime: "font/woff" }, ".woff2": { mime: "font/woff2" }, ".ttf": { mime: "font/ttf" },
+  ".otf": { mime: "font/otf" },
+  ".json": { mime: "application/json" }, ".map": { mime: "application/json" },
+  ".txt": { mime: "text/plain" }, ".csv": { mime: "text/csv" },
   // THERE IS NO `.html` / `.htm` ENTRY, AND THAT IS THE DECISION — not an oversight.
   // An earlier revision added them, which turned a sibling page from a download into a rendered
   // top-level document and was meant to make a multi-page artifact navigable. It was reverted.
@@ -382,8 +409,15 @@ const ASSET_MIME: Record<string, string> = {
   //
   // Putting these entries back means fixing the Referer-based lookup first, which is a change
   // to the URL structure and does not live on this line.
-  ".mp4": "video/mp4", ".webm": "video/webm", ".mp3": "audio/mpeg", ".pdf": "application/pdf",
+  ".mp4": { mime: "video/mp4" }, ".webm": { mime: "video/webm" }, ".mp3": { mime: "audio/mpeg" },
+  // Flagged on the limit above, not on a measurement of PDF's own scripting.
+  ".pdf": { mime: "application/pdf", document: true },
 };
+
+// What goes on a response the table calls a document. `default-src 'none'` was measured against
+// the SVG case: navigating to a script-carrying SVG stops running it, and the same file used as
+// an <img> source still renders. Anything not flagged gets no header and is served as before.
+const DOCUMENT_CSP = "default-src 'none'";
 
 // Resolve which artifact directory a sibling-asset request belongs to, via the Referer page.
 const artifactDirFromReferer = (referer: string | null): string | null => {
@@ -471,7 +505,7 @@ const serveSiblingAsset = async (assetPath: string, referer: string | null, rang
   // user's stated premise that they only ever open artifacts they wrote themselves: the window
   // needs someone else able to swap files in the artifact's own directory mid-request, so a
   // directory the user controls is one where this guards against itself. If that premise stops
-  // holding, this is where to look. (An earlier revision named the .html entry in ASSET_MIME as
+  // holding, this is where to look. (An earlier revision named the .html entry in the asset table as
   // the first place; that entry has since been reverted, so this is now the only one.)
   let id: { dev: number; ino: number };
   try {
@@ -495,7 +529,8 @@ const serveSiblingAsset = async (assetPath: string, referer: string | null, rang
       return new Response("not found", { status: 404 }); // swapped between check and open
     }
     const size = s1.size;
-    const ct = ASSET_MIME[extname(canonFile).toLowerCase()] || "application/octet-stream";
+    const assetType = ASSET_TYPES[extname(canonFile).toLowerCase()];
+    const ct = assetType?.mime ?? "application/octet-stream";
     const range = parseRange(rangeHeader, size);
     if (range === "invalid") {
       return new Response("range not satisfiable", {
@@ -524,6 +559,9 @@ const serveSiblingAsset = async (assetPath: string, referer: string | null, rang
         "Content-Type": ct,
         "Cache-Control": "no-store",
         "Accept-Ranges": "bytes",
+        // Attached from the table's own declaration, so a type added later is covered by the
+        // answer its entry gives rather than by anyone remembering this line exists.
+        ...(assetType?.document ? { "Content-Security-Policy": DOCUMENT_CSP } : {}),
         ...(range ? { "Content-Range": `bytes ${start}-${end}/${size}` } : {}),
       },
     });

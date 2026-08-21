@@ -1206,17 +1206,6 @@ function resolveQueueAnchors() {
     if (!liveIds.has(m.dataset.crId)) unmarkElement(m);
   }
   for (const entry of queueEntries) {
-    // Already marked: keep WHERE it is, take WHAT it says. Two different questions, and only the
-    // first one is settled by the existing mark. The element under a mark this page placed is
-    // the exact one that was right-clicked, which is stronger than re-resolving the path could
-    // establish — an ambiguous selector would MOVE a correct mark. But the comment TEXT on that
-    // element is just this page's copy of a line the server owns, and skipping the entry left it
-    // frozen: the sidebar re-rendered from the server while the mark and its borrowed tooltip
-    // went on showing the old words. openEditPopup fills the editor from the mark, not from the
-    // queue, so a user who right-clicked and pressed ⌘Enter without typing sent the stale text
-    // back with a later timestamp and silently reverted somebody else's edit.
-    // markElement is safe to call again: its title-saving guard tests `in` on the dataset, so a
-    // second call does not overwrite the artifact's original title with the borrowed one.
     // Set for EVERY entry, including the already-marked branch below, so the field has three
     // values and not four. Left unset, an entry that took that branch carried `undefined` while a
     // confirmed one carried `null` — both falsy, so both read as confirmed, but the sidebar was

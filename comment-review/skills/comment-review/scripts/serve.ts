@@ -668,7 +668,17 @@ const queueEntriesFor = async (slug: string, draft: string): Promise<any[]> => {
       // them would report retired markers and archived copies back as queued comments.
       !n.endsWith(".markers.jsonl") && !n.endsWith(".consumed.jsonl"));
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+    // Every listing failure, not only a missing directory. The comment below promised that the
+    // current queue survives when the directory cannot be listed, and the code kept the promise
+    // for ENOENT alone: a directory that is traversable but not listable (0711) fails readdir
+    // with EACCES while `readFile` by name still succeeds, and rethrowing turned that into a 500.
+    // The sidebar then said it could not read the queue, and — since the DELETE existence check
+    // runs through this same function — retracting a comment stopped working, with the readable
+    // queue file sitting right there.
+    // Logged rather than swallowed: without a line here, a carried-over queue that has quietly
+    // stopped being found looks exactly like one that was never there.
+    console.error(`[queue] cannot list ${dir}: ${(e as Error).message} — reading ${ownQueue} by name; ` +
+                  `a queue left under an earlier slug will not be found this session`);
   }
   // Read by name even if the directory could not be listed: losing the current queue because a
   // readdir failed would be a far worse failure than missing a carryover.
@@ -738,7 +748,15 @@ const liveQueueEntries = async (slug: string, draft: string): Promise<QueueEntry
       }
     }
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+    // The same listing failure as the entries pass above, and it has to be forgiven the same
+    // way — a directory that cannot be listed still hands over files opened by name. Fixing only
+    // the other one left this endpoint answering 500 while DELETE, which does not read markers,
+    // had started working: half the function recovered and the half a user looks at did not.
+    // A marker that cannot be read means a consumed line may be listed as still queued. That is
+    // the safe direction — a comment shown twice is visible, one hidden is not — but it is a
+    // real degradation and it says so.
+    console.error(`[queue] cannot list ${dir} for markers: ${(e as Error).message} — ` +
+                  `already-applied comments may be listed as still queued this session`);
   }
 
   const live: QueueEntry[] = [];

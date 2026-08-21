@@ -670,11 +670,19 @@ const queueEntriesFor = async (slug: string, draft: string): Promise<any[]> => {
   } catch (e) {
     // Every listing failure, not only a missing directory. The comment below promised that the
     // current queue survives when the directory cannot be listed, and the code kept the promise
-    // for ENOENT alone: a directory that is traversable but not listable (0711) fails readdir
-    // with EACCES while `readFile` by name still succeeds, and rethrowing turned that into a 500.
+    // for ENOENT alone: a directory the process can traverse but not READ fails the listing while
+    // a file opened by name inside it still succeeds, and rethrowing turned that into a 500.
     // The sidebar then said it could not read the queue, and — since the DELETE existence check
     // runs through this same function — retracting a comment stopped working, with the readable
     // queue file sitting right there.
+    // WHEN THIS ACTUALLY FIRES, because it is not the startup case a reader would assume. Serving
+    // an unreadable directory never gets here: `watch()` on it throws before the server accepts
+    // anything, and the process dies. What reaches this line is a directory whose permissions
+    // change while the server runs — the watcher is already established, so the process stays up
+    // and the next queue read is the first thing to fail.
+    // No mode number here on purpose. Which octal produces the condition depends on who the
+    // process is, so a number in this comment reads as a recipe and misleads whoever tries it as
+    // one — the reproduction lives in the commit that measured it.
     // Logged rather than swallowed: without a line here, a carried-over queue that has quietly
     // stopped being found looks exactly like one that was never there.
     console.error(`[queue] cannot list ${dir}: ${(e as Error).message} — reading ${ownQueue} by name; ` +

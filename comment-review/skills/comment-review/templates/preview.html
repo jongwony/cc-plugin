@@ -873,6 +873,7 @@ function dismissPopup() {
   // machine that has to be kept in step with each of them.
   if (heldReload) {
     heldReload = false;
+    paintConn();   // the page is about to go, but not painting here leaves a lie if it does not
     sessionStorage.setItem("scrollY", String(window.scrollY));
     location.reload();
   }
@@ -1542,10 +1543,31 @@ const conn = document.getElementById("cr-status-conn");
 // working rather than a race — do not try to make this flag survive the reload instead, since
 // a client-side store cannot know about a watcher that died before this page ever existed.
 let watchStale = false;
+
+// TWO FACTS SHARE ONE PILL, and until now the later writer simply won. The socket's own state
+// arrives through setConn; the held-reload notice was written straight over it, and then the next
+// `onclose`/`onopen` pair wrote back over that — so a page sitting on a stale render went back to
+// reading "live", with the toast gone 1.8 seconds earlier.
+// Gating held-reload the way `watchStale` is gated would fix that by killing the other fact: a
+// genuine disconnection would go unsaid, which is the same loss `watchStale` exists to prevent,
+// just pointed at the other message. And the two states are not alike — `watchStale` is terminal
+// while a held reload is released by dismissPopup.
+// So neither wins: the pill is composed from both. The socket's own words are kept here rather
+// than read back off the element, because reading them back would make the pill its own input.
+let connState = { text: "live", disconnected: false };
 function setConn(text, disconnected) {
   if (watchStale) return;
-  conn.classList.toggle("disconnected", disconnected);
-  conn.textContent = text;
+  connState = { text, disconnected };
+  paintConn();
+}
+function paintConn() {
+  if (watchStale) return;
+  const held = heldReload ? "source changed — refresh held" : "";
+  // While connected the socket has nothing to add, so the held notice stands alone. While
+  // disconnected both are said, because a page that is out of date AND cannot hear about further
+  // changes is in a worse position than either alone, and the user cannot infer the second.
+  conn.textContent = held ? (connState.disconnected ? held + " · " + connState.text : held) : connState.text;
+  conn.classList.toggle("disconnected", connState.disconnected || heldReload);
 }
 
 // Named, and branching on `type` BEFORE it can reload. Both message kinds arrive on the same
@@ -1591,10 +1613,10 @@ function handleWsMessage(e) {
     if (editorHoldsUnsentText()) {
       heldReload = true;
       // Two surfaces on purpose. The toast is what gets noticed; the pill is what is still there
-      // two minutes later, which is how long writing a comment can take. setConn declines to
+      // two minutes later, which is how long writing a comment can take. paintConn declines to
       // write while the watcher is dead — that state is heavier than this one and keeps the pill.
       showToast("⚠ the source changed — this page is out of date, and will refresh when you finish", true);
-      setConn("source changed — refresh held", true);
+      paintConn();
       return;
     }
     sessionStorage.setItem("scrollY", String(window.scrollY));

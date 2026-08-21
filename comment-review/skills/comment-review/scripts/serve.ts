@@ -599,21 +599,46 @@ const serveSiblingAsset = async (assetPath: string, referer: string | null, rang
 // What it does NOT buy: this is not authentication. A client that sends no `Origin` at all —
 // curl, a script, anything that is not a browser — still writes, deliberately, because that is
 // the local-tooling path. The tailnet exposure recorded as H9 is therefore UNCHANGED by this
-// check; do not read it as having closed that. Read paths (/preview/, sibling assets, vendored
-// assets) are untouched on purpose: what was decided here was the write side.
+// check; do not read it as having closed that.
+//
+// NOT ONLY WRITES, which is why the name no longer says so. The `/ws` upgrade is gated by this
+// same list. The read paths are not, and the difference is not a matter of degree: `GET
+// /feedback` sends no CORS header, so the browser itself refuses to hand the response body to a
+// cross-origin script and an allow-list there would be a second lock on a held door. A
+// WebSocket handshake is not subject to CORS at all — the browser performs it cross-origin and
+// delivers every frame to the page — so behind this check there is no browser-held lock, and
+// without it any page the user had open could read the artifact's name and the timing of every
+// comment and every edit of the source. /preview/, sibling assets and the vendored assets stay
+// ungated for the reason the read paragraph gives at the queue-read route.
 //
 // `Origin: null` — a sandboxed iframe, or a page loaded from file:// — arrives as the literal
 // string "null" rather than as an absent header, so it falls outside the allow-list and is
 // refused. That is the intended answer for it.
-const writeOriginAllowed = (req: Request, port: number): boolean => {
+const browserOriginAllowed = (req: Request, port: number): boolean => {
   const origin = req.headers.get("origin");
-  if (origin === null) return true; // not a browser write — see above
+  if (origin === null) return true; // not a browser — see above
   const allowed = [`http://${bindHost}:${port}`, `http://localhost:${port}`];
   // The startup banner advertises the MagicDNS name alongside the IP, and a phone that opens
   // THAT url sends it as its origin. An allow-list built from the IP alone would refuse
   // exactly the path the tailnet bind exists to serve, and the only symptom would be that
   // saving quietly stopped working.
-  if (tailnet?.dnsName) allowed.push(`http://${tailnet.dnsName}:${port}`);
+  if (tailnet?.dnsName) {
+    allowed.push(`http://${tailnet.dnsName}:${port}`);
+    // MagicDNS resolves the short name as well as the FQDN, and a phone typing a host by hand
+    // gets the short one. The page then loads — reads are ungated — and only saving fails, which
+    // is the same silent symptom the paragraph above was written about, arriving through the
+    // name it did not list.
+    const short = tailnet.dnsName.split(".")[0];
+    if (short) allowed.push(`http://${short}:${port}`);
+  }
+  // Whole origins are compared, never a part of one. Matching on the port alone would admit
+  // `http://evil.example:<port>` — any page can be served on any port — which is not a weaker
+  // guard but the absence of one.
+  // A list, and not a comparison against this request's own `Host`, though that would need no
+  // maintaining and would admit every name that reaches the server. It would also admit a
+  // rebound one: a page on a hostile domain whose DNS is repointed here sends Host and Origin
+  // that agree with each other, and the list is what tells them apart. So a name nobody listed
+  // is refused rather than admitted — the failure this shape chooses is the recoverable one.
   return allowed.includes(origin);
 };
 
@@ -893,7 +918,11 @@ const server = Bun.serve({
     //   does not otherwise have.
     //   Against anything that can simply REACH the port — which is the exposure the tailnet
     //   bind creates — an Origin check does nothing at all: a client that omits the header is
-    //   treated as "not a browser write" and allowed, so the check is not a barrier there.
+    //   treated as "not a browser" and allowed, so the check is not a barrier there.
+    //   This argument does NOT reach `/ws`, which is checked. Its first clause is the whole
+    //   basis for leaving this route open, and it rests on CORS holding the body back from a
+    //   cross-origin script — and a WebSocket handshake is not a CORS request. Read the two
+    //   routes as differing on that fact, not as an inconsistency.
     // What it DOES change, measured: the same bytes are already served from
     // /preview/feedback-{slug}.jsonl as a sibling asset, but only for a request carrying a
     // Referer that names a known slug. With one artifact there is a single-draft fallback, so
@@ -922,7 +951,7 @@ const server = Bun.serve({
     // it, not by any tag vocabulary here — the layer that once parsed such tags was removed
     // when this plugin was ported, and nothing replaced it.
     if (url.pathname === "/feedback" && req.method === "POST") {
-      if (!writeOriginAllowed(req, srv.port)) {
+      if (!browserOriginAllowed(req, srv.port)) {
         return new Response("cross-origin write refused", { status: 403 });
       }
       let body: FeedbackBody;
@@ -993,7 +1022,7 @@ const server = Bun.serve({
     }
 
     if (url.pathname === "/feedback" && req.method === "DELETE") {
-      if (!writeOriginAllowed(req, srv.port)) {
+      if (!browserOriginAllowed(req, srv.port)) {
         return new Response("cross-origin write refused", { status: 403 });
       }
       // Tombstone strategy keyed by stable id. Existence check guards against ghost
@@ -1071,6 +1100,13 @@ const server = Bun.serve({
     }
 
     if (url.pathname === "/ws") {
+      // Gated for the reason spelled out at the allow-list: nothing else holds this door. A page
+      // on any origin can open this socket, and every frame published here names the artifact
+      // and dates the comment or source edit that caused it.
+      if (!browserOriginAllowed(req, srv.port)) {
+        console.error(`[ws] cross-origin upgrade refused from ${req.headers.get("origin")}`);
+        return new Response("cross-origin upgrade refused", { status: 403 });
+      }
       if (srv.upgrade(req)) return;
       return new Response("upgrade failed", { status: 400 });
     }

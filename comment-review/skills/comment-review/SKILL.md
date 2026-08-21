@@ -103,9 +103,10 @@ free-exit : the user may end the review at any time by saying so (Phase 0 prose 
    something the user can be assumed to know, and there is no way to turn it off — no flag
    and no environment variable disables it, so do not imply one exists.
    Where the bind is loopback (no tailnet), say that instead; the startup lines are what
-   distinguish the two, so read them rather than guessing. The server refuses writes carrying
-   a cross-origin `Origin` header, which stops another *web page* from writing into the
-   queue — it is not authentication and does not bear on tailnet reachability at all.
+   distinguish the two, so read them rather than guessing. The server refuses writes AND
+   live-channel connections carrying a cross-origin `Origin` header, which stops another *web
+   page* from writing into the queue or listening to it — it is not authentication and does not
+   bear on tailnet reachability at all.
 4. **Round 1 entry** — surface the queue size for this artifact, or "No prior comments —
    fresh start." A slug widens when two artifacts would otherwise share one, so the same
    artifact can have left a queue under a different name in an earlier session: look beside

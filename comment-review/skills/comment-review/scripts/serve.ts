@@ -599,7 +599,18 @@ const serveSiblingAsset = async (assetPath: string, referer: string | null, rang
         // Attached from the table's own declaration, so a type added later is covered by the
         // answer its entry gives rather than by anyone remembering this line exists.
         ...(assetType?.document ? { "Content-Security-Policy": DOCUMENT_CSP } : {}),
-        ...(range ? { "Content-Range": `bytes ${start}-${end}/${size}` } : {}),
+        // Declared, not derived. Leaving `Content-Length` to the runtime made it disagree with
+        // the `Content-Range` right beside it on HEAD: the runtime honours the slice's START and
+        // ignores its END, so it answers `size - start` and every bounded range is wrong unless
+        // it happens to run to EOF. A client sending HEAD with a Range is asking how big the part
+        // is — that is the whole reason to send it — and the header carrying the answer was the
+        // wrong one. GET was already right, which is what made it invisible.
+        // Stating it also stops the answer depending on a runtime behaviour nobody documented,
+        // so it stays true across Bun versions rather than across this one.
+        ...(range ? {
+          "Content-Range": `bytes ${start}-${end}/${size}`,
+          "Content-Length": String(end - start + 1),
+        } : {}),
       },
     });
   } finally {

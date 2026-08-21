@@ -1176,10 +1176,19 @@ function resolveQueueAnchors() {
     if (!liveIds.has(m.dataset.crId)) unmarkElement(m);
   }
   for (const entry of queueEntries) {
-    // Already marked: leave it. The element under a mark this page placed itself is the exact
-    // one that was right-clicked, which is stronger than anything re-resolving the path could
-    // establish. Re-resolving here would let an ambiguous selector MOVE a correct mark.
-    if (markForId(entry.id)) continue;
+    // Already marked: keep WHERE it is, take WHAT it says. Two different questions, and only the
+    // first one is settled by the existing mark. The element under a mark this page placed is
+    // the exact one that was right-clicked, which is stronger than re-resolving the path could
+    // establish — an ambiguous selector would MOVE a correct mark. But the comment TEXT on that
+    // element is just this page's copy of a line the server owns, and skipping the entry left it
+    // frozen: the sidebar re-rendered from the server while the mark and its borrowed tooltip
+    // went on showing the old words. openEditPopup fills the editor from the mark, not from the
+    // queue, so a user who right-clicked and pressed ⌘Enter without typing sent the stale text
+    // back with a later timestamp and silently reverted somebody else's edit.
+    // markElement is safe to call again: its title-saving guard tests `in` on the dataset, so a
+    // second call does not overwrite the artifact's original title with the borrowed one.
+    const already = markForId(entry.id);
+    if (already) { markElement(already, entry.selector, entry.comment, entry.id); continue; }
     // Why an entry could not be confirmed, kept so the page can say which of these happened.
     // "Comment on it again" is true advice for one of them and false for another, and saying it
     // where it is false is worse than saying nothing.
@@ -1250,8 +1259,22 @@ async function refreshQueue() {
   }
   if (mine !== queueSeq) return; // a newer read started while this one was in flight
   queueEntries = Array.isArray(data.entries) ? data.entries : [];
+  // What the editor is holding, before the refresh moves the mark's text underneath it.
+  const editingId = pending && pending.editingMark ? pending.editingMark.dataset.crId : null;
+  const editingWas = editingId ? (pending.editingMark.dataset.crComment || "") : null;
   resolveQueueAnchors();
   renderSidebar();
+  // The popup is not touched — not the text, not `pending`. This project has settled that twice,
+  // and a comment being written is worth more than a tidy editor. But leaving it silent is how
+  // the revert above happens by hand instead of by code: the user is looking at words that are
+  // no longer the comment, with no way to tell. So the change is announced and the choice stays
+  // theirs.
+  if (editingId) {
+    const now = queueEntries.find((e) => e.id === editingId);
+    if (now && now.comment !== editingWas) {
+      showToast("⚠ this comment was just changed elsewhere — sending will overwrite that change", true);
+    }
+  }
 }
 
 function renderSidebar() {

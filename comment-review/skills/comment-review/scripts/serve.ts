@@ -13,7 +13,7 @@
 //
 // Stop with Ctrl-C. No port collision: Bun.serve(port: 0) lets the OS pick.
 
-import { accessSync, closeSync, constants, existsSync, fstatSync, openSync, statSync, watch, writeSync } from "node:fs";
+import { accessSync, closeSync, constants, existsSync, fstatSync, openSync, realpathSync, statSync, watch, writeSync } from "node:fs";
 import { readdir, readFile, realpath } from "node:fs/promises";
 import { basename, dirname, extname, isAbsolute, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
@@ -80,7 +80,18 @@ const slugCandidates = (abs: string): string[] => {
 };
 
 const drafts = new Map<string, string>(); // slug -> absolute path
-const paths = [...new Set(args.map((a) => resolve(a)))]; // same file twice is one artifact
+// resolve() makes a path absolute and flattens `..`; it does NOT follow symlinks. This string
+// becomes the `artifact` on every queue line and is compared with `!==` when the queue is read,
+// so two spellings of one file were two artifacts: a comment written through one was invisible
+// to the other and could not be retracted from it — the failure fix 69 closed, arriving through
+// a different door. It needs no hand-made symlink to reach: on macOS /tmp and /var are symlinks
+// themselves, so every artifact under them already has two spellings.
+// A path that cannot be resolved keeps its resolved form so the readable-file guard below is the
+// thing that reports it — realpath throwing here would replace that sentence with a stack trace.
+const paths = [...new Set(args.map((a) => {
+  const abs = resolve(a);
+  try { return realpathSync(abs); } catch { return abs; }
+}))]; // same file twice is one artifact, however it was spelled
 for (const abs of paths) {
   // resolve() accepts any string, so a mistyped path registers a slug and the index links it.
   // Phase 0 reads the "serving at" line as the start confirmation, which means the typo is
@@ -692,6 +703,22 @@ const queueEntriesFor = async (slug: string, draft: string): Promise<any[]> => {
   // readdir failed would be a far worse failure than missing a carryover.
   if (!queueFiles.includes(ownQueue)) queueFiles.push(ownQueue);
 
+  // Registration now normalises, so lines written from here on carry one identity. Lines written
+  // BEFORE it do not, and dropping those would be a defect this fix created rather than removed.
+  // So the comparison normalises as well. Cached per call: it is one syscall per distinct path
+  // rather than per line, and a per-call cache cannot go stale against a symlink repointed
+  // mid-session the way a process-wide one could.
+  const canonCache = new Map<string, string>();
+  const canonical = (p: string) => {
+    const hit = canonCache.get(p);
+    if (hit !== undefined) return hit;
+    let r = p;
+    try { r = realpathSync(p); } catch { /* gone or unreadable — the raw string is all there is */ }
+    canonCache.set(p, r);
+    return r;
+  };
+  const draftCanon = canonical(draft);
+
   for (const name of queueFiles) {
     const isOwnQueue = name === ownQueue;
     let content: string;
@@ -708,7 +735,7 @@ const queueEntriesFor = async (slug: string, draft: string): Promise<any[]> => {
       let e: any;
       try { e = JSON.parse(line); } catch { continue; }
       const claimsArtifact = typeof e?.artifact === "string" && isAbsolute(e.artifact);
-      if (claimsArtifact) { if (e.artifact !== draft) continue; }
+      if (claimsArtifact) { if (canonical(e.artifact) !== draftCanon) continue; }
       else if (!isOwnQueue) continue;
       entries.push(e);
     }

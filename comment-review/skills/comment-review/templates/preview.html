@@ -1059,8 +1059,19 @@ async function submitFeedback() {
     const entryId = id || (captured.editingMark && captured.editingMark.dataset.crId);
     queueEntries = queueEntries.filter((e) => e.id !== entryId).concat([{
       id: entryId, selector: captured.selector, anchorText: reqBody.anchorText,
-      comment, timestamp: new Date().toISOString(),
+      anchorSig: reqBody.anchorSig, comment, timestamp: new Date().toISOString(),
     }]);
+    // Through resolveQueueAnchors, not straight to renderSidebar. An entry carries more than the
+    // fields the server sends: `el`, `ownsMark` and `unconfirmed` are decided by resolving it,
+    // and renderSidebar reads all three. Handing it a hand-built object left those undefined, so
+    // the row for the comment just saved read "another comment holds this element's marker" —
+    // false — and clicking it passed `undefined` to pulseElement instead of scrolling.
+    // Filling the three by hand here would work today and is exactly how this broke: there are
+    // two places that build an entry and only one knew the contract. A fourth field would find
+    // the same gap. So the second place stops building and calls the first.
+    // It costs nothing: markElement ran just above, so markForId finds this id and the
+    // already-marked branch takes it — no selector is re-resolved.
+    resolveQueueAnchors();
     renderSidebar();
     refreshQueue();
   } catch (e) {
@@ -1134,6 +1145,10 @@ async function deleteFeedback() {
     // element was already unmarked above; leaving its row up until a read returns would show a
     // comment that is gone.
     queueEntries = queueEntries.filter((e) => e.id !== id);
+    // Same reason as the submit path, and one of its own: on a shared element the mark this
+    // delete just removed may free the element for another live entry, and that entry's row goes
+    // on saying "another comment holds its marker" until something re-resolves it.
+    resolveQueueAnchors();
     renderSidebar();
     refreshQueue();
     showToast("✓ deleted");

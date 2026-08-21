@@ -989,7 +989,10 @@ async function submitFeedback() {
     // What the anchored element read as at capture time. A positional selector can still
     // resolve after later edits and land on a different block; the guard only ever asked
     // whether it resolved. This is what lets the apply step tell those apart.
-    anchorText: (captured.targetEl.textContent || "").replace(/\s+/g, " ").trim().slice(0, 300),
+    anchorText: anchorTextOf(captured.targetEl),
+    // Only where the text is empty. Where there IS text, it is the better evidence — it is what
+    // the comment was written about, and it changes when the block changes.
+    anchorSig: anchorTextOf(captured.targetEl) ? "" : anchorSigOf(captured.targetEl),
   };
 
   // `pending` is not cleared until the response lands, so without this guard a repeated
@@ -1129,6 +1132,29 @@ const markForId = (id) => {
 // paragraph is stored truncated, so comparing the untruncated text would fail every time.
 const anchorTextOf = (el) => (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 300);
 
+// The stand-in for an element whose text is legitimately empty — an <img>, an <hr>, a figure
+// holding only a picture, an empty cell. Built ONLY from what the source author wrote, because
+// evidence that the render computed (position, ordinal, size) moves whenever the source does and
+// would therefore confirm an anchor precisely when it should not.
+//
+// `title` is not in the list and must not be: markElement borrows that attribute to hold the
+// comment, so it would be evidence of this tool's own writing. `cr-` classes come off for the
+// same reason. Both are ours, not the document's.
+//
+// One function, used by the write path and the read path alike — 63's lesson: a comparison is
+// only meaningful against the same transformation that produced the value.
+const ANCHOR_SIG_ATTRS = ["id", "src", "srcset", "href", "alt", "name", "type", "value", "width", "height"];
+function anchorSigOf(el) {
+  if (!el || el.nodeType !== Node.ELEMENT_NODE) return "";
+  const parts = [el.tagName.toLowerCase()];
+  for (const a of ANCHOR_SIG_ATTRS) {
+    if (el.hasAttribute(a)) parts.push(a + "=" + el.getAttribute(a));
+  }
+  const cls = (el.getAttribute("class") || "").split(/\s+/).filter((c) => c && c.indexOf("cr-") !== 0);
+  if (cls.length) parts.push("class=" + cls.join(" "));
+  return parts.join("|").slice(0, 300);
+}
+
 // Put marks back on the page for entries that are not marked yet.
 //
 // THE GUARD, AND WHY IT ARRIVES WITH THIS FUNCTION. The recorded selector is a path, not a
@@ -1154,14 +1180,46 @@ function resolveQueueAnchors() {
     // one that was right-clicked, which is stronger than anything re-resolving the path could
     // establish. Re-resolving here would let an ambiguous selector MOVE a correct mark.
     if (markForId(entry.id)) continue;
-    if (!entry.selector || !entry.anchorText) continue;
+    // Why an entry could not be confirmed, kept so the page can say which of these happened.
+    // "Comment on it again" is true advice for one of them and false for another, and saying it
+    // where it is false is worse than saying nothing.
+    entry.unconfirmed = null;
+    if (!entry.selector) { entry.unconfirmed = "no-selector"; continue; }
+    if (!entry.anchorText && !entry.anchorSig) { entry.unconfirmed = "no-evidence"; continue; }
     let el = null;
     try { el = root.querySelector(entry.selector); } catch { el = null; }
-    if (!el) continue;
-    if (anchorTextOf(el) !== entry.anchorText) continue;
+    if (!el) { entry.unconfirmed = "not-found"; continue; }
+    if (entry.anchorText) {
+      if (anchorTextOf(el) !== entry.anchorText) { entry.unconfirmed = "changed"; continue; }
+    } else {
+      if (anchorSigOf(el) !== entry.anchorSig) { entry.unconfirmed = "changed"; continue; }
+      // Evidence that matches several elements identifies none of them. The recorded selector is
+      // a path rather than a unique address, so it can land on a sibling that carries the same
+      // attributes — two copies of one logo, say — and the signature would agree there too.
+      // Refusing is the whole point of this guard: a visible unconfirmed row beats a mark put
+      // silently on the wrong picture and edited by the next apply round.
+      let matches = 0;
+      for (const cand of root.querySelectorAll(el.tagName)) {
+        if (anchorSigOf(cand) === entry.anchorSig) matches++;
+        if (matches > 1) break;
+      }
+      // NOT extended to the anchorText branch above. The same argument applies to two blocks of
+      // identical text, but that guard is behaviour the user already accepted, and tightening it
+      // here would change it without being asked. Recorded rather than done.
+      if (matches !== 1) { entry.unconfirmed = "ambiguous"; continue; }
+    }
     markElement(el, entry.selector, entry.comment, entry.id);
   }
 }
+
+// What actually blocked confirmation, in words, for the row and for the toast.
+const UNCONFIRMED_REASON = {
+  "no-selector": "this comment has no anchor recorded",
+  "no-evidence": "this element had nothing to identify it by — commenting on it again records the same nothing",
+  "not-found": "the anchor is not on this page — the block may have been removed",
+  "changed": "the block at this anchor has changed — comment on it again to re-anchor it",
+  "ambiguous": "more than one element here matches this anchor, so it cannot be pinned to one",
+};
 
 // One path for every change: this page's own write, another device's write, and a fresh load all
 // end here. Deliberately touches nothing but the list and the marks — not the popup, not the
@@ -1221,7 +1279,8 @@ function renderSidebar() {
     anchorEl.className = "cr-sidebar-item-anchor";
     // An unconfirmed entry still gets a row. Showing it is the whole point: the user can see
     // the comment exists and put it back, which a silently missing row denies them.
-    anchorEl.textContent = mark ? (entry.selector || "") : "⚠ anchor not confirmed — " + (entry.selector || "");
+    anchorEl.textContent = mark ? (entry.selector || "") : "⚠ not confirmed — " + (entry.selector || "");
+    if (!mark) anchorEl.title = UNCONFIRMED_REASON[entry.unconfirmed] || "this anchor could not be confirmed";
 
     // The row is an index entry, not a copy of the comment — the comment text lives on
     // the element itself (title + popup). Keep the full comment as the row's tooltip so
@@ -1231,7 +1290,10 @@ function renderSidebar() {
     item.appendChild(anchorEl);
     const openEdit = () => {
       if (!mark) {
-        showToast("⚠ this comment's anchor is not on the page — re-anchor it by commenting again", true);
+        // Was: "re-anchor it by commenting again", said for every unconfirmed row. For an element
+        // with no identifying evidence that is simply false — commenting again records the same
+        // emptiness — so the reason is said instead of the remedy.
+        showToast("⚠ " + (UNCONFIRMED_REASON[entry.unconfirmed] || "this anchor could not be confirmed"), true);
         return;
       }
       pulseElement(mark);

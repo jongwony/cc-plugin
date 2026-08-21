@@ -287,6 +287,11 @@ interface FeedbackBody {
   selector: string; // CSS path down to the right-clicked element — a path, not a unique address
   comment: string;
   anchorText?: string; // rendered text of that element when the comment was made
+  // Sent only when anchorText came out empty. An <img>, an <hr>, a figure holding only a
+  // picture, an empty cell: those have no text LEGITIMATELY, and treating that emptiness as
+  // "no evidence" left them permanently unconfirmable. This carries source-authored attributes
+  // instead — never anything the render computed, which would move whenever the source did.
+  anchorSig?: string;
   id?: string; // optional on POST: present for edits (re-uses original id), absent for new entries
 }
 
@@ -616,7 +621,7 @@ const writeOriginAllowed = (req: Request, port: number): boolean => {
 // no consumed-marker for that `id` carries a `consumedThrough` at or after that entry's
 // timestamp. Where the latest timestamp is a tie between entries of DIFFERENT KINDS, the one
 // that produces no edit wins — a tombstone beats an edit of the same millisecond.
-type QueueEntry = { id: string; selector: string; anchorText: string; comment: string; timestamp: string };
+type QueueEntry = { id: string; selector: string; anchorText: string; anchorSig: string; comment: string; timestamp: string };
 
 const liveQueueEntries = async (slug: string, draft: string): Promise<QueueEntry[]> => {
   const dir = dirname(draft);
@@ -730,6 +735,7 @@ const liveQueueEntries = async (slug: string, draft: string): Promise<QueueEntry
       id,
       selector: typeof e.selector === "string" ? e.selector : "",
       anchorText: typeof e.anchorText === "string" ? e.anchorText : "",
+      anchorSig: typeof e.anchorSig === "string" ? e.anchorSig : "",
       comment: typeof e.comment === "string" ? e.comment : "",
       timestamp: t,
     });
@@ -873,6 +879,9 @@ const server = Bun.serve({
         // Client-supplied, so capped here: a positional selector outlives the block it was
         // written about, and this is what the apply step compares against to notice.
         anchorText: isStr(body.anchorText) ? body.anchorText.slice(0, MAX_ANCHOR_TEXT_LEN) : "",
+        // Same cap as anchorText, and for the same reason: the page truncates before sending, so
+        // a comparison against an uncapped value would fail on every long one.
+        anchorSig: isStr(body.anchorSig) ? body.anchorSig.slice(0, MAX_ANCHOR_TEXT_LEN) : "",
         comment: body.comment,
         timestamp: new Date().toISOString(),
       };
@@ -959,6 +968,7 @@ const server = Bun.serve({
         artifact: draft,
         selector: liveEntry.selector ?? "",
         anchorText: typeof liveEntry.anchorText === "string" ? liveEntry.anchorText : "",
+        anchorSig: typeof liveEntry.anchorSig === "string" ? liveEntry.anchorSig : "",
         comment: "",
         deleted: true,
         timestamp: new Date().toISOString(),

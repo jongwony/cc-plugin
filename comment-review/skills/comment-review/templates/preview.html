@@ -1102,10 +1102,23 @@ async function deleteFeedback() {
   }
   const captured = pending;
   const editedMark = captured.editingMark;
-  const id = editedMark.dataset.crId;
+  // From `captured`, not from the element. `openEditPopup` takes the id by value when the popup
+  // opens; the attribute it came from can be gone by the time Delete is pressed, because a
+  // delete on another screen makes `resolveQueueAnchors` unmark this element — which is exactly
+  // the situation 73's notice fires in, so the button was lying in the one case the page had
+  // already warned about. And it lied about the cause: there is no "pre-update mark" format,
+  // and a user told to blame one has nowhere to go. The submit path a few lines up already reads
+  // `captured`; only this one went back to the DOM.
+  // With the real id the request reaches the server and the server's own answer comes back —
+  // "not found or already deleted" — which is true, which is the standard 76 set for these.
+  const id = captured.id;
 
+  // Unreachable as the file stands: `editingMark` is set non-null in exactly one place, and that
+  // same object literal sets `id` (`el.dataset.crId || newId()`), so passing the guard above
+  // means this is set. Kept for a second writer of `editingMark` that does not, and worded to
+  // say only what would then be true.
   if (!id) {
-    showToast("✗ delete unavailable (no id — pre-update mark)", true);
+    showToast("✗ delete unavailable — this comment has no id recorded", true);
     return;
   }
 

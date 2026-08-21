@@ -1304,8 +1304,19 @@ async function refreshQueue() {
     // Said, not prevented. Blocking the send would destroy words being written, which this page
     // does not do — the same reason the reload waits rather than discarding, and the same reason
     // the change notice above only speaks.
+    //
+    // TWO ROUTES OUT, and this page cannot tell them apart. A tombstone removes the entry, and so
+    // does a consumed-marker written by an apply round — the queue read drops both and hands back
+    // the same absence. An earlier wording named deletion, so a user holding the editor open
+    // while a round applied was told somebody had deleted their comment when nobody had.
+    // The repair is to stop asserting which. Carrying a reason on the wire would mean a new field
+    // and a new thing to keep true, for a sentence that is one line long.
+    // "Re-queues it" is what is accurate for both. After a deletion that reverses a retraction;
+    // after an apply round it puts back a line the source already carries, which the next round
+    // reads as already present and retires with a marker. Saying "brings it back" claimed the
+    // first of those in a case where it was the second.
     if (!now) {
-      showToast("⚠ this comment was deleted elsewhere — sending will bring it back", true);
+      showToast("⚠ this comment is no longer in the queue — deleted elsewhere, or already applied by a round. Sending re-queues it.", true);
     } else if (now.comment !== editingWas) {
       showToast("⚠ this comment was just changed elsewhere — sending will overwrite that change", true);
     }

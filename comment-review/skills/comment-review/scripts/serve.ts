@@ -338,8 +338,29 @@ function detectTailscale(): { ip: string; dnsName: string } | null {
   const tsBin = tailscaleBin();
   if (!tsBin) return null;
   try {
-    const proc = Bun.spawnSync([tsBin, "status", "--json"]);
-    if (proc.exitCode !== 0) return null;
+    // Bounded, because this runs at module top level — before Bun.serve, before anything is
+    // written to stderr. A wedged `tailscaled` (a known state after sleep/wake) made an
+    // unbounded call hold the process there with no output at all, and Phase 0 polls stderr for
+    // `serving at`: the failure showed up as an agent waiting on a line that was never coming,
+    // which is the shape that paragraph exists to prevent.
+    // 2s is generous for a local IPC call that normally answers in well under a tenth of that.
+    // Getting it wrong costs the tailnet bind, and the startup banner says which bind happened,
+    // so the wrong answer is visible rather than silent.
+    // A timeout kills with SIGTERM and leaves `exitCode` null, so the check below already
+    // catches it — this adds the bound, not a branch.
+    const proc = Bun.spawnSync([tsBin, "status", "--json"], { timeout: 2000 });
+    if (proc.exitCode !== 0) {
+      // The one detection failure that speaks, and the difference is not severity. Every other
+      // one is an ANSWER — not installed, exited non-zero, not Running, no address — and a
+      // loopback bind is the plainly right response to it, needing no explanation. A timeout is
+      // a NON-answer: tailscale is there and may well be up, so the user can expect the tailnet
+      // bind and get loopback with nothing to read. That gap is what this line closes.
+      if (proc.exitCode === null) {
+        console.error(`[tailscale] status did not answer within 2s — binding loopback instead; ` +
+                      `the tailnet address will not be offered this session`);
+      }
+      return null;
+    }
     const status = JSON.parse(proc.stdout.toString());
     // Stopped/disconnected daemon still reports stale TailscaleIPs that aren't bound locally.
     if (status?.BackendState !== "Running") return null;

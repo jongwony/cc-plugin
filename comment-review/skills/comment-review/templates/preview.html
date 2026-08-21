@@ -1714,7 +1714,21 @@ function connectWS() {
 }
 connectWS();
 
-// Restore scroll on reload
+// Restore scroll on reload — a floor, not the mechanism.
+//
+// NOT what preserves the reader's position in practice, and it is worth saying so because the
+// shape invites the opposite reading. This runs at the end of the inline script, before layout
+// and before subresources, so `scrollTo` clamps against a document that may still be short — an
+// artifact whose `<img>` carries no width/height contributes nothing yet. Reasoning from that,
+// this looks like a bug that drops the reader far above where they were.
+// It does not, because the browser restores the scroll position of a reloaded page itself and
+// re-attempts as content settles. Measured by deleting this block outright: the position came
+// back regardless, both for an artifact with a late 3000px image and for a text-only one.
+// Kept anyway, and the reason is what it can and cannot do rather than what it usually does:
+// `scrollTo` clamps, so this can only ever land AT or ABOVE the saved offset, never past it. It
+// costs nothing when the browser is doing the work and it is the only thing left when the
+// browser is not — `history.scrollRestoration` can be set to "manual", and some privacy modes
+// change it. Do not read it as the guarantee; the guarantee is the browser's.
 const savedScroll = sessionStorage.getItem("scrollY");
 if (savedScroll) {
   window.scrollTo(0, parseInt(savedScroll, 10));

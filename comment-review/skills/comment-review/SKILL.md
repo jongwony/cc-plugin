@@ -306,13 +306,25 @@ review *is* the rendered artifact.
 
 ### JSONL Consumption Timing
 
-Each JSONL line: `{id, slug, artifact, selector, anchorText, comment, timestamp}`, where
-`artifact` is the absolute path of the source file the comment belongs to and `anchorText` is
-the *rendered* text of the anchored element as it read when the comment was made (capped at
-300 characters). It is rendered text, not source text, so it will not match the source
+Each JSONL line: `{id, slug, artifact, selector, anchorText, anchorSig, comment, deleted?,
+timestamp}`, where `artifact` is the absolute path of the source file the comment belongs to and
+`anchorText` is the *rendered* text of the anchored element as it read when the comment was made
+(capped at 300 characters). It is rendered text, not source text, so it will not match the source
 character for character — inline markup is gone from it. It exists so the apply step can tell
 a selector that still resolves to the right block from one that resolves to a different block
-that has since moved into its position. A deletion appends a tombstone line — same `id`,
+that has since moved into its position.
+
+`anchorSig` is that same evidence for an element with no text to record — an image, a horizontal
+rule, a figure holding only a picture, an empty cell. Those are empty legitimately, so treating
+the emptiness as "no evidence" would leave their comments unconfirmable forever. The signature
+carries the element's tag name and the attributes its author wrote — `id`, `src`, `srcset`,
+`href`, `alt`, `name`, `type`, `value`, `width`, `height`, and any class that is not the review's
+own `cr-` one — joined with `|` and capped at the same 300 characters, and it is written only
+where `anchorText` came out empty. It never carries anything the render computed: a position, an
+ordinal or a measured size moves whenever the source moves, and would confirm an anchor precisely
+when it should not.
+
+A deletion appends a tombstone line — same `id`,
 empty `comment`, `deleted: true` — rather than rewriting the file, and the apply step records
 what it consumed by appending a marker rather than rewriting either, so the log is append-only
 without qualification. Nothing overwrites it, so there is nothing for a concurrent write to
@@ -369,8 +381,21 @@ load-bearing, and what breaks without it, is in the commit that settled it.
 2. For each surviving line, locate the anchor in the source artifact per **Locating the
    Anchor in the Source** above, then **read the source before editing it**. Two questions are
    settled by that read, and both are ordinary rather than exceptional:
-   - Is this still the block the comment was written about? Compare against `anchorText`. Where
-     it is not, or where it is unclear, leave the line and surface it — see Error Recovery.
+   - Is this still the block the comment was written about? Where `anchorText` is non-empty,
+     compare against it. Where it is empty, compare against `anchorSig` instead.
+     A signature names a KIND of element and the attributes its author gave it, so read it as a
+     description and find that element in the source — do not look for the string itself. In
+     markdown the source spells `![alt](src)`, never the rendered `<img src= alt=>` the signature
+     was built from, so a character comparison there answers nothing.
+     **If more than one element in the source could answer to that signature, do not apply —
+     leave the line and surface it.** The browser refuses to place a mark on an ambiguous
+     signature, and it refuses on the grounds of what THIS step would do to the wrong element
+     afterwards; a guard that stops at the browser does not accomplish the thing it names.
+     (That uniqueness requirement is asked of the signature branch only. The text branch does not
+     carry it, deliberately — the same asymmetry the browser holds, and it is recorded rather
+     than resolved.)
+     Where the comparison fails, or where it is unclear, leave the line and surface it — see
+     Error Recovery.
    - Is this edit already present? Then a previous round was interrupted between editing the
      source and writing its marker. Record the marker and move on; do not apply it twice.
    Otherwise translate the comment into an Edit/Write call. A comment that cannot be
@@ -438,7 +463,9 @@ Artifact(s):             {list of paths}
   resolved block against the entry's `anchorText`, which records how the anchored element read
   when the comment was made; it is rendered text, so it will not match the source character
   for character, and judging whether it is the same block is the point rather than an
-  obstacle. Where they are the same block, apply. Where they are not, or where it is unclear,
+  obstacle. Where `anchorText` is empty the element had no text to record and `anchorSig` is
+  what to compare instead — read it as a description of the element rather than as a string,
+  and where more than one element in the source answers to it, that counts as unclear. Where they are the same block, apply. Where they are not, or where it is unclear,
   leave the line in the queue and surface it so the user can judge — the two errors are not
   symmetric: a needless return is visible and cheap, while a wrong match edits a region the
   comment was never about, silently. Do not silently drop it, and do not pick a nearby block

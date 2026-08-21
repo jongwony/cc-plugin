@@ -102,6 +102,10 @@ free-exit : the user may end the review at any time by saying so (Phase 0 prose 
    That reach is deliberate: it is what lets a draft be read on a phone. It is also not
    something the user can be assumed to know, and there is no way to turn it off — no flag
    and no environment variable disables it, so do not imply one exists.
+   The tailnet address REPLACES loopback rather than adding to it: with tailscale up, that is
+   the only address the server answers on. Relay the startup line that says so, because the
+   consequence lands mid-review — if the tailnet interface drops, open tabs stop connecting and
+   the server has to be restarted.
    Where the bind is loopback (no tailnet), say that instead; the startup lines are what
    distinguish the two, so read them rather than guessing. The server refuses writes AND
    live-channel connections carrying a cross-origin `Origin` header, and refuses READS whose

@@ -356,6 +356,27 @@ function detectTailscale(): { ip: string; dnsName: string } | null {
 // bind to the tailnet interface instead, exposing the preview to the user's own
 // tailnet devices (e.g. mobile) — a deliberate widening from loopback-private to
 // tailnet-private, scoped to that single interface (not 0.0.0.0/all networks).
+//
+// WHAT THAT SCOPING COSTS, which the sentence above stated only as a safety property. It is ONE
+// address, not an additional one: with tailscale running, loopback stops answering. If the
+// tailnet interface goes away mid-review — `tailscale down`, a logout, a sleep/wake that drops
+// the utun address — every open preview tab and every queue read starts refusing to connect, and
+// there is no second address to fall back to. The comment's own `localhost` entry in the
+// allow-list is the visible edge of this: it is on the list and nothing can reach it.
+//
+// NOT REPAIRED BY WIDENING THE BIND, and 91 makes that worth saying plainly now that a Host
+// allow-list exists. A Host check is not an interface restriction: anything that can reach the
+// port sends whatever Host it likes, so 0.0.0.0 would trade a real network boundary for a header
+// the client writes. The bind is the boundary.
+//
+// NOT REPAIRED BY A SECOND SERVER either, which was the other candidate. `Bun.serve` binds one
+// hostname, so covering loopback as well means a second instance — and `publish()` is per
+// instance, so the two would have separate WebSocket topics. A comment posted through one would
+// not notify sockets held by the other: "two screens, two facts" rebuilt at the transport layer,
+// which is the failure the queue endpoint exists to end.
+// So what is done instead is to SAY it, in the startup banner the skill relays verbatim. This
+// repository's grain is to state the true thing rather than repair it quietly, and here the
+// quiet repair is the one that costs more than it removes.
 const tailnet = detectTailscale();
 const bindHost = tailnet ? tailnet.ip : "127.0.0.1";
 
@@ -1301,6 +1322,10 @@ if (tailnet) {
   // the rendered preview and this one handed the draft index to whoever typed the MagicDNS name
   // — on a phone, which is the path the tailnet bind exists for.
   if (tailnet.dnsName) console.error(`  or via MagicDNS: http://${tailnet.dnsName}:${server.port}/${openPath}`);
+  // After both addresses, because it applies to both and to nothing else. Without it the tailnet
+  // bind reads as an addition, and the first sign that it is a replacement is a dead tab.
+  console.error(`  those addresses only — loopback is not bound while tailscale is up, so if the`);
+  console.error(`  tailnet interface drops, open tabs stop connecting and the server needs a restart.`);
 }
 console.error("Ctrl-C to stop.");
 

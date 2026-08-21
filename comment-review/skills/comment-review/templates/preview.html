@@ -1658,7 +1658,23 @@ function connectWS() {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const ws = new WebSocket(`${proto}//${location.host}/ws`);
 
-  ws.onopen = () => setConn("live", false);
+  ws.onopen = () => {
+    setConn("live", false);
+    // The socket is how this page hears about the queue, so everything that happened while it
+    // was closed was never delivered — and nothing else would ever deliver it. The page stayed
+    // wrong until its own next write or a source change, with the pill saying "live" over a
+    // list that was not. That is 63's "two screens, two facts" arriving through the outage
+    // instead of through a race, and the outage is the whole reason the reconnect timer exists:
+    // a phone going to background, a tailnet link dropping — the path the tailnet bind is for.
+    // 73's notice comes with it for free: if the comment being edited changed or vanished while
+    // this page was away, refreshQueue says so rather than letting the next ⌘Enter overwrite it.
+    // Runs on the FIRST open too. Skipping it would save one request against a local server on a
+    // page that just rendered, and cost a flag — and the flag would be wrong in the case that
+    // needs this most: a first connection that fails and retries never sets it, so the open that
+    // finally succeeds would be treated as the first and skip. There is also a real gap on a
+    // genuine first open, between the page's initial read and the socket being ready.
+    refreshQueue();
+  };
   ws.onclose = () => {
     setConn("reconnecting…", true);
     setTimeout(connectWS, 2000);

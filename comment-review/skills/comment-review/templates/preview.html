@@ -1215,6 +1215,30 @@ function anchorSigOf(el) {
 // An entry with no anchorText is not evidence that the anchor is right; it is the absence of
 // the evidence, and it is treated as such.
 function resolveQueueAnchors() {
+  // How many elements carry each signature, counted ONCE for the whole pass. The count used to
+  // be taken per entry, walking the tree and computing anchorSigOf on every element each time:
+  // O(entries x DOM). This function runs on every `queue-changed` frame, every submit and every
+  // delete, and it is synchronous — so on a large HTML artifact with several picture comments,
+  // one person commenting held the other person's main thread while they were typing.
+  // Built lazily: a queue with no textless entry never asks, and then this costs nothing.
+  // Keyed by tag AND signature, which is not redundant even though the signature opens with the
+  // tag: anchorSigOf lowercases it, so two tag names differing only in case — an SVG `clipPath`
+  // beside an element named `clippath` — merge there and are separated here. That is what the
+  // per-entry tagName test did, and dropping it would make this guard quietly stricter than the
+  // one it replaces. (A comment added with the tagName test claimed the tag never mattered
+  // because signatures already carry it. That is true except for case, which is this line.)
+  let sigIndex = null;
+  const sigCount = (tagName, sig) => {
+    if (!sigIndex) {
+      sigIndex = new Map();
+      for (const cand of root.querySelectorAll("*")) {
+        const k = cand.tagName + "\u0000" + anchorSigOf(cand);
+        sigIndex.set(k, (sigIndex.get(k) || 0) + 1);
+      }
+    }
+    return sigIndex.get(tagName + "\u0000" + sig) || 0;
+  };
+
   const liveIds = new Set(queueEntries.map((e) => e.id));
   // A mark whose entry is gone — deleted from another screen, or retired by an apply round —
   // comes off, restoring the artifact element exactly as it was found.
@@ -1265,28 +1289,21 @@ function resolveQueueAnchors() {
       // attributes — two copies of one logo, say — and the signature would agree there too.
       // Refusing is the whole point of this guard: a visible unconfirmed row beats a mark put
       // silently on the wrong picture and edited by the next apply round.
-      // A tag name is not a selector. An element parsed from foreign markup can carry a name
-      // CSS cannot express — `<o:p>` out of Word-exported HTML is the ordinary way to get one,
-      // and html mode renders the file unsanitised, so it arrives intact. Handing that name to
-      // querySelectorAll throws SyntaxError, and the throw leaves this whole function: mark
-      // restoration and the sidebar render both stop there, for every entry after it too. The
-      // sibling call three lines up is wrapped because its input comes out of a file a person
-      // can edit; this one takes its input from the DOM, which is what made it read as safe.
-      // Compared rather than caught. A guard here would refuse every such element, and there is
-      // nothing wrong with them — the count is answerable, it just cannot be asked in selector
-      // syntax. Note that the tag test is not what makes the count correct: anchorSigOf already
-      // begins with the tag, so two different tags never share a signature. It is kept because
-      // it is a string compare and anchorSigOf is not.
-      let matches = 0;
-      for (const cand of root.querySelectorAll("*")) {
-        if (cand.tagName !== el.tagName) continue;
-        if (anchorSigOf(cand) === entry.anchorSig) matches++;
-        if (matches > 1) break;
-      }
+      // Asked of the per-pass index above, never of the selector engine. A tag name is not a
+      // selector: an element parsed from foreign markup can carry a name CSS cannot express —
+      // `<o:p>` out of Word-exported HTML is the ordinary way to get one, and html mode renders
+      // the file unsanitised, so it arrives intact. `querySelectorAll(el.tagName)` threw
+      // SyntaxError on it, and the throw left this whole function: mark restoration and the
+      // sidebar render both stopped there, for every later entry as well. The sibling call three
+      // lines up is wrapped in try/catch because its input comes out of a file a person can
+      // edit; this one took its input from the DOM, which is what made it read as safe.
+      // Compared rather than caught, then and now. A guard would refuse every such element, and
+      // there is nothing wrong with them — the count is answerable, it just cannot be asked in
+      // selector syntax.
       // NOT extended to the anchorText branch above. The same argument applies to two blocks of
       // identical text, but that guard is behaviour the user already accepted, and tightening it
       // here would change it without being asked. Recorded rather than done.
-      if (matches !== 1) { entry.unconfirmed = "ambiguous"; continue; }
+      if (sigCount(el.tagName, entry.anchorSig) !== 1) { entry.unconfirmed = "ambiguous"; continue; }
     }
     // The anchor IS confirmed from here on. Whether a mark ends up on the element is a second
     // question, and the two used to be answered by one value.

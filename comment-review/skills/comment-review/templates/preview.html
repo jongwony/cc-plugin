@@ -1265,8 +1265,21 @@ function resolveQueueAnchors() {
       // attributes — two copies of one logo, say — and the signature would agree there too.
       // Refusing is the whole point of this guard: a visible unconfirmed row beats a mark put
       // silently on the wrong picture and edited by the next apply round.
+      // A tag name is not a selector. An element parsed from foreign markup can carry a name
+      // CSS cannot express — `<o:p>` out of Word-exported HTML is the ordinary way to get one,
+      // and html mode renders the file unsanitised, so it arrives intact. Handing that name to
+      // querySelectorAll throws SyntaxError, and the throw leaves this whole function: mark
+      // restoration and the sidebar render both stop there, for every entry after it too. The
+      // sibling call three lines up is wrapped because its input comes out of a file a person
+      // can edit; this one takes its input from the DOM, which is what made it read as safe.
+      // Compared rather than caught. A guard here would refuse every such element, and there is
+      // nothing wrong with them — the count is answerable, it just cannot be asked in selector
+      // syntax. Note that the tag test is not what makes the count correct: anchorSigOf already
+      // begins with the tag, so two different tags never share a signature. It is kept because
+      // it is a string compare and anchorSigOf is not.
       let matches = 0;
-      for (const cand of root.querySelectorAll(el.tagName)) {
+      for (const cand of root.querySelectorAll("*")) {
+        if (cand.tagName !== el.tagName) continue;
         if (anchorSigOf(cand) === entry.anchorSig) matches++;
         if (matches > 1) break;
       }

@@ -131,15 +131,20 @@ always knows where they are:
 Round 1 — browser preview opened. {N comments in queue from prior session. | No prior comments — fresh start.}
 
 Round {k} complete — {X} applied{, {Y} deferred}{, {R} retracted mid-apply}.
-  deferred:  {selector} — {why} (× Y)                -- one line each; omitted when Y is 0
   retracted: {selector} — deleted while this round was applying (× R)   -- omitted when R is 0
 Browser preview reflects the latest edits.
 ```
 
-Name each deferred line rather than only counting it. The browser cannot show a queued
-comment once the page has reloaded — the mark is gone with the render it belonged to — so
-this prose is the only place it still appears. A bare count leaves the user knowing something
-was held back without knowing what, and nowhere to look it up.
+Deferred lines are counted, not named. Naming them here was required while the browser could
+not show a queued comment after a reload — this prose was then the only place one still
+appeared. The page now reads the queue from the server and lists every live entry, so a
+deferred line is visible where the user is already looking, and repeating it here would be a
+second copy that has to be kept true.
+
+Retracted lines are still named, on a reason of their own rather than by inheritance: a
+retraction leaves a tombstone, so the entry is gone from the queue and the browser has nothing
+to show. Without this line the user would not learn that a comment they deleted mid-apply was
+seen and honoured.
 
 **Round signal**: the user's chat turn *is* the round-complete signal. No separate browser
 button is needed — the browser collects comments, chat marks the boundary. "Wait, I'm still
@@ -226,20 +231,23 @@ is one click away, rather than a tab being forced open per artifact:
   commit.
 - Type a comment, ⌘Enter (or Submit) sends it as `{slug, selector, comment}`
 - The anchored element is marked in place: an outline + 💬
-- A right-side panel indexes where this round's comments are: one row per commented
-  element, showing its selector, and clicking a row scrolls to that element and pulses it.
-  It is an index of positions, not a second copy of the comments — the comment text lives
-  on the element itself. Open it from the handle that appears at the right edge when the
+- A right-side panel indexes the live queue for this artifact — every comment still waiting,
+  not only the ones made in this page: one row per entry, showing its selector, and clicking a
+  row scrolls to that element and pulses it. It is an index of positions, not a second copy of
+  the comments — the comment text lives on the element itself. A row whose anchor could not be
+  confirmed reads `⚠ not confirmed` and carries the reason; clicking it reports that reason
+  rather than scrolling. Open the panel from the handle that appears at the right edge when the
   cursor approaches, or from the comment count in the status bar; Esc closes it. It stays
   off-screen otherwise, so an HTML artifact still renders full-bleed.
 - When the source file changes (a round applied edits), the page auto-reloads while
-  preserving scroll position. Comment marks are **not** re-applied on reload: the marks live
-  in the page, not in the queue, so anything still queued — a deferred line, or one appended
-  while the apply was running — survives in `feedback-{slug}.jsonl` but has no mark and is
-  not counted by the sidebar, which reads only what is on the page. Those lines are carried
-  in the round-complete prose instead, named there so a queued comment the browser can no
-  longer show is still visible to you. Re-anchoring them in the page is not something this
-  channel does.
+  preserving scroll position. The queue is the server's, so the reloaded page reads it back —
+  as does any other device opening the same preview, and any page already open when the queue
+  moves. Every live entry is listed, and a mark is put back on the element wherever the anchor
+  can still be confirmed. Confirmation compares the element against the evidence recorded with
+  the comment (the block's text, or for an element with none, the attributes its author wrote),
+  so a block a round rewrote is listed without a mark rather than annotated in the wrong place.
+  That is the guard, not a shortfall: an unconfirmed row you can see and re-place is better
+  than a mark on a paragraph the comment was not about.
 
 ### Element Anchoring
 
@@ -352,7 +360,7 @@ load-bearing, and what breaks without it, is in the commit that settled it.
    step 1 and the browser stays live, so a retraction can arrive in between. Where a tombstone
    has appeared since step 1, skip it. This narrows the window to one id's worth of work
    rather than the whole round; it does not close it, because re-reading and then editing is
-   still two acts, and what remains is named in the round-complete prose. This is not what the
+   still two acts, and what remains stays in the queue, which the browser lists. This is not what the
    tie rule handles — that rule governs which entry wins, not the interval between reading a
    set and editing against it.
 3. Write one consumed-marker per consumed line into **this round's own file**,
@@ -387,6 +395,8 @@ Comments processed:      {C_in} queued → {E} edits landed, {Df} deferred
 Channel state at exit:   {C_unc} still-live comments across this artifact's queue file(s), named
                           -- live by the rule in JSONL Consumption Timing: no marker reaches them
                           -- includes never-processed comments AND apply-deferred ones
+                          -- named here, unlike the per-round prose: the channel is stopping,
+                             so the browser that lists them is about to be gone
 Artifact(s):             {list of paths}
 ```
 

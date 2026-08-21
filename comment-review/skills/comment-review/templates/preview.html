@@ -2,6 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- Without this a mobile browser lays out at ~980 CSS px and scales the result down, so the
+     page arrives shrunk and every chrome measurement is computed against a width the device does
+     not have: the 320px sidebar, the 340px popup, and the edge zone, which is `clientWidth - 48`
+     and so began off the physical screen. The tailnet bind exists so a draft can be READ on a
+     phone (Phase 0 says so in those words), and that is the thing this line was costing.
+     It changes HTML artifacts too: a fixed-width page now scrolls sideways instead of shrinking.
+     That is what a desktop page does on a phone, and it is the better of the two. -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__TITLE_PLACEHOLDER__ — preview</title>
 <script src="/marked.min.js"></script>
 <script src="/purify.min.js"></script>

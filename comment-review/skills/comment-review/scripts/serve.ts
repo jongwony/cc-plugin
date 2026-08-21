@@ -886,6 +886,13 @@ const server = Bun.serve({
       } catch {
         return new Response("not found", { status: 404 });
       }
+      // Before the branch below, not after it. Sitting on the far side, it covered sibling
+      // assets and left the known-slug arm open, so `POST /preview/{slug}` answered 200 with the
+      // preview HTML — everything under this route is read-only, and the guard read as though it
+      // said so while saying it about half. Harmless today because the arm it missed only reads;
+      // the defect is a guard whose apparent reach is wider than its actual one, which is the
+      // thing a later hand relies on.
+      if (req.method !== "GET" && req.method !== "HEAD") return new Response("method not allowed", { status: 405 });
       // A known slug renders the artifact preview; anything else under /preview/ is a sibling
       // asset request from a rendered HTML page (relative URLs resolve here) — served read-only,
       // scoped to that artifact's own directory.
@@ -899,7 +906,6 @@ const server = Bun.serve({
           return new Response("render failed", { status: 500 });
         }
       }
-      if (req.method !== "GET" && req.method !== "HEAD") return new Response("method not allowed", { status: 405 });
       return await serveSiblingAsset(seg, req.headers.get("referer"), req.headers.get("range"));
     }
 

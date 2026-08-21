@@ -89,6 +89,25 @@
   }
   #cr-content th { background: #f7f7f7; }
 
+  /* Comment mode, markdown case. iOS Safari does not dispatch `contextmenu` for these
+     elements at all (measured — see the commit that added this), so a long press has to be
+     the trigger there, and a long press needs something to anchor to rather than a text
+     selection or the system copy callout claiming the gesture first. `user-select: none`
+     leaves nothing for a long press to select, which is what stops the callout — the callout
+     property below matters for links/images specifically and is kept alongside it rather than
+     relied on alone.
+     This is a MODE, not the page's standing behaviour, because the artifact is read far more
+     than it is commented on and reading includes copying out of it — suppressing selection
+     unconditionally would take that away for good. The html-mode half of this same toggle is
+     the `:host(.cr-comment-mode)` rule inside MARK_CSS further down: this stylesheet cannot
+     reach across the shadow boundary, so the two substrates each need their own rule even
+     though both react to the one class the toggle button sets on #cr-content. */
+  #cr-content.cr-comment-mode, #cr-content.cr-comment-mode * {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
   /* Popup */
   #cr-popup {
     position: absolute;
@@ -328,6 +347,32 @@
   #cr-status-count:hover { background: rgba(44, 123, 229, .1); color: #222; }
   body.cr-sidebar-open #cr-status-count { background: rgba(44, 123, 229, .14); color: #222; }
   #cr-status-count strong { color: #222; }
+  /* Comment-mode toggle. Same transparent-chip shape as #cr-status-count beside it (padding,
+     radius, hover wash) so it reads as a sibling control rather than a different kind of
+     thing — the difference the eye needs to catch is on vs off, not toggle vs count. */
+  #cr-comment-mode-toggle {
+    background: transparent;
+    border: 1px solid transparent;
+    padding: .15em .55em;
+    margin: -.15em 0;
+    border-radius: 4px;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    transition: background .12s ease, color .12s ease, border-color .12s ease;
+  }
+  #cr-comment-mode-toggle:hover { background: rgba(44, 123, 229, .1); color: #222; }
+  /* Filled, not outlined: this is the only visible sign that #cr-content just lost text
+     selection, and the toggle itself is the one thing standing between "why can't I select
+     text right now" and an answer. An outline would read the same as the hover state above
+     and would not stand out once the cursor moves away — which on the touch screens this
+     mode exists for is immediately, since there is no hover at all. */
+  #cr-comment-mode-toggle.on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+  #cr-comment-mode-toggle.on:hover { filter: brightness(1.08); }
   /* Frontmatter notice. Lives in the status bar, never in #cr-content: anchors are
      `p:nth-of-type(n)` over the rendered body, so a single extra node inside the artifact
      would shift every selector the queue already holds. */
@@ -414,6 +459,7 @@
     #cr-status-count strong { color: #e0e0e0; }
     #cr-status-count:hover { background: rgba(255,255,255,.06); color: #e0e0e0; }
     body.cr-sidebar-open #cr-status-count { background: rgba(255,255,255,.1); color: #e0e0e0; }
+    #cr-comment-mode-toggle:hover { background: rgba(255,255,255,.06); color: #e0e0e0; }
     #cr-sidebar { background: #1f1f1f; border-left-color: #333; }
     #cr-sidebar-header { background: #1a1a1a; border-bottom-color: #333; }
     #cr-sidebar-header strong { color: #e0e0e0; }
@@ -471,6 +517,7 @@
 <div id="cr-status">
   <span id="cr-status-conn">live</span>
   <button id="cr-frontmatter-pill" type="button" aria-controls="cr-frontmatter-panel" aria-expanded="false"></button>
+  <button id="cr-comment-mode-toggle" type="button" aria-pressed="false" aria-label="Toggle comment mode">✎ comment mode</button>
   <button id="cr-status-count" type="button" aria-label="Toggle comment list" aria-controls="cr-sidebar" aria-expanded="false">
     <strong id="cr-count">0</strong> comments
   </button>
@@ -500,7 +547,14 @@ const MARK_CSS =
   // Declared after cr-anno so it wins while hovering an already-marked element; thin
   // dashed blue is distinct from the solid mark outline.
   ".cr-hover{outline:1px dashed #2c7be5;outline-offset:1px;cursor:context-menu;}" +
-  ".cr-pulse{box-shadow:0 0 0 4px rgba(44,123,229,.45);}";
+  ".cr-pulse{box-shadow:0 0 0 4px rgba(44,123,229,.45);}" +
+  // Comment mode's html-mode half. Nothing in the shadow tree is under this page's control to
+  // toggle directly, so the rule reacts to a class on the HOST (`content`, the element that
+  // owns the shadow root) instead — `:host()` is the primitive built for exactly that. Sharing
+  // this string is what keeps it from drifting from the markdown-mode rule in the page's own
+  // <style>: in that stylesheet `:host()` matches nothing (it is only meaningful inside a
+  // shadow tree), so the two coexist without a mode check anywhere in this string.
+  ":host(.cr-comment-mode) *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}";
 
 const lightMarkStyle = document.createElement("style");
 lightMarkStyle.textContent = MARK_CSS;
@@ -616,6 +670,7 @@ const statusCount = document.getElementById("cr-status-count");
 // The bar itself, for the click-away list. Named separately from `statusCount` because they are
 // different questions: that one is a button with a handler, this one is a region to be spared.
 const statusBar = document.getElementById("cr-status");
+const commentModeToggle = document.getElementById("cr-comment-mode-toggle");
 
 let pending = null;  // { selector, targetEl, editingMark }
 let hoverEl = null;  // element currently outlined under the cursor
@@ -635,6 +690,14 @@ document.body.appendChild(selectorChip);
 root.addEventListener("contextmenu", handleContextMenu);
 root.addEventListener("mouseover", handleHover);
 content.addEventListener("mouseleave", clearHover);
+// Long-press trigger for comment mode (defined below, in "Comment mode" — bound here to sit
+// beside the contextmenu binding it stands in for on touch). Always bound, same as
+// contextmenu: the handlers themselves check commentModeOn, so desktop right-click and a
+// touch long press both reach the artifact's real target the same way, unconditionally.
+root.addEventListener("touchstart", handleTouchStart, { passive: true });
+root.addEventListener("touchmove", handleTouchMove, { passive: true });
+root.addEventListener("touchend", handleTouchEnd);
+root.addEventListener("touchcancel", handleTouchEnd);
 
 function setPopupMode(isEdit) {
   popupSubmit.textContent = isEdit ? "Update" : "Submit";
@@ -825,6 +888,94 @@ function anchorOrEdit(target) {
   if (!selector) return false;
   openSelectorPopup(target, selector);
   return true;
+}
+
+// ── Comment mode ──
+// Right-click is the desktop trigger, and it stays desktop-only for a reason stronger than
+// preference: measured on iOS Safari, `contextmenu` never fires for these elements — not
+// suppressed, not delayed, simply never dispatched, under every combination of the CSS
+// properties below. So a phone cannot reach `anchorOrEdit` through the path above at all, and
+// the tailnet bind exists specifically to put the artifact in front of a phone. A long press
+// is the substitute trigger, but it cannot simply run whenever a finger stays down: on plain
+// text `-webkit-touch-callout: none` does not suppress the iOS copy callout by itself
+// (measured — that property reaches links and images, not text), so an unmoderated long press
+// would fight the system selection/copy gesture on every ordinary read of the artifact. What
+// suppresses the callout is `user-select: none` — with nothing selectable, the callout has
+// nothing to show — and THAT is what has to be a mode rather than the page's standing state:
+// the artifact is read far more than it is commented on, and reading includes copying out of
+// it. Default OFF, so nothing about reading or copying changes until the toggle is used.
+let commentModeOn = false;
+let touchTimer = null;
+let touchStartX = 0;
+let touchStartY = 0;
+let touchTarget = null;
+let longPressFired = false;
+const LONG_PRESS_MS = 600;      // measured reliable under all four CSS conditions tried
+const LONG_PRESS_SLOP_PX = 10;  // movement past this reads as a scroll, not a hold
+
+function clearTouchTimer() {
+  if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; }
+  touchTarget = null;
+}
+
+// One class, toggled on `content` — the element both substrates already share: the shadow
+// host in html mode, the light-DOM container in markdown mode. What the class DOES differs by
+// mode (the two `.cr-comment-mode` rules — one in this page's <style>, one in MARK_CSS's
+// `:host()` rule — split on that), but the toggle itself does not need to know which mode it
+// is in, so it only ever touches this one element.
+function setCommentMode(on) {
+  commentModeOn = on;
+  content.classList.toggle("cr-comment-mode", on);
+  commentModeToggle.classList.toggle("on", on);
+  commentModeToggle.setAttribute("aria-pressed", on ? "true" : "false");
+  // The visible label carries the state too, not only the fill color and aria-pressed: this
+  // is the one control standing between "why can't I select text right now" and an answer,
+  // and a glance at it — not a hover, not a screen-reader query — has to settle that question.
+  commentModeToggle.textContent = on ? "✎ comment mode ON" : "✎ comment mode";
+  commentModeToggle.title = on
+    ? "Comment mode is on — selection and copy are suppressed so a long press can anchor a comment. Tap to turn off."
+    : "Turn on to anchor comments with a long press on touch screens (selection and copy are suppressed while on).";
+  // A press held across the toggle — finger down, tap the toggle without lifting elsewhere —
+  // would otherwise fire against whatever state existed when the timer was armed.
+  clearTouchTimer();
+}
+commentModeToggle.addEventListener("click", () => setCommentMode(!commentModeOn));
+
+// `touchstart` fires at the same moment `pointerdown` does (measured), so timing the press off
+// it — rather than off a native long-press event, which touch browsers do not have — costs
+// nothing and needs no polyfill.
+function handleTouchStart(e) {
+  if (!commentModeOn) return;
+  const t = e.touches && e.touches[0];
+  if (!t) return;
+  touchStartX = t.clientX;
+  touchStartY = t.clientY;
+  touchTarget = e.target;
+  longPressFired = false;
+  touchTimer = setTimeout(() => {
+    touchTimer = null;
+    if (touchTarget && touchTarget.nodeType === Node.ELEMENT_NODE) {
+      longPressFired = true;
+      anchorOrEdit(touchTarget); // same path handleContextMenu uses — one anchoring implementation, two triggers
+    }
+  }, LONG_PRESS_MS);
+}
+
+function handleTouchMove(e) {
+  if (!touchTimer) return;
+  const t = e.touches && e.touches[0];
+  if (!t) return;
+  if (Math.abs(t.clientX - touchStartX) > LONG_PRESS_SLOP_PX || Math.abs(t.clientY - touchStartY) > LONG_PRESS_SLOP_PX) {
+    clearTouchTimer(); // reads as the start of a scroll, not a hold
+  }
+}
+
+// Not bound passive, unlike start/move: a press that already fired still gets a touchend, and
+// on a link or a button that end is what a real tap would use to act — preventDefault stops
+// the element from also doing its own thing on top of the popup this press just opened.
+function handleTouchEnd(e) {
+  clearTouchTimer();
+  if (longPressFired) { e.preventDefault(); longPressFired = false; }
 }
 
 // Is this element part of the artifact (as opposed to the review chrome)? The root

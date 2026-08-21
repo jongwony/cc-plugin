@@ -623,11 +623,18 @@ const writeOriginAllowed = (req: Request, port: number): boolean => {
 // that produces no edit wins — a tombstone beats an edit of the same millisecond.
 type QueueEntry = { id: string; selector: string; anchorText: string; anchorSig: string; comment: string; timestamp: string };
 
-const liveQueueEntries = async (slug: string, draft: string): Promise<QueueEntry[]> => {
-  const dir = dirname(draft);
-  const entries: any[] = [];
-
-  // Every queue file beside the source, not only the one named for the current slug. A slug
+// WHICH LINES BELONG TO THIS ARTIFACT. Shared, because two paths ask it and they must not
+// answer differently: the queue read below, and the DELETE existence check. When only the read
+// was widened, a carried-over line was listed and clickable while its delete bounced with 404
+// and wrote no tombstone — so the line stayed live and the next apply round edited the source
+// with a comment the user had just tried to retract.
+//
+// This is the FILE SET axis, and it is not the divergence SKILL.md protects. That one is the
+// TIE-BREAK — which entry wins when an edit and a tombstone share a millisecond — where the
+// apply rule leans to the tombstone and this check's strict comparison leaves the earlier line.
+// That disagreement is deliberate and stays. Reading different files was never a decision.
+//
+// Every queue file beside the source, not only the one named for the current slug. A slug
   // widens when two artifacts would otherwise share one, so THIS artifact can have left a queue
   // under a different name in an earlier session — Phase 0 surfaces it and the apply step acts
   // on it, and a sidebar reading one filename would show 0 over a queue that is not empty. That
@@ -649,6 +656,9 @@ const liveQueueEntries = async (slug: string, draft: string): Promise<QueueEntry
   // comparison. So a relative path is treated like a missing one — unevaluable, falling back to
   // the filename. Only a hand-edited queue produces one, and dropping a hand-written line in
   // silence is precisely the failure this endpoint exists to remove.
+const queueEntriesFor = async (slug: string, draft: string): Promise<any[]> => {
+  const dir = dirname(draft);
+  const entries: any[] = [];
   const ownQueue = `feedback-${slug}.jsonl`;
   let queueFiles: string[] = [];
   try {
@@ -685,6 +695,12 @@ const liveQueueEntries = async (slug: string, draft: string): Promise<QueueEntry
       entries.push(e);
     }
   }
+  return entries;
+};
+
+const liveQueueEntries = async (slug: string, draft: string): Promise<QueueEntry[]> => {
+  const dir = dirname(draft);
+  const entries = await queueEntriesFor(slug, draft);
 
   const latest = new Map<string, any>();
   for (const e of entries) {
@@ -925,35 +941,31 @@ const server = Bun.serve({
       if (!draft) return new Response("unknown slug", { status: 400 });
       // No length cap on the slug, for the same reason as POST above.
       if (body.id.length > MAX_ID_LEN) return new Response(`id exceeds ${MAX_ID_LEN} chars`, { status: 413 });
+      // The tombstone goes in this slug's own queue even when the line it retires came from a
+      // carried-over file. Appending is what this server does everywhere, and the liveness rule
+      // gathers entries from every belonging file before deduplicating by id — so a tombstone
+      // with a later timestamp beats the original line wherever that line happens to sit.
       const feedbackPath = resolve(dirname(draft), `feedback-${body.slug}.jsonl`);
 
-      // Existence check: scan JSONL, find latest entry for this id, ensure it is a live
-      // (non-tombstoned) annotation. Linear scan acceptable — feedback files are per-draft,
-      // typically <1 MB.
+      // Existence check: find the latest entry for this id and require it to be a live
+      // (non-tombstoned) annotation. Reads the SAME files the queue read does — see the note on
+      // queueEntriesFor. What stays different is the tie-break below: the comparison is strict,
+      // so an entry sharing the latest timestamp does not displace the one already held. SKILL.md
+      // says why that disagreement with the apply rule is safe, and it is not to be reconciled.
       let liveEntry: any = null;
       try {
-        const content = await readFile(feedbackPath, "utf8");
         let latest: any = null;
-        for (const line of content.split("\n")) {
-          if (!line.trim()) continue;
-          try {
-            const e = JSON.parse(line);
-            if (e.id !== body.id) continue;
-            if (!latest || (typeof e.timestamp === "string" && (typeof latest.timestamp !== "string" || e.timestamp > latest.timestamp))) {
-              latest = e;
-            }
-          } catch {
-            // skip malformed lines — preserves resilience to manual edits
+        for (const e of await queueEntriesFor(body.slug, draft)) {
+          if (e.id !== body.id) continue;
+          if (!latest || (typeof e.timestamp === "string" && (typeof latest.timestamp !== "string" || e.timestamp > latest.timestamp))) {
+            latest = e;
           }
         }
         if (latest && !latest.deleted) liveEntry = latest;
       } catch (e) {
-        if ((e as NodeJS.ErrnoException).code !== "ENOENT") {
-          const msg = (e as Error).message;
-          console.error(`[feedback] DELETE existence check failed for ${feedbackPath}: ${msg}`);
-          return new Response(`existence check failed: ${msg}`, { status: 500 });
-        }
-        // ENOENT — file does not exist, so target id cannot exist; fall through to 404
+        const msg = (e as Error).message;
+        console.error(`[feedback] DELETE existence check failed for ${dirname(draft)}: ${msg}`);
+        return new Response(`existence check failed: ${msg}`, { status: 500 });
       }
       if (!liveEntry) {
         return new Response(JSON.stringify({ ok: false, deleted: false, reason: "not found or already deleted" }), {

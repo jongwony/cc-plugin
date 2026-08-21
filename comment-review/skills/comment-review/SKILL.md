@@ -337,10 +337,18 @@ on: a comment that fails to apply shows up as a source that did not change, whil
 applied against a retraction edits the artifact the user was trying to protect.
 
 This deliberately disagrees with the server. `serve.ts`'s DELETE existence check breaks the same
-tie by file order — its comparison is strict, so the earlier line stays. That check asks a
-different question (is there a live entry to tombstone?), and the worst its disagreement produces
-is one redundant tombstone line, never a wrong edit. Do not reconcile the two by changing this
-rule to match: the reason this one leans the other way is written directly above.
+tie by the order the entries were read in — its comparison is strict, so the one already held
+stays. That check asks a different question (is there a live entry to tombstone?), and the worst
+its disagreement produces is one redundant tombstone line, never a wrong edit. Do not reconcile
+the two by changing this rule to match: the reason this one leans the other way is written
+directly above.
+
+That safety claim is about the TIE-BREAK, and only about it. **Which files the two paths read is
+not a second divergence — they read the same set**: every `feedback-*.jsonl` beside the source
+whose lines carry this artifact's path. They have to. A check reading fewer files than the queue
+does would refuse to tombstone a line the queue lists, leaving it live for the next round to
+apply against the user's wish — a wrong edit, which is exactly what the sentence above promises
+cannot happen. That promise holds only while the two file sets match.
 
 A marker is what retires a line, and reading the source cannot stand in for it — because the
 browser offers no way to retract a comment from an earlier round. Why that makes the marker

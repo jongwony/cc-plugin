@@ -725,8 +725,18 @@ const queueEntriesFor = async (slug: string, draft: string): Promise<any[]> => {
     try {
       content = await readFile(resolve(dir, name), "utf8");
     } catch (e) {
+      // Skip this file, not the queue. 79 forgave every failure of the LISTING above; this read
+      // was left forgiving ENOENT alone, so one unreadable `feedback-*.jsonl` — or a directory
+      // carrying that name — rethrew and the endpoint answered 500. The DELETE existence check
+      // runs through this same function, so retraction died with it while every other queue file
+      // in the directory was readable. One file's problem is one file's.
+      // ENOENT stays silent: a queue file that is simply absent is the ordinary case, and
+      // logging it would bury the line below in noise. Anything else says so, for the reason 79
+      // gave — a queue that has quietly stopped being read looks exactly like an empty one.
       if ((e as NodeJS.ErrnoException).code === "ENOENT") continue;
-      throw e;
+      console.error(`[queue] cannot read ${name}: ${(e as Error).message} — skipping it; ` +
+                    `comments in that file will not be listed this session`);
+      continue;
     }
     for (const line of content.split("\n")) {
       if (!line.trim()) continue;
@@ -769,8 +779,18 @@ const liveQueueEntries = async (slug: string, draft: string): Promise<QueueEntry
   try {
     for (const name of await readdir(dir)) {
       if (!name.startsWith("feedback-") || !name.endsWith(".markers.jsonl")) continue;
-      let text: string;
-      try { text = await readFile(resolve(dir, name), "utf8"); } catch { continue; }
+      // Forgiving already; what it was not is audible. The consequence is the one the listing
+      // catch below announces — a consumed line may be listed as still queued — and it is no
+      // less real for arriving one file at a time. ENOENT cannot happen here (the name came
+      // from the listing) but is treated the same way if it does.
+      let text: string | undefined;
+      try { text = await readFile(resolve(dir, name), "utf8"); } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== "ENOENT") {
+          console.error(`[queue] cannot read ${name}: ${(e as Error).message} — ` +
+                        `already-applied comments in it may be listed as still queued this session`);
+        }
+        continue;
+      }
       for (const line of text.split("\n")) {
         if (!line.trim()) continue;
         try {

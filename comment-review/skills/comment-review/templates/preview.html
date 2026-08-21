@@ -1293,7 +1293,20 @@ async function refreshQueue() {
   // theirs.
   if (editingId) {
     const now = queueEntries.find((e) => e.id === editingId);
-    if (now && now.comment !== editingWas) {
+    // Two ways the ground can move under an open editor, and only one of them was covered. A
+    // DELETE takes the other branch: the entry leaves the queue entirely, so `now` is undefined
+    // and a test written as `now && …` says nothing at all.
+    // What silence costs here, measured: the id was captured by value when the popup opened, so
+    // it survives the unmark that strips it from the element. Submitting appends under that same
+    // id with a later timestamp, which beats the tombstone — the retracted line comes back to
+    // life, and the next apply round writes it into the source. Somebody else's retraction,
+    // undone by a user who was told nothing.
+    // Said, not prevented. Blocking the send would destroy words being written, which this page
+    // does not do — the same reason the reload waits rather than discarding, and the same reason
+    // the change notice above only speaks.
+    if (!now) {
+      showToast("⚠ this comment was deleted elsewhere — sending will bring it back", true);
+    } else if (now.comment !== editingWas) {
       showToast("⚠ this comment was just changed elsewhere — sending will overwrite that change", true);
     }
   }

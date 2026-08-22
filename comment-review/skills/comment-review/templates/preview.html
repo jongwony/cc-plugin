@@ -1028,6 +1028,7 @@ function dismissPopup() {
   if (heldReload) {
     heldReload = false;
     paintConn();   // the page is about to go, but not painting here leaves a lie if it does not
+    sessionStorage.setItem("commentMode", commentModeOn ? "1" : "0");
     sessionStorage.setItem("scrollY", String(window.scrollY));
     location.reload();
   }
@@ -1825,6 +1826,7 @@ function handleWsMessage(e) {
       paintConn();
       return;
     }
+    sessionStorage.setItem("commentMode", commentModeOn ? "1" : "0");
     sessionStorage.setItem("scrollY", String(window.scrollY));
     location.reload();
   }
@@ -1885,6 +1887,24 @@ if (savedScroll) {
   window.scrollTo(0, parseInt(savedScroll, 10));
   sessionStorage.removeItem("scrollY");
 }
+
+// Restore comment mode on reload — same key/write/read shape as scrollY just above, for the
+// same reason: `location.reload()` is not an incidental page event here, it is the loop's own
+// transition between rounds (a comment gets applied, the source changes, the page reloads,
+// round k+1 begins), and it fires between every pair of rounds. A mode that reset there would
+// turn itself off at exactly the moment the next round starts — invisibly on desktop, where
+// right-click never depended on it, and as the whole capability vanishing on the touch screens
+// it exists for.
+// Through setCommentMode, not a direct assignment to the state flag: that function is what
+// keeps the toggle's fill, label and aria-pressed in agreement with the state, and skipping it
+// here would let the mode come back ON while the toggle still read OFF — the exact "suppressed
+// with nothing on screen saying so" state the toggle's visibility requirement exists to rule
+// out.
+// Only the literal "1" turns it on. An absent key (first load), an explicit "0", and
+// unparseable leftover junk all take the same branch here — none of them is evidence the mode
+// was on, and every one of them is safer read as off than guessed as on.
+if (sessionStorage.getItem("commentMode") === "1") setCommentMode(true);
+sessionStorage.removeItem("commentMode");
 </script>
 </body>
 </html>

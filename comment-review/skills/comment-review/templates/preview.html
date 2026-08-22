@@ -1,0 +1,1910 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- Without this a mobile browser lays out at ~980 CSS px and scales the result down, so the
+     page arrives shrunk and every chrome measurement is computed against a width the device does
+     not have: the 320px sidebar, the 340px popup, and the edge zone, which is `clientWidth - 48`
+     and so began off the physical screen. The tailnet bind exists so a draft can be READ on a
+     phone (Phase 0 says so in those words), and that is the thing this line was costing.
+     It changes HTML artifacts too: a fixed-width page now scrolls sideways instead of shrinking.
+     That is what a desktop page does on a phone, and it is the better of the two. -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE_PLACEHOLDER__ — preview</title>
+<script src="/marked.min.js"></script>
+<script src="/purify.min.js"></script>
+<style>
+  :root {
+    --accent: #2c7be5;
+    --highlight-edge: #d4a017;
+    --muted: #666;
+    --bg: #fafafa;
+    --sidebar-width: 320px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo", sans-serif;
+    margin: 0;
+    padding: 0;
+    line-height: 1.7;
+    color: #222;
+    background: white;
+  }
+
+  /* Layout — main content + right sidebar */
+  #cr-layout {
+    display: flex;
+    min-height: 100vh;
+  }
+  #cr-main {
+    flex: 1;
+    min-width: 0;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 2.5em 1.5em 5em;
+  }
+  header {
+    border-bottom: 1px solid #eee;
+    padding-bottom: 1em;
+    margin-bottom: 2em;
+    color: var(--muted);
+    font-size: .9em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  header a { color: var(--accent); text-decoration: none; }
+  header a:hover { text-decoration: underline; }
+  #cr-content { font-size: 17px; }
+  #cr-content h1 { font-size: 2em; margin-top: 1.5em; }
+  #cr-content h2 { font-size: 1.5em; margin-top: 1.4em; }
+  #cr-content h3 { font-size: 1.2em; margin-top: 1.2em; }
+  #cr-content blockquote {
+    border-left: 3px solid #ddd;
+    padding-left: 1em;
+    color: #555;
+    margin: 1em 0;
+  }
+  #cr-content code {
+    background: #f3f3f3;
+    padding: .1em .35em;
+    border-radius: 3px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: .92em;
+  }
+  #cr-content pre {
+    background: #f3f3f3;
+    padding: 1em;
+    border-radius: 4px;
+    overflow-x: auto;
+  }
+  #cr-content pre code { background: transparent; padding: 0; }
+  #cr-content table {
+    border-collapse: collapse;
+    margin: 1em 0;
+  }
+  #cr-content th, #cr-content td {
+    border: 1px solid #ddd;
+    padding: .4em .7em;
+  }
+  #cr-content th { background: #f7f7f7; }
+
+  /* Comment mode, markdown case. iOS Safari does not dispatch `contextmenu` for these
+     elements at all (measured — see the commit that added this), so a long press has to be
+     the trigger there, and a long press needs something to anchor to rather than a text
+     selection or the system copy callout claiming the gesture first. `user-select: none`
+     leaves nothing for a long press to select, which is what stops the callout — the callout
+     property below matters for links/images specifically and is kept alongside it rather than
+     relied on alone.
+     This is a MODE, not the page's standing behaviour, because the artifact is read far more
+     than it is commented on and reading includes copying out of it — suppressing selection
+     unconditionally would take that away for good. The html-mode half of this same toggle is
+     the `:host(.cr-comment-mode)` rule inside MARK_CSS further down: this stylesheet cannot
+     reach across the shadow boundary, so the two substrates each need their own rule even
+     though both react to the one class the toggle button sets on #cr-content. */
+  #cr-content.cr-comment-mode, #cr-content.cr-comment-mode * {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  /* Popup */
+  #cr-popup {
+    position: absolute;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.15);
+    padding: .8em;
+    z-index: 1000;
+    width: 340px;
+    display: none;
+  }
+  #cr-popup.show { display: block; }
+  #cr-popup-anchor-preview {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: .8em;
+    color: var(--muted);
+    margin-bottom: .5em;
+    padding: .4em .5em;
+    background: var(--bg);
+    border-left: 3px solid var(--highlight-edge);
+    border-radius: 3px;
+    max-height: 4.5em;
+    overflow: hidden;
+    line-height: 1.4;
+  }
+  #cr-popup textarea {
+    width: 100%;
+    min-height: 80px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: .5em;
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+  }
+  #cr-popup textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  #cr-popup-actions {
+    display: flex;
+    gap: .5em;
+    align-items: center;
+    margin-top: .5em;
+  }
+  #cr-popup-cancel { margin-left: auto; }
+  #cr-popup button.danger {
+    background: #c0392b;
+    color: white;
+    border-color: #c0392b;
+  }
+  #cr-popup button.danger:hover { background: #e74c3c; border-color: #e74c3c; }
+  #cr-popup-delete { display: none; }
+  #cr-popup.edit-mode #cr-popup-delete { display: inline-block; }
+  #cr-popup button {
+    padding: .4em .9em;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    font-size: .9em;
+  }
+  #cr-popup button.primary {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+  #cr-popup button:hover { filter: brightness(.95); }
+  #cr-popup-hint {
+    font-size: .75em;
+    color: var(--muted);
+    margin-top: .35em;
+    text-align: right;
+  }
+
+  /* Sidebar — right panel listing all comments */
+  #cr-sidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 2.4em; /* clear status bar */
+    width: var(--sidebar-width);
+    background: var(--bg);
+    border-left: 1px solid #eee;
+    transform: translateX(100%);
+    transition: transform .2s ease;
+    z-index: 400;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  body.cr-sidebar-open #cr-sidebar { transform: translateX(0); }
+  /* HTML renders at the authored viewport: drop the 760px reading-width box + all #cr-main padding,
+     and hide the top nav chrome (it pushed the artifact down and broke 100vh / top-aligned /
+     fixed layouts). Full-page 100vh / fixed-position fidelity is still bounded by Shadow-DOM
+     rendering — a sandboxed iframe (see Deferred hardening) would give a true nested viewport;
+     the bottom status pill remains a minimal fixed overlay. */
+  body.cr-html-mode #cr-main { max-width: none; padding: 0; }
+  body.cr-html-mode header { display: none; }
+  /* HTML artifacts are authored against the browser default (white page, dark text), not the
+     review app's OS-driven dark theme. Force a light base for the rendered artifact regardless of
+     prefers-color-scheme, so a transparent-bodied page shows white rather than the dark canvas. */
+  body.cr-html-mode { background: #fff; color: #1a2233; }
+  /* Two directions cross the shadow boundary, and only the first was written down here before.
+     OUTWARD the artifact LOSES: fragment injection drops its <body>, so everything the document
+     wrote on that element is void — its font, its background, its margins, its max-width.
+     INWARD this chrome PUSHES: font-family, font-size and line-height are inherited properties,
+     and inheritance passes straight through a shadow boundary. So the artifact was being drawn
+     in the review app's reading face at the review app's measure, and a document that styles
+     nothing at all still came out different from the same file opened directly. The rule below
+     stops that at the artifact's edge.
+     This is a stop, not a restoration. What the document wrote on <body> went with <body> and
+     does not come back; what returns is the browser default, which is what an unstyled document
+     is meant to look like. Background, margins and max-width are not inherited and stay gone
+     either way — a page that set those still needs the deferred iframe rendering to look like
+     itself.
+     The cost was chosen deliberately: a document that specified its typography and one that did
+     not now look alike on screen. The alternative was the tool's typography passing itself off
+     as the document's, which misleads rather than merely omits.
+     On `color: initial` — artifact text goes back to black. The light base above is what keeps
+     that readable, and it is still doing its job: the #1a2233 picked there for dark-theme
+     readability now governs only what the artifact does not cover, while inside it black on the
+     forced white is readable for the same reason that motivated #1a2233 in the first place.
+     Scoped to `body.cr-html-mode` because markdown is the opposite case — there is no authored
+     typography to protect there, and the chrome's reading typography is the intended look. */
+  body.cr-html-mode #cr-content { font: initial; line-height: initial; color: initial; }
+  #cr-sidebar-header {
+    padding: .75em 1em;
+    border-bottom: 1px solid #eee;
+    background: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: .9em;
+    color: var(--muted);
+  }
+  #cr-sidebar-header strong { color: #222; }
+  #cr-sidebar-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: .5em 0;
+  }
+  #cr-sidebar-empty {
+    padding: 2em 1em;
+    color: var(--muted);
+    font-size: .85em;
+    text-align: center;
+    font-style: italic;
+  }
+  .cr-sidebar-item {
+    padding: .65em 1em;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    transition: background .12s ease;
+  }
+  .cr-sidebar-item:hover { background: #f0f4f8; }
+  .cr-sidebar-item.cr-unconfirmed .cr-sidebar-item-anchor { color: #b26b00; }
+  .cr-sidebar-item-anchor {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: .78em;
+    color: #444;
+    border-left: 3px solid var(--highlight-edge);
+    padding-left: .55em;
+    line-height: 1.35;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  /* Sidebar reveal handle — chrome that rides the panel's left edge, so the list is
+     findable without already knowing the status-bar count is a button. Hidden until the
+     cursor approaches the right edge, and held visible while the panel is open (it is
+     then the affordance for closing it, and the panel already covers what it would
+     otherwise obscure). Never permanently on top of a full-bleed HTML artifact — the same
+     reason the top nav is dropped in html mode. */
+  #cr-sidebar-handle {
+    position: fixed;
+    top: 50%;
+    right: 0;
+    z-index: 450;
+    width: 22px;
+    height: 52px;
+    padding: 0;
+    border: 1px solid #e2e2e2;
+    border-right: none;
+    border-radius: 5px 0 0 5px;
+    background: white;
+    color: var(--muted);
+    font: inherit;
+    font-size: .8em;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-50%);
+    transition: transform .2s ease, opacity .18s ease;
+    box-shadow: -2px 0 8px rgba(0,0,0,.08);
+  }
+  /* Focus reveals it too, so the control is reachable by keyboard rather than
+     mouse-position-gated. */
+  #cr-sidebar-handle.visible, #cr-sidebar-handle:focus-visible { opacity: 1; pointer-events: auto; }
+  #cr-sidebar-handle:hover { color: #222; }
+  /* Rides the panel: same property and duration as #cr-sidebar's own transform, so the two
+     move as one piece. */
+  body.cr-sidebar-open #cr-sidebar-handle { transform: translateY(-50%) translateX(calc(-1 * var(--sidebar-width))); }
+
+  /* Status bar */
+  #cr-status {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: white;
+    border-top: 1px solid #eee;
+    padding: .55em 1.5em;
+    font-size: .85em;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 500;
+  }
+  #cr-status-conn::before {
+    content: "●";
+    color: #52c41a;
+    margin-right: .35em;
+  }
+  #cr-status-conn.disconnected::before { color: #aaa; }
+  #cr-status-count {
+    background: transparent;
+    border: none;
+    padding: .15em .55em;
+    margin: -.15em -.55em;
+    border-radius: 4px;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    transition: background .12s ease;
+  }
+  #cr-status-count:hover { background: rgba(44, 123, 229, .1); color: #222; }
+  body.cr-sidebar-open #cr-status-count { background: rgba(44, 123, 229, .14); color: #222; }
+  #cr-status-count strong { color: #222; }
+  /* Comment-mode toggle. Same transparent-chip shape as #cr-status-count beside it (padding,
+     radius, hover wash) so it reads as a sibling control rather than a different kind of
+     thing — the difference the eye needs to catch is on vs off, not toggle vs count. */
+  #cr-comment-mode-toggle {
+    background: transparent;
+    border: 1px solid transparent;
+    padding: .15em .55em;
+    margin: -.15em 0;
+    border-radius: 4px;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    transition: background .12s ease, color .12s ease, border-color .12s ease;
+  }
+  #cr-comment-mode-toggle:hover { background: rgba(44, 123, 229, .1); color: #222; }
+  /* Filled, not outlined: this is the only visible sign that #cr-content just lost text
+     selection, and the toggle itself is the one thing standing between "why can't I select
+     text right now" and an answer. An outline would read the same as the hover state above
+     and would not stand out once the cursor moves away — which on the touch screens this
+     mode exists for is immediately, since there is no hover at all. */
+  #cr-comment-mode-toggle.on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+  #cr-comment-mode-toggle.on:hover { filter: brightness(1.08); }
+  /* Frontmatter notice. Lives in the status bar, never in #cr-content: anchors are
+     `p:nth-of-type(n)` over the rendered body, so a single extra node inside the artifact
+     would shift every selector the queue already holds. */
+  #cr-frontmatter-pill {
+    background: transparent;
+    border: none;
+    padding: .15em .55em;
+    margin: -.15em .5em;
+    border-radius: 4px;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    max-width: 46vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: none;
+    transition: background .12s ease;
+  }
+  #cr-frontmatter-pill.visible { display: inline-block; }
+  #cr-frontmatter-pill:hover { background: rgba(212, 160, 23, .14); color: #222; }
+  #cr-frontmatter-panel {
+    position: fixed;
+    bottom: 2.6em; left: 1.5em;
+    z-index: 600;
+    display: none;
+    max-width: min(70vw, 720px);
+    max-height: 40vh;
+    overflow: auto;
+    background: white;
+    border: 1px solid #ddd;
+    border-left: 3px solid var(--highlight-edge);
+    border-radius: 4px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.15);
+    padding: .7em .9em;
+  }
+  #cr-frontmatter-panel.show { display: block; }
+  #cr-frontmatter-panel pre {
+    margin: .4em 0 0;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: .8em;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: #222;
+  }
+  #cr-frontmatter-panel .cr-fm-head { font-size: .78em; color: var(--muted); }
+
+  /* Toast — confirms each submit silently append to disk, since popup close alone is ambiguous */
+  #cr-toast {
+    position: fixed;
+    bottom: 3.2em;
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    background: #222;
+    color: white;
+    padding: .5em 1em;
+    border-radius: 20px;
+    font-size: .85em;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+    z-index: 1500;
+    box-shadow: 0 4px 14px rgba(0,0,0,.2);
+  }
+  #cr-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  #cr-toast.error { background: #c0392b; }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a1a; color: #e0e0e0; }
+    header { border-bottom-color: #333; color: #888; }
+    #cr-content blockquote { border-left-color: #444; color: #aaa; }
+    #cr-content code, #cr-content pre { background: #2a2a2a; }
+    #cr-content th, #cr-content td { border-color: #333; }
+    #cr-content th { background: #252525; }
+    #cr-popup { background: #222; border-color: #444; }
+    #cr-popup-anchor-preview { background: #2a2a2a; color: #aaa; }
+    #cr-popup textarea { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+    #cr-popup button { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+    #cr-status { background: #1a1a1a; border-top-color: #333; }
+    #cr-status-count strong { color: #e0e0e0; }
+    #cr-status-count:hover { background: rgba(255,255,255,.06); color: #e0e0e0; }
+    body.cr-sidebar-open #cr-status-count { background: rgba(255,255,255,.1); color: #e0e0e0; }
+    #cr-comment-mode-toggle:hover { background: rgba(255,255,255,.06); color: #e0e0e0; }
+    #cr-sidebar { background: #1f1f1f; border-left-color: #333; }
+    #cr-sidebar-header { background: #1a1a1a; border-bottom-color: #333; }
+    #cr-sidebar-header strong { color: #e0e0e0; }
+    .cr-sidebar-item { border-bottom-color: #333; }
+    .cr-sidebar-item:hover { background: #2a2a2a; }
+    .cr-sidebar-item-anchor { color: #aaa; }
+    #cr-sidebar-handle { background: #1f1f1f; border-color: #333; }
+    #cr-sidebar-handle:hover { color: #e0e0e0; }
+  }
+
+</style>
+</head>
+<body>
+
+<div id="cr-layout">
+  <div id="cr-main">
+    <header>
+      <span><a href="/">← all drafts</a></span>
+      <span><strong>__TITLE_PLACEHOLDER__</strong></span>
+    </header>
+
+    <div id="cr-content"></div>
+  </div>
+</div>
+
+<aside id="cr-sidebar" aria-label="Comments panel">
+  <div id="cr-sidebar-header">
+    <span><strong id="cr-sidebar-count">0</strong> comments</span>
+    <span style="font-size:.78em;">click to focus</span>
+  </div>
+  <div id="cr-sidebar-list">
+    <div id="cr-sidebar-empty">No comments yet — right-click an element to add one.</div>
+  </div>
+</aside>
+
+<button id="cr-sidebar-handle" type="button" aria-label="Toggle comment list" aria-controls="cr-sidebar" aria-expanded="false">◀</button>
+
+<div id="cr-popup">
+  <div id="cr-popup-anchor-preview"></div>
+  <textarea id="cr-popup-textarea" placeholder="Comment on this element…"></textarea>
+  <div id="cr-popup-actions">
+    <button id="cr-popup-delete" class="danger" type="button" aria-label="Delete comment">Delete</button>
+    <button id="cr-popup-cancel">Cancel</button>
+    <button id="cr-popup-copy" type="button">Copy</button>
+    <button id="cr-popup-submit" class="primary">Submit</button>
+  </div>
+  <div id="cr-popup-hint">⌘Enter to submit · Esc to cancel · right-click a 💬 element to edit</div>
+</div>
+
+<div id="cr-frontmatter-panel">
+  <div class="cr-fm-head">Removed before rendering — not shown in the page above:</div>
+  <pre id="cr-frontmatter-text"></pre>
+</div>
+
+<div id="cr-status">
+  <span id="cr-status-conn">live</span>
+  <button id="cr-frontmatter-pill" type="button" aria-controls="cr-frontmatter-panel" aria-expanded="false"></button>
+  <button id="cr-comment-mode-toggle" type="button" aria-pressed="false" aria-label="Toggle comment mode">✎ comment mode</button>
+  <button id="cr-status-count" type="button" aria-label="Toggle comment list" aria-controls="cr-sidebar" aria-expanded="false">
+    <strong id="cr-count">0</strong> comments
+  </button>
+</div>
+
+<div id="cr-toast" role="status" aria-live="polite"></div>
+
+<script type="application/json" id="cr-md-source">__MARKDOWN_CONTENT_PLACEHOLDER__</script>
+<script type="application/json" id="cr-frontmatter-source">__FRONTMATTER_PLACEHOLDER__</script>
+
+<script>
+const SLUG = __SLUG_PLACEHOLDER__;
+// Render substrate, keyed off the artifact's extension: "markdown" → marked.parse into the
+// light DOM; "html" → the raw file through an open Shadow DOM (CSS-isolated from this review
+// chrome; scripts inserted via innerHTML are inert). Anchoring does NOT branch on this —
+// both substrates anchor by right-clicking an element and recording a CSS path down to it.
+// What the substrate decides is only where the artifact is rendered.
+const RENDER_MODE = __RENDER_MODE_PLACEHOLDER__;
+
+// Comment-mark visuals. Injected into the light DOM always, and additionally into the shadow
+// root in html mode — the light-DOM stylesheet does not pierce the shadow boundary, so the
+// same rules must exist on both sides. One source string keeps the two copies from drifting.
+// Outline-based marks avoid re-flowing the artifact: nothing wraps or splits its text.
+const MARK_CSS =
+  ".cr-anno{outline:2px solid #d4a017;outline-offset:1px;cursor:help;}" +
+  '.cr-anno::after{content:"💬";font-size:.7em;vertical-align:super;margin-left:2px;}' +
+  // Declared after cr-anno so it wins while hovering an already-marked element; thin
+  // dashed blue is distinct from the solid mark outline.
+  ".cr-hover{outline:1px dashed #2c7be5;outline-offset:1px;cursor:context-menu;}" +
+  ".cr-pulse{box-shadow:0 0 0 4px rgba(44,123,229,.45);}" +
+  // Comment mode's html-mode half. Nothing in the shadow tree is under this page's control to
+  // toggle directly, so the rule reacts to a class on the HOST (`content`, the element that
+  // owns the shadow root) instead — `:host()` is the primitive built for exactly that. Sharing
+  // this string is what keeps it from drifting from the markdown-mode rule in the page's own
+  // <style>: in that stylesheet `:host()` matches nothing (it is only meaningful inside a
+  // shadow tree), so the two coexist without a mode check anywhere in this string.
+  ":host(.cr-comment-mode) *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}";
+
+const lightMarkStyle = document.createElement("style");
+lightMarkStyle.textContent = MARK_CSS;
+document.head.appendChild(lightMarkStyle);
+
+// What the artifact may not do, on top of DOMPurify's defaults (which already drop script,
+// iframe, object, embed, inline handlers, and javascript: URLs).
+//
+// `style` elements go because they are the one artifact construct that reaches other
+// elements: `#cr-popup{display:none}` hides the comment popup and the channel silently stops
+// working, and `url(...)` inside a stylesheet is an active subresource load. The style
+// *attribute* is kept — it can load a subresource too, but it cannot reach past its own
+// element, and markdown that sets a width on an image is ordinary rather than hostile. That
+// exclusion is deliberate and stated here so the surface is not invisible.
+const MD_SANITIZE = { FORBID_TAGS: ["style"] };
+
+// Impersonation is a separate axis from execution, and sanitizing does not cover it: a
+// plain `<div id="cr-popup">` is inert markup that nonetheless captures the chrome's own
+// element, because getElementById answers with whichever comes first in document order and
+// the artifact is rendered above the chrome. Every id, class, and dataset key this page owns
+// is namespaced under `cr-`, so one rule — drop artifact attributes in that namespace —
+// covers all of them and keeps covering them as the chrome grows.
+DOMPurify.addHook("uponSanitizeAttribute", (node, data) => {
+  if (data.attrName === "class") {
+    data.attrValue = data.attrValue.split(/\s+/).filter((c) => c && !c.startsWith("cr-")).join(" ");
+  } else if (data.attrName === "id" && data.attrValue.startsWith("cr-")) {
+    data.keepAttr = false;
+  } else if (data.attrName.startsWith("data-cr-")) {
+    data.keepAttr = false;
+  }
+});
+
+// Render the artifact. `root` is the query/anchor surface: the light-DOM #cr-content in markdown
+// mode, the shadow root in html mode. Every anchoring path takes `root` as a parameter, so one
+// code path serves both substrates.
+// The body is transported as a JSON string (escapeForScriptTag-protected): JSON.parse reverses
+// it losslessly — a real <\/script> in the artifact survives, and a literal <\/script> already
+// present in the source is not corrupted.
+const sourceText = JSON.parse(document.getElementById("cr-md-source").textContent);
+const content = document.getElementById("cr-content");
+let shadowRoot = null;
+let root = content;
+if (RENDER_MODE === "html") {
+  // Raw HTML served through an open Shadow DOM: CSS-isolated from the review chrome,
+  // selector anchoring works because it is the same document. innerHTML does not run script
+  // elements, but this is NOT a JS sandbox — inline event handlers (onerror/onload), iframes,
+  // and active subresources still execute/load in this same-origin page; review trusted
+  // HTML only. marked is not used in html mode.
+  shadowRoot = content.attachShadow({ mode: "open" });
+  shadowRoot.innerHTML = sourceText;
+  root = shadowRoot;
+  document.body.classList.add("cr-html-mode");
+  const shadowStyle = document.createElement("style");
+  shadowStyle.textContent = MARK_CSS;
+  shadowRoot.appendChild(shadowStyle);
+} else {
+  // Markdown renders into the LIGHT DOM deliberately: this page's stylesheet carries the
+  // published-artifact typography (the #cr-content rules), which a shadow boundary would cut
+  // off. Anchoring does not need the boundary — cssPath() takes the root as a parameter.
+  //
+  // Sanitized on the way in. marked passes raw HTML through untouched, and this is innerHTML
+  // in the same-origin review page: an `<img onerror>` in a document reaches /feedback, and
+  // the apply step then writes the document's own instruction into the user's file. That path
+  // needs no click — opening the preview is enough. So a markdown file is treated as data
+  // here, never as a program. HTML mode above is deliberately NOT sanitized: rendering the
+  // file as authored is that mode's identity, which is why it carries its own trust warning
+  // and this mode does not need one.
+  content.innerHTML = DOMPurify.sanitize(marked.parse(sourceText), MD_SANITIZE);
+}
+
+// ── What the frontmatter strip removed ──
+// A boolean would be useless here: it reads identically on a document with real frontmatter,
+// where nothing is wrong, and on one that merely opened with a thematic break, where a
+// paragraph has silently gone. So the notice carries the removed text — a line count and the
+// first content line at a glance, the block itself one click away. That is what lets someone
+// recognise their own prose sitting in the "frontmatter".
+// Placed in the status bar. Adding it to #cr-content would shift every `p:nth-of-type(n)`
+// anchor in the queue by one, which is a far worse failure than the one being reported.
+const strippedFrontmatter = JSON.parse(document.getElementById("cr-frontmatter-source").textContent);
+// Held outside the block below because the click listener needs them either way. Both elements
+// are in the template unconditionally; the block only decides whether the pill becomes visible.
+const fmPill = document.getElementById("cr-frontmatter-pill");
+const fmPanel = document.getElementById("cr-frontmatter-panel");
+if (strippedFrontmatter) {
+  const fmLines = strippedFrontmatter.replace(/\r?\n$/, "").split(/\r?\n/);
+  // The `---` fences are not informative; the first line that is neither a fence nor blank is.
+  const firstContent = fmLines.find((l) => l.trim() && l.trim() !== "---") || "";
+  document.getElementById("cr-frontmatter-text").textContent = strippedFrontmatter;
+  fmPill.textContent = `⚑ ${fmLines.length} lines removed as front matter: ${firstContent}`;
+  fmPill.title = strippedFrontmatter;
+  fmPill.classList.add("visible");
+  fmPill.addEventListener("click", () => {
+    const open = fmPanel.classList.toggle("show");
+    fmPill.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+}
+
+// Popup state
+const popup = document.getElementById("cr-popup");
+const popupPreview = document.getElementById("cr-popup-anchor-preview");
+const popupTextarea = document.getElementById("cr-popup-textarea");
+const popupSubmit = document.getElementById("cr-popup-submit");
+const popupCancel = document.getElementById("cr-popup-cancel");
+const popupDelete = document.getElementById("cr-popup-delete");
+const countEl = document.getElementById("cr-count");
+
+// Sidebar state
+const sidebar = document.getElementById("cr-sidebar");
+const sidebarList = document.getElementById("cr-sidebar-list");
+const sidebarEmpty = document.getElementById("cr-sidebar-empty");
+const sidebarCount = document.getElementById("cr-sidebar-count");
+const statusCount = document.getElementById("cr-status-count");
+// The bar itself, for the click-away list. Named separately from `statusCount` because they are
+// different questions: that one is a button with a handler, this one is a region to be spared.
+const statusBar = document.getElementById("cr-status");
+const commentModeToggle = document.getElementById("cr-comment-mode-toggle");
+
+let pending = null;  // { selector, targetEl, editingMark }
+let hoverEl = null;  // element currently outlined under the cursor
+// The chip lives in the light DOM so a shadow boundary cannot clip it.
+const selectorChip = document.createElement("div");
+selectorChip.id = "cr-selector-chip";
+selectorChip.style.cssText =
+  "position:fixed;bottom:10px;left:10px;z-index:1400;max-width:60vw;padding:.3em .6em;" +
+  "border-radius:4px;background:rgba(20,30,50,.92);color:#cfe3ff;font:12px ui-monospace,Menlo,monospace;" +
+  "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;display:none;" +
+  "box-shadow:0 2px 8px rgba(0,0,0,.25);";
+document.body.appendChild(selectorChip);
+
+// Right-click is the comment trigger so left-click stays free for the artifact's own
+// interactivity (links, buttons). A right-click inside the shadow root still sees the real
+// target — events retarget to the host only after they cross the boundary.
+root.addEventListener("contextmenu", handleContextMenu);
+root.addEventListener("mouseover", handleHover);
+content.addEventListener("mouseleave", clearHover);
+// Long-press trigger for comment mode (defined below, in "Comment mode" — bound here to sit
+// beside the contextmenu binding it stands in for on touch). Always bound, same as
+// contextmenu: the handlers themselves check commentModeOn, so desktop right-click and a
+// touch long press both reach the artifact's real target the same way, unconditionally.
+root.addEventListener("touchstart", handleTouchStart, { passive: true });
+root.addEventListener("touchmove", handleTouchMove, { passive: true });
+root.addEventListener("touchend", handleTouchEnd);
+root.addEventListener("touchcancel", handleTouchEnd);
+
+function setPopupMode(isEdit) {
+  popupSubmit.textContent = isEdit ? "Update" : "Submit";
+  popup.classList.toggle("edit-mode", !!isEdit);
+}
+
+function positionPopupNear(rect) {
+  const popupWidth = 340;
+  const left = Math.min(window.scrollX + rect.left, window.scrollX + window.innerWidth - popupWidth - 16);
+  popup.style.top = (window.scrollY + rect.bottom + 8) + "px";
+  popup.style.left = Math.max(16, left) + "px";
+}
+
+function truncateForPopup(text) {
+  if (!text) return "";
+  return text.length > 200 ? text.slice(0, 200) + "…" : text;
+}
+
+// Common popup-opening tail shared by both entry points (new comment, edit) — single point
+// where mode toggle + show class + focus ordering are guaranteed consistent.
+function showPopup({ rect, previewText, textareaValue, isEdit, selectAfterFocus }) {
+  positionPopupNear(rect);
+  popupPreview.textContent = truncateForPopup(previewText);
+  popupTextarea.value = textareaValue;
+  // What the box held before the user touched it. An edit popup opens prefilled with the comment
+  // that is already saved, and that is not writing — losing it costs nothing, because it is in
+  // the queue. Comparing against this is what tells the two apart.
+  popupOpenedWith = textareaValue;
+  setPopupMode(!!isEdit);
+  popup.classList.add("show");
+  popupTextarea.focus();
+  if (selectAfterFocus) popupTextarea.select();
+}
+
+// ── Element anchoring (selector-based, both substrates) ──
+
+// crypto.randomUUID is secure-context only, and this server binds plain http on the
+// tailnet — the same constraint the clipboard fallback below already works around.
+const newId = () =>
+  (crypto && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : "c-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+// All marks are in-place class toggles on the artifact's own elements; nothing wraps or
+// re-flows the artifact.
+
+const pulseSlot = { id: null };
+
+// CSS.escape with a conservative fallback for ids carrying special chars.
+function cssEscape(s) {
+  return (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+}
+
+// Build a CSS path from `r` (a shadow root or an element) down to `el`.
+//
+// An #id that is unique within `r` is used where there is one, and that check below is real —
+// its result does address a single element. Otherwise the tag:nth-of-type(n) chain is joined
+// with " > " and NOTHING is prefixed, so what comes out is a path rather than a root-anchored
+// address. querySelector matches such a string anywhere in the tree, so where a document
+// repeats a shape at two depths — a list inside a list, a paragraph inside a blockquote — the
+// same chain matches more than one element, and the first match is not always the one that was
+// right-clicked.
+//
+// Left as it is, deliberately. A `:scope > ` prefix is NOT the repair: inside a shadow root it
+// makes querySelector return null and throws nothing, so a merely ambiguous anchor would become
+// no anchor at all, silently. (It does work when the root is an element, which is the markdown
+// case — half a fix is what makes it tempting.)
+//
+// What carries the weight instead: nothing here re-resolves this string, because the element
+// itself is what gets held in `pending` and handed to markElement; the person commenting sees
+// the path in the selector chip before they confirm it; and at apply time the source is read
+// and compared against anchorText. See "Element Anchoring" in SKILL.md.
+function cssPath(el, r) {
+  if (!el || el.nodeType !== Node.ELEMENT_NODE) return "";
+  if (el.id && r.querySelectorAll("#" + cssEscape(el.id)).length === 1) return "#" + cssEscape(el.id);
+  const parts = [];
+  let cur = el;
+  while (cur && cur.nodeType === Node.ELEMENT_NODE && cur !== r) {
+    if (cur.id && r.querySelectorAll("#" + cssEscape(cur.id)).length === 1) {
+      parts.unshift("#" + cssEscape(cur.id));
+      break;
+    }
+    const tag = cur.tagName.toLowerCase();
+    const parent = cur.parentNode;
+    const sibs = parent ? Array.from(parent.children).filter((s) => s.tagName === cur.tagName) : [cur];
+    parts.unshift(sibs.length > 1 ? tag + ":nth-of-type(" + (sibs.indexOf(cur) + 1) + ")" : tag);
+    if (!parent || parent === r || parent.nodeType !== Node.ELEMENT_NODE) break;
+    cur = parent;
+  }
+  return parts.join(" > ");
+}
+
+// Scroll an element into view and pulse it (clearing any stale pulse first).
+function pulseElement(el) {
+  if (!el || !el.isConnected) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (pulseSlot.id) clearTimeout(pulseSlot.id);
+  root.querySelectorAll(".cr-pulse").forEach((e) => e.classList.remove("cr-pulse"));
+  void el.offsetWidth;
+  el.classList.add("cr-pulse");
+  pulseSlot.id = setTimeout(() => el.classList.remove("cr-pulse"), 800);
+}
+
+// Mark an element as a saved comment anchor (outline + 💬), carrying the dataset the
+// sidebar and the edit/delete flows read.
+//
+// The dataset keys are namespaced: an artifact element may legitimately carry `data-id` or
+// `data-comment` of its own, and writing over those would damage the artifact this page
+// exists to leave alone. `title` cannot be namespaced the same way — the browser's tooltip
+// reads that exact attribute — so it is saved and put back on unmark instead.
+function markElement(el, selector, comment, id) {
+  if (!el) return;
+  // Saved once, before the first mark overwrites it, and keyed on a presence flag rather
+  // than on the value: `title=""` is a real title and has to come back as one, which a
+  // truthiness check on the saved string would lose.
+  if (!("crTitleSaved" in el.dataset)) {
+    const had = el.hasAttribute("title");
+    el.dataset.crTitleSaved = had ? "1" : "0";
+    if (had) el.dataset.crTitleOrig = el.getAttribute("title");
+  }
+  el.classList.add("cr-anno");
+  el.dataset.crSelector = selector;
+  el.dataset.crComment = comment;
+  el.dataset.crId = id || "";
+  el.title = comment;
+}
+
+// Drop everything markElement added, leaving the artifact's element exactly as it was found.
+function unmarkElement(el) {
+  if (!el) return;
+  el.classList.remove("cr-anno");
+  delete el.dataset.crComment;
+  delete el.dataset.crSelector;
+  delete el.dataset.crId;
+  if (el.dataset.crTitleSaved === "1") el.setAttribute("title", el.dataset.crTitleOrig || "");
+  else el.removeAttribute("title");
+  delete el.dataset.crTitleSaved;
+  delete el.dataset.crTitleOrig;
+}
+
+// New-comment popup for a freshly right-clicked element; the selector is the anchor.
+function openSelectorPopup(el, selector) {
+  // The id is minted with the pending comment, not with the attempt to send it: a resend
+  // after a lost response has to carry the SAME id, or the two lines both survive id-dedup
+  // and the apply step edits twice.
+  pending = { selector, targetEl: el, editingMark: null, id: newId() };
+  showPopup({ rect: el.getBoundingClientRect(), previewText: selector, textareaValue: "" });
+}
+
+// Edit popup for an already-annotated element.
+function openEditPopup(el) {
+  // An edit reuses the mark's id, so its entry shares the dedup key with the version it
+  // replaces and the latest timestamp wins.
+  pending = { selector: el.dataset.crSelector || "", targetEl: el, editingMark: el, id: el.dataset.crId || newId() };
+  showPopup({
+    rect: el.getBoundingClientRect(),
+    previewText: pending.selector,
+    textareaValue: el.dataset.crComment || "",
+    isEdit: true,
+    selectAfterFocus: true,
+  });
+}
+
+// Right-click router: suppress the native menu, then edit an existing comment, else start a
+// new one. Left-click is intentionally left free for the artifact.
+function handleContextMenu(e) {
+  e.preventDefault(); // suppress the native context menu — right-click is the comment trigger
+  const target = e.target;
+  if (!target || target.nodeType !== Node.ELEMENT_NODE) return;
+  if (anchorOrEdit(target)) e.stopPropagation();
+}
+
+// Edit an existing mark, else anchor a new comment. Returns whether it acted, so callers
+// can decide what to do with the event. Also reachable from the sidebar handle, which has
+// to hand a right-click back to whatever it is covering.
+function anchorOrEdit(target) {
+  // Exact match, deliberately not `closest()`. The hover outline and the selector chip name
+  // the element under the cursor; an ancestor walk made the right-click act on a different
+  // element than the one the page had just pointed at — right-clicking a <p> inside a
+  // commented <blockquote> opened the blockquote's editor while the chip still read the <p>.
+  // The promise and the action have to be the same element, and the chip is the promise.
+  // Consequence, accepted: a commented element can now hold commented children. Each is its
+  // own mark with its own id, and each gets its own sidebar row.
+  if (target.classList.contains("cr-anno")) {
+    openEditPopup(target);
+    return true;
+  }
+  const selector = cssPath(target, root);
+  if (!selector) return false;
+  openSelectorPopup(target, selector);
+  return true;
+}
+
+// ── Comment mode ──
+// Right-click is the desktop trigger, and it stays desktop-only for a reason stronger than
+// preference: measured on iOS Safari, `contextmenu` never fires for these elements — not
+// suppressed, not delayed, simply never dispatched, under every combination of the CSS
+// properties below. So a phone cannot reach `anchorOrEdit` through the path above at all, and
+// the tailnet bind exists specifically to put the artifact in front of a phone. A long press
+// is the substitute trigger, but it cannot simply run whenever a finger stays down: on plain
+// text `-webkit-touch-callout: none` does not suppress the iOS copy callout by itself
+// (measured — that property reaches links and images, not text), so an unmoderated long press
+// would fight the system selection/copy gesture on every ordinary read of the artifact. What
+// suppresses the callout is `user-select: none` — with nothing selectable, the callout has
+// nothing to show — and THAT is what has to be a mode rather than the page's standing state:
+// the artifact is read far more than it is commented on, and reading includes copying out of
+// it. Default OFF, so nothing about reading or copying changes until the toggle is used.
+let commentModeOn = false;
+let touchTimer = null;
+let touchStartX = 0;
+let touchStartY = 0;
+let touchTarget = null;
+let longPressFired = false;
+const LONG_PRESS_MS = 600;      // measured reliable under all four CSS conditions tried
+const LONG_PRESS_SLOP_PX = 10;  // movement past this reads as a scroll, not a hold
+
+function clearTouchTimer() {
+  if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; }
+  touchTarget = null;
+}
+
+// One class, toggled on `content` — the element both substrates already share: the shadow
+// host in html mode, the light-DOM container in markdown mode. What the class DOES differs by
+// mode (the two `.cr-comment-mode` rules — one in this page's <style>, one in MARK_CSS's
+// `:host()` rule — split on that), but the toggle itself does not need to know which mode it
+// is in, so it only ever touches this one element.
+function setCommentMode(on) {
+  commentModeOn = on;
+  content.classList.toggle("cr-comment-mode", on);
+  commentModeToggle.classList.toggle("on", on);
+  commentModeToggle.setAttribute("aria-pressed", on ? "true" : "false");
+  // The visible label carries the state too, not only the fill color and aria-pressed: this
+  // is the one control standing between "why can't I select text right now" and an answer,
+  // and a glance at it — not a hover, not a screen-reader query — has to settle that question.
+  commentModeToggle.textContent = on ? "✎ comment mode ON" : "✎ comment mode";
+  commentModeToggle.title = on
+    ? "Comment mode is on — selection and copy are suppressed so a long press can anchor a comment. Tap to turn off."
+    : "Turn on to anchor comments with a long press on touch screens (selection and copy are suppressed while on).";
+  // A press held across the toggle — finger down, tap the toggle without lifting elsewhere —
+  // would otherwise fire against whatever state existed when the timer was armed.
+  clearTouchTimer();
+}
+commentModeToggle.addEventListener("click", () => setCommentMode(!commentModeOn));
+
+// `touchstart` fires at the same moment `pointerdown` does (measured), so timing the press off
+// it — rather than off a native long-press event, which touch browsers do not have — costs
+// nothing and needs no polyfill.
+function handleTouchStart(e) {
+  if (!commentModeOn) return;
+  const t = e.touches && e.touches[0];
+  if (!t) return;
+  touchStartX = t.clientX;
+  touchStartY = t.clientY;
+  touchTarget = e.target;
+  longPressFired = false;
+  touchTimer = setTimeout(() => {
+    touchTimer = null;
+    if (touchTarget && touchTarget.nodeType === Node.ELEMENT_NODE) {
+      longPressFired = true;
+      anchorOrEdit(touchTarget); // same path handleContextMenu uses — one anchoring implementation, two triggers
+    }
+  }, LONG_PRESS_MS);
+}
+
+function handleTouchMove(e) {
+  if (!touchTimer) return;
+  const t = e.touches && e.touches[0];
+  if (!t) return;
+  if (Math.abs(t.clientX - touchStartX) > LONG_PRESS_SLOP_PX || Math.abs(t.clientY - touchStartY) > LONG_PRESS_SLOP_PX) {
+    clearTouchTimer(); // reads as the start of a scroll, not a hold
+  }
+}
+
+// Not bound passive, unlike start/move: a press that already fired still gets a touchend, and
+// on a link or a button that end is what a real tap would use to act — preventDefault stops
+// the element from also doing its own thing on top of the popup this press just opened.
+function handleTouchEnd(e) {
+  clearTouchTimer();
+  if (longPressFired) { e.preventDefault(); longPressFired = false; }
+}
+
+// Is this element part of the artifact (as opposed to the review chrome)? The root
+// container itself is excluded — it has no selector and is not a comment target.
+function inArtifact(el) {
+  if (!el) return false;
+  return shadowRoot ? shadowRoot.contains(el) : (content.contains(el) && el !== content);
+}
+
+// Hover preview: outline the element under the cursor and show its live selector, so what
+// the right-click will anchor is visible before committing. An element with no computable
+// selector (the root container itself) is skipped rather than outlined — right-click would
+// not anchor it either.
+function handleHover(e) {
+  const t = e.target;
+  if (!t || t.nodeType !== Node.ELEMENT_NODE || t === hoverEl) return;
+  const selector = cssPath(t, root);
+  if (!selector) { clearHover(); return; }
+  if (hoverEl) hoverEl.classList.remove("cr-hover");
+  hoverEl = t;
+  hoverEl.classList.add("cr-hover");
+  selectorChip.textContent = selector;
+  selectorChip.style.display = "block";
+}
+
+// Clear the hover outline + chip when the cursor leaves the artifact.
+function clearHover() {
+  if (hoverEl) hoverEl.classList.remove("cr-hover");
+  hoverEl = null;
+  selectorChip.style.display = "none";
+}
+
+// A source reload held back because the editor has unsent words in it. See the reload branch in
+// handleWsMessage for why, and note the release below is the ONLY one: the popup closing is the
+// moment the words stop existing, so nothing else has to remember this is pending.
+let heldReload = false;
+let popupOpenedWith = "";
+// Written, not merely present. A prefilled edit box holds the saved comment; discarding that
+// loses nothing.
+const editorHoldsUnsentText = () =>
+  popup.classList.contains("show") && popupTextarea.value !== popupOpenedWith;
+
+function dismissPopup() {
+  popup.classList.remove("show");
+  popup.classList.remove("edit-mode");
+  pending = null;
+  // Release here, and only here. Submit, delete, Cancel, Esc and click-away all end in this
+  // function, so this covers every way the words can stop existing without becoming a state
+  // machine that has to be kept in step with each of them.
+  if (heldReload) {
+    heldReload = false;
+    paintConn();   // the page is about to go, but not painting here leaves a lie if it does not
+    sessionStorage.setItem("commentMode", commentModeOn ? "1" : "0");
+    sessionStorage.setItem("scrollY", String(window.scrollY));
+    location.reload();
+  }
+}
+
+popupCancel.addEventListener("click", dismissPopup);
+popupSubmit.addEventListener("click", submitFeedback);
+popupDelete.addEventListener("click", deleteFeedback);
+
+async function copyTextToClipboard(text) {
+  // Secure context (https / localhost): use the async Clipboard API.
+  if (navigator.clipboard && window.isSecureContext) {
+    try { await navigator.clipboard.writeText(text); return true; } catch (e) {}
+  }
+  // Insecure context (http over LAN / tailnet IP): clipboard API is undefined, fall back to
+  // the legacy execCommand path via a transient textarea.
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch (e) { return false; }
+}
+
+document.getElementById("cr-popup-copy").addEventListener("click", async () => {
+  if (!(pending && pending.selector)) return;
+  const ok = await copyTextToClipboard(pending.selector);
+  const b = document.getElementById("cr-popup-copy");
+  const prev = b.textContent;
+  b.textContent = ok ? "Copied" : "Failed";
+  setTimeout(() => { b.textContent = prev; }, 1000);
+});
+
+popupTextarea.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    submitFeedback();
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    e.stopPropagation(); // prevent the document-level Esc handler from also firing
+    dismissPopup();
+  }
+});
+
+// Clicking away discards the comment in progress — but only a click on something that is
+// not part of this review's own chrome. The edge handle is chrome and has to be listed
+// explicitly: it is a sibling of #cr-sidebar, not a child, so `sidebar.contains` is false for
+// it. Opening the panel from the handle used to throw away whatever was being typed, while
+// opening it from the status-bar count did not — and that asymmetry was an oversight, not a
+// design.
+//
+// The front-matter pill and its panel are the case this comment predicted and then arrived
+// after it was written. Neither is reached by anything above: the pill is a SIBLING of
+// #cr-status-count inside #cr-status, and the panel is a top-level div. So clicking the pill
+// to check what was stripped silently discarded whatever was being written — which is the
+// worst possible pairing, because the pill exists to be clicked mid-review when a paragraph
+// has gone missing and that is exactly when someone is part-way through commenting on it.
+// The panel body is listed for the same reason at one remove: reading the block, or dragging
+// across it to copy, must not cost the comment either.
+//
+// #cr-status is the bar the pill and the count sit in, and it was missing while both of its
+// children were listed. So a click landing on the bar's own padding — between the two buttons,
+// or beside them — went to dismissPopup and took a comment being typed with it. That is the same
+// failure the pill entry was added to fix, still present one element up: listing the children of
+// a container and not the container is how it keeps recurring.
+// Adding it does not widen the criterion. The line below already says what belongs here —
+// chrome this review drew itself — and the status bar is that; the list simply was not holding
+// what it had already admitted. A container whose children are all exempt is the shape to watch.
+//
+// This list stays narrow on purpose. Everything on it is chrome this review drew itself;
+// a click anywhere else still discards, and that is the behaviour the whole listener is for.
+document.addEventListener("click", (e) => {
+  if (!popup.contains(e.target) && !content.contains(e.target) && !sidebar.contains(e.target)
+      && !statusBar.contains(e.target) && !sidebarHandle.contains(e.target)
+      && !fmPanel.contains(e.target)) {
+    dismissPopup();
+  }
+});
+
+const toastEl = document.getElementById("cr-toast");
+let toastTimer = null;
+function showToast(msg, isError) {
+  toastEl.textContent = msg;
+  toastEl.classList.toggle("error", !!isError);
+  toastEl.classList.add("show");
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1800);
+}
+
+// Single-source fetch wrapper — all /feedback writes (POST + DELETE) share URL, headers, and
+// JSON body shape. Per-site response/error handling stays at the call site.
+function feedbackFetch(method, body) {
+  return fetch("/feedback", {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+// Guards both /feedback writes, not just POST. One flag rather than two because the two
+// cannot overlap by construction — a popup is either submitting or deleting — and a second
+// flag would have to be kept in step with this one at every early return.
+let submitInFlight = false;
+
+// Said when the shared in-flight guard swallows a write. The wording has to be true in both
+// cases the guard covers: a held ⌘Enter resending the SAME comment, and a right-click that
+// moved on to a DIFFERENT one. So it names neither — "the previous comment" would be false in
+// the first case, where it is this comment's own request that is open.
+//
+// It carries no instruction either, deliberately. "Press ⌘Enter again when it finishes" holds
+// for the second case but not the first: once the in-flight save lands, its popup is dismissed
+// and `pending` is null, so pressing again does nothing at all — silently, which is the exact
+// shape of defect this toast exists to remove. A fact about what happened is true in both.
+// Not an error: nothing failed, a write is simply already open.
+const IN_FLIGHT_NOTICE = "⏳ still saving — nothing new was sent";
+
+async function submitFeedback() {
+  // A repeat ⌘Enter/click while the first write is still open. Announced rather than dropped:
+  // returning silently meant the user pressed submit, saw nothing, and then saw the IN-FLIGHT
+  // comment's own "✓ saved" — which on screen reads as confirmation of the one they just tried
+  // to send.
+  if (submitInFlight) return showToast(IN_FLIGHT_NOTICE);
+  if (!pending) return dismissPopup();
+  const comment = popupTextarea.value.trim();
+  if (!comment) {
+    // Clearing an existing comment and submitting is a delete, not a no-op. This is a short
+    // reach, not an exotic one: openEditPopup opens with the text already selected, so
+    // Backspace + ⌘Enter lands here. Returning silently left the mark, the stored comment and
+    // the queue line all in place, with no toast to say otherwise — and the apply step would
+    // then edit the source with the comment the user had just erased.
+    // A NEW comment has nothing to delete, so an empty one still just closes.
+    if (pending.editingMark) return deleteFeedback();
+    return dismissPopup();
+  }
+
+  const captured = pending; // capture before dismiss
+
+  const reqBody = {
+    slug: SLUG,
+    selector: captured.selector,
+    comment,
+    // Minted with the pending comment (above), not on the server and not here: the server
+    // would mint a second UUID for a resend, and minting here would do the same, since a
+    // resend re-enters this function. Both lines would then survive id-dedup and the apply
+    // step would edit twice — which the failure toast explicitly invites.
+    id: captured.id,
+    // What the anchored element read as at capture time. A positional selector can still
+    // resolve after later edits and land on a different block; the guard only ever asked
+    // whether it resolved. This is what lets the apply step tell those apart.
+    anchorText: anchorTextOf(captured.targetEl),
+    // Only where the text is empty. Where there IS text, it is the better evidence — it is what
+    // the comment was written about, and it changes when the block changes.
+    anchorSig: anchorTextOf(captured.targetEl) ? "" : anchorSigOf(captured.targetEl),
+  };
+
+  // `pending` is not cleared until the response lands, so without this guard a repeated
+  // submit re-enters and POSTs the same new comment again. A new comment carries no id, so
+  // the server mints a second UUID: one visible mark, two directives in the queue, and the
+  // apply step edits the source twice.
+  submitInFlight = true;
+  try {
+    const resp = await feedbackFetch("POST", reqBody);
+    if (!resp.ok) {
+      // Every /feedback error body is plain text, so read it as text rather than JSON: the
+      // server's own sentence ("unknown slug", "name too long") is the only part of a
+      // failure the user can act on, and `server 500` tells them nothing.
+      const detail = await resp.text().then((t) => t.trim()).catch(() => "");
+      throw new Error(detail ? detail.slice(0, 200) : `server ${resp.status}`);
+    }
+    const result = await resp.json();
+    const id = result.id;
+
+    // The annotated element itself is the mark — create or update it in place.
+    markElement(captured.targetEl, captured.selector, comment, id || (captured.editingMark && captured.editingMark.dataset.crId));
+    showToast(captured.editingMark ? "✓ updated" : "✓ saved");
+    // Only touch the popup if it is still the one this response belongs to. The in-flight
+    // guard stops a second submit, not a second anchor: a right-click during the request
+    // swaps `pending` for a comment the user has not sent yet, and dismissing then would
+    // discard it. Anchoring elsewhere mid-request is left allowed on purpose — blocking it
+    // would be simpler and would stall the user whenever the network is slow.
+    if (pending === captured) dismissPopup();
+    // The server has confirmed this line, so put it in the list NOW rather than after another
+    // round trip. This is not a second source of truth — it is the same fact, applied without
+    // waiting, and the read below reconciles it. Leaving the list to lag would mean the mark
+    // appears and the row does not, which on a phone over a tailnet is a visible second of the
+    // screen disagreeing with itself: the state this whole change exists to remove.
+    const entryId = id || (captured.editingMark && captured.editingMark.dataset.crId);
+    queueEntries = queueEntries.filter((e) => e.id !== entryId).concat([{
+      id: entryId, selector: captured.selector, anchorText: reqBody.anchorText,
+      anchorSig: reqBody.anchorSig, comment, timestamp: new Date().toISOString(),
+    }]);
+    // Through resolveQueueAnchors, not straight to renderSidebar. An entry carries more than the
+    // fields the server sends: `el`, `ownsMark` and `unconfirmed` are decided by resolving it,
+    // and renderSidebar reads all three. Handing it a hand-built object left those undefined, so
+    // the row for the comment just saved read "another comment holds this element's marker" —
+    // false — and clicking it passed `undefined` to pulseElement instead of scrolling.
+    // Filling the three by hand here would work today and is exactly how this broke: there are
+    // two places that build an entry and only one knew the contract. A fourth field would find
+    // the same gap. So the second place stops building and calls the first.
+    // It costs nothing: markElement ran just above, so markForId finds this id and the
+    // already-marked branch takes it — no selector is re-resolved.
+    resolveQueueAnchors();
+    renderSidebar();
+    refreshQueue();
+  } catch (e) {
+    // The affordance is stated as a fact about the editor, not as a promise about the
+    // outcome. A stale slug after a channel restart, and a path too long to name a feedback
+    // file, both fail identically however many times they are resent — saying "retry" told
+    // the user the opposite of what was true.
+    // And it is a fact about the editor only while the editor still holds this comment. If a
+    // right-click moved it on while the request was open, ⌘Enter would send the new comment,
+    // not resend this one — so that sentence is only said where it is still true.
+    const stillMine = pending === captured;
+    showToast(
+      stillMine
+        ? `✗ not saved: ${e.message} — your text is still here; ⌘Enter resends`
+        : `✗ not saved: ${e.message} — that comment was not saved`,
+      true,
+    );
+  } finally {
+    submitInFlight = false;
+  }
+}
+
+async function deleteFeedback() {
+  if (!pending || !pending.editingMark) {
+    showToast("✗ delete unavailable", true);
+    return;
+  }
+  const captured = pending;
+  const editedMark = captured.editingMark;
+  // From `captured`, not from the element. `openEditPopup` takes the id by value when the popup
+  // opens; the attribute it came from can be gone by the time Delete is pressed, because a
+  // delete on another screen makes `resolveQueueAnchors` unmark this element — which is exactly
+  // the situation 73's notice fires in, so the button was lying in the one case the page had
+  // already warned about. And it lied about the cause: there is no "pre-update mark" format,
+  // and a user told to blame one has nowhere to go. The submit path a few lines up already reads
+  // `captured`; only this one went back to the DOM.
+  // With the real id the request reaches the server and the server's own answer comes back —
+  // "not found or already deleted" — which is true, which is the standard 76 set for these.
+  const id = captured.id;
+
+  // Unreachable as the file stands: `editingMark` is set non-null in exactly one place, and that
+  // same object literal sets `id` (`el.dataset.crId || newId()`), so passing the guard above
+  // means this is set. Kept for a second writer of `editingMark` that does not, and worded to
+  // say only what would then be true.
+  if (!id) {
+    showToast("✗ delete unavailable — this comment has no id recorded", true);
+    return;
+  }
+
+  // ⌘Enter on an emptied edit routes here, and a held ⌘Enter repeats. Measured without this
+  // guard: three keydowns in one tick wrote two tombstone lines and left the user looking at
+  // `✗ delete failed: not found or already deleted` — a red failure after a delete that had
+  // in fact succeeded. The extra tombstone is harmless to the apply step; the false failure
+  // report is not. Set before the first await, so a repeat in the same tick already sees it.
+  if (submitInFlight) return showToast(IN_FLIGHT_NOTICE);
+  submitInFlight = true;
+
+  try {
+    const resp = await feedbackFetch("DELETE", { slug: SLUG, id });
+    if (!resp.ok) {
+      // The 404 carries JSON with a `reason`; the existence-check and tombstone-write
+      // failures carry their cause as plain text. Read the body once as text and try JSON on
+      // that, so a plain-text cause reaches the user instead of a bare status.
+      const raw = (await resp.text().catch(() => "")).trim();
+      let reason = raw;
+      try { const j = JSON.parse(raw); if (j && j.reason) reason = j.reason; } catch { /* plain text body */ }
+      throw new Error(reason ? reason.slice(0, 200) : `HTTP ${resp.status}`);
+    }
+    const result = await resp.json();
+    if (!result.deleted) {
+      throw new Error(result.reason || "server did not confirm deletion");
+    }
+
+    // Leave the artifact's element exactly as it was found — including a `title` it carried
+    // before the mark borrowed it.
+    unmarkElement(editedMark);
+
+    // Same guard, same reason, as the submit path above: the in-flight flag stops a second
+    // write, not a second anchor. A right-click while the DELETE is open swaps `pending` for
+    // a comment the user has not sent yet, and closing then throws it away. Unmarking stays
+    // unconditional — the mark has to go whatever the popup is holding now.
+    if (pending === captured) dismissPopup();
+    // Same reason as the submit path: the tombstone is confirmed, so the row goes now. The
+    // element was already unmarked above; leaving its row up until a read returns would show a
+    // comment that is gone.
+    queueEntries = queueEntries.filter((e) => e.id !== id);
+    // Same reason as the submit path, and one of its own: on a shared element the mark this
+    // delete just removed may free the element for another live entry, and that entry's row goes
+    // on saying "another comment holds its marker" until something re-resolves it.
+    resolveQueueAnchors();
+    renderSidebar();
+    refreshQueue();
+    showToast("✓ deleted");
+  } catch (e) {
+    showToast("✗ delete failed: " + e.message, true);
+  } finally {
+    submitInFlight = false;
+  }
+}
+
+// ── Sidebar: this round's comments + click-to-focus ──
+
+// The queue is the SERVER's, and this page reads it. It used to be inferred from the marks in
+// this page's own DOM, which meant a reload showed `0 comments` over a queue that was not empty,
+// and a second device never learned what the first one wrote. Both symptoms were one cause:
+// every screen was drawing from private state.
+let queueEntries = [];
+
+const markForId = (id) => {
+  for (const m of root.querySelectorAll(".cr-anno")) if (m.dataset.crId === id) return m;
+  return null;
+};
+
+// Produced exactly the way the POST produces anchorText — collapse whitespace, trim, cap at 300
+// — because the comparison is only meaningful against the same transformation. A longer
+// paragraph is stored truncated, so comparing the untruncated text would fail every time.
+const anchorTextOf = (el) => (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 300);
+
+// The stand-in for an element whose text is legitimately empty — an <img>, an <hr>, a figure
+// holding only a picture, an empty cell. Built ONLY from what the source author wrote, because
+// evidence that the render computed (position, ordinal, size) moves whenever the source does and
+// would therefore confirm an anchor precisely when it should not.
+//
+// `title` is not in the list and must not be: markElement borrows that attribute to hold the
+// comment, so it would be evidence of this tool's own writing. `cr-` classes come off for the
+// same reason. Both are ours, not the document's.
+//
+// One function, used by the write path and the read path alike — 63's lesson: a comparison is
+// only meaningful against the same transformation that produced the value.
+const ANCHOR_SIG_ATTRS = ["id", "src", "srcset", "href", "alt", "name", "type", "value", "width", "height"];
+function anchorSigOf(el) {
+  if (!el || el.nodeType !== Node.ELEMENT_NODE) return "";
+  const parts = [el.tagName.toLowerCase()];
+  for (const a of ANCHOR_SIG_ATTRS) {
+    if (el.hasAttribute(a)) parts.push(a + "=" + el.getAttribute(a));
+  }
+  const cls = (el.getAttribute("class") || "").split(/\s+/).filter((c) => c && c.indexOf("cr-") !== 0);
+  if (cls.length) parts.push("class=" + cls.join(" "));
+  return parts.join("|").slice(0, 300);
+}
+
+// Put marks back on the page for entries that are not marked yet.
+//
+// THE GUARD, AND WHY IT ARRIVES WITH THIS FUNCTION. The recorded selector is a path, not a
+// unique address (see "Element Anchoring" in SKILL.md) — resolving it can land on a different
+// element that happens to repeat the same shape. Until now nothing in this page ever resolved a
+// stored selector, which is what made that tolerable. This function is the thing that changes
+// it, so the guard is part of it rather than a later hardening.
+// `anchorText` is the field kept for exactly this comparison. Where it matches, the mark goes
+// on. Where it does not — or where there is nothing to compare against — the mark stays OFF and
+// the row is listed as unconfirmed. That turns the failure from "silently annotates the wrong
+// paragraph, and a later apply round edits it" into "a visible row the user can re-place".
+// An entry with no anchorText is not evidence that the anchor is right; it is the absence of
+// the evidence, and it is treated as such.
+function resolveQueueAnchors() {
+  // How many elements carry each signature, counted ONCE for the whole pass. The count used to
+  // be taken per entry, walking the tree and computing anchorSigOf on every element each time:
+  // O(entries x DOM). This function runs on every `queue-changed` frame, every submit and every
+  // delete, and it is synchronous — so on a large HTML artifact with several picture comments,
+  // one person commenting held the other person's main thread while they were typing.
+  // Built lazily: a queue with no textless entry never asks, and then this costs nothing.
+  // Keyed by tag AND signature, which is not redundant even though the signature opens with the
+  // tag: anchorSigOf lowercases it, so two tag names differing only in case — an SVG `clipPath`
+  // beside an element named `clippath` — merge there and are separated here. That is what the
+  // per-entry tagName test did, and dropping it would make this guard quietly stricter than the
+  // one it replaces. (A comment added with the tagName test claimed the tag never mattered
+  // because signatures already carry it. That is true except for case, which is this line.)
+  let sigIndex = null;
+  const sigCount = (tagName, sig) => {
+    if (!sigIndex) {
+      sigIndex = new Map();
+      for (const cand of root.querySelectorAll("*")) {
+        const k = cand.tagName + "\u0000" + anchorSigOf(cand);
+        sigIndex.set(k, (sigIndex.get(k) || 0) + 1);
+      }
+    }
+    return sigIndex.get(tagName + "\u0000" + sig) || 0;
+  };
+
+  const liveIds = new Set(queueEntries.map((e) => e.id));
+  // A mark whose entry is gone — deleted from another screen, or retired by an apply round —
+  // comes off, restoring the artifact element exactly as it was found.
+  for (const m of Array.from(root.querySelectorAll(".cr-anno"))) {
+    if (!liveIds.has(m.dataset.crId)) unmarkElement(m);
+  }
+  for (const entry of queueEntries) {
+    // Set for EVERY entry, including the already-marked branch below, so the field has three
+    // values and not four. Left unset, an entry that took that branch carried `undefined` while a
+    // confirmed one carried `null` — both falsy, so both read as confirmed, but the sidebar was
+    // then reading a field that meant "not looked at" as if it meant "looked at and fine".
+    entry.unconfirmed = null;
+    entry.el = null;         // the element this entry resolves to, whether or not it holds the mark
+    entry.ownsMark = false;  // whether the mark on that element is THIS entry's
+
+    // Already marked: keep WHERE it is, take WHAT it says. Two different questions, and only the
+    // first one is settled by the existing mark. The element under a mark this page placed is
+    // the exact one that was right-clicked, which is stronger than re-resolving the path could
+    // establish — an ambiguous selector would MOVE a correct mark. But the comment TEXT on that
+    // element is just this page's copy of a line the server owns, and skipping the entry left it
+    // frozen: the sidebar re-rendered from the server while the mark and its borrowed tooltip
+    // went on showing the old words. openEditPopup fills the editor from the mark, not from the
+    // queue, so a user who right-clicked and pressed ⌘Enter without typing sent the stale text
+    // back with a later timestamp and silently reverted somebody else's edit.
+    // markElement is safe to call again: its title-saving guard tests `in` on the dataset, so a
+    // second call does not overwrite the artifact's original title with the borrowed one.
+    const already = markForId(entry.id);
+    if (already) {
+      markElement(already, entry.selector, entry.comment, entry.id);
+      entry.el = already;
+      entry.ownsMark = true;
+      continue;
+    }
+    // Why an entry could not be confirmed, kept so the page can say which of these happened.
+    // "Comment on it again" is true advice for one of them and false for another, and saying it
+    // where it is false is worse than saying nothing.
+    if (!entry.selector) { entry.unconfirmed = "no-selector"; continue; }
+    if (!entry.anchorText && !entry.anchorSig) { entry.unconfirmed = "no-evidence"; continue; }
+    let el = null;
+    try { el = root.querySelector(entry.selector); } catch { el = null; }
+    if (!el) { entry.unconfirmed = "not-found"; continue; }
+    if (entry.anchorText) {
+      if (anchorTextOf(el) !== entry.anchorText) { entry.unconfirmed = "changed"; continue; }
+    } else {
+      if (anchorSigOf(el) !== entry.anchorSig) { entry.unconfirmed = "changed"; continue; }
+      // Evidence that matches several elements identifies none of them. The recorded selector is
+      // a path rather than a unique address, so it can land on a sibling that carries the same
+      // attributes — two copies of one logo, say — and the signature would agree there too.
+      // Refusing is the whole point of this guard: a visible unconfirmed row beats a mark put
+      // silently on the wrong picture and edited by the next apply round.
+      // Asked of the per-pass index above, never of the selector engine. A tag name is not a
+      // selector: an element parsed from foreign markup can carry a name CSS cannot express —
+      // `<o:p>` out of Word-exported HTML is the ordinary way to get one, and html mode renders
+      // the file unsanitised, so it arrives intact. `querySelectorAll(el.tagName)` threw
+      // SyntaxError on it, and the throw left this whole function: mark restoration and the
+      // sidebar render both stopped there, for every later entry as well. The sibling call three
+      // lines up is wrapped in try/catch because its input comes out of a file a person can
+      // edit; this one took its input from the DOM, which is what made it read as safe.
+      // Compared rather than caught, then and now. A guard would refuse every such element, and
+      // there is nothing wrong with them — the count is answerable, it just cannot be asked in
+      // selector syntax.
+      // NOT extended to the anchorText branch above. The same argument applies to two blocks of
+      // identical text, but that guard is behaviour the user already accepted, and tightening it
+      // here would change it without being asked. Recorded rather than done.
+      if (sigCount(el.tagName, entry.anchorSig) !== 1) { entry.unconfirmed = "ambiguous"; continue; }
+    }
+    // The anchor IS confirmed from here on. Whether a mark ends up on the element is a second
+    // question, and the two used to be answered by one value.
+    entry.el = el;
+    // A mark carries one id — `markElement` overwrites — so when two live entries resolve to the
+    // same element only one can hold it. Two screens right-clicking the same unmarked paragraph
+    // is the ordinary way to get there, and it is the case the tailnet bind and the server queue
+    // exist for. The mark stays with whoever has it: taking it would move an annotation the user
+    // is looking at, and the loop would hand it to whichever entry happened to come last.
+    const occupant = el.dataset.crId;
+    if (occupant && occupant !== entry.id && liveIds.has(occupant)) continue;
+    markElement(el, entry.selector, entry.comment, entry.id);
+    entry.ownsMark = true;
+  }
+}
+
+// Not a confirmation failure — the anchor resolved. It says what is true instead: the element is
+// there, and another comment is holding its marker. Editing and deleting this one from the page
+// is not possible yet; that needs a mark that can carry several comments, which is a larger
+// change than this one and is recorded rather than attempted.
+const SHARED_ELEMENT_NOTE =
+  "another comment on this same element holds its marker — this row scrolls to it, but cannot open its editor";
+
+// What actually blocked confirmation, in words, for the row and for the toast.
+const UNCONFIRMED_REASON = {
+  "no-selector": "this comment has no anchor recorded",
+  "no-evidence": "this element had nothing to identify it by — commenting on it again records the same nothing",
+  "not-found": "the anchor is not on this page — the block may have been removed",
+  "changed": "the block at this anchor has changed — comment on it again to re-anchor it",
+  "ambiguous": "more than one element here matches this anchor, so it cannot be pinned to one",
+};
+
+// One path for every change: this page's own write, another device's write, and a fresh load all
+// end here. Deliberately touches nothing but the list and the marks — not the popup, not the
+// textarea, not `pending`. Those hold a comment being written, and a notice that destroys one is
+// worse than no notice.
+// Reads are sequenced, and a superseded one is dropped rather than applied. Without this a slow
+// read applies a list from before a change that has since landed, and `resolveQueueAnchors`
+// then unmarks the element the user just commented on — the comment is in the queue, the mark
+// is gone from the page. Measured: hold a read open, submit a comment, let the held read land,
+// and the new mark disappears. It takes a slow link, which is exactly the tailnet-from-a-phone
+// case this endpoint was built for.
+let queueSeq = 0;
+async function refreshQueue() {
+  const mine = ++queueSeq;
+  let data;
+  try {
+    const resp = await fetch("/feedback?slug=" + encodeURIComponent(SLUG), { cache: "no-store" });
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    data = await resp.json();
+  } catch (e) {
+    // Say so. An empty sidebar that actually means "the read failed" is the same confident
+    // wrong answer this whole change exists to remove. Unless a newer read is already running,
+    // in which case that one owns the outcome and this failure is not the user's problem.
+    if (mine !== queueSeq) return;
+    console.error("[queue] read failed:", e);
+    showToast("✗ could not read the comment queue — this list may be out of date", true);
+    return;
+  }
+  if (mine !== queueSeq) return; // a newer read started while this one was in flight
+  queueEntries = Array.isArray(data.entries) ? data.entries : [];
+  // What the editor is holding, before the refresh moves the mark's text underneath it.
+  const editingId = pending && pending.editingMark ? pending.editingMark.dataset.crId : null;
+  const editingWas = editingId ? (pending.editingMark.dataset.crComment || "") : null;
+  resolveQueueAnchors();
+  renderSidebar();
+  // The popup is not touched — not the text, not `pending`. This project has settled that twice,
+  // and a comment being written is worth more than a tidy editor. But leaving it silent is how
+  // the revert above happens by hand instead of by code: the user is looking at words that are
+  // no longer the comment, with no way to tell. So the change is announced and the choice stays
+  // theirs.
+  if (editingId) {
+    const now = queueEntries.find((e) => e.id === editingId);
+    // Two ways the ground can move under an open editor, and only one of them was covered. A
+    // DELETE takes the other branch: the entry leaves the queue entirely, so `now` is undefined
+    // and a test written as `now && …` says nothing at all.
+    // What silence costs here, measured: the id was captured by value when the popup opened, so
+    // it survives the unmark that strips it from the element. Submitting appends under that same
+    // id with a later timestamp, which beats the tombstone — the retracted line comes back to
+    // life, and the next apply round writes it into the source. Somebody else's retraction,
+    // undone by a user who was told nothing.
+    // Said, not prevented. Blocking the send would destroy words being written, which this page
+    // does not do — the same reason the reload waits rather than discarding, and the same reason
+    // the change notice above only speaks.
+    //
+    // TWO ROUTES OUT, and this page cannot tell them apart. A tombstone removes the entry, and so
+    // does a consumed-marker written by an apply round — the queue read drops both and hands back
+    // the same absence. An earlier wording named deletion, so a user holding the editor open
+    // while a round applied was told somebody had deleted their comment when nobody had.
+    // The repair is to stop asserting which. Carrying a reason on the wire would mean a new field
+    // and a new thing to keep true, for a sentence that is one line long.
+    // "Re-queues it" is what is accurate for both. After a deletion that reverses a retraction;
+    // after an apply round it puts back a line the source already carries, which the next round
+    // reads as already present and retires with a marker. Saying "brings it back" claimed the
+    // first of those in a case where it was the second.
+    if (!now) {
+      showToast("⚠ this comment is no longer in the queue — deleted elsewhere, or already applied by a round. Sending re-queues it.", true);
+    } else if (now.comment !== editingWas) {
+      showToast("⚠ this comment was just changed elsewhere — sending will overwrite that change", true);
+    }
+  }
+}
+
+function renderSidebar() {
+  const n = queueEntries.length;
+  sidebarCount.textContent = String(n);
+  countEl.textContent = String(n);
+
+  // Clear list (preserve the sidebarEmpty node by removing all children, then re-adding it
+  // only when the list is empty).
+  while (sidebarList.firstChild) sidebarList.removeChild(sidebarList.firstChild);
+
+  if (n === 0) {
+    sidebarList.appendChild(sidebarEmpty);
+    return;
+  }
+
+  for (const entry of queueEntries) {
+    // The row's state is the ENTRY's confirmation result, not "did a mark end up here". Reading
+    // it off the mark made a confirmed comment show as `⚠ not confirmed` whenever another
+    // comment on the same element held the marker — and then asked UNCONFIRMED_REASON for a
+    // reason that did not exist, so the row explained a failure that had not happened.
+    const confirmed = !entry.unconfirmed;
+    const el = entry.el;
+    const item = document.createElement("div");
+    item.className = confirmed ? "cr-sidebar-item" : "cr-sidebar-item cr-unconfirmed";
+    item.setAttribute("role", "button");
+    item.setAttribute("tabindex", "0");
+
+    const anchorEl = document.createElement("div");
+    anchorEl.className = "cr-sidebar-item-anchor";
+    // An unconfirmed entry still gets a row. Showing it is the whole point: the user can see
+    // the comment exists and put it back, which a silently missing row denies them.
+    anchorEl.textContent = confirmed ? (entry.selector || "") : "⚠ not confirmed — " + (entry.selector || "");
+    if (!confirmed) anchorEl.title = UNCONFIRMED_REASON[entry.unconfirmed] || "this anchor could not be confirmed";
+    else if (!entry.ownsMark) anchorEl.title = SHARED_ELEMENT_NOTE;
+
+    // The row is an index entry, not a copy of the comment — the comment text lives on
+    // the element itself (title + popup). Keep the full comment as the row's tooltip so
+    // hovering the list still tells you which one it is.
+    item.title = entry.comment || "";
+
+    item.appendChild(anchorEl);
+    const openEdit = () => {
+      if (!confirmed) {
+        // Was: "re-anchor it by commenting again", said for every unconfirmed row. For an element
+        // with no identifying evidence that is simply false — commenting again records the same
+        // emptiness — so the reason is said instead of the remedy.
+        showToast("⚠ " + (UNCONFIRMED_REASON[entry.unconfirmed] || "this anchor could not be confirmed"), true);
+        return;
+      }
+      // Confirmed, so the element is known and the row can take you to it. The reference was kept
+      // when the anchor was resolved rather than resolved again here — re-resolving is what the
+      // guard above exists to avoid, and there is no need for it when the element is in hand.
+      pulseElement(el);
+      // Editing is a different matter: the editor is opened FROM the mark, so opening it here
+      // would edit whichever comment holds the marker rather than this one. Scroll, and say why
+      // the editor did not open, instead of opening the wrong one.
+      if (entry.ownsMark) openEditPopup(el);
+      else showToast("⚠ " + SHARED_ELEMENT_NOTE, true);
+    };
+    item.addEventListener("click", openEdit);
+    item.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openEdit();
+      }
+    });
+    sidebarList.appendChild(item);
+  }
+}
+
+// ── Sidebar open/close, shared by the status pill, the edge handle, and Esc ──
+
+const sidebarHandle = document.getElementById("cr-sidebar-handle");
+const EDGE_ZONE_PX = 48;
+let cursorNearEdge = false;
+
+function syncHandle() {
+  const open = document.body.classList.contains("cr-sidebar-open");
+  sidebarHandle.classList.toggle("visible", cursorNearEdge || open);
+}
+
+function setSidebarOpen(open) {
+  document.body.classList.toggle("cr-sidebar-open", open);
+  statusCount.setAttribute("aria-expanded", open ? "true" : "false");
+  sidebarHandle.setAttribute("aria-expanded", open ? "true" : "false");
+  sidebarHandle.textContent = open ? "▶" : "◀";
+  syncHandle();
+}
+
+// Proximity is read from the cursor's own coordinates at the document level. A hit-area
+// strip along the right edge would do the same job and swallow the right-click that
+// anchors a comment: an element at that edge would stop being commentable, and the only
+// symptom would be nothing happening.
+document.addEventListener("mousemove", (e) => {
+  // Measured against documentElement.clientWidth, not window.innerWidth: a classic
+  // scrollbar sits between the two, and `right: 0` resolves against the narrower one. Using
+  // innerWidth would put the zone's inner boundary a scrollbar's width off from the handle
+  // it is supposed to reveal — and anything over the scrollbar still counts as the edge.
+  const near = e.clientX >= document.documentElement.clientWidth - EDGE_ZONE_PX;
+  if (near === cursorNearEdge) return;
+  cursorNearEdge = near;
+  syncHandle();
+}, { passive: true });
+
+statusCount.addEventListener("click", () => {
+  setSidebarOpen(!document.body.classList.contains("cr-sidebar-open"));
+});
+
+sidebarHandle.addEventListener("click", () => {
+  setSidebarOpen(!document.body.classList.contains("cr-sidebar-open"));
+});
+
+// While visible, the handle does sit over the artifact's right edge. Hand a right-click
+// that lands on it back to whatever is underneath, so that edge stays commentable.
+sidebarHandle.addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+  const prev = sidebarHandle.style.pointerEvents;
+  sidebarHandle.style.pointerEvents = "none";
+  let beneath = document.elementFromPoint(e.clientX, e.clientY);
+  // A point over shadow content retargets to the host, so the top-level answer is never an
+  // artifact element in html mode. Re-ask the shadow root whenever the first answer is not
+  // already inside the artifact — keying on the host specifically would miss a positioned
+  // artifact element that overhangs the host's own box.
+  if (shadowRoot && !inArtifact(beneath)) {
+    beneath = shadowRoot.elementFromPoint(e.clientX, e.clientY) || beneath;
+  }
+  sidebarHandle.style.pointerEvents = prev;
+  if (inArtifact(beneath)) anchorOrEdit(beneath);
+});
+
+// Document-level Esc: dismiss the popup if open, otherwise close the sidebar. The popup
+// textarea handler runs first and its stopPropagation prevents this from also firing when
+// the textarea has focus.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (popup.classList.contains("show")) {
+    dismissPopup();
+  } else if (document.body.classList.contains("cr-sidebar-open")) {
+    setSidebarOpen(false);
+  }
+});
+
+// First paint reads the server. This is what makes a reload — and a second device — show the
+// comments that actually exist rather than the ones this page happens to have made.
+refreshQueue();
+
+// WebSocket hot reload
+const conn = document.getElementById("cr-status-conn");
+
+// A dead file watcher is terminal: the server does not rebuild it, so nothing will ever reload
+// this page again. Once that is known no later socket event may overwrite the indicator — the
+// socket reconnects on its own every two seconds, and a single `onopen` writing "live" back
+// would erase the only warning the user gets while the page went on being permanently stale.
+// That is why every write to the pill AFTER that point goes through here. There is exactly one
+// write that does not, and cannot: the one that sets the terminal state, in handleWsMessage
+// below. It runs immediately after `watchStale = true`, so routing it through this function
+// would meet the early return and the warning would never appear at all.
+// That exception is load-bearing. Tidying it into setConn for consistency deletes the only
+// signal this whole arrangement exists to produce, and deletes it silently — the pill simply
+// goes on reading "live" over a page that can no longer update.
+// This flag is page-scoped and cannot be otherwise: a reload starts a new page with it false.
+// What carries the fact ACROSS a reload is the server, which keeps a set of dead slugs and
+// replays them to each socket as it connects (see `websocket.open` in serve.ts). So a fresh
+// page briefly shows "live" and is corrected a moment later, and that is the arrangement
+// working rather than a race — do not try to make this flag survive the reload instead, since
+// a client-side store cannot know about a watcher that died before this page ever existed.
+let watchStale = false;
+
+// TWO FACTS SHARE ONE PILL, and until now the later writer simply won. The socket's own state
+// arrives through setConn; the held-reload notice was written straight over it, and then the next
+// `onclose`/`onopen` pair wrote back over that — so a page sitting on a stale render went back to
+// reading "live", with the toast gone 1.8 seconds earlier.
+// Gating held-reload the way `watchStale` is gated would fix that by killing the other fact: a
+// genuine disconnection would go unsaid, which is the same loss `watchStale` exists to prevent,
+// just pointed at the other message. And the two states are not alike — `watchStale` is terminal
+// while a held reload is released by dismissPopup.
+// So neither wins: the pill is composed from both. The socket's own words are kept here rather
+// than read back off the element, because reading them back would make the pill its own input.
+let connState = { text: "live", disconnected: false };
+function setConn(text, disconnected) {
+  if (watchStale) return;
+  connState = { text, disconnected };
+  paintConn();
+}
+function paintConn() {
+  if (watchStale) return;
+  const held = heldReload ? "source changed — refresh held" : "";
+  // While connected the socket has nothing to add, so the held notice stands alone. While
+  // disconnected both are said, because a page that is out of date AND cannot hear about further
+  // changes is in a worse position than either alone, and the user cannot infer the second.
+  conn.textContent = held ? (connState.disconnected ? held + " · " + connState.text : held) : connState.text;
+  conn.classList.toggle("disconnected", connState.disconnected || heldReload);
+}
+
+// Named, and branching on `type` BEFORE it can reload. Both message kinds arrive on the same
+// topic, so a handler that reloads on anything carrying this slug would turn the notice that
+// the watcher died into a page reload — the one thing a stale page must not silently do.
+// The slug test comes first for the same reason it always did: watchers are per artifact, and
+// one artifact's dead watcher says nothing about another's.
+function handleWsMessage(e) {
+  let msg;
+  try { msg = JSON.parse(e.data); } catch { return; } // ignore non-JSON frames
+  if (!msg || msg.slug !== SLUG) return;
+  if (msg.type === "watch-error") {
+    watchStale = true;
+    // Written directly rather than through setConn: this is the write the gate above closes
+    // in front of. See the note there before changing it.
+    conn.classList.add("disconnected");
+    conn.textContent = "file watch stopped — reload manually";
+    return;
+  }
+  if (msg.type === "queue-changed") {
+    // Re-read the list only. NOT a reload: a reload destroys a comment being written here, and
+    // the queue moves precisely when someone else is working — which is when this page is most
+    // likely to be mid-comment.
+    refreshQueue();
+    return;
+  }
+  if (msg.type === "reload") {
+    // The branch two above refuses to reload because a reload destroys a comment being written.
+    // This branch used to reload anyway — and it fires at the WORSE moment: the source changes
+    // when an apply round lands, which is exactly when the user is likely to be writing the next
+    // round's comment.
+    //
+    // The two failures are not symmetric. A comment written against a now-stale render is caught
+    // by the anchor guard at apply time — its evidence stops matching the source, the line is
+    // left and surfaced, and the user sees it. Words deleted from the box are caught by nothing;
+    // they are simply gone. So the reload waits.
+    //
+    // It waits rather than saving and restoring. Restoring the text would not restore the
+    // anchor: the element the comment was attached to may not survive the new source, and the
+    // user would face an editor full of words pointing at nothing. That is a state this page
+    // does not have today, and inventing it would be the maximal answer rather than the
+    // fundamental one.
+    if (editorHoldsUnsentText()) {
+      heldReload = true;
+      // Two surfaces on purpose. The toast is what gets noticed; the pill is what is still there
+      // two minutes later, which is how long writing a comment can take. paintConn declines to
+      // write while the watcher is dead — that state is heavier than this one and keeps the pill.
+      showToast("⚠ the source changed — this page is out of date, and will refresh when you finish", true);
+      paintConn();
+      return;
+    }
+    sessionStorage.setItem("commentMode", commentModeOn ? "1" : "0");
+    sessionStorage.setItem("scrollY", String(window.scrollY));
+    location.reload();
+  }
+}
+
+function connectWS() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  const ws = new WebSocket(`${proto}//${location.host}/ws`);
+
+  ws.onopen = () => {
+    setConn("live", false);
+    // The socket is how this page hears about the queue, so everything that happened while it
+    // was closed was never delivered — and nothing else would ever deliver it. The page stayed
+    // wrong until its own next write or a source change, with the pill saying "live" over a
+    // list that was not. That is 63's "two screens, two facts" arriving through the outage
+    // instead of through a race, and the outage is the whole reason the reconnect timer exists:
+    // a phone going to background, a tailnet link dropping — the path the tailnet bind is for.
+    // 73's notice comes with it for free: if the comment being edited changed or vanished while
+    // this page was away, refreshQueue says so rather than letting the next ⌘Enter overwrite it.
+    // Runs on the FIRST open too. Skipping it would save one request against a local server on a
+    // page that just rendered, and cost a flag — and the flag would be wrong in the case that
+    // needs this most: a first connection that fails and retries never sets it, so the open that
+    // finally succeeds would be treated as the first and skip. There is also a real gap on a
+    // genuine first open, between the page's initial read and the socket being ready.
+    refreshQueue();
+  };
+  ws.onclose = () => {
+    setConn("reconnecting…", true);
+    setTimeout(connectWS, 2000);
+  };
+  ws.onerror = (e) => {
+    // Surface handshake / protocol errors instead of swallowing them into the reconnect loop.
+    setConn("ws error", true);
+    console.error("[ws] error:", e);
+    // onclose fires next and triggers the reconnect timer; no manual action needed here.
+  };
+  ws.onmessage = handleWsMessage;
+}
+connectWS();
+
+// Restore scroll on reload — a floor, not the mechanism.
+//
+// NOT what preserves the reader's position in practice, and it is worth saying so because the
+// shape invites the opposite reading. This runs at the end of the inline script, before layout
+// and before subresources, so `scrollTo` clamps against a document that may still be short — an
+// artifact whose `<img>` carries no width/height contributes nothing yet. Reasoning from that,
+// this looks like a bug that drops the reader far above where they were.
+// It does not, because the browser restores the scroll position of a reloaded page itself and
+// re-attempts as content settles. Measured by deleting this block outright: the position came
+// back regardless, both for an artifact with a late 3000px image and for a text-only one.
+// Kept anyway, and the reason is what it can and cannot do rather than what it usually does:
+// `scrollTo` clamps, so this can only ever land AT or ABOVE the saved offset, never past it. It
+// costs nothing when the browser is doing the work and it is the only thing left when the
+// browser is not — `history.scrollRestoration` can be set to "manual", and some privacy modes
+// change it. Do not read it as the guarantee; the guarantee is the browser's.
+const savedScroll = sessionStorage.getItem("scrollY");
+if (savedScroll) {
+  window.scrollTo(0, parseInt(savedScroll, 10));
+  sessionStorage.removeItem("scrollY");
+}
+
+// Restore comment mode on reload — same key/write/read shape as scrollY just above, for the
+// same reason: `location.reload()` is not an incidental page event here, it is the loop's own
+// transition between rounds (a comment gets applied, the source changes, the page reloads,
+// round k+1 begins), and it fires between every pair of rounds. A mode that reset there would
+// turn itself off at exactly the moment the next round starts — invisibly on desktop, where
+// right-click never depended on it, and as the whole capability vanishing on the touch screens
+// it exists for.
+// Through setCommentMode, not a direct assignment to the state flag: that function is what
+// keeps the toggle's fill, label and aria-pressed in agreement with the state, and skipping it
+// here would let the mode come back ON while the toggle still read OFF — the exact "suppressed
+// with nothing on screen saying so" state the toggle's visibility requirement exists to rule
+// out.
+// Only the literal "1" turns it on. An absent key (first load), an explicit "0", and
+// unparseable leftover junk all take the same branch here — none of them is evidence the mode
+// was on, and every one of them is safer read as off than guessed as on.
+if (sessionStorage.getItem("commentMode") === "1") setCommentMode(true);
+sessionStorage.removeItem("commentMode");
+</script>
+</body>
+</html>

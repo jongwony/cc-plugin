@@ -42,9 +42,9 @@ see the current shape.
 ## Revising a surface
 
 A `SKILL.md`, an `agents/*.md`, and this file are LLM-facing instruction
-surfaces. Changing one is a revision of a durable instruction layer, which is
-the moment `premise/instruction-authoring.md` governs — read it before drafting
-the change.
+surfaces, and `premise/` ranks above all of them. Changing one is a revision of
+a durable instruction layer — a moment that layer's own index names, so read
+from there before drafting the change.
 
 ## Conventions
 

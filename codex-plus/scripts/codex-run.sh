@@ -13,7 +13,11 @@ CDPATH=
 
 # Defaults
 readonly DEFAULT_MODEL="gpt-5.6-sol"
-readonly DEFAULT_EFFORT="xhigh"
+# high is a floor, not a ceiling. Raising effort is a per-call judgment made
+# from the task in front of the caller; a default cannot read the task, so
+# pinning the top of the ladder here spends it on every run that never
+# needed it. Callers escalate to xhigh or max deliberately.
+readonly DEFAULT_EFFORT="high"
 # workspace-write, not read-only, for one reason: the network. codex exposes no
 # network switch under read-only — the toggle lives in the
 # sandbox_workspace_write table and does nothing while the mode is read-only
@@ -37,7 +41,8 @@ Usage: codex-run.sh [options] <prompt_file>
 
 Options:
   -m, --model MODEL      Model name (default: gpt-5.6-sol)
-  -r, --effort EFFORT    Reasoning effort: medium|high|xhigh|max (default: xhigh)
+  -r, --effort EFFORT    Reasoning effort: medium|high|xhigh|max (default: high,
+                         a floor rather than a ceiling — escalate per task)
   -s, --sandbox SANDBOX  Sandbox: read-only|workspace-write|danger-full-access
                          (default: workspace-write, which this wrapper always
                          runs with network access enabled, and which already
@@ -62,7 +67,7 @@ no most-recent fallback, so it is never a race under parallel sessions.
 
 Examples (<scratchpad> = the calling session's scratchpad directory):
   codex-run.sh <scratchpad>/codex_prompt_a3f9.txt
-  codex-run.sh -m gpt-5.6-terra -r high <scratchpad>/codex_prompt_a3f9.txt
+  codex-run.sh -m gpt-5.6-luna -r xhigh <scratchpad>/codex_prompt_a3f9.txt
   codex-run.sh -S 019e3eff-c191-7401-bffb-bb8c31ac37c7 <scratchpad>/codex_prompt_a3f9.txt
 USAGE
   exit "${1:-0}"

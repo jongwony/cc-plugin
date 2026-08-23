@@ -86,10 +86,6 @@ enough to tell it from its siblings under the same parent. Three segments always
 marker, then parent and child. Two Stints from one creator:
 `stint::comment-review::port` and `stint::comment-review::review`.
 
-Because `<parent>` names whoever created the Stint, and a Stint never spawns another,
-that creator is always an orchestrator session. The no-nesting cap below holds here by
-construction rather than as an exception this rule has to carve out.
-
 Neither segment may carry whitespace, which is why both substitutions are quoted in the
 command above. That bars the character, not the phrase: a multi-word name stays
 multi-word, hyphenated — `comment-review`, not `commentreview`. Compressing a title into
@@ -112,9 +108,10 @@ confirmation step. `<child>` it describes; `<parent>` it renders from its own to
 same way across every Stint it spawns, so siblings match without either of them having to
 look anything up.
 
-Stints chain — one hands off to the next — but never nest: a worker must not spawn or
-supervise sub-workers, since only the orchestrator holds that role. That caps the spawn
-graph at one supervised level.
+Stints chain — one hands off to the next. Each level of Stint under a Stint adds
+supervision depth, which puts another hop between a gate and whoever can answer it.
+A subagent adds no such depth: it returns to its dispatcher and supervises nothing,
+which is how a Stint realizes work that must run in mutually isolated contexts.
 
 ## Talking to it
 
@@ -150,8 +147,7 @@ A spawned session never reads this file. Carry the contract in the brief itself:
 > request unless it carries the ref, and names collide. Send (a) an ACK on start,
 > (b) your state whenever you are blocked on a decision you cannot make alone, and
 > (c) a completion report. Do not wait for a reply — durable output (PR, parked task)
-> ships regardless of the channel. Do not spawn or supervise workers of your own: hand
-> work back to your supervisor instead, since only it holds that role.
+> ships regardless of the channel.
 
 ## Observing
 

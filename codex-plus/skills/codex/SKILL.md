@@ -71,14 +71,14 @@ When the delegated task is image generation or image editing:
 - Use `references/image-gen-models-prompting-guide.ipynb` only as the backing reference for model choice, prompt structure, text rendering, edits, and multi-image workflows.
 
 ## Running a Task
-1. Ask the user (via `AskUserQuestion`) which model(s) and reasoning effort in a **single prompt with two questions**. Model selection is **multi-select** — multiple models can be chosen for parallel execution.
+1. Run on `gpt-5.6-sol` at `high` unless the caller named otherwise. Designation normally arrives upstream, in the request itself, so a model or effort already named there IS the answer — do not re-ask it.
 
-   Models to offer:
-   - `gpt-5.6-sol` — the default. A run uses Sol unless the caller named another model.
+   Ask (via `AskUserQuestion`, a **single prompt with two questions**; model selection is **multi-select**, so several models can run in parallel) only where the choice is genuinely open: neither model nor effort was named, and the task's shape does not settle them.
+
+   Models:
+   - `gpt-5.6-sol` — the default, used whenever no model was named.
    - `gpt-5.6-terra` — balanced 5.6 variant; lighter usage, faster than Sol, same effort ladder.
    - `gpt-5.6-luna` — opt-in, and only where the caller names it: browser / computer-use E2E runs, and implementation work that writes a lot of code, at `xhigh`. It is routed to for cost-efficient operation on those two shapes, so it does not stand in for Sol generally.
-
-   Any model other than `gpt-5.6-sol` is used only when the caller specifies it. The ask above covers the case where nothing was fixed upstream; left unanswered, the answer is Sol.
 
    Reasoning effort is selected once and applied identically to all chosen models. `high` is the wrapper's default and the floor here — raise it to `xhigh` or `max` where the task's reasoning depth warrants, and do not go below `high`.
 

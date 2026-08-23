@@ -112,9 +112,13 @@ confirmation step. `<child>` it describes; `<parent>` it renders from its own to
 same way across every Stint it spawns, so siblings match without either of them having to
 look anything up.
 
-Stints chain — one hands off to the next — but never nest: a worker must not spawn or
-supervise sub-workers, since only the orchestrator holds that role. That caps the spawn
-graph at one supervised level.
+Stints chain — one hands off to the next — but never nest: a Stint must not spawn or
+supervise another Stint, since that recursion is what multiplies supervision depth and
+the cognitive load that comes with it. A Stint may dispatch and supervise subagents of
+its own — a subagent adds no supervision depth, and dispatching isolated subagents is
+exactly how a Stint realizes work that must run in mutually isolated contexts. The cap
+holds at one level of Stint depth; the subagent layer beneath a Stint is a different
+kind of thing and is not what this cap counts.
 
 ## Talking to it
 
@@ -150,8 +154,10 @@ A spawned session never reads this file. Carry the contract in the brief itself:
 > request unless it carries the ref, and names collide. Send (a) an ACK on start,
 > (b) your state whenever you are blocked on a decision you cannot make alone, and
 > (c) a completion report. Do not wait for a reply — durable output (PR, parked task)
-> ships regardless of the channel. Do not spawn or supervise workers of your own: hand
-> work back to your supervisor instead, since only it holds that role.
+> ships regardless of the channel. Do not spawn or supervise another worker of your
+> own — hand that work back to your supervisor instead, since worker-to-worker nesting
+> is what multiplies supervision depth. Dispatching and supervising subagents of your
+> own is fine; that adds no such depth.
 
 ## Observing
 

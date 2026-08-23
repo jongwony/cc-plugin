@@ -39,31 +39,34 @@ Frontmatter shapes (skill/agent YAML, multi-skill loading, tool restriction, MCP
 HTTP/Command forms) are re-derivable from existing siblings — read a neighbor to
 see the current shape.
 
+## Revising a surface
+
+A `SKILL.md`, an `agents/*.md`, and this file are LLM-facing instruction
+surfaces. Changing one is a revision of a durable instruction layer, which is
+the moment `premise/instruction-authoring.md` governs — read it before drafting
+the change.
+
 ## Conventions
 
-- **Helper scripts: Python by default; Bun TypeScript when the other half runs
-  in a browser.** *Python* = PEP 723 + uv — inline script metadata (`# ///
-  script … ///`), invoked as `uv run scripts/x.py` (sidesteps the `python` vs
-  `python3` ambiguity), with `dependencies = []` declared even when empty.
-  *Bun TypeScript* — `bun scripts/x.ts` — when the script's counterpart is a
-  page the plugin ships, such as a preview server driving its own browser
-  client: one language spans the wire, and HTTP + WebSocket + file-watch come
-  from the runtime instead of a dependency list. Both are prerequisites rather
-  than vendored artifacts; a skill that needs one says so, and says how to
-  install it.
+- **Helper scripts: Python by default; Bun TypeScript when the script's
+  counterpart is a page the plugin ships.** *Python* = PEP 723 + uv — inline
+  script metadata (`# /// script … ///`), `dependencies = []` declared even when
+  empty, invoked as `uv run scripts/x.py`. *Bun TypeScript* — `bun
+  scripts/x.ts`. Both are prerequisites rather than vendored artifacts; a skill
+  that needs one says so, and says how to install it.
 - **Agent vs Skill.** Agent = how to behave (principles, boundaries, error
   philosophy). Skill = what to do (workflow, procedures, commands). A
   `skills:`-loaded skill is the single home for its workflow; the agent adds only
   behavior it does not carry.
 - **Gap tracking (Syneidesis).** Mark unverified assumptions/procedures with a
-  `[Gap:Type]` prefix in TodoWrite — `Procedural`, `Assumption`, `Consideration`.
+  `[Gap:Type]` prefix on the tracked task — `Procedural`, `Assumption`,
+  `Consideration`.
 - **Importing external-tool capability — 3 tests, all required.** (1)
   *Irreducibility*: not reproducible from existing primitives (ergonomic wrappers
   stay inside scripts). (2) *Environment neutrality*: a protocol-level capability
-  (e.g. CDP) that works without the originating tool installed. (3) *SSOT
-  respect*: authoritative state (browser cookies/`localStorage`/…) is reached
-  through its authoritative path — the source owns get/set/clear rather than a
-  mirror.
+  that works without the originating tool installed. (3) *SSOT respect*:
+  authoritative state is reached through its authoritative path — the source owns
+  get/set/clear rather than a mirror.
 
 ## Versioning
 

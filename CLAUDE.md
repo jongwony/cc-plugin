@@ -70,21 +70,22 @@ the change.
 
 ## Versioning
 
-Edit `version` in `{plugin}/.claude-plugin/plugin.json`; `marketplace.json`
-carries source paths only.
+Edit `version` in `{plugin}/.claude-plugin/plugin.json`.
 
 **Bump-on-change.** When a plugin's meaningful files change in a change-set, that
 plugin's `version` must actually change (re-ordering/reformatting alone does not
-count). Exception: top-level non-meaningful files only — `.claude-plugin/`
-metadata and plugin-root `README*`/`LICENSE`/`.gitignore`/`.gitattributes`; a
-same-named file in a subdirectory counts as content. A `git rm` of a meaningful
-file counts. A new plugin satisfies it via its initial version.
+count). Exception: a plugin's own top-level metadata and boilerplate — the same
+name one directory down counts as content. A `git rm` of a meaningful file
+counts. A new plugin satisfies it via its initial version.
 
-Logic SSOT: `.githooks/check-version-bump.sh` (pure bash). Two entry points call
-it — the local pre-commit hook (`git config core.hooksPath .githooks`, once per
-clone; best-effort, bypassable) and CI
-(`.github/workflows/version-bump-check.yml`, the real gate; range mode; not
-bypassable).
+Logic SSOT: `.githooks/check-version-bump.sh` (pure bash), which also holds the
+exception list. Two entry points call it, and they share the rule while differing
+in baseline: the local pre-commit hook (`git config core.hooksPath .githooks`,
+once per clone; best-effort, bypassable) compares the staged index against `HEAD`,
+CI (`.github/workflows/version-bump-check.yml`, the real gate; not bypassable)
+against the merge-base with the PR base. A later commit on a branch therefore
+needs its own bump to pass the hook after CI is already satisfied by an earlier
+one, so such a branch carries one bump per such commit.
 
 ## Workflow
 

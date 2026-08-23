@@ -2,8 +2,10 @@
 # Pre-commit: enforce per-plugin version bumps (index mode).
 #
 # Thin wrapper — the rule logic is the single source of truth in
-# check-version-bump.sh, which CI also runs (in range mode) so the local hook
-# and CI never drift. Activate this hook with: git config core.hooksPath .githooks
+# check-version-bump.sh, which CI also runs (in range mode). The rule cannot
+# drift; the baseline differs by design — index vs HEAD here, merge-base with the
+# PR base there — so this can fail on a later commit that CI already accepts.
+# Activate this hook with: git config core.hooksPath .githooks
 # Bypass once with: git commit --no-verify
 set -euo pipefail
 dir=$(cd "$(dirname "$0")" && pwd)

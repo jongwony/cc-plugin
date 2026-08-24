@@ -70,7 +70,9 @@ in a spawn command is refused by auto mode's own permission classifier, so the s
 before any worker exists. Pass the supervisor's own class explicitly — it is the one part of
 this command that cannot be copied from a sibling. The session registry does not carry it;
 the supervisor's transcript does, as `{"type":"permission-mode","permissionMode":…}` records
-written on every mode change.
+written on every mode change. Whether parity is consulted at all is decided one level up, by
+the `crossSessionInbound` setting — so a class match cannot be inferred from a message having
+arrived, and the setting is read rather than assumed when that inference would matter.
 
 ## Naming a spawned session
 
@@ -137,7 +139,9 @@ just printed. The first message to a peer you have not addressed before comes ba
 asking you to re-send with its `[ref]` — a one-time confirmation, after which the bare
 name resolves for the rest of that conversation. Sending the ref every time skips that
 round trip and survives the other hazard: names collide heavily here, and a target that
-restarts changes both its ref and its auto-derived name. So read it, do not cache it.
+restarts changes both its ref and its auto-derived name. It also resolves where a bare name
+would not: the explicit-ref branch runs ahead of the bare-name uniqueness check, which fails
+closed on a collision. So read it, do not cache it.
 
 A row for another session **on this machine** is already the result of a live socket
 connect attempt, so it needs no separate liveness check. Rows for cloud or Remote Control

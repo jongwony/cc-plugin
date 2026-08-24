@@ -10,8 +10,9 @@ app's own dictation. It ships two skills:
 
 ## remote-spawn — spawn one session
 
-No script. One command gives a session that is background-resident, worktree-isolated,
-app-reachable, and addressable by `SendMessage` from other sessions:
+No script. One command gives a session that is background-resident, worktree-isolated and
+addressable by `SendMessage` from other sessions, and — on a launch that takes
+`--remote-control` — reachable from the Claude app:
 
 ```bash
 ( cd ~/src/foo && claude --bg --worktree foo \
@@ -26,23 +27,34 @@ claude rm     <jobId>    # retire it: removes worktree and job state
 ```
 
 Each flag is load-bearing: `--bg` detaches without a PTY, `--worktree` cuts a branch from
-`origin/<default>`, `--remote-control` registers the app bridge, `-n` pins a permanent name
-(otherwise it is regenerated every launch, along with the peer ref other sessions address it
-by — so neither is safe to cache). The worktree token and the session name are separate on
-purpose — see the skill's naming section.
+`origin/<default>`, `-n` pins a permanent name (otherwise it is regenerated every launch,
+along with the peer ref other sessions address it by — so neither is safe to cache), and
+`--remote-control` registers the app bridge. The worktree token and the session name are
+separate on purpose — see the skill's naming section.
+
+`--remote-control` is the one a launch can be missing, and it is separable: what it buys is
+the app bridge alone. The messaging socket comes from the backgrounded launch itself and the
+name from `-n`, so `SendMessage`, the fleet row and the pinned name all survive without it —
+what goes is reachability from claude.ai/code and the mobile app. Some launch paths have not
+carried it (observed: a project-local `ocx claude`-style wrapper) and the reason is
+unestablished, so do not predict it from the shape of the command — read `bridgeSessionId` in
+`~/.claude/sessions/<pid>.json`, written exactly when the bridge registered. Going without is
+not deferrable: the bridge is decided at launch, so a worker started without one stays
+app-unreachable until it is launched again on a path that does take the flag.
 
 The two pieces of shell around them are load-bearing as well. The **`cd` is what selects the
 project** — there is no flag for it, the session inherits the launching shell's directory, and
 `--worktree` needs that directory inside a git repo; the subshell keeps the caller's own cwd.
-The **`--` guards the brief** — without it a brief starting with a dash, or one sitting where
-`--remote-control`'s optional name argument can take it, is swallowed with no error and the
-worker comes up idle having been told nothing.
+The **`--` guards the brief** — without it a brief starting with a dash is swallowed with no
+error and the worker comes up idle having been told nothing, and wherever `--remote-control`
+is passed its optional name argument is a second way for a brief to disappear the same way.
 
 A worker keeps its socket after finishing a turn and stays idle-resident, so follow-up
 instructions reach it. Resume with `( cd <its-cwd> && claude --bg --remote-control <name> -n
-<name> --resume <sessionId> … -- "<next>" )` — keep `--remote-control`, or the resumed worker
-loses its app bridge for good. Context carries over but a new sessionId is minted; `jobId` is
-that id's first 8 hex characters.
+<name> --resume <sessionId> … -- "<next>" )` — a resume is itself a launch, so keep
+`--remote-control` if the first launch had it, or the resumed worker comes up with no app
+bridge and cannot be given one while it runs. Context carries over but a new sessionId is
+minted; `jobId` is that id's first 8 hex characters.
 
 ## Why the script went away
 

@@ -33,7 +33,7 @@ the project directory but is held out of the shared checkout: edits there are
 rejected until the session isolates itself under `.claude/worktrees/`. The one
 opt-out is `worktree.bgIsolation: "none"` in settings.
 
-**`--remote-control` is the one flag a launch can be missing, and it is separable.**
+**`--remote-control` is the one flag a launch path may fail to carry, and it is separable.**
 Independence is not decorative here: what the flag buys is the app bridge and nothing
 else. The messaging socket that makes a worker addressable by `SendMessage` comes from
 the backgrounded launch itself, the fleet row comes with it, and the name is pinned by
@@ -45,17 +45,27 @@ known mechanism: one path where the flag has not come through is a launch made v
 project-local `ocx claude`-style wrapper, and *why* it does not is unestablished — nobody
 has run it down to a cause. So neither a wrapper in the command nor this paragraph is a
 verdict on any particular launch. Read the session instead: `bridgeSessionId` in
-`~/.claude/sessions/<pid>.json` is written exactly when the app bridge registered, so one
-look after the spawn answers it for that session whatever the reason would have been. The
-check holds if the cause turns out to be something else, and it holds if the path is fixed
-later; a sentence naming the cause would quietly stop holding at both.
+`~/.claude/sessions/<pid>.json` holds a non-null value exactly when the app bridge
+registered, so one look after the spawn answers it for that session whatever the reason
+would have been. Read the value and not the key: the key can sit present and `null` on a
+session that never got a bridge, so a presence test reports every such worker as
+app-reachable. The `<pid>` is the `pid` field `claude agents --json` carries for that
+`<jobId>` — the spawn line hands back the jobId, not the pid. The check holds if the cause
+turns out to be something else, and it holds if the path is fixed later; a sentence naming
+the cause would quietly stop holding at both.
 
-Pass it wherever the launch takes it — reaching a worker from a phone is most of what the
-bridge is for, and no other flag offers it. Where a launch does not take it, going without is the right
-move rather than a defeat, and it is not a deferral: the bridge is decided at launch, so a
-worker started without one stays app-unreachable for the life of that run. Reaching it
-from the app means launching it again on a path that does take the flag, not attaching a
-bridge to the worker already up.
+Pass it on every spawn — reaching a worker from a phone is most of what the bridge is for,
+and no other flag offers it. The command's shape is no verdict on whether the path carries
+the flag through, so passing it and reading the session after is the only order available;
+there is no pre-launch check to run. What a path that does not take the flag does with it —
+ignore it silently, or fail the spawn on an unknown option — is unestablished, so if a spawn
+dies on the flag, relaunch without it and take the loss below. Where a launch does not take
+it, going without is the right move rather than a defeat, and it is not a deferral: the
+bridge is decided at launch, so a worker started without one stays app-unreachable for the
+life of that run. A fresh launch on a path that does take the flag gets a bridge — but that
+is a new run, not the worker already up, and nothing attaches a bridge to a session
+mid-flight. Carrying that worker's conversation across means `--resume`, and whether the
+flag restores a bridge there is untested (see Resuming).
 
 **`<surface>` and the session name are separate tokens on purpose.** `--worktree` puts its
 argument through `claude`'s own worktree-name validator, which is stricter than git's
@@ -189,9 +199,10 @@ A spawned session never reads this file. Carry the contract in the brief itself:
 only). The registry at `~/.claude/sessions/<pid>.json` is a different surface and answers a
 different question: **`messagingSocketPath` is present exactly when the session is addressable
 by `SendMessage`**, which nothing else reports. Alongside it: `entrypoint`, `bridgeSessionId`
-(written exactly when `--remote-control` registered the app bridge — the after-the-fact
-answer to whether this session is reachable from the app), `nameSource`, `jobId`,
-`statusUpdatedAt`, and `waitingFor` — the last
+(non-null exactly when `--remote-control` registered the app bridge — the after-the-fact
+answer to whether this session is reachable from the app; it can also sit present and `null`
+on a session that never got one, so test the value rather than the key), `nameSource`,
+`jobId`, `statusUpdatedAt`, and `waitingFor` — the last
 written only while the session is actually waiting, so its absence is the normal case.
 
 `status: "waiting"` means **an unanswered dialog exists, not that the session is stuck** —
@@ -221,7 +232,7 @@ block deletion. Audit rather than rely on either.
 ## Resuming
 
 ```bash
-( cd <its-cwd> && claude --bg --remote-control <name> -n <name> --resume <sessionId> \
+( cd <its-cwd> && claude --bg --remote-control "<name>" -n "<name>" --resume <sessionId> \
                          --permission-mode auto -- "<next instruction>" )
 ```
 

@@ -1,6 +1,6 @@
 # remote-tmux
 
-A `claude remote-control` toolkit reachable from the Claude app (claude.ai/code + mobile).
+A `claude remote-control` toolkit for reaching sessions from the Claude app (claude.ai/code + mobile).
 No Telegram, no bridge — the running session *is* the aperture; voice input comes from the
 app's own dictation. It ships two skills:
 
@@ -32,15 +32,19 @@ along with the peer ref other sessions address it by — so neither is safe to c
 `--remote-control` registers the app bridge. The worktree token and the session name are
 separate on purpose — see the skill's naming section.
 
-`--remote-control` is the one a launch can be missing, and it is separable: what it buys is
+`--remote-control` is the one a launch path may fail to carry, and it is separable: what it buys is
 the app bridge alone. The messaging socket comes from the backgrounded launch itself and the
 name from `-n`, so `SendMessage`, the fleet row and the pinned name all survive without it —
 what goes is reachability from claude.ai/code and the mobile app. Some launch paths have not
 carried it (observed: a project-local `ocx claude`-style wrapper) and the reason is
 unestablished, so do not predict it from the shape of the command — read `bridgeSessionId` in
-`~/.claude/sessions/<pid>.json`, written exactly when the bridge registered. Going without is
-not deferrable: the bridge is decided at launch, so a worker started without one stays
-app-unreachable until it is launched again on a path that does take the flag.
+`~/.claude/sessions/<pid>.json`, non-null exactly when the bridge registered. Test the value
+and not the key: it can sit present and `null` on a session that never got a bridge. The
+`<pid>` is the `pid` field `claude agents --json` carries for that `<jobId>`. Going without
+is not deferrable: the bridge is decided at launch, so a worker started without one stays
+app-unreachable for the life of that run. A fresh launch on a flag-carrying path gets a
+bridge, but it is a new run rather than the same worker; carrying the conversation across
+means `--resume`, and whether the flag restores a bridge there is untested.
 
 The two pieces of shell around them are load-bearing as well. The **`cd` is what selects the
 project** — there is no flag for it, the session inherits the launching shell's directory, and
@@ -50,8 +54,8 @@ error and the worker comes up idle having been told nothing, and wherever `--rem
 is passed its optional name argument is a second way for a brief to disappear the same way.
 
 A worker keeps its socket after finishing a turn and stays idle-resident, so follow-up
-instructions reach it. Resume with `( cd <its-cwd> && claude --bg --remote-control <name> -n
-<name> --resume <sessionId> … -- "<next>" )` — a resume is itself a launch, so keep
+instructions reach it. Resume with `( cd <its-cwd> && claude --bg --remote-control "<name>"
+-n "<name>" --resume <sessionId> … -- "<next>" )` — a resume is itself a launch, so keep
 `--remote-control` if the first launch had it, or the resumed worker comes up with no app
 bridge and cannot be given one while it runs. Context carries over but a new sessionId is
 minted; `jobId` is that id's first 8 hex characters.

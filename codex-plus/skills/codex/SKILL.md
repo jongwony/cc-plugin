@@ -78,11 +78,9 @@ When the delegated task is image generation or image editing:
    Models:
    - `gpt-5.6-sol` — the default, used whenever no model was named.
    - `gpt-5.6-terra` — balanced 5.6 variant; lighter usage, faster than Sol, same effort ladder.
-   - `gpt-5.6-luna` — named-only, never offered in the ask: the ask fires only when no model was named, which is the one state luna is barred in. Reached for browser / computer-use E2E runs and implementation work that writes a lot of code, at `xhigh`, running alone rather than alongside another model. codex's own registry calls it a "Fast and affordable agentic coding model".
+   - `gpt-5.6-luna` — a "Fast and affordable agentic coding model" in codex's own registry; the cost-efficient pick for browser / computer-use E2E runs and implementation work that writes a lot of code, usually at `xhigh`.
 
-   So the ask offers Sol and Terra; luna enters by being named.
-
-   Reasoning effort is selected once and applied identically to all chosen models — which is why a named luna run is not bundled into a multi-model selection. `high` is the wrapper's default and the floor here — raise it to `xhigh` or `max` where the task's reasoning depth warrants, and do not go below `high`.
+   Reasoning effort is selected once and applied identically to all chosen models. `high` is the wrapper's default and the floor here — raise it to `xhigh` or `max` where the task's reasoning depth warrants, and do not go below `high`.
 
 2. Select sandbox mode. Omitting `-s` gives `workspace-write` **with network access** — codex offers no network under `read-only` at all, so this is the only mode short of full access that has any. Pass `-s read-only` when a run must neither touch the tree nor reach off-machine; `-s danger-full-access` only when it must write outside the workspace. Because the default already permits writes, what bounds a run that is meant to only read is the role its prompt declares — state it.
 3. Craft prompt per Context Classification and Prompt Template — classify context, write to `<scratchpad>/codex_prompt_<suffix>.txt`.

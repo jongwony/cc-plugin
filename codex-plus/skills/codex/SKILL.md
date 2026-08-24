@@ -78,7 +78,7 @@ When the delegated task is image generation or image editing:
    Models:
    - `gpt-5.6-sol` — the default, used whenever no model was named.
    - `gpt-5.6-terra` — balanced 5.6 variant; lighter usage, faster than Sol, same effort ladder.
-   - `gpt-5.6-luna` — opt-in, and only where the caller names it: browser / computer-use E2E runs, and implementation work that writes a lot of code, at `xhigh`. It is routed to for cost-efficient operation on those two shapes, so it does not stand in for Sol generally.
+   - `gpt-5.6-luna` — a "Fast and affordable agentic coding model" in codex's own registry; the cost-efficient pick for browser / computer-use E2E runs and implementation work that writes a lot of code, usually at `xhigh`.
 
    Reasoning effort is selected once and applied identically to all chosen models. `high` is the wrapper's default and the floor here — raise it to `xhigh` or `max` where the task's reasoning depth warrants, and do not go below `high`.
 
@@ -104,7 +104,7 @@ Base patterns:
 
 Modifiers, added to any base pattern above:
 - Different working directory — `-C <DIR>`; pass it again on resume (step 6)
-- Model and effort — `-m gpt-5.6-luna`, `-r xhigh` (effort defaults to `high`; `-r` raises it)
+- Model and effort — `-m gpt-5.6-terra`, `-r xhigh` (effort defaults to `high`; `-r` raises it)
 - Capture the answer to a file — `-o <FILE>` writes codex's final message to FILE deterministically
 
 ## Following Up

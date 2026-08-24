@@ -4,9 +4,13 @@ description: >
   This skill should be used when the user asks to "spawn a remote-control session",
   "open this repo/folder in the Claude app", "remote control here", "띄워줘",
   "이 디렉터리에서 remote-control 켜줘", to spawn a worker session for a piece of work,
-  or to list/message/retire those sessions. It launches a backgrounded `claude` session
-  that is reachable from claude.ai/code and the mobile app AND addressable by
-  `SendMessage` from other sessions — no script, no tmux, no Telegram bridge.
+  or to list/message/retire those sessions. Use it also whenever a message arrives from
+  another Claude session, and whenever you are about to read the peer listing, address a
+  peer, or judge whether one can be interrupted. It launches a backgrounded `claude`
+  session that is reachable from claude.ai/code and the mobile app AND addressable by
+  `SendMessage` from other sessions — no script, no tmux, no Telegram bridge — and it
+  carries the whole lifecycle of such a session: spawning, addressing, receiving,
+  observing, retiring.
 ---
 
 # Remote-Control Spawner
@@ -122,12 +126,34 @@ claude attach <jobId>         # open it in this terminal
 ```
 
 From a session, `ListAgents` lists addressable peers and `SendMessage` reaches them.
+Not every peer in that list is a Stint: a session you did not spawn — an interactive one
+opened in another terminal — sits in the same listing and is addressed exactly the same
+way. This section, **Before you send** and **Observing** apply to both; only the lifecycle
+around a spawned worker — the command above, the reporting contract, retiring — is
+Stint-specific.
+
 **Resolve the address at send time**: send the exact `name [ref]` string `ListAgents`
 just printed. The first message to a peer you have not addressed before comes back
 asking you to re-send with its `[ref]` — a one-time confirmation, after which the bare
 name resolves for the rest of that conversation. Sending the ref every time skips that
 round trip and survives the other hazard: names collide heavily here, and a target that
 restarts changes both its ref and its auto-derived name. So read it, do not cache it.
+
+A row for another session **on this machine** is already the result of a live socket
+connect attempt, so it needs no separate liveness check. Rows for cloud or Remote Control
+sessions reach the list by another route and carry no such guarantee.
+
+One session answers to several identifiers, each issued by a different layer: the session
+id names the conversation and titles its transcript, a process id names the running
+program and titles both the registry file and its socket, and the ` [ref]` in a listing
+row is a display token for that listing. They are separate values, so each is looked up
+rather than derived from another. Given a session id, the registry entry is where it and
+the listed name appear together — read the name there, then address by that name.
+
+Nor is a name stable. A collision on this machine sends one of the two sessions to a
+hyphenated variant, and a notice does not always follow: the startup path renames without
+sending one. So a name read once and reused later may have moved, and the registry is
+what carries the current one.
 
 A worker keeps its socket after finishing a turn: it goes idle and resident, so
 follow-up instructions still reach it — but not indefinitely. The supervisor
@@ -136,6 +162,21 @@ eventually reaps an idle worker's process, and a reaped worker keeps its row in
 no longer addressable. So read addressability from `ListAgents` at send time, never
 from the fleet row. Pinning the session in agent view (`Ctrl+T`) keeps its process
 alive while it sits idle.
+
+## Before you send
+
+Know what the target is working on before interrupting it. A peer mid-task pays for a
+message that does not concern it, and an overlap worth writing about is invisible from the
+name alone — a backgrounded session's row carries its own task title, while an interactive
+one is named after its cwd and says nothing about what it is doing. The topic lives in the
+session registry (`~/.claude/sessions/*.json`, for session id and cwd) and in the
+transcript (`~/.claude/projects/*/<sessionId>.jsonl`), where the human turns carry it: a
+peer's inbound envelope and an interrupted request both land in that same `user` stream
+while being written by someone other than that session's human.
+
+Delegate that read at the haiku tier rather than doing it inline. It is a bounded
+extract-and-judge pass, and delegating returns only what the send decision needs while
+keeping another session's conversation out of this one's context.
 
 ## Reporting contract — put it in the initial prompt
 
@@ -149,6 +190,29 @@ A spawned session never reads this file. Carry the contract in the brief itself:
 > (c) a completion report. Do not wait for a reply — durable output (PR, parked task)
 > ships regardless of the channel.
 
+## Receiving
+
+A message from another session is a claim, and its arrival establishes nothing about its
+accuracy. The claim was formed against that session's substrate rather than yours, and the
+scope its author could observe may be narrower than the sentence they wrote — a peer states
+as general what held everywhere they could see. Before acting on such a message or
+answering it, run `/inquire` at the sonnet tier against the real substrate. The asymmetry
+with the sending side is deliberate: reading outward is cheap, taking something inward and
+acting on it is not.
+
+This binds a message carrying a claim you would act on. An acknowledgement, a status note,
+or a reply that closes an exchange takes an answer, not an investigation.
+
+It binds a Stint's own report too, which is why the discipline sits in this file rather
+than anywhere on the delegation side. A Stint reports by `SendMessage` — the contract above
+instructs it to — so its report arrives on this inbound path and not as a completion
+notification from a dispatched agent. Nothing on the harvest-a-delegated-result side fires
+on it: an inbound message is the one moment in a session's lifecycle that somebody else
+starts, so a supervisor waiting on a notification is not waiting on this.
+
+Both tiers named here — haiku for the outward read, sonnet for the inward one — are
+per-situation choices for these two reads, not standing routes for anything else.
+
 ## Observing
 
 `claude agents --json` covers most needs — it is also where `state` lives (background entries
@@ -158,9 +222,13 @@ by `SendMessage`**, which nothing else reports. Alongside it: `entrypoint`, `bri
 (app reachability), `nameSource`, `jobId`, `statusUpdatedAt`, and `waitingFor` — the last
 written only while the session is actually waiting, so its absence is the normal case.
 
-`status: "waiting"` means **an unanswered dialog exists, not that the session is stuck** —
-a worker in that state still accepts app input and still processes peer messages. Judge by
-how long `statusUpdatedAt` has been frozen, not by the status value alone.
+**`status` does not report what a session is doing.** `busy` covers generating and having a
+delegated task in flight alike, and some delegated work is not counted at all. `waiting`
+means an unanswered dialog exists, *not* that the session is stuck — a worker in that state
+still accepts app input and still processes peer messages. `shell` is an otherwise-idle
+session with background shells. Read the field as a rough interruptibility signal, never as
+an account of the work, and judge a suspected stall by how long `statusUpdatedAt` has been
+frozen rather than by the status value.
 
 ## Retiring
 
@@ -172,15 +240,33 @@ claude rm  <jobId>     # retires it: removes worktree and job state
 `stop` alone is not retirement — the job stays in `claude agents --json --all`. Use `rm`
 to close out a work unit, the same lease discipline a worktree gets.
 
-Retiring is not a loss to be weighed against keeping the row. Ending the process and
-taking the row out of the fleet is the point: a list of finished-looking rows is the
-cost that accumulates, and it is paid by whoever has to read the list. The
-conversation survives `rm` — the transcript stays on disk and `claude --resume
-<sessionId>` still reaches it. What does not survive is anything whose only copy sits
-on the worktree, so audit that first. Sources disagree on how far `rm` reaches there:
-`claude rm --help` says it deletes the session and its worktree outright, while the
-published docs say a worktree with uncommitted changes is kept and unpushed commits
-block deletion. Audit rather than rely on either.
+Retiring is not a loss to be weighed against keeping the row. A finished session still
+holds a row, a process slot and possibly a worktree, and ending the process and taking the
+row out of the fleet is the point: a list of finished-looking rows is the cost that
+accumulates, and it is paid by whoever has to read the list.
+
+What survives retirement is the conversation. The transcript stays on disk and `claude
+--resume <sessionId>` still reaches it, so the removal is recoverable in the sense that
+usually matters. What does not survive is anything whose only copy sits on the worktree —
+that is what the audit before retiring is for, and it asks about unpushed commits and
+uncommitted files rather than about where you happen to be standing. The conversation being
+recoverable is what makes the removal cheap; the worktree audit is what makes it safe, and
+neither substitutes for the other.
+
+Sources disagree on how far `rm` reaches into the worktree: `claude rm --help` says it
+deletes the session and its worktree outright, while the published docs say a worktree with
+uncommitted changes is kept and unpushed commits block deletion. Audit rather than rely on
+either.
+
+Standing inside the worktree a finished session ran in is not itself a reason to defer.
+The hesitation worth having looks narrower than that: a job that *created* its own worktree
+would take that directory with it, so retiring such a job from inside its directory would
+remove the ground underfoot, while a job spawned into a worktree that already existed does
+not own it, and retiring that one should touch only job state. Treat that ownership split
+as a reading to verify against the run rather than as established behaviour — it appears to
+show in what the retirement reports, the owning case naming the worktree path and the other
+not, so read that line rather than predicting it, and check `git worktree list` before and
+after when the answer matters.
 
 ## Resuming
 

@@ -37,14 +37,13 @@ shared checkout: edits there are rejected until the session isolates itself unde
 **`<surface>` and the session name are separate tokens on purpose.** `--worktree` puts its
 argument through `claude`'s own worktree-name validator, which is stricter than git's
 refname rules: each `/`-separated segment may hold only letters, digits, dots,
-underscores and dashes, to 64 characters total. Reason from git's rules instead and you
-will mispredict — `a+b`, `a,b` and `a@b` are all legal refnames and all rejected here.
-So `<surface>` stays a plain hyphenated token, and the `::` the session name is built on is
-not available to it.
+underscores and dashes, to 64 characters total. Git's refname grammar is wider, so
+reasoning from it mispredicts — `a+b` is a legal refname and is rejected here. `<surface>`
+stays a plain hyphenated token, and the `::` the session name is built on is not available
+to it.
 
 Nor should the two share a value, independent of that constraint: several Stints can
-share one worktree (a build pass and a review pass on the same surface), and one unit of
-work can span several worktrees (a change landing in two repos) — neither direction
+share one worktree, and one unit of work can span several worktrees — neither direction
 supports a fixed mapping from branch to session name. Sharing needs no special form:
 `--worktree <surface>` is find-or-create, so a second Stint passing a name that already
 exists joins that worktree and its branch rather than colliding.
@@ -55,7 +54,7 @@ inherits the launching shell's working directory. `--worktree` additionally requ
 directory to be inside a git repo. Keep the `cd` inside a subshell so the caller's own
 working directory survives the spawn.
 
-**The `--` is not decoration.** Without it the brief is parsed as options: a brief that
+**The `--` is what ends option parsing.** Without it the brief is parsed as options: a brief that
 starts with a dash, or that follows `--remote-control` (whose name argument is optional and
 will happily swallow it), is consumed silently — `claude` prints `(idle — send a prompt to
 start)`, no error, no transcript, and a worker sits there having been told nothing.
@@ -64,10 +63,10 @@ start)`, no error, no transcript, and a worker sits there having been told nothi
 that resolves to from an auto-mode supervisor. Two constraints close on the same value.
 A cross-session message from a sender in a different permission class is not delivered —
 it opens a dialog the worker never answers, so the instruction silently never arrives, which
-is why the worker takes the supervisor's class rather than the most permissive one available.
-And from that class the permissive one is not available anyway: `--dangerously-skip-permissions`
-in a spawn command is refused by auto mode's own permission classifier, so the spawn is denied
-before any worker exists. Pass the supervisor's own class explicitly — it is the one part of
+is why the worker takes the supervisor's class. That class is also the only one reachable
+from an auto-mode supervisor: a spawn command carrying a skip-permissions flag is refused by
+auto mode's own permission classifier, so the spawn is denied before any worker exists. Pass
+the supervisor's own class explicitly — it is the one part of
 this command that cannot be copied from a sibling. The session registry does not carry it;
 the supervisor's transcript does, as `{"type":"permission-mode","permissionMode":…}` records
 written on every mode change. Whether parity is consulted at all is decided one level up, by
@@ -76,9 +75,7 @@ arrived, and the setting is read rather than assumed when that inference would m
 
 ## Naming a spawned session
 
-When the spawning session is an orchestrator and this session is a **Stint** — a worker
-whose scope exceeds one context lifecycle; smaller work goes to a subagent instead — name
-it:
+When the spawning session is an orchestrator and this session is a **Stint**, name it:
 
     stint::<parent>::<child>
 
@@ -94,20 +91,19 @@ marker, then parent and child. Two Stints from one creator:
 
 Neither segment may carry whitespace, which is why both substitutions are quoted in the
 command above. That bars the character, not the phrase: a multi-word name stays
-multi-word, hyphenated — `comment-review`, not `commentreview`. Compressing a title into
-a single token to make it fit throws away the reading the token was chosen for. The
-asymmetry is the part worth holding on to: `<surface>` is covered by the validator,
-which rejects a bad token loudly before anything gets created, while the session name
-passes through no validator at all. There a space is not an error but a truncation —
-`--remote-control stint::my unit::build` registers `stint::my` and leaves the rest as a
-stray positional, so the worker comes up under a name nobody can address it by. The same
-freedom that is safe on one token fails silently on the other.
+multi-word and hyphenated, since compressing a title into a single token to make it fit
+throws away the reading it was chosen for. The asymmetry is what to hold on to:
+`<surface>` is covered by the validator, which rejects a bad token loudly before anything
+gets created, while the session name passes through no validator at all. There a space is
+not an error but a truncation — `--remote-control stint::my unit::build` registers
+`stint::my` and leaves the rest as a stray positional, so the worker comes up under a name
+nobody can address it by. The same freedom that is safe on one token fails silently on the
+other.
 
-`claude` does ship `--remote-control-session-name-prefix`, and this convention does not
-use it: it prefixes auto-generated names only, while every name here is pinned explicitly
-with `-n`. `-n` and `--remote-control` then deliberately take the same value — they are
-independent flags, one naming the session and one registering the app bridge, and holding
-them equal is what makes the name printed at spawn the same string peers address.
+Every name here is pinned explicitly with `-n`, and `-n` and `--remote-control`
+deliberately take the same value — they are independent flags, one naming the session and
+one registering the app bridge, and holding them equal is what makes the name printed at
+spawn the same string peers address.
 
 The orchestrator reports both tokens with the spawn line — there is no separate per-spawn
 confirmation step. `<child>` it describes; `<parent>` it renders from its own topic, the
@@ -138,10 +134,14 @@ Stint-specific.
 just printed. The first message to a peer you have not addressed before comes back
 asking you to re-send with its `[ref]` — a one-time confirmation, after which the bare
 name resolves for the rest of that conversation. Sending the ref every time skips that
-round trip and survives the other hazard: names collide heavily here, and a target that
-restarts changes both its ref and its auto-derived name. It also resolves where a bare name
-would not: the explicit-ref branch runs ahead of the bare-name uniqueness check, which fails
-closed on a collision. So read it, do not cache it.
+round trip, and it also resolves where a bare name would not: the explicit-ref branch runs
+ahead of the bare-name uniqueness check, which fails closed on a collision.
+
+Neither half of the address holds still. Names collide heavily here, and a collision sends
+one of the two sessions to a hyphenated variant without a notice always following — the
+startup path renames silently. A target that restarts changes both its ref and its
+auto-derived name. So read the address fresh at each send; the registry is what carries the
+current one.
 
 A row for another session **on this machine** is already the result of a live socket
 connect attempt, so it needs no separate liveness check. Rows for cloud or Remote Control
@@ -154,10 +154,6 @@ row is a display token for that listing. They are separate values, so each is lo
 rather than derived from another. Given a session id, the registry entry is where it and
 the listed name appear together — read the name there, then address by that name.
 
-Nor is a name stable. A collision on this machine sends one of the two sessions to a
-hyphenated variant, and a notice does not always follow: the startup path renames without
-sending one. So a name read once and reused later may have moved, and the registry is
-what carries the current one.
 
 A worker keeps its socket after finishing a turn: it goes idle and resident, so
 follow-up instructions still reach it — but not indefinitely. The supervisor
@@ -222,17 +218,14 @@ per-situation choices for these two reads, not standing routes for anything else
 `claude agents --json` covers most needs — it is also where `state` lives (background entries
 only). The registry at `~/.claude/sessions/<pid>.json` is a different surface and answers a
 different question: **`messagingSocketPath` is present exactly when the session is addressable
-by `SendMessage`**, which nothing else reports. Alongside it: `entrypoint`, `bridgeSessionId`
-(app reachability), `nameSource`, `jobId`, `statusUpdatedAt`, and `waitingFor` — the last
-written only while the session is actually waiting, so its absence is the normal case.
+by `SendMessage`**, which nothing else reports. Alongside it, `bridgeSessionId` is where app
+reachability is read, and `statusUpdatedAt` is what the staleness judgment below rests on.
 
-**`status` does not report what a session is doing.** `busy` covers generating and having a
-delegated task in flight alike, and some delegated work is not counted at all. `waiting`
-means an unanswered dialog exists, *not* that the session is stuck — a worker in that state
-still accepts app input and still processes peer messages. `shell` is an otherwise-idle
-session with background shells. Read the field as a rough interruptibility signal, never as
-an account of the work, and judge a suspected stall by how long `statusUpdatedAt` has been
-frozen rather than by the status value.
+**`status` is a rough interruptibility signal, not an account of the work.** It collapses
+distinctions the caller may care about — `busy` covers generating and having a delegated task
+in flight alike, and some delegated work is not counted at all — and `waiting` means an
+unanswered dialog exists, which a worker still accepts app input and processes peer messages
+through. Judge a suspected stall by how long `statusUpdatedAt` has been frozen.
 
 ## Retiring
 
@@ -244,33 +237,28 @@ claude rm  <jobId>     # retires it: removes worktree and job state
 `stop` alone is not retirement — the job stays in `claude agents --json --all`. Use `rm`
 to close out a work unit, the same lease discipline a worktree gets.
 
-Retiring is not a loss to be weighed against keeping the row. A finished session still
-holds a row, a process slot and possibly a worktree, and ending the process and taking the
-row out of the fleet is the point: a list of finished-looking rows is the cost that
-accumulates, and it is paid by whoever has to read the list.
+Retiring is the point. A finished session holds a row, a process slot and possibly a
+worktree, and a list of finished-looking rows is a cost paid by whoever has to read it.
 
-What survives retirement is the conversation. The transcript stays on disk and `claude
---resume <sessionId>` still reaches it, so the removal is recoverable in the sense that
-usually matters. What does not survive is anything whose only copy sits on the worktree —
-that is what the audit before retiring is for, and it asks about unpushed commits and
-uncommitted files rather than about where you happen to be standing. The conversation being
-recoverable is what makes the removal cheap; the worktree audit is what makes it safe, and
-neither substitutes for the other.
+What survives retirement is the conversation: the transcript stays on disk and `claude
+--resume <sessionId>` still reaches it. What does not survive is anything whose only copy
+sits on the worktree — that is what the audit before retiring is for, and it asks about
+unpushed commits and uncommitted files rather than about where you happen to be standing.
+Recoverability is what makes the removal cheap; the worktree audit is what makes it safe,
+and neither substitutes for the other.
 
 Sources disagree on how far `rm` reaches into the worktree: `claude rm --help` says it
 deletes the session and its worktree outright, while the published docs say a worktree with
 uncommitted changes is kept and unpushed commits block deletion. Audit rather than rely on
 either.
 
-Standing inside the worktree a finished session ran in is not itself a reason to defer.
-The hesitation worth having looks narrower than that: a job that *created* its own worktree
-would take that directory with it, so retiring such a job from inside its directory would
-remove the ground underfoot, while a job spawned into a worktree that already existed does
-not own it, and retiring that one should touch only job state. Treat that ownership split
-as a reading to verify against the run rather than as established behaviour — it appears to
-show in what the retirement reports, the owning case naming the worktree path and the other
-not, so read that line rather than predicting it, and check `git worktree list` before and
-after when the answer matters.
+Standing inside a finished session's worktree is not itself a reason to defer; the
+hazard is narrower. A job that *created* its own worktree takes that directory with it, so
+retiring it from inside pulls the ground out from underfoot — while a job spawned into a
+worktree that already existed does not own it, and retiring that one should touch only job
+state. That ownership split is a reading to verify against the run rather than established
+behaviour, and the retirement's own report is where it shows: the owning case names the
+worktree path and the other does not. Read that line rather than predicting it.
 
 ## Resuming
 
@@ -300,7 +288,5 @@ Notes to pass on when relevant:
   `rc-pool` skill.
 - An already-running session cannot become addressable later; the socket is decided once at
   launch, so an old session must be restarted to join.
-- `claude daemon status` reports on the supervisor that hosts every background session;
-  `claude daemon stop --any --keep-workers` stops the supervisor while leaving the workers
-  running. Neither is wanted in normal use — they are the handles for when the fleet itself
-  misbehaves.
+- `claude daemon status` and `claude daemon stop --any --keep-workers` reach the supervisor
+  that hosts every background session — the handles for when the fleet itself misbehaves.

@@ -67,7 +67,7 @@
     {
       "name": "remote-tmux",
       "source": "./remote-tmux",
-      "description": "tmux-tracked `claude remote-control` toolkit: spawn one-off sessions, app-reachable wherever the launch takes --remote-control, or keep a self-restarting --spawn-worktree pool host alive per project"
+      "description": "`claude remote-control` toolkit: spawn one-off backgrounded sessions, app-reachable wherever the launch takes --remote-control, or keep a tmux-tracked self-restarting `--spawn worktree` pool host alive per project"
     },
     {
       "name": "excalidraw-host",

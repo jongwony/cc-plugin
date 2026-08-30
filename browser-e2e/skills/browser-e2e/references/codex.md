@@ -21,30 +21,61 @@ second codex inside the first. The nested process died at
 the run then reported that error as the browser path's failure — which it was not.
 Do not remove this table.
 
-## ⛔ Blocker: `codex exec` does not expose the chrome plugin
+## ⛔ Blocker: the CLI never loads the chrome plugin
 
 **Measured 2026-08-30, codex-cli 0.150.1.** A `codex exec` run's tool inventory
 contains no chrome plugin, no browser plugin, and no JS/Node REPL through which
-`agent.browsers.get("chrome")` could be evaluated. Confirmed twice, from the
-worktree and from the trust-listed parent repository, so it is neither a
-`trust_level` nor a sandbox effect. `codex exec --help` offers no flag that
-enables a plugin for the run.
+`agent.browsers.get("chrome")` could be evaluated. Confirmed three times — from
+the worktree, from the trust-listed parent repository, and once more with a Chrome
+tab open by hand — so it is not a `trust_level`, a sandbox, or a browser-state
+effect. `codex exec --help` offers no flag that enables a plugin for a run.
 
-This holds **even though** `~/.codex/config.toml` carries
-`[plugins."chrome@openai-bundled"]` with `enabled = true`. Config enablement and
-exec-surface exposure are separate things.
+### Root cause: the marketplace is not registered
 
-Everything in *Operations* below was measured through some codex surface, but
-**not through `codex exec`** — the invocation in *Invoking* is therefore
-unconfirmed as a route to the browser API, and the operations are recorded here as
-what that other surface showed. Which surface reaches them (the interactive
-`codex` TUI, the Codex desktop app — `config.toml` carries
-`BROWSER_USE_CODEX_APP_VERSION` and a `codex-app-tools@openai-bundled` plugin — or
-an exec configuration not yet found) is **open**, and is the one thing this path
-needs settled before it can be the default in practice.
+```
+$ codex plugin marketplace list
+MARKETPLACE     ROOT
+openai-curated  …/hermeneutic-assistant/data/opencodex/.codex/.tmp/plugins
+```
 
-The four *Diagnostics* below are unaffected: they are plain `node` scripts and ran
-correctly from inside `codex exec`.
+`openai-curated` is the only registered marketplace. The chrome plugin is
+`chrome@openai-bundled`, and **`openai-bundled` is not registered at all** — so
+`codex plugin list` never lists it and the CLI has no route to load it.
+
+Three things point the other way and none of them overrides that:
+
+| Looks enabled | Actually |
+|---|---|
+| `~/.codex/config.toml` has `[plugins."chrome@openai-bundled"] enabled = true` | an enablement flag for a plugin the CLI cannot resolve |
+| `~/.codex/plugins/cache/openai-bundled/chrome/latest/` exists, fully populated | a cache written by something other than this CLI |
+| `codex features list` → `browser_use`, `plugins`, `in_app_browser` all `true` | feature gates, upstream of marketplace resolution |
+
+The likely writer of that cache is the Codex **desktop app** — `config.toml`
+carries `BROWSER_USE_CODEX_APP_VERSION` and a `codex-app-tools@openai-bundled`
+entry, and `codex app` launches it. **Unverified**: whether the desktop app
+exposes the browser API, and whether
+`codex plugin marketplace add openai-bundled …` would make the CLI load it. Both
+are one command away from being known, but the second writes to the user's codex
+config, so it is theirs to authorize.
+
+### What this means for the operations below
+
+Everything in *Operations* was measured through **some** codex surface, and the
+provenance of that measurement could not be traced to a surface anyone can name.
+Treat the whole codex column as **unverified-provenance**: evidence that the API
+exists somewhere, not evidence that this skill's documented invocation reaches it.
+
+### What is NOT the cause
+
+Ruled out by measurement, so a later session need not re-check them:
+
+- **The Chrome extension.** Installed and enabled (`check-extension-installed.js`
+  exit 0), native host manifest correct, Chrome running. Opening a tab by hand
+  changed nothing — the plugin is absent before any browser state matters.
+- **Sandbox mode, working directory, project trust, feature flags.**
+
+The four *Diagnostics* below are unaffected: they are plain `node` scripts run
+through the shell, not plugin tools, and ran correctly from inside `codex exec`.
 
 ## Settings
 

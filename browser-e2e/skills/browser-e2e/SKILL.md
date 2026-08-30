@@ -29,12 +29,18 @@ machine state that changes underneath the skill.
 | Claude (named) | The Claude in Chrome extension connected to this session | `tabs_context_mcp` returns a tab group instead of an error |
 
 > **⛔ Open blocker on the default path.** Measured 2026-08-30 on codex-cli
-> 0.150.1: a `codex exec` run's tool inventory contains **no** chrome plugin and
-> no JS REPL to reach `agent.browsers.get("chrome")` — confirmed from two working
-> directories, and true even with `[plugins."chrome@openai-bundled"] enabled =
-> true` in `~/.codex/config.toml`. The four diagnostics all pass while the browser
-> API stays out of reach, so **a green preflight does not mean the path works**.
-> Which codex surface reaches the browser is unsettled: `references/codex.md`.
+> 0.150.1: the CLI never loads the chrome plugin, so no `codex exec` run can reach
+> `agent.browsers.get("chrome")`. Root cause is upstream of the browser entirely —
+> `codex plugin marketplace list` registers only `openai-curated`, while the
+> plugin is `chrome@openai-bundled`, a marketplace the CLI does not know. The
+> `enabled = true` in `~/.codex/config.toml`, the populated cache directory, and
+> the `browser_use` feature flag all look like enablement and none of them
+> resolves the plugin.
+>
+> Confirmed three times, including once with a Chrome tab open by hand, so the
+> extension is not the blocker. The four diagnostics all pass while the browser
+> API stays out of reach: **a green preflight does not mean the path works.**
+> Full evidence and what remains unverified: `references/codex.md`.
 
 > **Note**: no Chrome launch flag is required — neither path uses
 > `--remote-debugging-port`. Both reach Chrome through their vendor's own
@@ -148,6 +154,12 @@ outcome, whichever branch is running.
 the operation itself was not exercised. Treat a ᵁ cell as expected-to-work, and
 if it does not, report that rather than working around it (see *No fallback*).
 
+> **Read the ᴹ in the codex column narrowly.** Those operations were measured
+> through *some* codex surface whose identity could not be established, and the
+> CLI this skill documents cannot load the chrome plugin at all (blocker above).
+> They are evidence that the API exists somewhere — not that this skill's
+> invocation reaches it.
+
 `chrome.nameSession()` is Chrome-specific and must be called **before** opening or
 claiming tabs on the codex side.
 
@@ -197,10 +209,15 @@ assumptions:
 - **`tab.markHandoff()` lifetime across sessions** is unknown — whether a handoff
   marked in one codex run is still meaningful to a later one has not been tested.
   `references/codex.md`.
-- **Which codex surface exposes the chrome plugin.** The blocker above. The
-  operations in the codex column were measured through *some* surface but not
-  through `codex exec`, so every ᴹ in that column is evidence about the API, not
-  about the invocation this skill documents.
+- **Which codex surface exposes the chrome plugin.** The blocker above. Two
+  specific unknowns: whether the Codex desktop app (`codex app`) exposes the
+  browser API, and whether registering the `openai-bundled` marketplace would make
+  the CLI load it. The second writes to the user's codex config, so it is not the
+  skill's to try unasked.
+- **The provenance of the codex column's measurements.** The operations were
+  recorded as measured on a surface nobody has since been able to name; the
+  session originally credited with them has stated it made no codex measurement.
+  Not "probably fine" — unverified as to where it came from, and marked so.
 
 ### What a dogfood run already found
 

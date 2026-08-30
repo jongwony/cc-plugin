@@ -145,8 +145,8 @@ outcome, whichever branch is running.
 | read page structure | `tab.playwright.domSnapshot()` ᴹ | `read_page` / `get_page_text` ᵁ |
 | locate an element | `tab.playwright.locator(sel)` ᴹ | `find` ᵁ |
 | click | `locator.click()` ᴹ | `computer` ᵁ |
-| type into a field | `locator.type()` ᴹ | `form_input` ᵁ |
-| scroll | `tab.dom_cua.scroll({x,y})` ᴹ | `computer` ᵁ |
+| type into a field | `locator.type()` ᴹ⚠ | `form_input` ᵁ |
+| scroll | `tab.dom_cua.scroll({x,y})` ⚠✗ | `computer` ᵁ |
 | screenshot | `tab.screenshot()` ᴹ | `computer` ᵁ |
 | read console | `tab.dev.logs({})` ᴹ | `read_console_messages` ᵁ |
 | close a tab | `tab.close()` ᴹ | `tabs_close_mcp` ᴹ |
@@ -155,10 +155,23 @@ outcome, whichever branch is running.
 **ᵁ unmeasured** — present in the vendor's tool surface and described there, but
 the operation itself was not exercised. Treat a ᵁ cell as expected-to-work, and
 if it does not, report that rather than working around it (see *No fallback*).
+**⚠ works, with a documented hazard.** **✗ measured NOT working.**
+
+Two rows carry a mark that the whole codex column had before it was exercised:
+
+- **`type()` ⚠** — typing right after `goto()` fails with `Detached while handling
+  command`. A wait alone does not fix it; the locator must be rebuilt after the
+  navigation. Procedure: `references/codex.md`.
+- **`scroll()` ✗** — returns the success shape while `scrollY` stays `0` and the
+  page does not move. **A flow that scrolls then asserts will read a stale page as
+  a real one.** Verify by reading `scrollY` back. Whether this row survives in the
+  shared set is pending one re-test on a plain long document.
 
 The codex column's calls are JavaScript, evaluated through the
-**`mcp__node_repl__js`** tool. A prompt that names the operations but not the tool
-leaves the run to find the mechanism itself — name it.
+**`mcp__node_repl__js`** tool — and `agent` does not exist there until the
+plugin's `browser-client.mjs` is imported and `setupBrowserRuntime()` is called.
+Every call is async. Name the tool and the bootstrap when delegating; a run given
+the operations alone has to rediscover both.
 
 `chrome.nameSession()` is Chrome-specific and must be called **before** opening or
 claiming tabs on the codex side.
@@ -209,12 +222,14 @@ assumptions:
 - **`tab.markHandoff()` lifetime across sessions** is unknown — whether a handoff
   marked in one codex run is still meaningful to a later one has not been tested.
   `references/codex.md`.
-- **The provenance of the codex column's original measurements.** They were handed
-  over as measured, but on a surface nobody has since been able to name; the
-  session first credited with them has stated it made none. The operations are
-  being re-measured under a known `CODEX_HOME` — until that lands, read the codex
-  column's ᴹ as unverified-provenance, which is a distinct state from unmeasured
-  and from confirmed.
+- **Whether the `scroll()` row belongs in the shared set.** It failed silently in
+  the run above; one re-test on a plain long document decides it.
+- **`claimTab()`** stays unmeasured on purpose — exercising it takes over a tab the
+  user is browsing.
+
+The codex column's provenance question is closed: the operations were re-measured
+end to end on 2026-08-30 under an explicit `CODEX_HOME`, so the ᴹ marks now rest
+on this repository's own run rather than on a handoff nobody could source.
 
 ### What a dogfood run already found
 

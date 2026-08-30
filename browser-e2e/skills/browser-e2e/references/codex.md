@@ -125,9 +125,23 @@ are evaluated through; without it, it does not.
 
 ## The browser handle
 
+**Bootstrap first — `agent` does not exist yet.** A fresh `mcp__node_repl__js`
+environment exposes only `nodeRepl`; evaluating `agent.browsers…` straight away
+raises `ReferenceError: agent is not defined` (measured 2026-08-30). Import the
+plugin's browser client and call `setupBrowserRuntime()` before anything else.
+The client lives beside the diagnostics:
+
+```
+$HOME/.codex/plugins/cache/openai-bundled/chrome/latest/scripts/browser-client.mjs
+```
+
+**Everything is async.** `browsers.get()` and every tab method return Promises.
+The snippets below elide `await` for readability — a real run needs it on each
+call, and a dropped `await` surfaces later as an unrelated-looking failure.
+
 ```js
-const chrome = agent.browsers.get("chrome");   // explicit, always
-chrome.nameSession("browser-e2e ✅");           // BEFORE opening or claiming tabs
+const chrome = await agent.browsers.get("chrome");   // explicit, always
+await chrome.nameSession("browser-e2e ✅");           // BEFORE opening or claiming tabs
 ```
 
 Naming the browser explicitly is not optional bookkeeping — the default is machine
@@ -152,27 +166,86 @@ distinct from any group already open.
 
 ## Operations
 
-Shared-set operations, all measured 2026-08-30:
+Exercised end to end 2026-08-30 under a known `CODEX_HOME`. `await` elided.
 
 ```js
 const tab = chrome.tabs.new();          // default target: a new tab
-chrome.tabs.list();                     // this session's tabs
+chrome.tabs.list();                     // this session's tabs only — verified
 tab.goto(url);
 
-tab.playwright.domSnapshot();           // page structure
+tab.playwright.domSnapshot();           // -> string
 const el = tab.playwright.locator(sel);
-el.click();
-el.type(text);
-
-tab.dom_cua.scroll({ x, y });
-tab.screenshot();
-tab.dev.logs({});                       // console
-tab.close();                            // tear down what the run opened
+el.click();                             // -> undefined
+el.type(text);                          // -> undefined; see the detachment race
+tab.screenshot();                       // -> Uint8Array of PNG bytes
+tab.dev.logs({});                       // -> [{ level, message, timestamp, url }]
+tab.close();                            // -> undefined
 ```
 
-`tab.dev.logs({})` is the **only** member of the `dev` namespace. There is no
-high-level network API on this path at all — `api.json`'s `dev` namespace contains
-`logs()` and nothing else. Response bodies require raw CDP: `codex-privileged.md`.
+### Return shapes
+
+Most calls return `undefined` and are used for effect — `nameSession`, `click`,
+`type`, `markDeliverable`, `markHandoff`, `close`. Do not test them for success;
+verify the effect instead (read the page back, list the tabs).
+
+The three that return data:
+
+| Call | Returns | Observed |
+|---|---|---|
+| `domSnapshot()` | string | 232 chars / 5 lines for `example.com` — compact, not a DOM dump |
+| `screenshot()` | `Uint8Array` | 14,206 bytes of PNG — **bytes, not a path or handle**; write them yourself if a file is wanted |
+| `dev.logs({})` | array of objects | `{ level, message, timestamp, url }`; captured a live page `TypeError` |
+
+### ⚠️ The detachment race — the gap a real flow hits first
+
+**Measured.** Typing into a field immediately after `goto()` fails with
+`Detached while handling command`. The locator resolved against the pre-navigation
+document and the navigation invalidated it.
+
+`waitForLoadState({ state: "load" })` does **not** prevent it. And `networkidle`
+is not available at all:
+
+```
+playwright_wait_for_load_state does not support networkidle
+```
+
+What worked: `waitForTimeout(500)`, then build a **fresh** locator. Re-using the
+old one after the wait still fails — the wait alone is not the fix; re-targeting
+is.
+
+```js
+tab.goto(url);
+tab.playwright.waitForTimeout(500);
+tab.playwright.locator("#username").type("…");   // fresh locator, after the wait
+```
+
+Treat every navigation as invalidating every locator held across it. `click()`
+that triggers navigation is the same hazard for whatever comes next.
+
+### ⚠️ `dom_cua.scroll()` did not scroll
+
+**Measured, and this one is a defect rather than a caveat.**
+`tab.dom_cua.scroll({x, y})` returned `undefined` — the success shape — while
+`scrollY` stayed `0`, and screenshots and snapshots were unchanged. Both positive
+and negative values were tried. The runtime's own reference describes the
+arguments as deltas.
+
+Because the call reports success, **a flow that scrolls and then asserts will read
+a stale page as a real one.** Until this is understood, verify any scroll by
+reading `scrollY` back rather than trusting the return.
+
+Whether the scroll row survives in the shared operation set depends on one more
+measurement — this run used
+`the-internet.herokuapp.com/infinite_scroll`, whose own JS may interact with it.
+Re-test on a plain long document before deciding. The row stays in SKILL.md's
+table for now, flagged there.
+
+### The `dev` namespace
+
+`tab.dev.logs({})` is the **only** member — confirmed by enumeration: `tab.dev`
+has no enumerable own members, and its prototype exposes `logs` and `constructor`
+and nothing else. There is no high-level network API on this path. Response
+bodies require raw CDP: `codex-privileged.md`.
 
 ### Enumerating and claiming beyond this session
 
@@ -181,8 +254,14 @@ chrome.user.openTabs();      // -> [{ id, lastOpened, providerTabId, tabGroup, t
 chrome.user.claimTab(entry); // attach; works on a tab this session did not create
 ```
 
-Both measured. `claimTab` is the codex-only attach route and is an **exception
-path**, not a default — `attach.md` states when it is warranted.
+`openTabs()` is **confirmed**: 11 entries on a live profile, fields exactly
+`id`, `lastOpened`, `providerTabId`, `tabGroup`, `title`, `url` — no more, no
+fewer. Note the contrast with `chrome.tabs.list()`, which returned only the
+session's own single tab: `list()` is session-scoped, `openTabs()` is not.
+
+`claimTab` remains **unmeasured** — deliberately not exercised, since claiming
+takes over a tab the user is browsing. It is the codex-only attach route and an
+**exception path**, not a default — `attach.md` states when it is warranted.
 
 ### Deliverable and handoff markers
 
@@ -191,11 +270,23 @@ tab.markDeliverable();
 tab.markHandoff();
 ```
 
-Both measured as calls. **Unverified**: `markHandoff()`'s lifetime across
-sessions — whether a handoff marked in one codex run remains meaningful to a
-later run, or is scoped to the session that set it, has not been tested. Do not
-build a multi-run flow that depends on a handoff surviving; if a later run needs
-the same tab, re-establish it through `openTabs()` / `claimTab()`.
+Both return `undefined` in 1–2 ms and produced **no observable effect** within the
+session — the tab listing did not change, and nothing visible marked the tab
+(measured). So a single session cannot tell a working marker from a no-op.
+
+**Unverified**: `markHandoff()`'s lifetime across sessions — whether a handoff
+marked in one codex run remains meaningful to a later run, or is scoped to the
+session that set it. The in-session silence above makes this harder to close, not
+easier: there is no local signal to check against. Do not build a multi-run flow
+that depends on a handoff surviving; if a later run needs the same tab,
+re-establish it through `openTabs()` / `claimTab()`.
+
+### Teardown
+
+`tab.close()` returned in ~42 ms, after which `chrome.tabs.list()` returned an
+empty array. **The API cannot distinguish a removed tab group from an empty one**
+— both read as `[]`. If a flow needs to know which happened, it needs a signal
+from outside this API.
 
 ## Diagnostics
 

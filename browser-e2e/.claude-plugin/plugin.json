@@ -1,7 +1,7 @@
 {
   "name": "browser-e2e",
   "description": "End-to-end browser flows in Chrome through two vendor-separated executors (codex by default, Claude on request) over one shared operation set",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

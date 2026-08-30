@@ -21,61 +21,61 @@ second codex inside the first. The nested process died at
 the run then reported that error as the browser path's failure — which it was not.
 Do not remove this table.
 
-## ⛔ Blocker: the CLI never loads the chrome plugin
+## ⚠️ Check which `codex` you are running
 
-**Measured 2026-08-30, codex-cli 0.150.1.** A `codex exec` run's tool inventory
-contains no chrome plugin, no browser plugin, and no JS/Node REPL through which
-`agent.browsers.get("chrome")` could be evaluated. Confirmed three times — from
-the worktree, from the trust-listed parent repository, and once more with a Chrome
-tab open by hand — so it is not a `trust_level`, a sandbox, or a browser-state
-effect. `codex exec --help` offers no flag that enables a plugin for a run.
+**The single most likely reason this path appears broken.** `codex` on `PATH` may
+be a wrapper that redirects `CODEX_HOME` to a project-isolated codex home, and an
+isolated home does not carry the bundled marketplace the chrome plugin lives in.
+Nothing about Chrome, the extension, the sandbox or the model is wrong when this
+happens — the run is simply reading a different codex installation.
 
-### Root cause: the marketplace is not registered
+Check before blaming anything else:
 
-```
-$ codex plugin marketplace list
-MARKETPLACE     ROOT
-openai-curated  …/hermeneutic-assistant/data/opencodex/.codex/.tmp/plugins
+```bash
+command -v codex                    # is this the real binary, or a wrapper?
+codex plugin marketplace list       # openai-bundled must appear
 ```
 
-`openai-curated` is the only registered marketplace. The chrome plugin is
-`chrome@openai-bundled`, and **`openai-bundled` is not registered at all** — so
-`codex plugin list` never lists it and the CLI has no route to load it.
+Measured 2026-08-30 on this machine: `command -v codex` resolved to
+`…/hermeneutic-assistant/data/opencodex/bin/codex`, a two-line shell wrapper that
+sources an `env.sh` setting `CODEX_HOME` to a project-local directory before
+exec'ing `/opt/homebrew/bin/codex`. Under that home, `plugin marketplace list`
+shows only `openai-curated` and no run gets a browser capability. Under the real
+home it lists `openai-bundled` and the capability appears.
 
-Three things point the other way and none of them overrides that:
+The symptom is easy to misread as a browser problem, because it is not one:
 
-| Looks enabled | Actually |
+| What you see | What it means |
 |---|---|
-| `~/.codex/config.toml` has `[plugins."chrome@openai-bundled"] enabled = true` | an enablement flag for a plugin the CLI cannot resolve |
-| `~/.codex/plugins/cache/openai-bundled/chrome/latest/` exists, fully populated | a cache written by something other than this CLI |
-| `codex features list` → `browser_use`, `plugins`, `in_app_browser` all `true` | feature gates, upstream of marketplace resolution |
+| No chrome/browser tool in the run's inventory | wrong `CODEX_HOME`, most likely |
+| All four diagnostics exit 0 | true and irrelevant — they are shell `node` scripts, not plugin tools, so they pass under either home |
+| `config.toml` says `[plugins."chrome@openai-bundled"] enabled = true` | you are reading `~/.codex/config.toml` while the run reads another one |
 
-The likely writer of that cache is the Codex **desktop app** — `config.toml`
-carries `BROWSER_USE_CODEX_APP_VERSION` and a `codex-app-tools@openai-bundled`
-entry, and `codex app` launches it. **Unverified**: whether the desktop app
-exposes the browser API, and whether
-`codex plugin marketplace add openai-bundled …` would make the CLI load it. Both
-are one command away from being known, but the second writes to the user's codex
-config, so it is theirs to authorize.
+That last row is the trap worth naming: reading the real home's config while
+running a wrapper's home makes every check agree that the plugin is enabled while
+every run disagrees. Confirm the two are the same home before drawing any
+conclusion.
 
-### What this means for the operations below
+Run against an explicit home when in doubt:
 
-Everything in *Operations* was measured through **some** codex surface, and the
-provenance of that measurement could not be traced to a surface anyone can name.
-Treat the whole codex column as **unverified-provenance**: evidence that the API
-exists somewhere, not evidence that this skill's documented invocation reaches it.
+```bash
+CODEX_HOME="$HOME/.codex" /opt/homebrew/bin/codex exec …
+```
 
-### What is NOT the cause
+**Ruled out by measurement**, so do not re-check them: the Chrome extension
+(installed and enabled, native host manifest correct, and a probe with a tab open
+by hand changed nothing), sandbox mode, working directory, project trust, and the
+`browser_use` / `plugins` / `in_app_browser` feature flags.
 
-Ruled out by measurement, so a later session need not re-check them:
+## How the JS actually runs
 
-- **The Chrome extension.** Installed and enabled (`check-extension-installed.js`
-  exit 0), native host manifest correct, Chrome running. Opening a tab by hand
-  changed nothing — the plugin is absent before any browser state matters.
-- **Sandbox mode, working directory, project trust, feature flags.**
+The calls in *Operations* are JavaScript, and codex evaluates them through the
+**`mcp__node_repl__js`** tool — the REPL the chrome plugin exposes. Measured
+2026-08-30 under the real `CODEX_HOME`; the tool is absent under the wrapper's
+home, which is what makes its absence the diagnostic signal above.
 
-The four *Diagnostics* below are unaffected: they are plain `node` scripts run
-through the shell, not plugin tools, and ran correctly from inside `codex exec`.
+A prompt that names the operations but not the tool leaves the run to discover
+the mechanism for itself. Name the tool.
 
 ## Settings
 
@@ -91,22 +91,23 @@ through the shell, not plugin tools, and ran correctly from inside `codex exec`.
 > section entirely — see the two-readers table above. Acting on it nests a second
 > codex inside yourself, which has been measured to fail.
 
-> **Unconfirmed as a route to the browser API** — see the blocker above. The flags
-> below are the correct codex invocation and the run starts cleanly; what has not
-> been shown is that the resulting run can reach Chrome.
-
 Write the task to a prompt file, then hand it to `codex exec`. Run it in the
 background with output redirected to a file so codex's banner and step-by-step
 output stay out of this conversation — only the outcome comes back.
 
 ```bash
-codex exec --skip-git-repo-check \
+CODEX_HOME="$HOME/.codex" /opt/homebrew/bin/codex exec --skip-git-repo-check \
   -m gpt-5.6-luna \
   --config model_reasoning_effort=xhigh \
   --sandbox workspace-write \
   --config sandbox_workspace_write.network_access=true \
   --output-last-message "$OUT" < "$PROMPT"
 ```
+
+The explicit home and absolute binary are not belt-and-braces: a bare `codex` may
+resolve to a `PATH` wrapper pointing at a different home, which silently costs the
+run its browser capability (see the check at the top of this file). Drop them only
+once `command -v codex` and `codex plugin marketplace list` have both been read.
 
 codex prints `session id: <uuid>` to stderr. Capture it verbatim — it is the only
 handle for resuming the same flow (`codex exec resume <uuid>`), which matters when
@@ -115,11 +116,12 @@ an E2E run needs a follow-up turn against browser state it already established.
 Read `$OUT` for codex's final message rather than relying on the subagent's
 summary; an E2E verdict is exactly the part a summary flattens.
 
-**Measured 2026-08-30**: this exact invocation starts a run cleanly under
+**Measured 2026-08-30**: this invocation starts a run cleanly under
 `gpt-5.6-luna` / `xhigh` / `workspace-write` with network — the banner reports all
 three back, `--output-last-message` captures the final message, and the
-`session id: <uuid>` line appears on stderr as described. What the run does *not*
-get is the browser API (see the blocker above).
+`session id: <uuid>` line appears on stderr as described. Under the explicit
+`CODEX_HOME` the run also carries `mcp__node_repl__js`, the tool the browser calls
+are evaluated through; without it, it does not.
 
 ## The browser handle
 

@@ -28,19 +28,21 @@ machine state that changes underneath the skill.
 | codex (default) | `codex` CLI on PATH; the bundled `chrome` plugin's extension **and** native host installed; Chrome running; **plus a codex surface that actually exposes the chrome plugin — see below** | Preflight step 2 below runs the four bundled diagnostics |
 | Claude (named) | The Claude in Chrome extension connected to this session | `tabs_context_mcp` returns a tab group instead of an error |
 
-> **⛔ Open blocker on the default path.** Measured 2026-08-30 on codex-cli
-> 0.150.1: the CLI never loads the chrome plugin, so no `codex exec` run can reach
-> `agent.browsers.get("chrome")`. Root cause is upstream of the browser entirely —
-> `codex plugin marketplace list` registers only `openai-curated`, while the
-> plugin is `chrome@openai-bundled`, a marketplace the CLI does not know. The
-> `enabled = true` in `~/.codex/config.toml`, the populated cache directory, and
-> the `browser_use` feature flag all look like enablement and none of them
-> resolves the plugin.
+> **⚠️ Check which `codex` you are running, before anything else.** `codex` on
+> `PATH` may be a wrapper that redirects `CODEX_HOME` to a project-isolated home,
+> and an isolated home has no bundled marketplace — so the chrome plugin never
+> loads and no run gets a browser capability. Measured on this machine
+> 2026-08-30: that is exactly what `command -v codex` resolved to, and it cost
+> three probes before it was noticed.
 >
-> Confirmed three times, including once with a Chrome tab open by hand, so the
-> extension is not the blocker. The four diagnostics all pass while the browser
-> API stays out of reach: **a green preflight does not mean the path works.**
-> Full evidence and what remains unverified: `references/codex.md`.
+> ```bash
+> command -v codex                 # wrapper, or the real binary?
+> codex plugin marketplace list    # openai-bundled must appear
+> ```
+>
+> The four diagnostics pass under either home — they are shell `node` scripts, not
+> plugin tools — so **a green preflight does not prove the path works.** Details
+> and what this rules out: `references/codex.md`.
 
 > **Note**: no Chrome launch flag is required — neither path uses
 > `--remote-debugging-port`. Both reach Chrome through their vendor's own
@@ -154,11 +156,9 @@ outcome, whichever branch is running.
 the operation itself was not exercised. Treat a ᵁ cell as expected-to-work, and
 if it does not, report that rather than working around it (see *No fallback*).
 
-> **Read the ᴹ in the codex column narrowly.** Those operations were measured
-> through *some* codex surface whose identity could not be established, and the
-> CLI this skill documents cannot load the chrome plugin at all (blocker above).
-> They are evidence that the API exists somewhere — not that this skill's
-> invocation reaches it.
+The codex column's calls are JavaScript, evaluated through the
+**`mcp__node_repl__js`** tool. A prompt that names the operations but not the tool
+leaves the run to find the mechanism itself — name it.
 
 `chrome.nameSession()` is Chrome-specific and must be called **before** opening or
 claiming tabs on the codex side.
@@ -209,15 +209,12 @@ assumptions:
 - **`tab.markHandoff()` lifetime across sessions** is unknown — whether a handoff
   marked in one codex run is still meaningful to a later one has not been tested.
   `references/codex.md`.
-- **Which codex surface exposes the chrome plugin.** The blocker above. Two
-  specific unknowns: whether the Codex desktop app (`codex app`) exposes the
-  browser API, and whether registering the `openai-bundled` marketplace would make
-  the CLI load it. The second writes to the user's codex config, so it is not the
-  skill's to try unasked.
-- **The provenance of the codex column's measurements.** The operations were
-  recorded as measured on a surface nobody has since been able to name; the
-  session originally credited with them has stated it made no codex measurement.
-  Not "probably fine" — unverified as to where it came from, and marked so.
+- **The provenance of the codex column's original measurements.** They were handed
+  over as measured, but on a surface nobody has since been able to name; the
+  session first credited with them has stated it made none. The operations are
+  being re-measured under a known `CODEX_HOME` — until that lands, read the codex
+  column's ᴹ as unverified-provenance, which is a distinct state from unmeasured
+  and from confirmed.
 
 ### What a dogfood run already found
 
@@ -233,3 +230,10 @@ of the *writing*, not of the design:
   The real finding — "the browser API is not exposed in this session" — appeared
   once in its working notes and never reached its report. When a delegated run
   names a cause, check its trace against it.
+
+A third lesson came from the investigation rather than the run. Three probes each
+returned "no browser capability," and that was counted as three confirmations; it
+was one fault reproduced three times, because every probe went through the same
+`PATH` wrapper. Varying the working directory and the browser state varied nothing
+that mattered — both sit below the wrapper. **Repetition is not independence**, and
+one `command -v codex` would have said more than all three.

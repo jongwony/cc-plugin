@@ -105,6 +105,11 @@
       "description": "Browser-preview comment loop for markdown/HTML artifacts — right-click an element to anchor a comment by CSS selector, apply the queue back as edits, hot-reload"
     },
     {
+      "name": "browser-e2e",
+      "source": "./browser-e2e",
+      "description": "End-to-end browser flows in Chrome through two vendor-separated executors (codex by default, Claude on request) over one shared operation set"
+    },
+    {
       "name": "agent-device-preflight",
       "source": "./agent-device-preflight",
       "description": "Resolve agent-device attachment prerequisites before `open` — device lock state, signing team from the certificate OU, developer-account device registration, developer disk image mount, macOS DevToolsSecurity, stale runner cache and daemon environment, and physical-vs-virtual device selection"

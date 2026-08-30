@@ -19,14 +19,22 @@ the same way for the user. There is no automatic switching between them.
 
 ## Prerequisites
 
-**Chrome specifically.** Both executors drive Google Chrome. The system default
-browser on this machine is Dia, which neither path supports, so the browser is
-always named explicitly — never left to the default.
+**Chrome specifically.** Both executors drive Google Chrome, and the browser is
+always named explicitly rather than left to the system default — a default is
+machine state that changes underneath the skill.
 
 | Path | Needs | Check |
 |------|-------|-------|
-| codex (default) | `codex` CLI on PATH; the bundled `chrome` plugin's extension **and** native host installed; Chrome running | Preflight step 2 below runs the four bundled diagnostics |
+| codex (default) | `codex` CLI on PATH; the bundled `chrome` plugin's extension **and** native host installed; Chrome running; **plus a codex surface that actually exposes the chrome plugin — see below** | Preflight step 2 below runs the four bundled diagnostics |
 | Claude (named) | The Claude in Chrome extension connected to this session | `tabs_context_mcp` returns a tab group instead of an error |
+
+> **⛔ Open blocker on the default path.** Measured 2026-08-30 on codex-cli
+> 0.150.1: a `codex exec` run's tool inventory contains **no** chrome plugin and
+> no JS REPL to reach `agent.browsers.get("chrome")` — confirmed from two working
+> directories, and true even with `[plugins."chrome@openai-bundled"] enabled =
+> true` in `~/.codex/config.toml`. The four diagnostics all pass while the browser
+> API stays out of reach, so **a green preflight does not mean the path works**.
+> Which codex surface reaches the browser is unsettled: `references/codex.md`.
 
 > **Note**: no Chrome launch flag is required — neither path uses
 > `--remote-debugging-port`. Both reach Chrome through their vendor's own
@@ -189,3 +197,22 @@ assumptions:
 - **`tab.markHandoff()` lifetime across sessions** is unknown — whether a handoff
   marked in one codex run is still meaningful to a later one has not been tested.
   `references/codex.md`.
+- **Which codex surface exposes the chrome plugin.** The blocker above. The
+  operations in the codex column were measured through *some* surface but not
+  through `codex exec`, so every ᴹ in that column is evidence about the API, not
+  about the invocation this skill documents.
+
+### What a dogfood run already found
+
+An acceptance run on 2026-08-30 (gpt-5.6-luna at xhigh, handed this skill and
+`references/codex.md`) reached none of the shared-set operations. Two defects it
+exposed are fixed in the files rather than left as notes, and both were failures
+of the *writing*, not of the design:
+
+- Handed the whole of `references/codex.md`, the codex run read its *Invoking*
+  section as addressed to itself and re-invoked `codex exec`, nesting a second
+  codex inside the first. That file now states which reader each section is for.
+- The run then reported the nested process's crash as the browser path's failure.
+  The real finding — "the browser API is not exposed in this session" — appeared
+  once in its working notes and never reached its report. When a delegated run
+  names a cause, check its trace against it.

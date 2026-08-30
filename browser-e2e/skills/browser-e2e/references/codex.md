@@ -4,6 +4,48 @@ How a `/browser-e2e <task>` run reaches Chrome. Everything here is the **default
 branch; the Claude branch is `claude.md`, and neither substitutes for the other
 (SKILL.md, *No fallback*).
 
+## ⚠️ Two readers, and they must not swap roles
+
+This file is read by both sides of the delegation, and they need different parts.
+Check which one you are before acting on anything here.
+
+| If you are… | Read | Do **not** act on |
+|---|---|---|
+| **the orchestrator** (Claude Code, holding the user's `/browser-e2e` request) | *Settings*, *Invoking*, *Diagnostics* | — |
+| **the codex run itself** (already inside codex, given this file) | everything **except** *Invoking* | *Invoking* — you are already the run |
+
+**Measured 2026-08-30**: handed this whole file, a codex run read *Invoking* as an
+instruction addressed to itself and executed `codex exec` **again**, nesting a
+second codex inside the first. The nested process died at
+`failed to initialize in-process app-server client: Operation not permitted`, and
+the run then reported that error as the browser path's failure — which it was not.
+Do not remove this table.
+
+## ⛔ Blocker: `codex exec` does not expose the chrome plugin
+
+**Measured 2026-08-30, codex-cli 0.150.1.** A `codex exec` run's tool inventory
+contains no chrome plugin, no browser plugin, and no JS/Node REPL through which
+`agent.browsers.get("chrome")` could be evaluated. Confirmed twice, from the
+worktree and from the trust-listed parent repository, so it is neither a
+`trust_level` nor a sandbox effect. `codex exec --help` offers no flag that
+enables a plugin for the run.
+
+This holds **even though** `~/.codex/config.toml` carries
+`[plugins."chrome@openai-bundled"]` with `enabled = true`. Config enablement and
+exec-surface exposure are separate things.
+
+Everything in *Operations* below was measured through some codex surface, but
+**not through `codex exec`** — the invocation in *Invoking* is therefore
+unconfirmed as a route to the browser API, and the operations are recorded here as
+what that other surface showed. Which surface reaches them (the interactive
+`codex` TUI, the Codex desktop app — `config.toml` carries
+`BROWSER_USE_CODEX_APP_VERSION` and a `codex-app-tools@openai-bundled` plugin — or
+an exec configuration not yet found) is **open**, and is the one thing this path
+needs settled before it can be the default in practice.
+
+The four *Diagnostics* below are unaffected: they are plain `node` scripts and ran
+correctly from inside `codex exec`.
+
 ## Settings
 
 | Setting | Value | Why fixed |
@@ -14,9 +56,17 @@ branch; the Claude branch is `claude.md`, and neither substitutes for the other
 
 ## Invoking
 
-Write the task to a prompt file, then hand it to `codex exec`. Delegate the run to
-a Bash subagent so codex's banner and step-by-step output stay out of this
-conversation — only the outcome comes back.
+> **Orchestrator only.** If you are the codex run reading this file, skip this
+> section entirely — see the two-readers table above. Acting on it nests a second
+> codex inside yourself, which has been measured to fail.
+
+> **Unconfirmed as a route to the browser API** — see the blocker above. The flags
+> below are the correct codex invocation and the run starts cleanly; what has not
+> been shown is that the resulting run can reach Chrome.
+
+Write the task to a prompt file, then hand it to `codex exec`. Run it in the
+background with output redirected to a file so codex's banner and step-by-step
+output stay out of this conversation — only the outcome comes back.
 
 ```bash
 codex exec --skip-git-repo-check \
@@ -34,10 +84,11 @@ an E2E run needs a follow-up turn against browser state it already established.
 Read `$OUT` for codex's final message rather than relying on the subagent's
 summary; an E2E verdict is exactly the part a summary flattens.
 
-> **Unverified**: the measured operations below were confirmed working headless
-> through `codex exec`, but the sandbox mode in force during that measurement was
-> not recorded. The settings above follow the repo's codex default rather than a
-> measured requirement for browser control specifically.
+**Measured 2026-08-30**: this exact invocation starts a run cleanly under
+`gpt-5.6-luna` / `xhigh` / `workspace-write` with network — the banner reports all
+three back, `--output-last-message` captures the final message, and the
+`session id: <uuid>` line appears on stderr as described. What the run does *not*
+get is the browser API (see the blocker above).
 
 ## The browser handle
 
@@ -46,9 +97,19 @@ const chrome = agent.browsers.get("chrome");   // explicit, always
 chrome.nameSession("browser-e2e ✅");           // BEFORE opening or claiming tabs
 ```
 
-Naming the browser explicitly is not optional bookkeeping. This machine's system
-default browser is Dia, which the plugin does not support, so a `browsers.get()`
-that relies on the default resolves to an unsupported app.
+Naming the browser explicitly is not optional bookkeeping — the default is machine
+state that changes underneath the skill, and the plugin supports Chrome.
+
+An earlier note here claimed the system default was Dia. **That is not what the
+machine reports.** `installed-browsers.js --check --json`, run 2026-08-30, gives
+`default_browser` as `com.google.chrome` for both `http` and `https`, and lists
+exactly one installed browser: Google Chrome 151.0.7922.174. Dia does not appear
+in the inventory at all.
+
+The instruction stands and the old reason for it does not. Keep naming `"chrome"`
+because a default is not a guarantee, not because of what the default happens to
+be today — and if `browsers.get()` ever does resolve to something unexpected, read
+the inventory rather than trusting either claim.
 
 `chrome.nameSession(name)` is Chrome-specific and must be called before the
 session opens or claims tabs. The name it sets is what Chrome renders on the tab
@@ -121,6 +182,15 @@ D="$HOME/.codex/plugins/cache/openai-bundled/chrome/latest/scripts"
 
 Exit-code semantics read off the installed scripts (`latest` is a floating version
 directory, so re-read them if a codex upgrade changes behaviour).
+
+**Measured 2026-08-30**: all four ran from inside a `codex exec` run, accepted the
+flags exactly as documented, and exited `0` on a healthy machine — Chrome
+installed (151.0.7922.174) and running, extension installed and enabled in the
+Default profile, native-host manifest correct. Their `--json` output is a full
+object, not a status line, so quote the field that decides rather than the whole
+blob. **Negative exit codes remain unmeasured**: no precondition was deliberately
+broken, so the `1` / `2` / `3` rows above are still read-off-the-source, not
+observed.
 
 **Pass `--check`.** The first two scripts report their finding on stdout but exit
 `0` regardless without it — a run that branches on the exit code alone would read

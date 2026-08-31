@@ -5,10 +5,13 @@ Push-to-talk voice dictation for Claude Code, powered by whisper.cpp.
 - Hold **Right Option (⌥)** to record; release to transcribe and paste into the active window
 - 엔진: whisper.cpp `large-v3-turbo` (`whisper-cli`), 녹음은 `rec`
 - 받아쓴 텍스트는 클립보드 + `Cmd+V`로 frontmost 앱에 붙여넣기
-- 토글: 실행 중인 데몬을 스크립트 경로 시그니처(`dictation_daemon.py`)로 `pgrep` 탐지해 on/off
+- 토글: 실행 중인 데몬을 flock 보유자(`$TMPDIR/voice_dictation.lock`)로 탐지해 on/off
 - 로그: `/tmp/voice-dictation.log`
 
-> `uv run`은 자식 python 프로세스로 재분리되어 런처 PID가 stale 포인터가 되므로, PID 파일 대신 on-disk 스크립트 경로 시그니처로 `pgrep`/`pkill` 합니다 (clawd-toggle과 동일).
+> `uv run`은 자식 python 프로세스로 재분리되어 런처 PID가 stale 포인터가 되므로 PID 파일을 쓸 수 없습니다.
+> 대신 데몬이 기동 즉시 잡아 수명 내내 쥐고 있는 배타 flock 의 보유자를 `lsof` 로 조회합니다 — 종료·크래시
+> 시 커널이 락을 해제하므로 stale 상태가 없고, 설치 경로와 무관하게 같은 데몬을 가리킵니다. 경로 시그니처
+> `pgrep` 은 설치본이 둘이면 상대를 못 봐 거짓 `STARTED` 를 냅니다(옛 데몬은 계속 실행).
 
 ## Requirements (CLI)
 

@@ -27,10 +27,9 @@ Four checks, in order. The first two decide *whether* to draw; the last two deci
    where `W` is the reading terminal's width. The terminal hard-wraps anything past it and
    a wrapped drawing is unreadable, so this is the one hard constraint. `render.py` reads
    `W` at invocation and warns past it, falling back to 80 only when the width cannot be
-   detected. At `W = 80` that works out to roughly 6 siblings for 6-character labels,
-   4 for 10-character, 3 for 15-character — and those numbers move with `W`, so read them
-   as the 80-column case rather than as the rule. Label length eats the budget as fast as
-   sibling count does; shortening names is usually the cheaper fix.
+   detected. Label length eats the budget as fast as sibling count does, so shortening
+   names is usually the cheaper fix — read that off the formula rather than off a table
+   of sibling counts, which would only be true at one `W`.
 
    When the skill runs the script on the user's behalf, the detected width is the tool's
    own pty rather than the user's window — usually narrower, so the check errs

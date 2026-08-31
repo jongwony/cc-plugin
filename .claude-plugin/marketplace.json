@@ -55,9 +55,9 @@
       "description": "Safely identify, investigate, and remove macOS programs with risk-assessed execution"
     },
     {
-      "name": "graph-sketch",
-      "source": "./graph-sketch",
-      "description": "Render workflow/DAG graphs as layered ASCII box-art in the terminal"
+      "name": "text-diagram",
+      "source": "./text-diagram",
+      "description": "Draw directed graphs — DAGs, workflows, pipelines, dependency trees — as layered box-art you read directly in the terminal"
     },
     {
       "name": "voice-dictation",

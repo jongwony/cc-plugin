@@ -13,7 +13,7 @@ Anchor every script reference at `${CLAUDE_PLUGIN_ROOT}`. The subpath after it m
 the script's **real location in the repo**, so a reader can open exactly what runs:
 
 - **Bundled under a skill** (default): `${CLAUDE_PLUGIN_ROOT}/skills/<name>/scripts/x.py`
-  — pdf-split, media-download, graph-sketch, manim, handwriting.
+  — pdf-split, media-download, text-diagram, manim, handwriting.
 - **Shared at plugin root** (single-skill plugin, or scripts shared across skills):
   `${CLAUDE_PLUGIN_ROOT}/scripts/x.py` — cdp-attach (its `v1`/`v2`/`v3` scripts live at
   the plugin root and are shared by the one skill).
@@ -48,7 +48,7 @@ CLAUDE.md "Python = PEP 723 + uv").
 
 Precedent: media-download's `decode_qr.py` / `save_metadata.py` were stdlib-only but on
 `python3`; PR #102 `c1083b3` added the minimal `dependencies = []` header and switched
-invocations to `uv run`, aligning them with the sibling tools (pdf-split, graph-sketch,
+invocations to `uv run`, aligning them with the sibling tools (pdf-split, text-diagram,
 manim).
 
 ## Frontmatter tier rule
@@ -90,7 +90,7 @@ snapshot, not a checklist):
 |----------|--------|
 | `context: fork` + `model: sonnet` | cdp-attach, google/video-understanding, pdf-split |
 | `context: fork` only | claude-code-internals |
-| neither | caffeinate, clawd-toggle, codex-plus, excalidraw-host, graph-sketch, handwriting, hourly-digest, make-deck, manim, media-download, remote-tmux, safe-uninstall, unfold, voice-dictation |
+| neither | caffeinate, clawd-toggle, codex-plus, excalidraw-host, handwriting, hourly-digest, make-deck, manim, media-download, remote-tmux, safe-uninstall, text-diagram, unfold, voice-dictation |
 
 ## Prerequisites + error-table format
 

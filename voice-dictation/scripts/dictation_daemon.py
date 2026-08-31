@@ -561,6 +561,16 @@ def _acquire_singleton_lock():
 
 def main():
     global DEBUG, KEEP_DIR, WAV, LOCK, TRIGGER
+    # 데몬을 띄운 셸의 cwd 를 상속한 채로 살지 않는다. 이 데몬 자신은 모델·WAV·락을
+    # 전부 절대경로로 들고 있어 cwd 가 사라져도 멀쩡하지만, cwd 를 물려받는 *자식* 은
+    # 그렇지 않다 — whisper-cli 는 기동 시 백엔드 dylib 를 찾느라
+    # std::filesystem::current_path() 를 부르고, 삭제된 cwd 에서는 getcwd 가 ENOENT 로
+    # 실패해 잡히지 않은 예외로 abort 한다(SIGABRT). 워크트리나 임시 디렉터리 안에서
+    # 토글을 눌렀다가 그 디렉터리가 나중에 정리되면, 데몬은 살아 있는데 전사만 매번
+    # 죽는 비대칭 상태가 된다. 기동 시점에 사라지지 않는 루트로 한 번 옮겨 두면 이후
+    # 모든 자식(rec·whisper-cli·osascript·pbcopy)이 온전한 cwd 를 상속한다 — 자식마다
+    # cwd= 를 붙이는 국소 처치와 달리 나중에 추가되는 자식까지 자동으로 덮는다.
+    os.chdir("/")
     parser = argparse.ArgumentParser(description="voice-dictation 데몬 (push-to-talk 받아쓰기)")
     parser.add_argument("--debug", action="store_true",
                         help="디버그 하네스: 오른쪽 Command(⌘) 트리거, WAV+전사를 ~/voice-dictation-debug 에 보존, 붙여넣기 생략 (프로덕션 데몬과 공존)")

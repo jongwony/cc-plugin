@@ -105,10 +105,14 @@ def junction(up, down, left, right, ascii_mode):
     }.get((up, down, left, right), "┼")
 
 
-def render(nodes, edges, ascii_mode=False, gutter=3):
+def render(nodes, edges, ascii_mode=False, gutter=3, focus=(), width_budget=80):
     if not nodes:
         return "(empty graph)"
     layer = compute_layers(nodes, edges)
+    # A cycle pushes every node off layer 0, leaving an empty band at the top.
+    # Compact to consecutive layers so no blank rows are emitted.
+    remap = {old: new for new, old in enumerate(sorted(set(layer.values())))}
+    layer = {n: remap[L] for n, L in layer.items()}
     n_layers = max(layer.values()) + 1
     rows = [[] for _ in range(n_layers)]      # nodes per layer, first-seen order
     for n in nodes:
@@ -140,17 +144,21 @@ def render(nodes, edges, ascii_mode=False, gutter=3):
 
     # draw boxes
     h, v = ("-", "|") if ascii_mode else ("─", "│")
-    tl, tr, bl, br = ("+", "+", "+", "+") if ascii_mode else ("┌", "┐", "└", "┘")
+    # Heavy strokes are the only emphasis channel: assistant output reaches the
+    # terminal as plain characters, so no colour is available to mark a focus.
+    light = ("-", "|", "+", "+", "+", "+") if ascii_mode else ("─", "│", "┌", "┐", "└", "┘")
+    heavy = ("=", "|", "+", "+", "+", "+") if ascii_mode else ("━", "┃", "┏", "┓", "┗", "┛")
     for L, r in enumerate(rows):
         t = top_row(L)
         for n in r:
+            bh, bv, tl, tr, bl, br = heavy if n in focus else light
             x, w = left[n], bw[n]
             for c in range(1, w - 1):
-                put(t, x + c, h)
-                put(t + 2, x + c, h)
+                put(t, x + c, bh)
+                put(t + 2, x + c, bh)
             put(t, x, tl); put(t, x + w - 1, tr)
             put(t + 2, x, bl); put(t + 2, x + w - 1, br)
-            put(t + 1, x, v); put(t + 1, x + w - 1, v)
+            put(t + 1, x, bv); put(t + 1, x + w - 1, bv)
             for i, ch in enumerate(" " + n + " "):
                 put(t + 1, x + 1 + i, ch)
 
@@ -181,6 +189,14 @@ def render(nodes, edges, ascii_mode=False, gutter=3):
         arrow = "-->" if ascii_mode else "⇢"
         note = "\n".join(f"  {a} {arrow} {b}" for a, b in cross)
         out += f"\n\ncross-layer edges (not drawn above):\n{note}"
+    if width_budget and canvas_w > width_budget:
+        widest = max(rows, key=line_w)
+        out += (
+            f"\n\nover budget: {canvas_w} columns (budget {width_budget}), "
+            f"widest layer has {len(widest)} boxes.\n"
+            "  Terminals hard-wrap past their width, which breaks the drawing.\n"
+            "  Shorten labels, split the graph, or move siblings to another layer."
+        )
     return out
 
 
@@ -189,10 +205,16 @@ def main():
     ap.add_argument("file", nargs="?", help="edge-list file (default: stdin)")
     ap.add_argument("--ascii", action="store_true", help="use +-| instead of box chars")
     ap.add_argument("--gutter", type=int, default=3, help="space between sibling boxes")
+    ap.add_argument("--focus", default="",
+                    help="comma-separated node(s) to draw with heavy strokes; keep it to one")
+    ap.add_argument("--width", type=int, default=80,
+                    help="column budget to warn past (0 disables the check)")
     args = ap.parse_args()
     text = open(args.file, encoding="utf-8").read() if args.file else sys.stdin.read()
     nodes, edges = parse_edges(text)
-    print(render(nodes, edges, ascii_mode=args.ascii, gutter=args.gutter))
+    focus = {s.strip() for s in args.focus.split(",") if s.strip()}
+    print(render(nodes, edges, ascii_mode=args.ascii, gutter=args.gutter,
+                 focus=focus, width_budget=args.width))
 
 
 if __name__ == "__main__":

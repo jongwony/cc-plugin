@@ -8,11 +8,47 @@ description: |
   Renders layered box-art, zero-dependency, upgrading to graph-easy when installed.
 ---
 
-# Graph Sketch
+# Text Diagram
 
 Turn a directed graph — most often a workflow or DAG — into a layered box-art diagram you
 can read straight in the terminal. The whole point is to make a branching process *legible
 at a glance* without reaching for an image renderer or a browser.
+
+## Before you draw
+
+Four checks, in order. The first two decide *whether* to draw; the last two decide *how big*.
+
+1. **Would a well-written sentence beat this picture?** A three-node chain is a sentence.
+   Draw when the reader has to hold several relationships at once — that is what prose is
+   bad at and a picture is good at.
+2. **Merge nodes that always travel together.** Two boxes that appear and disappear as a
+   pair are one box with a compound name. Every node should stand for a distinct idea.
+3. **Fit the width budget: `Σ(label lengths) + 4n + 3(n−1) ≤ 80` for the widest layer.**
+   The terminal hard-wraps anything past its width and a wrapped drawing is unreadable,
+   so this is the one hard constraint. `render.py` checks it and warns. In practice:
+   6-character labels allow ~6 siblings, 10-character labels ~4, 15-character labels ~3.
+   Label length eats the budget as fast as sibling count does — shortening names is
+   usually the cheaper fix.
+4. **Pick a detail level before drawing, not after.**
+
+   | Level | Node ceiling | Use when |
+   |---|---|---|
+   | `faithful` | ≤24, split into stages | The reader will check the picture against the real system |
+   | `balanced` (default) | ≤12 | Explaining how something works |
+   | `simplified` | ≤7 | The shape is the point and details would distract |
+
+   Above the ceiling it is two diagrams, not one crowded one.
+
+## Emphasis: strokes, because there is no colour
+
+Assistant output reaches the terminal as plain characters — escape sequences are consumed
+before they become cells, so **no colour is available to mark a focal node**. Emphasis is
+carried by stroke weight instead: `--focus <node>` draws that box with `┏━┓┃┗┛` (`=` under
+`--ascii`).
+
+**Use one focal node.** Heavy strokes contrast far less than colour would, so the signal
+dies faster: mark five of six boxes and "focus" stops meaning anything. If two things
+genuinely compete for the reader's eye, that is usually a sign the graph should be split.
 
 ## Choosing a rendering path
 
@@ -69,6 +105,8 @@ also tolerant of pasted DOT.
 |------|--------|
 | `--ascii` | Use `+ - |` instead of unicode box characters — for terminals that mangle UTF-8. |
 | `--gutter N` | Horizontal space between sibling boxes (default `3`). Widen it if labels look cramped. |
+| `--focus A[,B]` | Draw the named node(s) with heavy strokes. Keep it to one — see *Emphasis* above. |
+| `--width N` | Column budget to warn past (default `80`; `0` disables the check). |
 
 ### What the output looks like
 
@@ -116,6 +154,23 @@ Read the script's `phase()` calls and the shape of its `parallel`/`pipeline` cal
 edges, and render. This recovers the fan-out → verify → fan-in skeleton that the prose of a
 script hides.
 
+## Delivering the drawing
+
+Emit the diagram **inside a fenced code block with no language tag**. Three separate things
+go wrong otherwise:
+
+- In prose, `*`, `_` and `|` are eaten as inline markdown, and a line indented four spaces
+  silently becomes a code block of its own.
+- A language tag routes the content through the syntax highlighter, which recolours box
+  characters. No tag means the highlighter runs a grammar that assigns nothing, so the
+  drawing comes out uniform.
+- Inside a table cell the content is still markdown, so backticks pick up inline-code
+  styling. Never wrap diagram characters in backticks.
+
+The fence buys verbatim indentation and immunity from inline markdown. It does **not** buy
+overflow protection — every line is still hard-wrapped at the terminal's width, which is
+why the width budget above is the constraint that actually matters.
+
 ## Limits — and when to escalate
 
 The layered renderer optimises for hub-style graphs. Two honest limitations, surfaced rather
@@ -139,9 +194,12 @@ this to the user and offer graph-easy.
 The renderer targets graphs small enough to read in a terminal — the kind you can specify
 inline — so a few input boundaries are accepted rather than engineered around:
 
-- **Labels are measured by character count, not display width.** Wide glyphs (CJK, emoji)
-  drift the boxes and connectors, because box width is `len(label) + 4`. Stick to ASCII/Latin
-  labels, or pad manually, when alignment matters.
+- **Labels are measured by character count, not display width, and this is deliberate.**
+  Box width is `len(label) + 4`, so CJK and emoji labels overflow their boxes and the
+  connectors drift. Measuring display width instead would put a third measurer alongside
+  the harness and the terminal, which already disagree in edge cases — so the renderer
+  stays with one simple rule and documents the limit rather than chasing agreement it
+  cannot guarantee. Use ASCII/Latin labels when alignment matters.
 - **Very deep chains recurse.** Layering is computed recursively, so a single chain longer
   than Python's recursion limit (~1000 nodes) raises `RecursionError`. Graphs that fit in a
   terminal never approach this; for machine-scale DAGs, use graphviz.

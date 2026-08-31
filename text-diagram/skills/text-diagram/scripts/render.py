@@ -28,6 +28,7 @@ Flags:
 """
 import sys
 import argparse
+import shutil
 
 
 def parse_edges(text):
@@ -105,7 +106,7 @@ def junction(up, down, left, right, ascii_mode):
     }.get((up, down, left, right), "┼")
 
 
-def render(nodes, edges, ascii_mode=False, gutter=3, focus=(), width_budget=80):
+def render(nodes, edges, ascii_mode=False, gutter=3, focus=(), width_budget=None):
     if not nodes:
         return "(empty graph)"
     layer = compute_layers(nodes, edges)
@@ -207,14 +208,18 @@ def main():
     ap.add_argument("--gutter", type=int, default=3, help="space between sibling boxes")
     ap.add_argument("--focus", default="",
                     help="comma-separated node(s) to draw with heavy strokes; keep it to one")
-    ap.add_argument("--width", type=int, default=80,
-                    help="column budget to warn past (0 disables the check)")
+    ap.add_argument("--width", type=int, default=None,
+                    help="column budget to warn past; defaults to the detected "
+                         "terminal width (80 when undetectable), 0 disables the check")
     args = ap.parse_args()
     text = open(args.file, encoding="utf-8").read() if args.file else sys.stdin.read()
     nodes, edges = parse_edges(text)
     focus = {s.strip() for s in args.focus.split(",") if s.strip()}
+    # Read the budget at invocation: the terminal's own width is the constraint,
+    # and 80 is only what to fall back to when it cannot be read.
+    width = args.width if args.width is not None else shutil.get_terminal_size((80, 24)).columns
     print(render(nodes, edges, ascii_mode=args.ascii, gutter=args.gutter,
-                 focus=focus, width_budget=args.width))
+                 focus=focus, width_budget=width))
 
 
 if __name__ == "__main__":

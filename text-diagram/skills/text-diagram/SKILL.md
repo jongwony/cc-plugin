@@ -23,12 +23,18 @@ Four checks, in order. The first two decide *whether* to draw; the last two deci
    bad at and a picture is good at.
 2. **Merge nodes that always travel together.** Two boxes that appear and disappear as a
    pair are one box with a compound name. Every node should stand for a distinct idea.
-3. **Fit the width budget: `Σ(label lengths) + 4n + 3(n−1) ≤ 80` for the widest layer.**
-   The terminal hard-wraps anything past its width and a wrapped drawing is unreadable,
-   so this is the one hard constraint. `render.py` checks it and warns. In practice:
-   6-character labels allow ~6 siblings, 10-character labels ~4, 15-character labels ~3.
-   Label length eats the budget as fast as sibling count does — shortening names is
-   usually the cheaper fix.
+3. **Fit the width budget: `Σ(label lengths) + 4n + 3(n−1) ≤ W` for the widest layer,**
+   where `W` is the reading terminal's width. The terminal hard-wraps anything past it and
+   a wrapped drawing is unreadable, so this is the one hard constraint. `render.py` reads
+   `W` at invocation and warns past it, falling back to 80 only when the width cannot be
+   detected. At `W = 80` that works out to roughly 6 siblings for 6-character labels,
+   4 for 10-character, 3 for 15-character — and those numbers move with `W`, so read them
+   as the 80-column case rather than as the rule. Label length eats the budget as fast as
+   sibling count does; shortening names is usually the cheaper fix.
+
+   When the skill runs the script on the user's behalf, the detected width is the tool's
+   own pty rather than the user's window — usually narrower, so the check errs
+   conservative. Pass `--width` when you know the real reading width.
 4. **Pick a detail level before drawing, not after.**
 
    | Level | Node ceiling | Use when |
@@ -106,7 +112,7 @@ also tolerant of pasted DOT.
 | `--ascii` | Use `+ - |` instead of unicode box characters — for terminals that mangle UTF-8. |
 | `--gutter N` | Horizontal space between sibling boxes (default `3`). Widen it if labels look cramped. |
 | `--focus A[,B]` | Draw the named node(s) with heavy strokes. Keep it to one — see *Emphasis* above. |
-| `--width N` | Column budget to warn past (default `80`; `0` disables the check). |
+| `--width N` | Column budget to warn past. Defaults to the detected terminal width (80 when undetectable); `0` disables the check. |
 
 ### What the output looks like
 

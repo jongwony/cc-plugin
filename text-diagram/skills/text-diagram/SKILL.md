@@ -1,5 +1,5 @@
 ---
-name: graph-sketch
+name: text-diagram
 description: |
   This skill should be used when the user wants a directed graph — a DAG, workflow,
   pipeline, or dependency tree — drawn as a plain-text terminal picture: "draw this graph",
@@ -42,7 +42,7 @@ principle: a skill must work even when an optional external tool is absent).
 Feed it an edge list on stdin (or pass a file path):
 
 ```bash
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/graph-sketch/scripts/render.py <<'EOF'
+uv run ${CLAUDE_PLUGIN_ROOT}/skills/text-diagram/scripts/render.py <<'EOF'
 diff/fate -> Category, Type, OpSem, Gap
 Category, Type, OpSem, Gap -> verify
 verify -> Synthesize -> report

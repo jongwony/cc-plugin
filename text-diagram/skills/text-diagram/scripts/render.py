@@ -126,8 +126,15 @@ def render(nodes, edges, ascii_mode=False, gutter=3, focus=(), width_budget=None
 
     # assign absolute column of each box's left edge, then its center
     left, center = {}, {}
+    axis = canvas_w // 2
     for r in rows:
-        x = (canvas_w - line_w(r)) // 2
+        if len(r) == 1:
+            # Put a lone box's centre ON the shared axis. Centring each layer's SPAN
+            # instead lets integer division land neighbouring centres a column apart,
+            # and a chain of lone boxes then zigzags for no structural reason.
+            x = axis - bw[r[0]] // 2
+        else:
+            x = (canvas_w - line_w(r)) // 2
         for n in r:
             left[n] = x
             center[n] = x + bw[n] // 2

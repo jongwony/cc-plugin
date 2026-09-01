@@ -194,6 +194,11 @@ If a graph has cycles, the renderer still lays it out (back-edges are treated as
 contributions) but the result reads better as a tree than as a faithful cyclic graph; note
 this to the user and offer graph-easy.
 
+Every limit on this page is rendered as a worked case in [`references/catalog.md`](references/catalog.md) — the over-budget notice, the
+shared connector bus, the undrawn cross-layer edge, the cycle laid out as a tree,
+and the CJK misalignment below. Read a case there rather than picturing it from
+the prose; `uv run scripts/catalog.py --check` is what keeps it true.
+
 ### Input envelope
 
 The renderer targets graphs small enough to read in a terminal — the kind you can specify
@@ -217,3 +222,5 @@ inline — so a few input boundaries are accepted rather than engineered around:
 | File | Purpose |
 |------|---------|
 | `scripts/render.py` | Layered box-art / ASCII renderer. Stdlib-only, runs via `uv run`. Reads an edge list from stdin or a file. |
+| `scripts/catalog.py` | Regenerates the rendering catalog from its own scenario list. `--write` to rebuild, `--check` to fail on drift. |
+| `references/catalog.md` | Every catalogued scenario rendered at 80 columns — generated, not hand-written. |

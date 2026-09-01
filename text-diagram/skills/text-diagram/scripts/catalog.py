@@ -1,0 +1,223 @@
+#!/usr/bin/env uv run --quiet --script
+# /// script
+# requires-python = ">=3.8"
+# dependencies = []
+# ///
+"""Render every catalogued scenario and write the visible catalog.
+
+The catalog is DERIVED, never hand-maintained: `SCENARIOS` below is the single
+source, `--write` regenerates `references/catalog.md` from it, and `--check`
+fails when the file on disk has drifted from what the current renderer produces.
+So a renderer change that alters output shows up as a failing check with the
+diff in hand, and adding a scenario means adding one entry here.
+
+Every scenario renders at a fixed 80 columns rather than the invoking terminal's
+width, because a golden file that moved with the generating window would report
+the window's size as a renderer change.
+
+    uv run scripts/catalog.py --write     # regenerate references/catalog.md
+    uv run scripts/catalog.py --check     # exit 1 when it has drifted
+"""
+
+import argparse
+import difflib
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from render import parse_edges, render  # noqa: E402
+
+WIDTH = 80
+CATALOG = Path(__file__).resolve().parent.parent / "references" / "catalog.md"
+
+# slug, title, what this case is here to show, edge text, render kwargs
+SCENARIOS = [
+    (
+        "fan",
+        "Fan-out and fan-in",
+        "The shape the layered renderer is built for: one source spreading to N "
+        "parallel stages that gather back into one.",
+        "start -> A, B, C\nA, B, C -> verify -> report",
+        {},
+    ),
+    (
+        "chain",
+        "Linear chain",
+        "Three nodes in a row. Worth checking against the first pre-draw question: "
+        "a chain this short is a sentence, and the picture earns nothing.",
+        "read -> parse -> emit",
+        {},
+    ),
+    (
+        "single",
+        "One node",
+        "The degenerate input. A lone token declares an isolated node, so this "
+        "renders rather than erroring.",
+        "solo",
+        {},
+    ),
+    (
+        "width-fits",
+        "Widest layer inside the budget",
+        "Four siblings with short labels. Sum of labels + 4n + 3(n-1) lands under "
+        "80, so nothing is reported.",
+        "root -> aa, bb, cc, dd",
+        {},
+    ),
+    (
+        "width-overflow",
+        "Widest layer past the budget",
+        "The same shape with long labels. The renderer appends an over-budget "
+        "notice instead of emitting a drawing the terminal will hard-wrap.",
+        "root -> extraction-stage, validation-stage, aggregation-stage, delivery-stage",
+        {},
+    ),
+    (
+        "shared-bus",
+        "Two parents, one connector bus",
+        "Both parents feed the same layer, and the connectors are drawn as one "
+        "shared bus — so which child came from which parent is NOT readable here. "
+        "Split the graph or push a child to its own layer when that matters.",
+        "left -> x, y\nright -> z",
+        {},
+    ),
+    (
+        "cross-layer",
+        "Edge that skips a layer",
+        "`start -> end` jumps past the middle. The renderer lists it beneath the "
+        "drawing rather than routing a line that would read as passing through.",
+        "start -> mid -> end\nstart -> end",
+        {},
+    ),
+    (
+        "cycle",
+        "Back edge",
+        "Layering is cycle-safe (back edges contribute 0), so this lays out — but "
+        "it reads as a tree, not as a loop. Reach for graph-easy when the cycle is "
+        "the point.",
+        "a -> b -> c -> a",
+        {},
+    ),
+    (
+        "focus",
+        "One focal node",
+        "Heavy strokes carry emphasis because assistant output reaches the terminal "
+        "as plain characters and no colour survives. Marking more than one spends "
+        "the only contrast channel there is.",
+        "plan -> build, test, ship",
+        {"focus": {"test"}},
+    ),
+    (
+        "ascii",
+        "ASCII fallback",
+        "Same graph with `--ascii`, for terminals that mangle UTF-8 box characters.",
+        "plan -> build, test, ship",
+        {"ascii_mode": True},
+    ),
+    (
+        "cjk",
+        "CJK labels misalign — a known limit",
+        "Box width is len(label) + 4, and CJK characters occupy two terminal cells, "
+        "so these boxes come out narrower than their contents and the connectors "
+        "drift. This case exists to keep that visible; use Latin labels when "
+        "alignment matters.",
+        "시작 -> 분석, 검증\n분석, 검증 -> 보고",
+        {},
+    ),
+    (
+        "dot-paste",
+        "Pasted DOT body",
+        "Quotes, trailing semicolons, `[label=...]` blocks and the digraph wrapper "
+        "are stripped, so a .dot body pastes in directly — as long as the wrapper "
+        "braces sit on their own lines.",
+        'digraph G {\n  "load" -> "clean" [label="step 1"];\n  "clean" -> "score";\n}',
+        {},
+    ),
+]
+
+
+def build():
+    """Return the whole catalog document as text."""
+    out = [
+        "# Rendering catalog",
+        "",
+        "Generated by `scripts/catalog.py` — do not edit by hand. Every case below",
+        f"is rendered at {WIDTH} columns by the renderer in this repository, so the",
+        "drawings are what you actually get rather than what the prose claims.",
+        "",
+        "Regenerate with `uv run scripts/catalog.py --write`; `--check` fails when a",
+        "renderer change has moved any output.",
+        "",
+        "| # | Case | Shows |",
+        "|---|---|---|",
+    ]
+    for i, (slug, title, why, _, _) in enumerate(SCENARIOS, 1):
+        first = why.split(".")[0]
+        out.append(f"| {i} | [{title}](#{slug}) | {first}. |")
+    out.append("")
+
+    for slug, title, why, text, kw in SCENARIOS:
+        nodes, edges = parse_edges(text)
+        drawing = render(nodes, edges, width_budget=WIDTH, **kw)
+        flags = []
+        if kw.get("ascii_mode"):
+            flags.append("--ascii")
+        if kw.get("focus"):
+            flags.append("--focus " + ",".join(sorted(kw["focus"])))
+        out += [
+            f'<a id="{slug}"></a>',
+            "",
+            f"## {title}",
+            "",
+            why,
+            "",
+            "**Input**" + (f" — `{' '.join(flags)}`" if flags else ""),
+            "",
+            "```",
+            text,
+            "```",
+            "",
+            "**Output**",
+            "",
+            "```",
+            drawing,
+            "```",
+            "",
+        ]
+    return "\n".join(out).rstrip() + "\n"
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--write", action="store_true", help="regenerate the catalog file")
+    ap.add_argument("--check", action="store_true", help="exit 1 when it has drifted")
+    args = ap.parse_args()
+
+    fresh = build()
+    if args.write:
+        CATALOG.parent.mkdir(parents=True, exist_ok=True)
+        CATALOG.write_text(fresh, encoding="utf-8")
+        print(f"wrote {CATALOG} ({len(SCENARIOS)} cases)")
+        return 0
+    if args.check:
+        if not CATALOG.exists():
+            print(f"missing {CATALOG} — run with --write", file=sys.stderr)
+            return 1
+        stored = CATALOG.read_text(encoding="utf-8")
+        if stored == fresh:
+            print(f"catalog up to date ({len(SCENARIOS)} cases)")
+            return 0
+        sys.stderr.writelines(
+            difflib.unified_diff(
+                stored.splitlines(True), fresh.splitlines(True),
+                fromfile="catalog.md (on disk)", tofile="catalog.md (regenerated)",
+            )
+        )
+        print("\ncatalog has drifted — run with --write", file=sys.stderr)
+        return 1
+    print(fresh, end="")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

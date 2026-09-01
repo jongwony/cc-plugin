@@ -1,7 +1,7 @@
 {
   "name": "text-diagram",
   "description": "Draw directed graphs — DAGs, workflows, pipelines, dependency trees — as layered box-art you read directly in the terminal",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

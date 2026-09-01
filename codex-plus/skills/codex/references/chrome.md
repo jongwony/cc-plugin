@@ -9,8 +9,7 @@ Two steps, in order. Name both in the prompt; neither is discoverable from the
 task.
 
 **1. The browser calls are JavaScript, evaluated through `mcp__node_repl__js`.**
-The client throws `Browser use requires a trusted Node REPL browser service`
-without it, so that tool is required, not preferred.
+That tool is required, not preferred.
 
 **2. `setupBrowserRuntime()` returns the agent — it creates no global.** A fresh
 REPL exposes only `nodeRepl`, and `agent.browsers…` raises
@@ -33,9 +32,8 @@ only marker a person can act on if the run has to ask for help.
 
 ## Operations
 
-**Every `await` below is load-bearing.** Drop it on `tabs.new()` and the next line
-fails as `TypeError: <promise>.goto is not a function`, which reads like a wrong
-API rather than a missing keyword.
+**Every `await` below is load-bearing** — omitting one surfaces as a wrong-API
+error rather than a missing keyword.
 
 ```js
 const tab = await chrome.tabs.new();      // default target: a new tab
@@ -73,16 +71,20 @@ login does not justify it.
 
 ## When something fails
 
-Match the symptom, then load
-[`chrome-troubleshooting.md`](chrome-troubleshooting.md). Nothing in it is needed
-to start a run.
+Match the observed string. Rows marked → need
+[`chrome-troubleshooting.md`](chrome-troubleshooting.md); the rest are fixed here.
 
-| Symptom | Actually |
-|---|---|
-| No browser tool in the run's inventory; the four diagnostics all exit `0` | `codex` on `PATH` is a wrapper with its own `CODEX_HOME` |
-| Scrolled, then asserted, and the page looks unchanged | the page manages its own scroll position |
-| `Detached while handling command` on an input | page-specific; every input path fails on that page |
-| `browsers.get("chrome")` fails | one of four preconditions; the diagnostics name which |
+| Observed | Cause | Do |
+|---|---|---|
+| `ReferenceError: agent is not defined` | client never imported | Setup step 2 |
+| `TypeError: <promise>.goto is not a function` | missing `await` | add `await` |
+| `Browser use requires a trusted Node REPL browser service` | not running under `mcp__node_repl__js` | use that tool |
+| a browser other than Chrome | `browsers.get()` called without a name | pass `"chrome"` |
+| no browser tool in the inventory; four diagnostics exit `0` | `PATH` wrapper with its own `CODEX_HOME` | → |
+| `browsers.get("chrome")` throws | one of four preconditions unmet | → |
+| `Detached while handling command` on an input | page rejects every input path | → |
+| `scrollY` unchanged after `scroll()` returned | page manages its own scroll position | → |
+| a call returned cleanly and the effect is absent | most calls return `undefined` | verify with `evaluate` |
 
-Anything else: report the failing step with its evidence rather than working
-around it.
+Not listed: report the failing step with its evidence rather than working around
+it.

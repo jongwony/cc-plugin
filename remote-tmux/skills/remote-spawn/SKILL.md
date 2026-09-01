@@ -79,6 +79,15 @@ inherits the launching shell's working directory. `--worktree` additionally requ
 directory to be inside a git repo. Keep the `cd` inside a subshell so the caller's own
 working directory survives the spawn.
 
+That `cd` is also what a **worktree-isolated launching session** cannot do. Such a session
+refuses a command whose target it cannot verify stays inside its own worktree, and this one
+lands in another repository by construction — the `cd` leaves, and `--worktree` makes the
+line read as a git operation once it arrives. The refusal is loud rather than silent, so
+nothing is lost but the attempt; what it does not admit is rephrasing, because the guard
+reads where the command lands and not how it is written. Leave the worktree first and spawn
+from the project directory. The constraint is the launcher's own isolation and not the
+target: spawning into a worktree is what `--worktree` is for, and it stays available.
+
 **The `--` is what ends option parsing.** Without it the brief is parsed as options and
 consumed silently — no error, no transcript, and a worker sits there idle having been told
 nothing. A brief that starts with a dash hits this on any launch. `--remote-control` opens a

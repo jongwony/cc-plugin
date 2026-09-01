@@ -148,6 +148,9 @@ while all four bundled diagnostics still exit `0`.
 
 **File**: `references/chrome.md`
 
-Its first half is the setup and the operation surface; the second half is
-diagnosis-time material indexed by symptom, worth reading only when a run
-misbehaves.
+It carries the setup, the operation surface, and a symptom table. Do not read the
+troubleshooting reference up front — the symptom table says when to load it.
+
+**File**: `references/chrome-troubleshooting.md`
+
+Load it only after a browser run has actually failed, matching the symptom first.

@@ -59,31 +59,36 @@ The call returns the success shape either way, so **a flow that scrolls and then
 asserts can read a stale page as a real one.** Read `scrollY` back rather than
 trusting the return whenever the page does anything of its own with scrolling.
 
-## `Detached while handling command` on `type()`
+## `Detached while handling command` on an input
 
-**The cause is not a stale locator, and the wait-then-retarget recipe does not
-work.** Both were disproven 2026-09-01 on
-`https://the-internet.herokuapp.com/login`:
+**Page-specific, not an API defect** — the same shape the `scroll()` failure
+turned out to have. Measured 2026-09-01, fresh tab and a 2000 ms wait in every
+cell:
 
-- In a **pristine tab**, with a locator built fresh *after* the wait, `type()`
-  failed at both 500 ms and 2000 ms.
-- The locator was not the problem. Diagnostics reported
-  `{"kind":"action_failed","matchCount":1,"visibleCount":1}` — it matched exactly
-  one visible `<input>` — and the field read back `""`.
-- Running it first in a tab that had already failed once changes only the
-  diagnostic (`no_matches` instead of `action_failed`), not the outcome.
+| Page | `playwright.locator(sel).type()` |
+|---|---|
+| `httpbin.org/forms/post` | text entered, read back |
+| `the-internet.herokuapp.com/inputs` | text entered, read back |
+| `the-internet.herokuapp.com/login` | `Detached while handling command`, value `""` |
 
-The same recipe was reported working on 2026-08-30. It did not reproduce.
+**Do not vary the input path — that axis is measured out.** On the failing page,
+all eight of these detached with the same diagnostics and left the field empty:
+`locator.type`, `locator.fill`, `locator.pressSequentially`, `cua.type`,
+`cua.keypress`, `dom_cua.type`, `dom_cua.keypress`. Coordinate focus succeeded
+first in every case, so the field was reachable; the write is what failed.
 
-So the honest state is: **`playwright.locator().type()` did not enter text on the
-one page measured, and no wait length repairs it.** Do not spend turns on waits or
-re-targeting — that path is already measured out. Report the failing step with the
-locator diagnostics.
+`locator.press("P")` is the one to watch: it returned **no error at all** and the
+value still read back `""`. On a page in this state, a call completing is not
+evidence that anything landed.
 
-Two things this does *not* establish, and one of them has already caught us once:
-the failure may be specific to this page, exactly as the `scroll()` failure turned
-out to be. And the other input namespaces on the tab (`cua`, `dom_cua`) were never
-tried. Before concluding that typing is broken, try one on a different page.
+Two earlier claims are withdrawn. A stale locator is not the cause — diagnostics
+reported `action_failed` with `matchCount: 1`, `visibleCount: 1`, so the locator
+matched one visible `<input>`. And no wait length repairs it: 500 ms and 2000 ms
+failed identically, as did retrying in a tab that had never failed before.
+
+So when this appears: the page is doing something the runtime cannot write
+through. Report it with the locator diagnostics and solve the flow another way
+rather than spending turns on the input call.
 
 ## `browsers.get("chrome")` fails → name the unmet precondition
 

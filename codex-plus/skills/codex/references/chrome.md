@@ -48,10 +48,11 @@ await tab.goto(url);
 
 await tab.playwright.domSnapshot();       // -> string; size scales with the page
 await tab.playwright.locator(sel).click();
-await tab.playwright.locator(sel).type(text);   // measured failing on one page; see the symptom table
+await tab.playwright.locator(sel).type(text);
 await tab.dom_cua.scroll({ x: 0, y: 600 });     // verify by reading scrollY back
 await tab.screenshot();                   // -> Uint8Array of image bytes, not a path
 await tab.dev.logs({});                   // -> [{ level, message, timestamp, url }]
+await tab.playwright.evaluate(js);        // -> the value; this is how you verify an effect
 await tab.close();
 ```
 
@@ -65,6 +66,12 @@ Two return shapes are worth knowing before you call them:
 - **`screenshot()` returned JPEG, not PNG** — header `FF D8 FF E0`, 179,736 bytes
   (measured 2026-09-01). Sniff the header rather than assuming a format, and note
   it takes `{ fullPage, clip }` options.
+
+`playwright` mirrors Playwright's own surface — `locator`, the `getBy*` family,
+the `waitFor*` family, `evaluate` — plus `elementInfo`, `elementScreenshot` and
+`expectNavigation`. `cua` and `dom_cua` are the alternate input paths
+(`click`, `type`, `keypress`, `scroll`, `drag`); reach for them only when the
+`playwright` path has actually failed, since they are not cheaper.
 
 `logs` is the **only** member of `dev` — there is no network API on this path, and
 response bodies need raw CDP. Every call that is not listed above as returning
@@ -87,7 +94,7 @@ material and nothing in it is needed to start a run.
 |---|---|
 | No browser tool in the run's inventory; the four diagnostics all exit `0` | `codex` on `PATH` is a wrapper with its own `CODEX_HOME` |
 | Scrolled, then asserted, and the page looks unchanged | the page manages its own scrolling; `scroll()` returns the success shape either way |
-| `Detached while handling command` on `type()` | cause unknown; a stale locator is disproven, and no wait length repairs it |
+| `Detached while handling command` on an input | page-specific; every input path fails on that page, and no wait repairs it |
 | `browsers.get("chrome")` fails | one of four preconditions; the diagnostics name which |
 
 Anything else: report the failing step with its evidence rather than working

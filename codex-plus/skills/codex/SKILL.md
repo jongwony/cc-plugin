@@ -139,3 +139,18 @@ Read the image reference when the delegated task involves image generation, imag
 **File**: `references/image-gen-models-prompting-guide.ipynb`
 
 Use the notebook directly instead of duplicating its per-use-case guidance here.
+
+Read the Chrome reference **before** delegating a browser or computer-use task.
+Driving Chrome from codex needs a bootstrap and a tool name that are not
+discoverable from the task, and the most common failure — `codex` on `PATH`
+resolving to a wrapper with its own `CODEX_HOME` — presents as a browser problem
+while all four bundled diagnostics still exit `0`.
+
+**File**: `references/chrome.md`
+
+It carries the setup, the operation surface, and a symptom table. Do not read the
+troubleshooting reference up front — the symptom table says when to load it.
+
+**File**: `references/chrome-troubleshooting.md`
+
+Load it only after a browser run has actually failed, matching the symptom first.

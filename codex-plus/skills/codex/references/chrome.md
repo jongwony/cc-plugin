@@ -48,7 +48,7 @@ await tab.goto(url);
 
 await tab.playwright.domSnapshot();       // -> string; size scales with the page
 await tab.playwright.locator(sel).click();
-await tab.playwright.locator(sel).type(text);   // rebuild the locator after any navigation
+await tab.playwright.locator(sel).type(text);   // measured failing on one page; see the symptom table
 await tab.dom_cua.scroll({ x: 0, y: 600 });     // verify by reading scrollY back
 await tab.screenshot();                   // -> Uint8Array of image bytes, not a path
 await tab.dev.logs({});                   // -> [{ level, message, timestamp, url }]
@@ -87,7 +87,7 @@ material and nothing in it is needed to start a run.
 |---|---|
 | No browser tool in the run's inventory; the four diagnostics all exit `0` | `codex` on `PATH` is a wrapper with its own `CODEX_HOME` |
 | Scrolled, then asserted, and the page looks unchanged | the page manages its own scrolling; `scroll()` returns the success shape either way |
-| `Detached while handling command` on `type()` or `click()` | a navigation invalidated the locator |
+| `Detached while handling command` on `type()` | cause unknown; a stale locator is disproven, and no wait length repairs it |
 | `browsers.get("chrome")` fails | one of four preconditions; the diagnostics name which |
 
 Anything else: report the failing step with its evidence rather than working

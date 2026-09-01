@@ -59,20 +59,31 @@ The call returns the success shape either way, so **a flow that scrolls and then
 asserts can read a stale page as a real one.** Read `scrollY` back rather than
 trusting the return whenever the page does anything of its own with scrolling.
 
-## `type()` right after `goto()` → `Detached while handling command`
+## `Detached while handling command` on `type()`
 
-The locator resolved against the pre-navigation document and the navigation
-invalidated it. `waitForLoadState({ state: "load" })` does not prevent it, and
-`networkidle` is unsupported. The wait alone is not the fix — re-targeting is:
+**The cause is not a stale locator, and the wait-then-retarget recipe does not
+work.** Both were disproven 2026-09-01 on
+`https://the-internet.herokuapp.com/login`:
 
-```js
-tab.goto(url);
-tab.playwright.waitForTimeout(500);
-tab.playwright.locator("#username").type("…");   // fresh locator, after the wait
-```
+- In a **pristine tab**, with a locator built fresh *after* the wait, `type()`
+  failed at both 500 ms and 2000 ms.
+- The locator was not the problem. Diagnostics reported
+  `{"kind":"action_failed","matchCount":1,"visibleCount":1}` — it matched exactly
+  one visible `<input>` — and the field read back `""`.
+- Running it first in a tab that had already failed once changes only the
+  diagnostic (`no_matches` instead of `action_failed`), not the outcome.
 
-Treat every navigation as invalidating every locator held across it. A `click()`
-that triggers navigation is the same hazard for whatever comes next.
+The same recipe was reported working on 2026-08-30. It did not reproduce.
+
+So the honest state is: **`playwright.locator().type()` did not enter text on the
+one page measured, and no wait length repairs it.** Do not spend turns on waits or
+re-targeting — that path is already measured out. Report the failing step with the
+locator diagnostics.
+
+Two things this does *not* establish, and one of them has already caught us once:
+the failure may be specific to this page, exactly as the `scroll()` failure turned
+out to be. And the other input namespaces on the tab (`cua`, `dom_cua`) were never
+tried. Before concluding that typing is broken, try one on a different page.
 
 ## `browsers.get("chrome")` fails → name the unmet precondition
 

@@ -44,17 +44,20 @@ Three probes all reporting "no browser capability" is one fault reproduced three
 times when every probe goes through the same `PATH` wrapper. Vary what sits
 *below* the suspected cause, not beside it.
 
-## `scroll()` reports success and does not scroll
+## `scroll()` returned success and the page did not move
 
-`tab.dom_cua.scroll({x, y})` returns `undefined` — the success shape — while
-`scrollY` stays `0` and screenshots and snapshots are unchanged. Measured
-2026-08-30 with both positive and negative values. Because the call reports
-success, **a flow that scrolls and then asserts will read a stale page as a real
-one**: read `scrollY` back rather than trusting the return.
+**Not an API defect.** Measured 2026-09-01 on a plain static document
+(`scrollHeight: 145039`): `tab.dom_cua.scroll({x: 0, y: 600})` moved `scrollY`
+from `0` to `600`, and `y: -600` restored it. The call works.
 
-Still open: that run used an infinite-scroll page whose own JS may interact with
-the call. One re-test on a plain long document decides whether this is a defect or
-a page interaction.
+What fails is a page that manages its own scroll position. The earlier
+measurement (2026-08-30) used an infinite-scroll page, where the same call
+returned `undefined` while `scrollY` stayed `0` and screenshots and snapshots
+were unchanged, in both directions.
+
+The call returns the success shape either way, so **a flow that scrolls and then
+asserts can read a stale page as a real one.** Read `scrollY` back rather than
+trusting the return whenever the page does anything of its own with scrolling.
 
 ## `type()` right after `goto()` → `Detached while handling command`
 

@@ -4,29 +4,27 @@ Read this before delegating a browser or computer-use task to codex. It covers
 the codex side only — this session's own `mcp__claude-in-chrome__*` tools need no
 reference and are not described here.
 
-Run on `gpt-5.6-luna` at `xhigh` (SKILL.md, *Running a Task* step 1).
-
 ## Setup
 
 Two steps, in order. Neither is discoverable from the task, so name both in the
 prompt.
 
 **1. The browser calls are JavaScript, evaluated through `mcp__node_repl__js`** —
-the REPL the bundled `chrome` plugin exposes. A run given only the operations has
-to rediscover the mechanism for itself.
+the REPL the bundled `chrome` plugin exposes. The client throws
+`Browser use requires a trusted Node REPL browser service` when `globalThis.nodeRepl`
+is missing, so that tool is the required channel, not a preference.
 
-**2. `agent` does not exist until the client is imported.** A fresh REPL exposes
-only `nodeRepl`; reaching for `agent.browsers…` raises
-`ReferenceError: agent is not defined`. Import the plugin's browser client and
-call `setupBrowserRuntime()` before anything else:
-
-```
-$HOME/.codex/plugins/cache/openai-bundled/chrome/latest/scripts/browser-client.mjs
-```
-
-Then, in this order — `nameSession` must precede opening or claiming any tab:
+**2. `setupBrowserRuntime()` *returns* the agent — it creates no global.** A fresh
+REPL exposes only `nodeRepl`, and reaching for `agent.browsers…` raises
+`ReferenceError: agent is not defined`. Import the client (its only export) and
+bind what it hands back:
 
 ```js
+const { setupBrowserRuntime } = await import(
+  `${process.env.HOME}/.codex/plugins/cache/openai-bundled/chrome/latest/scripts/browser-client.mjs`
+);
+const agent = await setupBrowserRuntime();
+
 const chrome = await agent.browsers.get("chrome");   // always by name
 await chrome.nameSession("codex ✅");                 // BEFORE any tab
 ```
@@ -39,26 +37,39 @@ help.
 
 ## Operations
 
-Everything is async. A dropped `await` surfaces later as an unrelated-looking
-failure.
+**Every call is async, and the `await` below is load-bearing** — omit it on
+`tabs.new()` and the next line fails as `TypeError: <promise>.goto is not a
+function`, which reads like a wrong API rather than a missing keyword.
 
 ```js
-const tab = chrome.tabs.new();          // default target: a new tab
-chrome.tabs.list();                     // this session's tabs only
-tab.goto(url);
+const tab = await chrome.tabs.new();      // default target: a new tab
+await chrome.tabs.list();                 // this session only; [{ id, title, url }]
+await tab.goto(url);
 
-tab.playwright.domSnapshot();           // -> string; compact, not a DOM dump
-tab.playwright.locator(sel).click();
-tab.playwright.locator(sel).type(text); // rebuild the locator after any navigation
-tab.screenshot();                       // -> Uint8Array of PNG bytes, not a path
-tab.dev.logs({});                       // -> [{ level, message, timestamp, url }]
-tab.close();
+await tab.playwright.domSnapshot();       // -> string; size scales with the page
+await tab.playwright.locator(sel).click();
+await tab.playwright.locator(sel).type(text);   // rebuild the locator after any navigation
+await tab.dom_cua.scroll({ x: 0, y: 600 });     // verify by reading scrollY back
+await tab.screenshot();                   // -> Uint8Array of image bytes, not a path
+await tab.dev.logs({});                   // -> [{ level, message, timestamp, url }]
+await tab.close();
 ```
 
+Two return shapes are worth knowing before you call them:
+
+- **`domSnapshot()` is not small.** 232 chars on `example.com`, but 805,388 chars
+  across 4,545 lines on a book-length page (measured 2026-09-01). "Accessibility
+  text, not a DOM dump" describes its *form*, not its size — do not call it blind
+  on an unknown page. `tab.ax` and `tab.content` are separate namespaces on the
+  same tab and may be cheaper; both are unmeasured.
+- **`screenshot()` returned JPEG, not PNG** — header `FF D8 FF E0`, 179,736 bytes
+  (measured 2026-09-01). Sniff the header rather than assuming a format, and note
+  it takes `{ fullPage, clip }` options.
+
 `logs` is the **only** member of `dev` — there is no network API on this path, and
-response bodies need raw CDP. Every other call returns `undefined` and is used for
-effect: do not test the return for success, verify by reading the page back or
-listing the tabs.
+response bodies need raw CDP. Every call that is not listed above as returning
+data returns `undefined` and is used for effect: do not test the return for
+success, verify by reading the page back or listing the tabs.
 
 `chrome.user.openTabs()` lists the whole profile (unlike session-scoped
 `tabs.list()`) and `chrome.user.claimTab(entry)` attaches to a tab this session
@@ -75,8 +86,8 @@ material and nothing in it is needed to start a run.
 | Symptom | Actually |
 |---|---|
 | No browser tool in the run's inventory; the four diagnostics all exit `0` | `codex` on `PATH` is a wrapper with its own `CODEX_HOME` |
-| Scrolled, then asserted, and the page looks unchanged | `dom_cua.scroll()` returns the success shape without scrolling |
-| `Detached while handling command` on `type()` or `click()` | a navigation invalidated the locator; waiting does not fix it |
+| Scrolled, then asserted, and the page looks unchanged | the page manages its own scrolling; `scroll()` returns the success shape either way |
+| `Detached while handling command` on `type()` or `click()` | a navigation invalidated the locator |
 | `browsers.get("chrome")` fails | one of four preconditions; the diagnostics name which |
 
 Anything else: report the failing step with its evidence rather than working

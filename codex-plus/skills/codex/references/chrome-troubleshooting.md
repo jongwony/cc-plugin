@@ -1,101 +1,60 @@
 # codex + Chrome — when it misbehaves
 
-Load this only after a codex browser run has actually failed. Setup, the
-operation surface and the symptom index are in `chrome.md`; nothing here is
-needed to start a run.
+Load this after a browser run has failed. Setup, the operation surface and the
+symptom index are in `chrome.md`.
 
-Each entry is a failure whose signal points somewhere other than its cause.
+Each entry is a failure that reports a cause other than its own.
 
 ## No browser tool in the run's inventory → wrong `CODEX_HOME`
 
 The most likely reason this path looks broken, and it is not a browser problem.
 `codex` on `PATH` may be a wrapper that redirects `CODEX_HOME` to a
-project-isolated home, and an isolated home carries no bundled marketplace — so
-the chrome plugin never loads and no run gets a browser capability.
-`scripts/codex-run.sh` resolves the binary with `command -v codex` and pins no
-home, so it inherits whatever the caller's `PATH` gives it. **The check is the
-caller's, before the run:**
+project-isolated home, which carries no bundled marketplace — so the chrome plugin
+never loads. `scripts/codex-run.sh` resolves the binary with `command -v codex`
+and pins no home, so **the check is the caller's, before the run**:
 
 ```bash
 command -v codex                 # a wrapper, or the real binary?
 codex plugin marketplace list    # openai-bundled must appear
 ```
 
-Measured 2026-08-30: `command -v codex` resolved to a two-line shell wrapper that
-sourced an `env.sh` setting a project-local `CODEX_HOME`; under that home
-`plugin marketplace list` showed only `openai-curated`, and no run got a browser
-capability. Under the real home it lists `openai-bundled` and the capability
-appears.
+Two signals mislead here:
 
-Two things make this hard to see:
+- **All four diagnostics still exit `0`.** They are shell `node` scripts, not
+  plugin tools, so they pass under either home.
+- **`config.toml` says the plugin is enabled.** You are reading
+  `~/.codex/config.toml` while the run reads another one.
 
-- **All four diagnostics still exit `0`** — true and irrelevant. They are shell
-  `node` scripts, not plugin tools, so they pass under either home.
-- **`config.toml` says the plugin is enabled** — you are reading
-  `~/.codex/config.toml` while the run reads another one. Confirm both are the
-  same home before drawing any conclusion.
-
-Ruled out by measurement, so do not re-check them: the Chrome extension
-(installed, enabled, native-host manifest correct), sandbox mode, working
-directory, project trust, and the `browser_use` / `plugins` / `in_app_browser`
-feature flags.
-
-Three probes all reporting "no browser capability" is one fault reproduced three
-times when every probe goes through the same `PATH` wrapper. Vary what sits
-*below* the suspected cause, not beside it.
+Do not re-check these — they are ruled out: the Chrome extension, its native-host
+manifest, sandbox mode, working directory, project trust, and the `browser_use` /
+`plugins` / `in_app_browser` flags.
 
 ## `scroll()` returned success and the page did not move
 
-**Not an API defect.** Measured 2026-09-01 on a plain static document
-(`scrollHeight: 145039`): `tab.dom_cua.scroll({x: 0, y: 600})` moved `scrollY`
-from `0` to `600`, and `y: -600` restored it. The call works.
-
-What fails is a page that manages its own scroll position. The earlier
-measurement (2026-08-30) used an infinite-scroll page, where the same call
-returned `undefined` while `scrollY` stayed `0` and screenshots and snapshots
-were unchanged, in both directions.
-
-The call returns the success shape either way, so **a flow that scrolls and then
-asserts can read a stale page as a real one.** Read `scrollY` back rather than
-trusting the return whenever the page does anything of its own with scrolling.
+A page that manages its own scroll position can swallow the scroll while the call
+still returns the success shape. Read `scrollY` back rather than trusting the
+return.
 
 ## `Detached while handling command` on an input
 
-**Page-specific, not an API defect** — the same shape the `scroll()` failure
-turned out to have. Measured 2026-09-01, fresh tab and a 2000 ms wait in every
-cell:
+Page-specific, not an API defect — ordinary form pages take input fine. On a page
+that does this, **every input path fails the same way**: `locator.type`,
+`locator.fill`, `locator.pressSequentially`, `cua.type`, `cua.keypress`,
+`dom_cua.type`, `dom_cua.keypress`. Coordinate focus still succeeds, so the field
+is reachable; the write is what fails. No wait length repairs it, and the locator
+is not stale — diagnostics report a match on one visible input.
 
-| Page | `playwright.locator(sel).type()` |
-|---|---|
-| `httpbin.org/forms/post` | text entered, read back |
-| `the-internet.herokuapp.com/inputs` | text entered, read back |
-| `the-internet.herokuapp.com/login` | `Detached while handling command`, value `""` |
+`locator.press()` is the one to watch: it can return **no error** and still leave
+the field empty. A call completing is not evidence that anything landed.
 
-**Do not vary the input path — that axis is measured out.** On the failing page,
-all eight of these detached with the same diagnostics and left the field empty:
-`locator.type`, `locator.fill`, `locator.pressSequentially`, `cua.type`,
-`cua.keypress`, `dom_cua.type`, `dom_cua.keypress`. Coordinate focus succeeded
-first in every case, so the field was reachable; the write is what failed.
-
-`locator.press("P")` is the one to watch: it returned **no error at all** and the
-value still read back `""`. On a page in this state, a call completing is not
-evidence that anything landed.
-
-Two earlier claims are withdrawn. A stale locator is not the cause — diagnostics
-reported `action_failed` with `matchCount: 1`, `visibleCount: 1`, so the locator
-matched one visible `<input>`. And no wait length repairs it: 500 ms and 2000 ms
-failed identically, as did retrying in a tab that had never failed before.
-
-So when this appears: the page is doing something the runtime cannot write
-through. Report it with the locator diagnostics and solve the flow another way
-rather than spending turns on the input call.
+Report it with the locator diagnostics and solve the flow another way rather than
+spending turns on the input call.
 
 ## `browsers.get("chrome")` fails → name the unmet precondition
 
-Four bundled diagnostics say which one it is. **Pass `--check` to the first two**:
-they report their finding on stdout but exit `0` regardless without it, so a run
-branching on the exit code alone reads "no browser installed" as success. The last
-two carry their finding in the exit code unconditionally.
+Four bundled diagnostics say which one. **Pass `--check` to the first two** — they
+report on stdout but exit `0` regardless without it, so branching on the exit code
+alone reads "no browser installed" as success.
 
 ```bash
 D="$HOME/.codex/plugins/cache/openai-bundled/chrome/latest/scripts"
@@ -105,11 +64,9 @@ node "$D/check-extension-installed.js"         --json   # 1 = installed not enab
 node "$D/check-native-host-manifest.js"        --json   # 1 = manifest missing or incorrect
 ```
 
-Report which precondition is unmet, quoting the `--json` field that decides it — a
+Report which precondition is unmet, quoting the `--json` field that decides it. A
 generic "browser unavailable" leaves the user to re-derive what this already
 knows.
 
-Exit-code semantics were read off the installed scripts under `latest`, a floating
-version directory: re-read them after a codex upgrade. The non-zero rows are
-read-off-the-source rather than observed — no precondition was deliberately broken
-when they were measured.
+`latest` is a floating version directory — re-read the exit codes off the scripts
+after a codex upgrade.

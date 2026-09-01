@@ -88,6 +88,15 @@ reads where the command lands and not how it is written. Leave the worktree firs
 from the project directory. The constraint is the launcher's own isolation and not the
 target: spawning into a worktree is what `--worktree` is for, and it stays available.
 
+**Where the `cd` lands is not governed by the destination's own rules.** A path-scoped rule
+binds the session working under that path, while spawning is decided from outside it, so the
+launcher never loads what the destination forbids — the guard fires later, against the
+worker's writes, once the worker is already there. The case that bites is a managed tree:
+`~/.claude/plugins/` is the plugin manager's to populate and is read-only across sessions, so
+a worker spawned there writes into it and `--worktree` leaves a registered worktree for the
+next update to contend with. Spawn into the project's own development checkout — for a
+marketplace, the repository the clone was made from rather than the clone.
+
 **The `--` is what ends option parsing.** Without it the brief is parsed as options and
 consumed silently — no error, no transcript, and a worker sits there idle having been told
 nothing. A brief that starts with a dash hits this on any launch. `--remote-control` opens a

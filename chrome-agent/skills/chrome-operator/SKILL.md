@@ -22,6 +22,14 @@ The Claude in Chrome extension is connected to this session: `tabs_context_mcp`
 returns a tab group rather than an error. No Chrome launch flag is involved —
 the extension drives the running Chrome and its real profile.
 
+**If the tools are absent from this context entirely** — `ToolSearch` finds no
+`mcp__claude-in-chrome__*` at all — this run cannot recover it: a subagent's
+tool set is fixed when it launches, so a browser connection completed after
+that never reaches here. Stop and report that, naming `/chrome` as where the
+connection is made, so the caller connects first and delegates again. Do not
+retry, and do not substitute a different way of reaching the page — a result
+from another surface is that surface's, not this task's.
+
 If the `mcp__claude-in-chrome__*` tools are deferred, load the set in **one**
 `ToolSearch` call:
 

@@ -13,8 +13,10 @@ background: false
 
 $ARGUMENTS
 
-If the line above is still a literal placeholder, the task arrived in the
-delegation message instead.
+This body arrives twice, and only one copy carries the task — the other renders
+the section above empty (measured: four newlines, never a placeholder string).
+An empty section here means the task is in the other copy or in the delegation
+message; read it there rather than asking for it.
 
 ## Prerequisite
 
@@ -34,7 +36,7 @@ If the `mcp__claude-in-chrome__*` tools are deferred, load the set in **one**
 `ToolSearch` call:
 
 ```
-select:mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrome__tabs_create_mcp,mcp__claude-in-chrome__tabs_close_mcp,mcp__claude-in-chrome__navigate,mcp__claude-in-chrome__read_page,mcp__claude-in-chrome__get_page_text,mcp__claude-in-chrome__find,mcp__claude-in-chrome__computer,mcp__claude-in-chrome__form_input,mcp__claude-in-chrome__read_console_messages
+select:mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrome__tabs_create_mcp,mcp__claude-in-chrome__tabs_close_mcp,mcp__claude-in-chrome__navigate,mcp__claude-in-chrome__read_page,mcp__claude-in-chrome__get_page_text,mcp__claude-in-chrome__find,mcp__claude-in-chrome__computer,mcp__claude-in-chrome__browser_batch,mcp__claude-in-chrome__form_input,mcp__claude-in-chrome__read_console_messages
 ```
 
 Add `read_network_requests`, `gif_creator`, or `javascript_tool` to the same
@@ -50,7 +52,9 @@ finding no group is the ordinary opening move — create and continue.
 
 `createIfEmpty` already produced an empty tab in the group — **navigate that
 one** rather than opening another. `tabs_create_mcp` is for the second tab
-onward, when the flow genuinely needs more than one. A fresh tab in a fresh
+onward, when the flow genuinely needs more than one. A task that says to open
+the page "in a new tab" is asking for the fresh-tab start this already is, and
+is satisfied without a second tab. A fresh tab in a fresh
 group inherits the profile's auth (measured: `github.com` loaded already
 logged in), so needing to be logged in is reached by navigating.
 
@@ -81,7 +85,8 @@ report which part of the original state was not carried.
 | navigate | `navigate` |
 | read page structure / rendered text | `read_page` / `get_page_text` |
 | locate an element | `find` |
-| click, scroll, key, screenshot | `computer` |
+| click, scroll, key, wait, screenshot | `computer` |
+| several actions in one call | `browser_batch` |
 | type into a field | `form_input` |
 | read console | `read_console_messages` (use `pattern` to filter) |
 | read requests | `read_network_requests` |
@@ -91,6 +96,14 @@ report which part of the original state was not carried.
 - **Re-read after every navigation.** A navigating click or a `navigate`
   leaves element references from before it stale; locate again (`find`,
   `read_page`) before the next action.
+- **Batch a run whose middle you do not need to see.** `browser_batch` carries
+  several actions in one call and the harness recommends it, but an E2E flow
+  earns its verdict from what it observed between steps. Batch a stretch that
+  is settled in advance — a form's fields, a known click path — and keep a
+  separate call wherever the next action depends on what the last one
+  rendered.
+- **A page that is not ready yet** is `computer` with `wait`, then re-read;
+  that is the one retry the errors rule allows.
 - **Assert on what rendered.** `get_page_text` / `read_page` is the assertion
   for an end-to-end flow — it is what the user sees. Reach for
   `read_network_requests` when the assertion is genuinely about a request: a

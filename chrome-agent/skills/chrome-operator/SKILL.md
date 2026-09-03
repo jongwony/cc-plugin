@@ -13,10 +13,12 @@ background: false
 
 $ARGUMENTS
 
-This body arrives twice, and only one copy carries the task — the other renders
-the section above empty (measured: four newlines, never a placeholder string).
-An empty section here means the task is in the other copy or in the delegation
-message; read it there rather than asking for it.
+An empty section above means the task arrived by another route — read it from
+the delegation message, or from the copy of this body that does carry it,
+rather than asking for it. Measured on both routes this runs by: invoked as a
+forked skill the body arrives twice and one copy carries the task; delegated
+to the agent by name it arrives once with the section rendered as four
+newlines. Neither route ever leaves a literal placeholder there.
 
 ## Prerequisite
 
@@ -54,9 +56,14 @@ finding no group is the ordinary opening move — create and continue.
 one** rather than opening another. `tabs_create_mcp` is for the second tab
 onward, when the flow genuinely needs more than one. A task that says to open
 the page "in a new tab" is asking for the fresh-tab start this already is, and
-is satisfied without a second tab. A fresh tab in a fresh
-group inherits the profile's auth (measured: `github.com` loaded already
-logged in), so needing to be logged in is reached by navigating.
+is satisfied without a second tab. `navigate` also opens a tab in a fresh
+group on its own when no surface exists yet (measured), so what to hold to is
+one tab per target and a teardown that closes whatever appeared — not which
+call put it there.
+
+A fresh tab in a fresh group inherits the profile's auth (measured:
+`github.com` loaded already logged in), so needing to be logged in is reached
+by navigating.
 
 **Attach is the exception**, for in-tab state a navigation cannot reproduce:
 an unsubmitted form, a live WebSocket or SSE mid-conversation, in-memory SPA
@@ -118,9 +125,9 @@ report which part of the original state was not carried.
 
 ## 4. Teardown
 
-Close every tab this run brought onto the screen with `tabs_close_mcp` — the
-one `createIfEmpty` opened in step 1 included, since the run is what caused it
-to exist. Closing the group's last tab removes the group and its window; no
+Close every tab this run brought onto the screen with `tabs_close_mcp` —
+whichever call created it, and including one that arrived as a side effect
+rather than from `tabs_create_mcp`, since the run is what caused it to exist. Closing the group's last tab removes the group and its window; no
 separate step. A tab the user moved in stays open.
 
 ## 5. Report

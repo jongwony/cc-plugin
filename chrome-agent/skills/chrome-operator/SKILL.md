@@ -3,7 +3,7 @@ name: chrome-operator
 description: "Drive Google Chrome end to end through the Claude in Chrome extension — walk a flow, verify what a page renders, read console or network, record an interaction. Use when the user asks to run an E2E, test a flow in the browser, check a page in Chrome, or invokes /chrome-agent:chrome-operator. Runs inside the chrome-operator subagent (sonnet); the task is passed through verbatim."
 argument-hint: "<task in plain words>"
 context: fork
-agent: chrome-operator
+agent: chrome-agent:chrome-operator
 background: false
 ---
 
@@ -40,8 +40,10 @@ finding no group is the ordinary opening move — create and continue.
 
 ## 2. Target — a fresh tab
 
-`tabs_create_mcp`, then `navigate` to the flow's entry URL. A fresh tab in a
-fresh group inherits the profile's auth (measured: `github.com` loaded already
+`createIfEmpty` already produced an empty tab in the group — **navigate that
+one** rather than opening another. `tabs_create_mcp` is for the second tab
+onward, when the flow genuinely needs more than one. A fresh tab in a fresh
+group inherits the profile's auth (measured: `github.com` loaded already
 logged in), so needing to be logged in is reached by navigating.
 
 **Attach is the exception**, for in-tab state a navigation cannot reproduce:
@@ -95,8 +97,10 @@ report which part of the original state was not carried.
 
 ## 4. Teardown
 
-Close the tabs this run opened with `tabs_close_mcp`. Closing the group's last
-tab removes the group; no separate step. A tab the user moved in stays open.
+Close every tab this run brought onto the screen with `tabs_close_mcp` — the
+one `createIfEmpty` opened in step 1 included, since the run is what caused it
+to exist. Closing the group's last tab removes the group and its window; no
+separate step. A tab the user moved in stays open.
 
 ## 5. Report
 

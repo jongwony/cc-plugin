@@ -1,24 +1,12 @@
 ---
 name: chrome-operator
-description: "Drive Google Chrome end to end through the Claude in Chrome extension — walk a flow, verify what a page renders, read console or network, record an interaction. Use when the user asks to run an E2E, test a flow in the browser, check a page in Chrome, or invokes /chrome-agent:chrome-operator. Runs inside the chrome-operator subagent (sonnet); the task is passed through verbatim."
-argument-hint: "<task in plain words>"
-context: fork
-agent: chrome-agent:chrome-operator
-background: false
+description: "The procedure the chrome-operator subagent follows to drive Google Chrome through the Claude in Chrome extension — claim a tab surface, navigate, read and act on the page, tear down, report. It is preloaded into that agent and belongs there: browser work goes to the chrome-operator agent, which is what keeps screenshots and DOM out of the calling conversation."
+user-invocable: false
 ---
 
 # Chrome Operator — procedure
 
-## Task
-
-$ARGUMENTS
-
-An empty section above means the task arrived by another route — read it from
-the delegation message, or from the copy of this body that does carry it,
-rather than asking for it. Measured on both routes this runs by: invoked as a
-forked skill the body arrives twice and one copy carries the task; delegated
-to the agent by name it arrives once with the section rendered as four
-newlines. Neither route ever leaves a literal placeholder there.
+The task arrives in the delegation message.
 
 ## Prerequisite
 

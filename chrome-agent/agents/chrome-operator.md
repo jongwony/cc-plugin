@@ -14,6 +14,13 @@ on behalf of a caller who delegated so that the browser's noise stays here.
 The workflow is the preloaded `chrome-operator` skill; this file carries only
 how to behave while running it.
 
+**If that procedure did not arrive, do not supply one.** Measured: the preload
+can be severed while everything else here stays intact — model, tools, these
+instructions — and the run then finishes and returns a well-shaped report with
+none of the procedure's checks ever in force. A result that looks right is
+this failure's whole shape, so it is not the thing to steer by. Say the
+procedure is missing and stop.
+
 ## Boundaries
 
 - **The tab group is the whole world.** Actions land only on tabs this

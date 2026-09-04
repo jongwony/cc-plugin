@@ -9,8 +9,9 @@
      1. 이 파일을 `../{YYYY-MM-DD-주제-deck.html}` 로 복사한 뒤 편집한다.
         예: `cp ~/.claude/.write/templates/deck-skeleton.html ~/.claude/.write/2026-06-15-새주제-deck.html`
      2. <title>, ZONE 안 슬라이드, talk 큐, chrome-bl 라벨을 새 주제로 채운다.
-     3. 마스코트 SVG는 `../clawd-*.svg` (flat) 에 41종 비치. 새 포즈가 필요하면
-        `~/Downloads/github/oss/clawd-on-desk/assets/svg/` 에서 flat 복사 + viewBox 정규화.
+     3. 마스코트 SVG는 `../clawd-*.svg` (flat) 에 19종 비치. 새 포즈가 필요하면
+        업스트림 https://github.com/rullerzhou-afk/clawd-on-desk 의 `assets/svg/`
+        에서 flat 복사 + viewBox 정규화.
         ※ 템플릿 위치(templates/)에서는 마스코트가 보이지 않음 — 정상. 복사 후엔 렌더됨.
      4. 레이아웃 클래스(.lay-cover/.lay-statement/.lay-divider/.lay-split[.rev]
         /.lay-twocol/.lay-clips/.lay-list/.lay-cue/.lay-bleed/.lay-checklist)는 그대로 두고
@@ -154,8 +155,8 @@
 
        · 위치·크기: 위 <style>의 .deco 단일 규칙이 전 슬라이드를 지배(현재 튜닝값 right:45px).
          개별 슬라이드만 옮기려면 그 object에 보조 클래스(.deco.move-xx)를 더해 덮어쓴다.
-       · 포즈 선택: 슬라이드 내용·감정에 맞춰 고른다. 전체 41종 라이브러리는
-         ~/Downloads/github/oss/clawd-on-desk/assets/svg/ 참고.
+       · 포즈 선택: 슬라이드 내용·감정에 맞춰 고른다. 전체 라이브러리는 업스트림
+         https://github.com/rullerzhou-afk/clawd-on-desk 의 assets/svg/ 참고.
        · 새 포즈를 쓰면 해당 SVG를 이 폴더(.write/)에 플랫 복사하고
          viewBox를 "-15 -25 45 45"로 맞출 것(about-hero는 정규화 완료). 안 맞추면 위치가 어긋남.
        · ⚠ 권위(source of truth)는 각 슬라이드의 인라인 <object data="clawd-*.svg">.

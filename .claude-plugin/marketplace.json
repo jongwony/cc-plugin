@@ -40,11 +40,6 @@
       "description": "macOS sleep prevention toggle with battery and network monitoring"
     },
     {
-      "name": "clawd-toggle",
-      "source": "./clawd-toggle",
-      "description": "Toggle clawd-on-desk (Electron desktop pet) as a tracked background process"
-    },
-    {
       "name": "safe-uninstall",
       "source": "./safe-uninstall",
       "description": "Safely identify, investigate, and remove macOS programs with risk-assessed execution"
@@ -63,11 +58,6 @@
       "name": "remote-tmux",
       "source": "./remote-tmux",
       "description": "`claude remote-control` toolkit: spawn one-off backgrounded sessions, app-reachable wherever the launch takes --remote-control, or keep a tmux-tracked self-restarting `--spawn worktree` pool host alive per project"
-    },
-    {
-      "name": "excalidraw-host",
-      "source": "./excalidraw-host",
-      "description": "Self-host the official open-source Excalidraw whiteboard (clone + Vite dev server, no Docker)"
     },
     {
       "name": "make-deck",

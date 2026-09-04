@@ -65,9 +65,9 @@ Faithful to the source, or reframed toward the audience's actual goal?
 ## Mascot pose library (asset note)
 
 Bundled poses live flat in `../assets/clawd-*.svg` (19 normalized poses, viewBox
-`-15 -25 45 45`). For more poses, the full library is at
-`~/Downloads/github/oss/clawd-on-desk/assets/svg/` (47 raw poses) — **normalize the
-viewBox before bundling** a new one. Neutral poses suitable for most decks:
+`-15 -25 45 45`). For more poses, the full library is upstream at
+<https://github.com/rullerzhou-afk/clawd-on-desk> under `assets/svg/` (47 raw
+poses) — **normalize the viewBox before bundling** a new one. Neutral poses suitable for most decks:
 `about-hero`, `mini-enter`, `working-thinking`, `working-typing`, `working-juggling`,
 `working-ultrathink`, `idle-reading`, `idle-bubble`, `headphones-groove`, `react-double`,
 `mini-happy`.

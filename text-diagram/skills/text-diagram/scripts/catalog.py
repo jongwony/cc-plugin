@@ -108,13 +108,6 @@ SCENARIOS = [
         {"focus": {"test"}},
     ),
     (
-        "ascii",
-        "ASCII fallback",
-        "Same graph with `--ascii`, for terminals that mangle UTF-8 box characters.",
-        "plan -> build, test, ship",
-        {"ascii_mode": True},
-    ),
-    (
         "cjk",
         "CJK labels misalign — a known limit",
         "Box width is len(label) + 4, and CJK characters occupy two terminal cells, "
@@ -160,8 +153,6 @@ def build():
         nodes, edges = parse_edges(text)
         drawing = render(nodes, edges, width_budget=WIDTH, **kw)
         flags = []
-        if kw.get("ascii_mode"):
-            flags.append("--ascii")
         if kw.get("focus"):
             flags.append("--focus " + ",".join(sorted(kw["focus"])))
         out += [

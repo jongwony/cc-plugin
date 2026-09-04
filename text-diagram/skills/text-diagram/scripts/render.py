@@ -3,7 +3,7 @@
 # requires-python = ">=3.8"
 # dependencies = []
 # ///
-"""Render a directed graph (DAG) as a layered box-art / ASCII diagram in the terminal.
+"""Render a directed graph (DAG) as a layered box-art diagram in the terminal.
 
 Zero external dependencies — pure stdlib, so it works on any machine with uv/python.
 Best for hub-style fan-out / fan-in (the common workflow shape: one source feeding N
@@ -23,7 +23,6 @@ blocks, and `digraph foo {` / `}` wrappers are stripped. Blank lines and `#` com
 are ignored.
 
 Flags:
-    --ascii     use +-|  instead of unicode box characters (for non-UTF8 terminals)
     --gutter N  horizontal space between sibling boxes (default 3)
 """
 import sys
@@ -90,13 +89,7 @@ def compute_layers(nodes, edges):
     return layer
 
 
-def junction(up, down, left, right, ascii_mode):
-    if ascii_mode:
-        if not up and not down:
-            return "-"
-        if not left and not right:
-            return "|"
-        return "+"
+def junction(up, down, left, right):
     return {
         (1, 0, 1, 1): "┴", (1, 0, 1, 0): "┘", (1, 0, 0, 1): "└",
         (0, 1, 1, 1): "┬", (0, 1, 1, 0): "┐", (0, 1, 0, 1): "┌",
@@ -106,7 +99,7 @@ def junction(up, down, left, right, ascii_mode):
     }.get((up, down, left, right), "┼")
 
 
-def render(nodes, edges, ascii_mode=False, gutter=3, focus=(), width_budget=None):
+def render(nodes, edges, gutter=3, focus=(), width_budget=None):
     if not nodes:
         return "(empty graph)"
     layer = compute_layers(nodes, edges)
@@ -151,11 +144,11 @@ def render(nodes, edges, ascii_mode=False, gutter=3, focus=(), width_budget=None
     top_row = lambda L: L * (BOX_H + BAND_H)
 
     # draw boxes
-    h, v = ("-", "|") if ascii_mode else ("─", "│")
+    v = "│"
     # Heavy strokes are the only emphasis channel: assistant output reaches the
     # terminal as plain characters, so no colour is available to mark a focus.
-    light = ("-", "|", "+", "+", "+", "+") if ascii_mode else ("─", "│", "┌", "┐", "└", "┘")
-    heavy = ("=", "|", "+", "+", "+", "+") if ascii_mode else ("━", "┃", "┏", "┓", "┗", "┛")
+    light = ("─", "│", "┌", "┐", "└", "┘")
+    heavy = ("━", "┃", "┏", "┓", "┗", "┛")
     for L, r in enumerate(rows):
         t = top_row(L)
         for n in r:
@@ -188,14 +181,13 @@ def render(nodes, edges, ascii_mode=False, gutter=3, focus=(), width_budget=None
         for c in range(lo, hi + 1):
             up = c in parents
             down = c in children
-            grid[bus][c] = junction(up, down, c > lo, c < hi, ascii_mode)
+            grid[bus][c] = junction(up, down, c > lo, c < hi)
         for c in children:
             put(drop, c, v)
 
     out = "\n".join("".join(row).rstrip() for row in grid)
     if cross:
-        arrow = "-->" if ascii_mode else "⇢"
-        note = "\n".join(f"  {a} {arrow} {b}" for a, b in cross)
+        note = "\n".join(f"  {a} ⇢ {b}" for a, b in cross)
         out += f"\n\ncross-layer edges (not drawn above):\n{note}"
     if width_budget and canvas_w > width_budget:
         widest = max(rows, key=line_w)
@@ -209,9 +201,8 @@ def render(nodes, edges, ascii_mode=False, gutter=3, focus=(), width_budget=None
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Render a DAG as layered box-art ASCII.")
+    ap = argparse.ArgumentParser(description="Render a DAG as layered box-art.")
     ap.add_argument("file", nargs="?", help="edge-list file (default: stdin)")
-    ap.add_argument("--ascii", action="store_true", help="use +-| instead of box chars")
     ap.add_argument("--gutter", type=int, default=3, help="space between sibling boxes")
     ap.add_argument("--focus", default="",
                     help="comma-separated node(s) to draw with heavy strokes; keep it to one")
@@ -225,7 +216,7 @@ def main():
     # Read the budget at invocation: the terminal's own width is the constraint,
     # and 80 is only what to fall back to when it cannot be read.
     width = args.width if args.width is not None else shutil.get_terminal_size((80, 24)).columns
-    print(render(nodes, edges, ascii_mode=args.ascii, gutter=args.gutter,
+    print(render(nodes, edges, gutter=args.gutter,
                  focus=focus, width_budget=width))
 
 

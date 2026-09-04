@@ -18,9 +18,8 @@ renderer change has moved any output.
 | 7 | [Edge that skips a layer](#cross-layer) | `start -> end` jumps past the middle. |
 | 8 | [Back edge](#cycle) | Layering is cycle-safe (back edges contribute 0), so this lays out — but it reads as a tree, not as a loop. |
 | 9 | [One focal node](#focus) | Heavy strokes carry emphasis because assistant output reaches the terminal as plain characters and no colour survives. |
-| 10 | [ASCII fallback](#ascii) | Same graph with `--ascii`, for terminals that mangle UTF-8 box characters. |
-| 11 | [CJK labels misalign — a known limit](#cjk) | Box width is len(label) + 4, and CJK characters occupy two terminal cells, so these boxes come out narrower than their contents and the connectors drift. |
-| 12 | [Pasted DOT body](#dot-paste) | Quotes, trailing semicolons, `[label=. |
+| 10 | [CJK labels misalign — a known limit](#cjk) | Box width is len(label) + 4, and CJK characters occupy two terminal cells, so these boxes come out narrower than their contents and the connectors drift. |
+| 11 | [Pasted DOT body](#dot-paste) | Quotes, trailing semicolons, `[label=. |
 
 <a id="fan"></a>
 
@@ -278,31 +277,6 @@ plan -> build, test, ship
 ┌───────┐   ┏━━━━━━┓   ┌──────┐
 │ build │   ┃ test ┃   │ ship │
 └───────┘   ┗━━━━━━┛   └──────┘
-```
-
-<a id="ascii"></a>
-
-## ASCII fallback
-
-Same graph with `--ascii`, for terminals that mangle UTF-8 box characters.
-
-**Input** — `--ascii`
-
-```
-plan -> build, test, ship
-```
-
-**Output**
-
-```
-           +------+
-           | plan |
-           +------+
-    +----------++----------+
-    |           |          |
-+-------+   +------+   +------+
-| build |   | test |   | ship |
-+-------+   +------+   +------+
 ```
 
 <a id="cjk"></a>

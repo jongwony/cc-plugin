@@ -48,8 +48,7 @@ Four checks, in order. The first two decide *whether* to draw; the last two deci
 
 Assistant output reaches the terminal as plain characters — escape sequences are consumed
 before they become cells, so **no colour is available to mark a focal node**. Emphasis is
-carried by stroke weight instead: `--focus <node>` draws that box with `┏━┓┃┗┛` (`=` under
-`--ascii`).
+carried by stroke weight instead: `--focus <node>` draws that box with `┏━┓┃┗┛`.
 
 **Use one focal node.** Heavy strokes contrast far less than colour would, so the signal
 dies faster: mark five of six boxes and "focus" stops meaning anything. If two things
@@ -74,7 +73,7 @@ principle: a skill must work even when an optional external tool is absent).
    (`cpanm Graph::Easy`, or `apt install libgraph-easy-perl`), so installation is a real
    cost — do not push it for simple graphs.
 
-3. **Hand-ASCII heredoc (one-off).** For a three- or four-node sketch you will never reuse,
+3. **Hand-drawn heredoc (one-off).** For a three- or four-node sketch you will never reuse,
    just write the boxes by hand in a `cat <<'EOF'` block. Faster than any tool when the
    graph is trivial and disposable.
 
@@ -108,7 +107,6 @@ also tolerant of pasted DOT.
 
 | Flag | Effect |
 |------|--------|
-| `--ascii` | Use `+ - |` instead of unicode box characters — for terminals that mangle UTF-8. |
 | `--gutter N` | Horizontal space between sibling boxes (default `3`). Widen it if labels look cramped. |
 | `--focus A[,B]` | Draw the named node(s) with heavy strokes. Keep it to one — see *Emphasis* above. |
 | `--width N` | Column budget to warn past. Defaults to the detected terminal width (80 when undetectable); `0` disables the check. |
@@ -209,7 +207,7 @@ inline — so a few input boundaries are accepted rather than engineered around:
   connectors drift. Measuring display width instead would put a third measurer alongside
   the harness and the terminal, which already disagree in edge cases — so the renderer
   stays with one simple rule and documents the limit rather than chasing agreement it
-  cannot guarantee. Use ASCII/Latin labels when alignment matters.
+  cannot guarantee. Use single-cell Latin labels when alignment matters.
 - **Very deep chains recurse.** Layering is computed recursively, so a single chain longer
   than Python's recursion limit (~1000 nodes) raises `RecursionError`. Graphs that fit in a
   terminal never approach this; for machine-scale DAGs, use graphviz.
@@ -221,6 +219,6 @@ inline — so a few input boundaries are accepted rather than engineered around:
 
 | File | Purpose |
 |------|---------|
-| `scripts/render.py` | Layered box-art / ASCII renderer. Stdlib-only, runs via `uv run`. Reads an edge list from stdin or a file. |
+| `scripts/render.py` | Layered box-art renderer. Stdlib-only, runs via `uv run`. Reads an edge list from stdin or a file. |
 | `scripts/catalog.py` | Regenerates the rendering catalog from its own scenario list. `--write` to rebuild, `--check` to fail on drift. |
 | `references/catalog.md` | Every catalogued scenario rendered at 80 columns — generated, not hand-written. |

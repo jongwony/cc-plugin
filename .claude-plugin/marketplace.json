@@ -35,11 +35,6 @@
       "description": "Media download via yt-dlp with QR decode and metadata extraction"
     },
     {
-      "name": "cdp-attach",
-      "source": "./cdp-attach",
-      "description": "Attach to running CDP instance for browser automation"
-    },
-    {
       "name": "caffeinate",
       "source": "./caffeinate",
       "description": "macOS sleep prevention toggle with battery and network monitoring"

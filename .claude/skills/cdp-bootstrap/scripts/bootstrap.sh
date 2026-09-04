@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bootstrap.sh — start Xvfb + Chromium so cdp-attach can connect.
+# bootstrap.sh — start Xvfb + Chromium exposing a CDP port for any client.
 # Linux only. Start-only lifecycle. Idempotent: skips if CDP already up.
 set -euo pipefail
 
@@ -10,7 +10,7 @@ IGNORE_CERT_ERRORS=0
 
 usage() {
   cat <<'USAGE'
-bootstrap.sh — start Xvfb + Chromium so cdp-attach can connect.
+bootstrap.sh — start Xvfb + Chromium exposing a CDP port for any client.
 Linux only. Start-only lifecycle. Idempotent: skips if CDP already up.
 
 Usage: bootstrap.sh [--port N] [--display N] [--chrome PATH] [--ignore-cert-errors]
@@ -48,9 +48,8 @@ if EXISTING=$(curl -sf "$VERSION_URL" 2>/dev/null); then
 fi
 
 # --- Preflight ---
-[ "$(uname -s)" = "Linux" ] || die "Linux only (uname=$(uname -s)). Use cdp-attach's native launch on macOS."
+[ "$(uname -s)" = "Linux" ] || die "Linux only (uname=$(uname -s)). See references/cdp-endpoints.md for the macOS native launch."
 command -v Xvfb >/dev/null || die "Xvfb not found. Install: apt install xvfb"
-command -v uv >/dev/null   || die "uv not found. Install: https://docs.astral.sh/uv/getting-started/installation/"
 command -v curl >/dev/null || die "curl not found."
 
 if [ -z "$CHROME" ]; then
@@ -103,9 +102,9 @@ for _ in $(seq 1 75); do
     printf '%s\n' "$VERSION" | head -3 >&2
     cat >&2 <<HINT
 
-Next step:
-  uv run --quiet --script \$CLAUDE_PLUGIN_ROOT/cdp-attach/scripts/v1_core.py select 0
-  uv run --quiet --script \$CLAUDE_PLUGIN_ROOT/cdp-attach/scripts/v1_core.py doctor
+Verify from the client side:
+  curl -sf http://127.0.0.1:${PORT}/json/version   # "Browser" must not contain HeadlessChrome
+  curl -sf http://127.0.0.1:${PORT}/json/list      # non-empty array
 HINT
     exit 0
   fi

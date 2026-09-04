@@ -60,11 +60,6 @@
       "description": "`claude remote-control` toolkit: spawn one-off backgrounded sessions, app-reachable wherever the launch takes --remote-control, or keep a tmux-tracked self-restarting `--spawn worktree` pool host alive per project"
     },
     {
-      "name": "make-deck",
-      "source": "./make-deck",
-      "description": "Generate self-contained HTML slide decks from organized notes (progressive dimension elicitation, bundled layout-catalog skeleton, mascot decorators)"
-    },
-    {
       "name": "hourly-digest",
       "source": "./hourly-digest",
       "description": "Consolidated hourly Slack and Gmail digest with /loop scheduling"

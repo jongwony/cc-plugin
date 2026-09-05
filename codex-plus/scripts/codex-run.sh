@@ -12,12 +12,20 @@ set -euo pipefail
 CDPATH=
 
 # Defaults
-readonly DEFAULT_MODEL="gpt-5.6-sol"
-# high is a floor, not a ceiling. Raising effort is a per-call judgment made
-# from the task in front of the caller; a default cannot read the task, so
-# pinning the top of the ladder here spends it on every run that never
-# needed it. Callers escalate to xhigh or max deliberately.
-readonly DEFAULT_EFFORT="high"
+readonly DEFAULT_MODEL="gpt-6-astra"
+# medium is a starting point, not a ceiling. Raising effort is a per-call
+# judgment made from the task in front of the caller; a default cannot read the
+# task, so pinning the top of the ladder here spends it on every run that never
+# needed it. OpenAI's own guidance for the current generation is to start at
+# medium and compare against neighbours on representative work rather than
+# assume the highest effort wins. astra is a more capable model than the sol
+# default it replaced, so the same work lands at a lower rung than it used to.
+# Callers escalate to high, xhigh or max deliberately.
+#
+# astra's ladder is low|medium|high|xhigh|max. It has no `none` rung, unlike
+# the gpt-5.6 family — passing one is codex's error to report, not this
+# script's to pre-empt.
+readonly DEFAULT_EFFORT="medium"
 # workspace-write, not read-only, for one reason: the network. codex exposes no
 # network switch under read-only — the toggle lives in the
 # sandbox_workspace_write table and does nothing while the mode is read-only
@@ -40,9 +48,10 @@ usage() {
 Usage: codex-run.sh [options] <prompt_file>
 
 Options:
-  -m, --model MODEL      Model name (default: gpt-5.6-sol)
-  -r, --effort EFFORT    Reasoning effort: medium|high|xhigh|max (default: high,
-                         a floor rather than a ceiling — escalate per task)
+  -m, --model MODEL      Model name (default: gpt-6-astra)
+  -r, --effort EFFORT    Reasoning effort: low|medium|high|xhigh|max (default:
+                         medium, a starting point rather than a ceiling —
+                         escalate per task. astra has no `none` rung)
   -s, --sandbox SANDBOX  Sandbox: read-only|workspace-write|danger-full-access
                          (default: workspace-write, which this wrapper always
                          runs with network access enabled, and which already
@@ -67,7 +76,7 @@ no most-recent fallback, so it is never a race under parallel sessions.
 
 Examples (<scratchpad> = the calling session's scratchpad directory):
   codex-run.sh <scratchpad>/codex_prompt_a3f9.txt
-  codex-run.sh -m gpt-5.6-terra -r xhigh <scratchpad>/codex_prompt_a3f9.txt
+  codex-run.sh -m gpt-5.6-sol -r xhigh <scratchpad>/codex_prompt_a3f9.txt
   codex-run.sh -S 019e3eff-c191-7401-bffb-bb8c31ac37c7 <scratchpad>/codex_prompt_a3f9.txt
 USAGE
   exit "${1:-0}"

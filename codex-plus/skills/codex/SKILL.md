@@ -78,7 +78,7 @@ When the delegated task is image generation or image editing:
    Models:
    - `gpt-6-astra` — the default, used whenever no model was named. OpenAI's most capable model, for complex and demanding end-to-end work. It is also what `~/.codex/config.toml` already selects for interactive codex, so a run through this wrapper and a run the user starts by hand now land on the same model.
    - `gpt-5.6-sol` — the previous default; a reliable agentic workhorse for everyday tasks. The pick when capability is not what the task is short of, and astra's per-token cost is not worth paying.
-   - `gpt-5.6-terra` — balanced agentic coding model; lighter usage, faster than Sol, same effort ladder.
+   - `gpt-5.6-terra` — balances intelligence and cost: half sol's price ($2/$12 against $4/$20) one reasoning tier below it, with the same effort ladder and the same 1.05M context. Both model cards rate speed "Fast", so reach for terra to spend less, not to finish sooner.
    - `gpt-5.6-luna` — a "Fast and affordable agentic coding model" in codex's own registry; the cost-efficient pick for browser / computer-use E2E runs and implementation work that writes a lot of code, usually at `xhigh`.
 
    Reasoning effort is selected once and applied identically to all chosen models. `medium` is the wrapper's default and the starting point here — raise it to `high`, `xhigh` or `max` where the task's reasoning depth warrants. astra's ladder is `low|medium|high|xhigh|max` and has no `none` rung. `low` exists but is for latency-bound work; runs from this skill are unattended, where a cheap wrong answer costs a resume rather than saving time.

@@ -5,20 +5,29 @@ Operative notes for prompts this skill sends to `gpt-6-astra` through
 tool-holding** run — the shape `codex-run.sh` produces. General prompt craft
 that did not change with the generation is not repeated here.
 
-Sourced from OpenAI's model guidance (`developers.openai.com/api/docs/guides/latest-model`,
-section "Using GPT-6 Astra"), the API docs index, the Codex subagents page, and
-the reasoning guide. Claims that could not be read off an OpenAI page are marked
-`[secondary]`.
+Sources, and how each line is marked:
+
+- **Unmarked** — read off an OpenAI page: the model card
+  (`developers.openai.com/api/docs/models/gpt-6-astra`), the model guidance
+  (`.../guides/latest-model`, section "Using GPT-6 Astra"), or the Codex
+  subagents page (`developers.openai.com/codex/subagents`).
+- **`[secondary]`** — not found on an OpenAI page; taken from third-party
+  write-ups. Treat as a lead, not a citation.
+- **`[applied]`** — extended from an OpenAI statement to this skill's situation.
+  The source carries the general claim; the consequence drawn for an unattended
+  `codex exec` run is drawn here and is not in the source.
 
 ## Model facts
 
-- Effort ladder: `low` `medium` `high` `xhigh` `max`. **No `none` rung** — the
-  gpt-5.6 family has one, astra does not. `[secondary]`
-- Context window ~1,050,000 tokens; max output ~128,000 tokens. `[secondary]`
+- Effort ladder: `low` `medium` `high` `xhigh` `max`. **No `none` rung** — sol,
+  terra and luna each support `none` and default to `medium`; astra drops it.
+- Context window 1,050,000 tokens; max output 128,000 tokens.
 - Knowledge cutoff 2026-04-30 — anything later needs retrieval, and the prompt
-  should say so rather than assuming the model will notice. `[secondary]`
-- Price ~$10 in / ~$50 out per 1M tokens. Materially above the gpt-5.6 tiers, so
-  a run that only needs a workhorse belongs on `gpt-5.6-sol`. `[secondary]`
+  says so rather than assuming the model will notice.
+- Price per 1M tokens: $10 in, $1 cached in, $12.50 cache writes, $50 out —
+  2.5x sol on both ends, so a run that only needs a workhorse belongs on
+  `gpt-5.6-sol`. Prompts over 272K input tokens bill at 2x input and 1.5x output
+  for the whole request.
 - Stop sending `temperature`, `top_p`, `top_logprobs`. `codex-run.sh` never sent
   them, so nothing in this skill changes — recorded so a future flag is not
   added. `[secondary]`
@@ -95,5 +104,7 @@ the reasoning guide. Claims that could not be read off an OpenAI page are marked
   model and tool work. Ask for them when the work genuinely splits.
 - A prompt that asks for subagents says how to divide the work, whether codex
   waits for all of them before continuing, and what each returns.
-- Fast scans belong on a cheaper model (`gpt-5.6-terra`) even when the parent is
-  astra.
+- Fast scans belong on a cheaper model; the page's own example is
+  `gpt-5.6-terra`. `[applied]` — that example contrasts terra with a
+  higher-effort `gpt-5.6` config and predates astra, so its holding with astra as
+  the parent is drawn here rather than stated there.

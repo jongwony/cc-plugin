@@ -101,6 +101,18 @@ Each plugin installs whether or not its prerequisite is present. The macOS-only
 plugins are opt-in: the script names them in `SKIP_PLUGINS`, checks that list
 against the manifest on every run, and prints the install command for each.
 
+A Claude Code cloud environment takes one line in its setup-script field:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/cloud-setup.sh | bash
+```
+
+`scripts/cloud-setup.sh` runs both marketplaces' installers, adds the opt-in
+epistemic-protocols plugins and the Codex CLI, and registers
+`scripts/codex-auth-restore.sh` as a user-level SessionStart hook: the
+environment's variables reach the session but not the setup script, so the
+Codex login is restored from `CODEX_AUTH_JSON_B64` there.
+
 ## Workflow
 
 Test inside Claude Code: `/plugin marketplace add <repo>`, then `/plugin install

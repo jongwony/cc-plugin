@@ -87,6 +87,18 @@ against the merge-base with the PR base. A later commit on a branch therefore
 needs its own bump to pass the hook after CI is already satisfied by an earlier
 one, so such a branch carries one bump per such commit.
 
+## Install
+
+Every plugin in the marketplace, in one line:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/install.sh | bash
+```
+
+`scripts/install.sh` reads the plugin list from `.claude-plugin/marketplace.json`,
+so adding or retiring a plugin needs no edit to it, and re-running it is safe.
+Each plugin installs whether or not its prerequisite is present.
+
 ## Workflow
 
 Test inside Claude Code: `/plugin marketplace add <repo>`, then `/plugin install

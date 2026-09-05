@@ -58,9 +58,6 @@ the change.
   philosophy). Skill = what to do (workflow, procedures, commands). A
   `skills:`-loaded skill is the single home for its workflow; the agent adds only
   behavior it does not carry.
-- **Gap tracking (Syneidesis).** Mark unverified assumptions/procedures with a
-  `[Gap:Type]` prefix on the tracked task — `Procedural`, `Assumption`,
-  `Consideration`.
 - **Importing external-tool capability — 3 tests, all required.** (1)
   *Irreducibility*: not reproducible from existing primitives (ergonomic wrappers
   stay inside scripts). (2) *Environment neutrality*: a protocol-level capability

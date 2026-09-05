@@ -1,7 +1,8 @@
 #!/bin/bash
 # Provision a Claude Code cloud environment: both plugin marketplaces, the
-# opt-in epistemic-protocols plugins, the Codex CLI, and a SessionStart hook
-# that restores the Codex login from CODEX_AUTH_JSON_B64 at each session start.
+# opt-in epistemic-protocols plugins, the Codex CLI with the Tavily MCP server
+# registered, and a SessionStart hook that restores the Codex login from
+# CODEX_AUTH_JSON_B64 at each session start.
 # Idempotent: safe to re-run in a container that already has any of these.
 #
 # Paste this one line into the environment's "Setup script" field:
@@ -11,7 +12,10 @@
 # launches; it must exit zero or the session fails to start, and it should
 # finish within about five minutes. Environment variables are not in its
 # process env — that is why the Codex login is restored by the hook below
-# rather than here — so anything that needs them belongs in the hook.
+# rather than here — so anything that needs them belongs in the hook. The
+# Tavily registration is the exception that stays here: Codex reads the key
+# from the session's TAVILY_API_KEY at call time, so no value is needed now
+# and none is written to disk.
 
 set -o pipefail
 
@@ -97,4 +101,15 @@ if [ -n "$codex_pid" ]; then
   command -v codex >/dev/null 2>&1 || { echo "Error: Codex CLI is still not on PATH after install." >&2; exit 1; }
 fi
 rm -f "$codex_log"
+
+# --- Tavily MCP for Codex: the remote server, authenticated by a bearer token
+# that Codex reads from TAVILY_API_KEY when it launches the server. That is
+# how the epistemic-cooperative goal-research skill reaches external search
+# from inside a Codex session. `codex mcp add` overwrites an existing entry
+# of the same name, so a re-run converges on this shape.
+if codex mcp add tavily --url https://mcp.tavily.com/mcp/ --bearer-token-env-var TAVILY_API_KEY < /dev/null; then
+  echo "Registered the Tavily MCP server for Codex; set TAVILY_API_KEY in the environment's variables to enable it."
+else
+  echo "Error: could not register the Tavily MCP server for Codex." >&2
+fi
 echo "Cloud environment ready."

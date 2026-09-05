@@ -105,10 +105,12 @@ curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/clo
 ```
 
 `scripts/cloud-setup.sh` runs both marketplaces' installers, adds the opt-in
-epistemic-protocols plugins and the Codex CLI, and registers
-`scripts/codex-auth-restore.sh` as a user-level SessionStart hook: the
-environment's variables reach the session but not the setup script, so the
-Codex login is restored from `CODEX_AUTH_JSON_B64` there.
+epistemic-protocols plugins and the Codex CLI, registers Tavily's remote MCP
+server for Codex (the key is read from `TAVILY_API_KEY` at call time, so the
+setup script writes no secret), and registers `scripts/codex-auth-restore.sh`
+as a user-level SessionStart hook: the environment's variables reach the
+session but not the setup script, so the Codex login is restored from
+`CODEX_AUTH_JSON_B64` there.
 
 ## Workflow
 

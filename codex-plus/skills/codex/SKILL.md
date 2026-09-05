@@ -71,16 +71,17 @@ When the delegated task is image generation or image editing:
 - Use `references/image-gen-models-prompting-guide.ipynb` only as the backing reference for model choice, prompt structure, text rendering, edits, and multi-image workflows.
 
 ## Running a Task
-1. Run on `gpt-5.6-sol` at `high` unless the caller named otherwise. Designation normally arrives upstream, in the request itself, so a model or effort already named there IS the answer — do not re-ask it.
+1. Run on `gpt-6-astra` at `medium` unless the caller named otherwise. Designation normally arrives upstream, in the request itself, so a model or effort already named there IS the answer — do not re-ask it.
 
    Ask (via `AskUserQuestion`, a **single prompt with two questions**; model selection is **multi-select**, so several models can run in parallel) only where the choice is genuinely open: neither model nor effort was named, and the task's shape does not settle them.
 
    Models:
-   - `gpt-5.6-sol` — the default, used whenever no model was named.
-   - `gpt-5.6-terra` — balanced 5.6 variant; lighter usage, faster than Sol, same effort ladder.
+   - `gpt-6-astra` — the default, used whenever no model was named. OpenAI's most capable model, for complex and demanding end-to-end work. It is also what `~/.codex/config.toml` already selects for interactive codex, so a run through this wrapper and a run the user starts by hand now land on the same model.
+   - `gpt-5.6-sol` — the previous default; a reliable agentic workhorse for everyday tasks. The pick when capability is not what the task is short of, and astra's per-token cost is not worth paying.
+   - `gpt-5.6-terra` — balanced agentic coding model; lighter usage, faster than Sol, same effort ladder.
    - `gpt-5.6-luna` — a "Fast and affordable agentic coding model" in codex's own registry; the cost-efficient pick for browser / computer-use E2E runs and implementation work that writes a lot of code, usually at `xhigh`.
 
-   Reasoning effort is selected once and applied identically to all chosen models. `high` is the wrapper's default and the floor here — raise it to `xhigh` or `max` where the task's reasoning depth warrants, and do not go below `high`.
+   Reasoning effort is selected once and applied identically to all chosen models. `medium` is the wrapper's default and the starting point here — raise it to `high`, `xhigh` or `max` where the task's reasoning depth warrants. astra's ladder is `low|medium|high|xhigh|max` and has no `none` rung. `low` exists but is for latency-bound work; runs from this skill are unattended, where a cheap wrong answer costs a resume rather than saving time.
 
 2. Select sandbox mode. Omitting `-s` gives `workspace-write` **with network access** — codex offers no network under `read-only` at all, so this is the only mode short of full access that has any. Pass `-s read-only` when a run must neither touch the tree nor reach off-machine; `-s danger-full-access` only when it must write outside the workspace. Because the default already permits writes, what bounds a run that is meant to only read is the role its prompt declares — state it.
 3. Craft prompt per Context Classification and Prompt Template — classify context, write to `<scratchpad>/codex_prompt_<suffix>.txt`.
@@ -104,7 +105,7 @@ Base patterns:
 
 Modifiers, added to any base pattern above:
 - Different working directory — `-C <DIR>`; pass it again on resume (step 6)
-- Model and effort — `-m gpt-5.6-terra`, `-r xhigh` (effort defaults to `high`; `-r` raises it)
+- Model and effort — `-m gpt-5.6-sol`, `-r xhigh` (effort defaults to `medium`; `-r` raises it)
 - Capture the answer to a file — `-o <FILE>` writes codex's final message to FILE deterministically
 
 ## Following Up
@@ -117,22 +118,24 @@ After `codex` completes, use `AskUserQuestion` to confirm next steps. Restate mo
 
 ## Reference Guide
 
-Read the reference when detailed GPT-5.4 prompting guidance is needed.
+Read the reference before writing a prompt for `gpt-6-astra`, and again whenever a
+run came back having stopped early or asked a question instead of deciding.
 
-**File**: `references/gpt-5-4_prompting_guide.md`
+**File**: `references/gpt-6-astra_prompting_guide.md`
 
 Key sections (grep patterns for navigation):
-- `Where GPT-5.4 is strongest` - Strengths: tone adherence, agentic robustness, evidence-rich synthesis, long-context analysis
-- `Where explicit prompting still helps` - Weak spots: low-context tool routing, dependency-aware workflows, reasoning effort selection
-- `Keep outputs compact` - Token efficiency via `<output_contract>` and `<verbosity_controls>` blocks
-- `tool_persistence_rules` - Persistent tool use, dependency checks, parallel tool calling
-- `completeness_contract` - Long-horizon task coverage and `<empty_result_recovery>` fallback
-- `verification_loop` - Pre-commit verification, missing context gating, action safety
-- `research_mode` - 3-pass research (plan → retrieve → synthesize) with citation rules
-- `Prompting patterns for coding tasks` - Autonomy, persistence, intermediary updates, formatting, frontend tasks
-- `Treat reasoning effort as a last-mile knob` - reasoning_effort selection: none/low/medium/high/xhigh guidance
-- `phase` - Responses API phase parameter for long-running agents
-- `Compaction` - Extended context management via `/responses/compact` endpoint
+- `## Model facts` - effort ladder, context window, knowledge cutoff, price, parameters to stop sending
+- `## Autonomy and stop conditions` - astra asks non-blocking questions by default; what an unattended `codex exec` prompt has to state in place of that
+- `## Instruction priority` - astra weighs in-context material more heavily, and conflicting guidance in a skill file stops work early
+- `## Context discipline` - why this skill's pointer-over-copy rule matters more under astra rather than less
+- `## Reconcile before switching` - what to send when astra's answer contradicts evidence already in hand
+- `## Choosing an effort rung` - reading the rung off the task instead of off habit
+- `## Subagents` - what a spawned agent inherits, and how to override it
+
+**Historical**: `references/gpt-5-4_prompting_guide.md` is the GPT-5.4-era guide,
+kept for provenance. Do not prompt against it — it describes a model this skill no
+longer runs, and its migration table stops two generations back. Read it only to
+see what a pattern used to say.
 
 Read the image reference when the delegated task involves image generation, image editing, slides, diagrams, ads, UI mockups, in-image text, or image prompt tuning.
 

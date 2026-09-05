@@ -1,7 +1,8 @@
 #!/bin/bash
 # Install every plugin in the cc-plugin marketplace for Claude Code.
+# macOS-only plugins are opt-in — see SKIP_PLUGINS below.
 # The plugin list is derived from the marketplace manifest, so adding or
-# retiring a plugin needs no edit here.
+# retiring a plugin needs no edit here beyond that list.
 # Idempotent: safe to re-run when new plugins are added.
 #
 # Usage:
@@ -13,6 +14,15 @@ REPO="jongwony/cc-plugin"
 MARKETPLACE="cc-plugin"
 MANIFEST_URL="https://raw.githubusercontent.com/$REPO/main/.claude-plugin/marketplace.json"
 
+# Opt-in plugins the default installer leaves out: each drives a macOS-only
+# facility (pmset, Apple Notes, the macOS uninstall surface, an iOS/Android
+# device attach, a whisper.cpp paste daemon). Install one deliberately:
+#   claude plugin install <name>@cc-plugin
+# The plugin list itself comes from the manifest; this is the one
+# hand-maintained exclusion, and every name here is checked against the
+# fetched manifest below so a retired plugin cannot linger in it.
+SKIP_PLUGINS="caffeinate safe-uninstall handwriting voice-dictation agent-device-preflight"
+
 command -v claude >/dev/null 2>&1 || { echo "Error: claude CLI not found. Install Claude Code first." >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "Error: python3 not found." >&2; exit 1; }
 
@@ -23,10 +33,20 @@ echo "Fetching plugin list..."
 plugins=$(curl -fsSL "$MANIFEST_URL" \
   | python3 -c "import json,sys; [print(p['name']) for p in json.load(sys.stdin)['plugins']]")
 
+for s in $SKIP_PLUGINS; do
+  [[ " ${plugins//$'\n'/ } " == *" $s "* ]] \
+    || { echo "Error: SKIP_PLUGINS names '$s', which is not in the marketplace manifest. Remove it from scripts/install.sh." >&2; exit 1; }
+done
+
 installed=0
 skipped=0
+opted_out=""
 
 for p in $plugins; do
+  if [[ " $SKIP_PLUGINS " == *" $p "* ]]; then
+    opted_out="$opted_out $p"
+    continue
+  fi
   if claude plugin install "$p@$MARKETPLACE" < /dev/null 2>/dev/null; then
     installed=$((installed + 1))
     # Install does not guarantee activation: a plugin that was already
@@ -43,4 +63,7 @@ done
 echo ""
 echo "Installed $installed plugin(s)."
 [[ $skipped -gt 0 ]] && echo "$skipped skipped (already installed or unavailable)."
+for p in $opted_out; do
+  echo "Not installed (macOS-only, opt-in): $p — add it with: claude plugin install $p@$MARKETPLACE"
+done
 echo "Each plugin's SKILL.md states the prerequisite it needs, if any."

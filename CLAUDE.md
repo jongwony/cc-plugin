@@ -97,7 +97,9 @@ curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/ins
 
 `scripts/install.sh` reads the plugin list from `.claude-plugin/marketplace.json`,
 so adding or retiring a plugin needs no edit to it, and re-running it is safe.
-Each plugin installs whether or not its prerequisite is present.
+Each plugin installs whether or not its prerequisite is present. The macOS-only
+plugins are opt-in: the script names them in `SKIP_PLUGINS`, checks that list
+against the manifest on every run, and prints the install command for each.
 
 ## Workflow
 

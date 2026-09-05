@@ -132,11 +132,6 @@ Key sections (grep patterns for navigation):
 - `## Choosing an effort rung` - reading the rung off the task instead of off habit
 - `## Subagents` - what a spawned agent inherits, and how to override it
 
-**Historical**: `references/gpt-5-4_prompting_guide.md` is the GPT-5.4-era guide,
-kept for provenance. Do not prompt against it — it describes a model this skill no
-longer runs, and its migration table stops two generations back. Read it only to
-see what a pattern used to say.
-
 Read the image reference when the delegated task involves image generation, image editing, slides, diagrams, ads, UI mockups, in-image text, or image prompt tuning.
 
 **File**: `references/image-gen-models-prompting-guide.ipynb`

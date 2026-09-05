@@ -58,9 +58,6 @@ the change.
   philosophy). Skill = what to do (workflow, procedures, commands). A
   `skills:`-loaded skill is the single home for its workflow; the agent adds only
   behavior it does not carry.
-- **Gap tracking (Syneidesis).** Mark unverified assumptions/procedures with a
-  `[Gap:Type]` prefix on the tracked task — `Procedural`, `Assumption`,
-  `Consideration`.
 - **Importing external-tool capability — 3 tests, all required.** (1)
   *Irreducibility*: not reproducible from existing primitives (ergonomic wrappers
   stay inside scripts). (2) *Environment neutrality*: a protocol-level capability
@@ -100,6 +97,18 @@ so adding or retiring a plugin needs no edit to it, and re-running it is safe.
 Each plugin installs whether or not its prerequisite is present. The macOS-only
 plugins are opt-in: the script names them in `SKIP_PLUGINS`, checks that list
 against the manifest on every run, and prints the install command for each.
+
+A Claude Code cloud environment takes one line in its setup-script field:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/cloud-setup.sh | bash
+```
+
+`scripts/cloud-setup.sh` runs both marketplaces' installers, adds the opt-in
+epistemic-protocols plugins and the Codex CLI, and registers
+`scripts/codex-auth-restore.sh` as a user-level SessionStart hook: the
+environment's variables reach the session but not the setup script, so the
+Codex login is restored from `CODEX_AUTH_JSON_B64` there.
 
 ## Workflow
 

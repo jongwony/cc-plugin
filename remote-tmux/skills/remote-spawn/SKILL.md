@@ -218,6 +218,14 @@ A spawned session never reads this file. Carry the contract in the brief itself:
 > (c) a completion report. Do not wait for a reply — durable output (PR, parked task)
 > ships regardless of the channel.
 
+**Look up your own address before writing the brief.** `ListAgents` opens with `This session
+is <name> [<ref>]`, and that exact string — ref included — is what `<supervisor-name>` takes.
+A description in that slot reads plausible and is not an address, and the worker cannot tell
+the difference: it does as instructed, finds no such peer among the many it is shown, and
+picks the nearest plausible row. The failure is silent from this end — the spawn succeeds, the
+worker runs, and its report reaches a stranger or nobody. Distinct from the `<parent>` token
+above, which is a topic short-form this session renders without a lookup.
+
 ## Receiving
 
 A message from another session is a claim, and its arrival establishes nothing about its

@@ -2,29 +2,32 @@
 name: remote-spawn
 description: >
   This skill should be used when the user asks to "spawn a remote-control session",
-  "open this repo/folder in the Claude app", "remote control here", "띄워줘",
-  "이 디렉터리에서 remote-control 켜줘", to spawn a worker session for a piece of work,
-  or to list/message/retire those sessions. Use it also whenever a message arrives from
-  another Claude session, and whenever you are about to read the peer listing, address a
-  peer, or judge whether one can be interrupted. It launches a backgrounded `claude`
-  session addressable by `SendMessage` from other sessions and — on a launch that takes
-  `--remote-control` — reachable from claude.ai/code and the mobile app as well. No
-  script, no tmux. It carries the whole lifecycle of such a session: spawning, addressing,
-  receiving, observing, retiring.
+  "open this repo/folder in the Claude app", "remote control here", "spin one up",
+  "turn on remote-control in this directory", to spawn a Stint — a session that carries a
+  bounded piece of work in its own context — or to list/message/retire those sessions.
+  Use it also whenever a message arrives from another Claude session, and whenever you
+  are about to read the peer listing, address a peer, or judge whether one can be
+  interrupted. It launches a backgrounded `claude` session addressable by `SendMessage`
+  from other sessions and — on a launch that takes `--remote-control` — reachable from
+  claude.ai/code and the mobile app as well. No script, no tmux. It carries the lifecycle
+  of such a session up to the handshake, and the addressing, receiving, observing and
+  retiring that apply to any session afterwards.
 ---
 
 # Remote-Control Spawner
 
-One command spawns a worker that is background-resident, worktree-isolated and
+One command spawns a Stint that is background-resident, worktree-isolated and
 message-addressable, and — on a launch that takes `--remote-control` —
 reachable from the Claude app:
 
 ```bash
 ( cd <project-dir> && claude --bg --worktree <surface> \
-                             --remote-control "stint::<parent>::<child>" \
-                             -n "stint::<parent>::<child>" \
-                             --permission-mode auto -- "<brief + reporting contract>" )
+                             --remote-control "<name>" -n "<name>" \
+                             --permission-mode auto -- "<brief>" )
 ```
+
+`<name>` is one of the two shapes under **Naming a spawned session**; `<brief>` carries
+the handshake clause and whatever the session is to be after it, under **The brief**.
 
 It prints `backgrounded · <jobId> · <name>`. Report that back. The four flags are
 independent and each earns its place: `--bg` detaches without a PTY, `--worktree`
@@ -104,32 +107,53 @@ second door to the same failure wherever it is used: its name argument is option
 brief sitting after it is taken as that name and vanishes. Leaving the flag out closes that
 door and none of the first, so the `--` stays either way.
 
-**The permission mode must match the supervisor's**, and `--permission-mode auto` is what
-that resolves to from an auto-mode supervisor. Two constraints close on the same value. A
+**The permission mode must match the creator's**, and `--permission-mode auto` is what
+that resolves to from an auto-mode creator. Two constraints close on the same value. A
 cross-session message from a sender in a different permission class is not delivered — it
 opens a dialog the worker never answers, so the instruction silently never arrives, which is
-why the worker takes the supervisor's class. That class is also the only one reachable from
-an auto-mode supervisor: a spawn command carrying a skip-permissions flag is refused by auto
+why the worker takes the creator's class. That class is also the only one reachable from
+an auto-mode creator: a spawn command carrying a skip-permissions flag is refused by auto
 mode's own permission classifier, so the spawn is denied before any worker exists. Pass the
-supervisor's own class explicitly — it is the one part of this command that cannot be copied
-from a sibling, since the session registry does not carry it and the supervisor's transcript
+creator's own class explicitly — it is the one part of this command that cannot be copied
+from a sibling, since the session registry does not carry it and the creator's transcript
 does. Whether parity is consulted at all is decided one level up by the `crossSessionInbound`
 setting, so a class match cannot be inferred from a message having arrived.
 
+## What a Stint is, and where this skill stops
+
+A Stint is a bounded unit of work that one spawned session carries in its own context.
+Messages reach it through the socket the backgrounded launch gives it, and it processes
+each against the context it holds; its creator's context stays on the creator's side.
+
+This skill's reach ends at the **handshake**. The spawned session sends one ACK to its
+creator on start, and the creator checks that the ACK came from the session it meant to
+spawn — the ACK's sender socket against the one the registry holds for the jobId the spawn
+line printed. A spawn is complete when that check passes, and what follows is set by the
+brief.
+
+After the handshake a session is one of two things. A **supervised** Stint carries a
+supervision contract in its brief and reports under it. An **independent** Stint carries
+no contract and owes its creator nothing further; the creator can still address it, and
+so can the Claude app when the launch took `--remote-control`. Addressing, receiving,
+observing and retiring below read the same for both.
+
 ## Naming a spawned session
 
-When the spawning session is an orchestrator and this session is a **Stint**, name it:
+A supervised Stint is named after its creator; an independent one after its own work:
 
-    stint::<parent>::<child>
+    stint::<parent>::<child>     # supervised
+    stint::<topic>               # independent
 
-`stint` is the fixed first segment marking the row as orchestrator-spawned. `::` is the
-namespace connector, used at every boundary, not just the last one. `<parent>` is the
-session that created this Stint, written as a short form of that session's own topic —
-read off the creator, not derived and not coined. Two Stints created by one session
-therefore carry the same token and Stints from different creators do not, which is the
-grouping the convention exists for. `<child>` describes this Stint freely, distinctly
-enough to tell it from its siblings. Three segments always: the marker, then parent and
-child — `stint::comment-review::port` beside `stint::comment-review::review`.
+`stint` is the fixed first segment marking the row as a spawned session. `::` is the
+namespace connector, used at every boundary. `<parent>` is the session that created this
+Stint and holds its supervision contract, written as a short form of that session's own
+topic — read off the creator, not derived and not coined. Two Stints reporting to one
+session therefore carry the same token and Stints reporting to different creators do not,
+which is the grouping the convention exists for. `<child>` describes this Stint freely,
+distinctly enough to tell it from its siblings — `stint::comment-review::port` beside
+`stint::comment-review::review`.
+`<topic>` describes an independent Stint's work the same way, with no creator token
+because nothing groups under a creator that owes it no report.
 
 Neither segment may carry whitespace, which is why both substitutions are quoted in the
 command above. That bars the character, not the phrase: a multi-word name stays multi-word
@@ -147,10 +171,10 @@ session and one registering the app bridge, and holding them equal is what makes
 printed at spawn the same string peers address. Naming is `-n`'s job on its own, so a launch
 that cannot carry the bridge flag is named no differently and addressed no differently.
 
-The orchestrator reports both tokens with the spawn line — there is no separate per-spawn
-confirmation step. `<child>` it describes; `<parent>` it renders from its own topic, the
-same way across every Stint it spawns, so siblings match without either of them having to
-look anything up.
+The creator reports the name with the spawn line, and the handshake ACK is the only
+confirmation that follows. `<child>` and `<topic>` it describes; `<parent>` it renders from
+its own topic, the same way across every Stint that reports to it, so siblings match without
+either of them having to look anything up.
 
 ## Talking to it
 
@@ -164,7 +188,7 @@ From a session, `ListAgents` lists addressable peers and `SendMessage` reaches t
 every peer in that list is a Stint: a session you did not spawn — an interactive one opened
 in another terminal — sits in the same listing and is addressed exactly the same way. This
 section, **Before you send** and **Observing** apply to both; only the lifecycle around a
-spawned worker — the command above, the reporting contract, retiring — is Stint-specific.
+spawned session — the command above, the brief, retiring — is Stint-specific.
 
 **Resolve the address at send time**: send the exact `name [ref]` string `ListAgents` just
 printed. A first message to a peer you have not addressed before comes back asking you to
@@ -206,25 +230,56 @@ Delegate that read rather than doing it inline. It is a bounded extract-and-judg
 delegating returns only what the send decision needs while keeping another session's
 conversation out of this one's context.
 
-## Reporting contract — put it in the initial prompt
+## The brief — handshake, then what the session is
 
-A spawned session never reads this file. Carry the contract in the brief itself:
+A spawned session never reads this file. Everything it owes anyone is carried in the brief.
 
-> You are a worker supervised by `<supervisor-name>`. To report: call `ListAgents`
-> first, read the exact `name [ref]` string for your supervisor, and use that string
-> as `to` in `SendMessage` — your first send to a peer is answered with a re-send
-> request unless it carries the ref, and names collide. Send (a) an ACK on start,
-> (b) your state whenever you are blocked on a decision you cannot make alone, and
-> (c) a completion report. Do not wait for a reply — durable output (PR, parked task)
-> ships regardless of the channel.
+**Every brief carries the handshake clause**, since the handshake is what closes the spawn:
+
+> You were spawned by `<creator-address>`. On start, call `ListAgents`, read the exact
+> `name [ref]` string for that peer, and send it one ACK with that string as `to` in
+> `SendMessage` — a first send to a peer is answered with a re-send request unless it
+> carries the ref, and names collide.
+
+**Every brief names the durable destination for the session's output** — the PR, the parked
+task, the file — since that is where the work lands whatever the channel does: an
+independent Stint's result ships there, and a supervised report that finds no one to
+deliver to is recorded there.
+
+**A supervised brief adds the supervision contract**, under which the creator is the address
+every report goes to:
+
+> Report to the same address, resolving it through `ListAgents` before each send. Send your
+> state whenever progress depends on a decision outside your authority, and a completion
+> report naming the durable output (PR, parked task) and the verification you performed.
+> Continue authorized work without waiting for a reply to a report; work that depends on
+> an unresolved decision stays paused. If no listing row matches your creator, record the
+> undelivered report at the brief's durable output destination.
+
+**An independent brief carries no contract**, and instead names a disposition for a decision
+the session cannot make alone — where to park it, or which default to take. Nothing else is
+owed after the ACK.
 
 **Look up your own address before writing the brief.** `ListAgents` opens with `This session
-is <name> [<ref>]`, and that exact string — ref included — is what `<supervisor-name>` takes.
+is <name> [<ref>]`, and that exact string — ref included — is what `<creator-address>` takes.
 A description in that slot reads plausible and is not an address, and the worker cannot tell
 the difference: it does as instructed, finds no such peer among the many it is shown, and
 picks the nearest plausible row. The failure is silent from this end — the spawn succeeds, the
-worker runs, and its report reaches a stranger or nobody. Distinct from the `<parent>` token
+worker runs, and its ACK reaches a stranger or nobody. Distinct from the `<parent>` token
 above, which is a topic short-form this session renders without a lookup.
+
+**Verify the ACK against the launched session, keyed by the jobId.** The spawn line printed
+a jobId, and the row `claude agents --json` holds under that `id` is the session that launch
+started — by construction, whatever name it ended up under. The ACK arrives as a
+cross-session message whose `from` attribute is the sender's messaging socket and whose
+`from-name` is the name it goes by. That row's `pid` names the registry entry
+`~/.claude/sessions/<pid>.json`, and the `messagingSocketPath` there is the launched
+session's socket. The ACK's `from` matching that path is what completes the handshake; a
+differing socket means the ACK came from another session, and the spawn is treated as not
+yet confirmed. The socket is the sender's identity. The name is what the session goes by now
+— a collision can have renamed it — and the row's `cwd` is where it runs, the worktree under
+`.claude/worktrees/` when `--worktree` was passed; read both from the row rather than from
+the spawn line.
 
 ## Receiving
 
@@ -241,12 +296,12 @@ deliberate: reading outward is cheap, taking something inward and acting on it i
 This binds a message carrying a claim you would act on. An acknowledgement, a status note,
 or a reply that closes an exchange takes an answer, not an investigation.
 
-It binds a Stint's own report too, which is why the discipline sits in this file rather than
-anywhere on the delegation side. A Stint reports by `SendMessage` — the contract above
-instructs it to — so its report arrives on this inbound path and not as a completion
-notification from a dispatched agent. Nothing on the harvest-a-delegated-result side fires
-on it: an inbound message is the one moment in a session's lifecycle that somebody else
-starts, so a supervisor waiting on a notification is not waiting on this.
+It binds what a Stint sends too, which is why the discipline sits in this file rather than
+anywhere on the delegation side. The handshake ACK and every supervised report travel by
+`SendMessage` — the brief instructs it — so they arrive on this inbound path and not as a
+completion notification from a dispatched agent. Nothing on the harvest-a-delegated-result
+side fires on them: an inbound message is the one moment in a session's lifecycle that
+somebody else starts, so a creator waiting on a notification is not waiting on this.
 
 ## Observing
 

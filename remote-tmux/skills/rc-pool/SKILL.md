@@ -2,7 +2,7 @@
 name: rc-pool
 description: >
   This skill should be used when the user asks to "start/stop the pool", "toggle the
-  remote-control pool", "keep this project's pool alive", "풀 호스트 띄워줘/내려줘", or to
+  remote-control pool", "keep this project's pool alive", "bring the pool host up/down", or to
   start, stop, or toggle a self-restarting `claude remote-control --spawn worktree` pool
   host for a project. One singleton per project, tmux-tracked, reachable from the Claude app.
 ---
@@ -19,14 +19,14 @@ from claude.ai/code + the mobile app.
 provides. The cost is structural: the host's children run as `sdk-cli` and get no
 messaging socket, so a pool child **can send a message but cannot receive a task or a
 reply**. It is not addressable, and to peers it appears unnamed. This is a design
-boundary, not a bug to fix: work that a supervisor must direct is spawned by that
-supervisor (see the `remote-spawn` skill), and a pool child that needs direction
-escalates to it rather than being driven from outside.
+boundary, not a bug to fix: work that another session must reach by message after
+launch is spawned by that session (see the `remote-spawn` skill), and a pool child that
+needs direction escalates to it rather than being driven from outside.
 
 Run the script and report the result concisely:
 
 ```bash
-# Toggle (up if down, down if up) — the default for "올렸다 내렸다"
+# Toggle (up if down, down if up) — the default for "flip the pool"
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-pool.sh" toggle <project-dir> [name] [capacity]
 
 # Or explicit:

@@ -32,6 +32,13 @@ along with the peer ref other sessions address it by — so neither is safe to c
 `--remote-control` registers the app bridge. The worktree token and the session name are
 separate on purpose — see the skill's naming section.
 
+A spawned session is a **Stint**: a bounded piece of work carried in its own context, reachable
+by message. The skill's job ends at the **handshake** — the Stint ACKs its creator once, and the
+creator checks the ACK came from the session it meant to spawn. What the Stint is after that is
+set by its brief: a *supervised* Stint (`stint::<parent>::<child>`) carries a reporting contract
+and reports blocked decisions and completion; an *independent* Stint (`stint::<topic>`) owes
+nothing further and names a durable destination for its output instead.
+
 `--remote-control` is separable: what it buys is the app bridge alone. The messaging socket
 comes from the backgrounded launch itself and the name from `-n`, so `SendMessage`, the fleet
 row and the pinned name all survive without it — what goes is reachability from claude.ai/code
@@ -59,10 +66,10 @@ Two caveats worth knowing:
 - **Permission classes must match**, which is why the command above passes `--permission-mode
   auto` rather than a bypass flag. A cross-session message from a different permission class is
   not delivered — it opens a dialog the worker never answers, so the instruction silently never
-  arrives. From an auto-mode supervisor the bypass flag is not an option regardless:
+  arrives. From an auto-mode creator the bypass flag is not an option regardless:
   `--dangerously-skip-permissions` inside a spawn command is refused by auto mode's own
-  classifier, denying the spawn before a worker exists. Pass whatever class the supervisor is
-  actually in — the registry does not record it, but the supervisor's transcript does.
+  classifier, denying the spawn before a worker exists. Pass whatever class the creator is
+  actually in — the registry does not record it, but the creator's transcript does.
 - `status: "waiting"` in the registry means an unanswered dialog exists, **not** that the
   session is stuck; it still takes app input and peer messages. Judge by how long
   `statusUpdatedAt` has been frozen.
@@ -88,5 +95,5 @@ phone's entry point.
 The `remote-control` subcommand hard-errors on an untrusted workspace, so trust the project once
 (`claude` in the dir, accept the dialog) before `up`.
 
-Work that a supervisor must direct — anything it has to send instructions to after launch — is
-spawned by that supervisor via `remote-spawn`, not opened through the pool.
+Work that another session must reach by message after launch — a follow-up instruction, a
+reply, a supervised report — is spawned via `remote-spawn`, not opened through the pool.

@@ -34,10 +34,11 @@ separate on purpose — see the skill's naming section.
 
 A spawned session is a **Stint**: a bounded piece of work carried in its own context, reachable
 by message. The skill's job ends at the **handshake** — the Stint ACKs its creator once, and the
-creator checks the ACK came from the session it meant to spawn. What the Stint is after that is
-set by its brief: a *supervised* Stint (`stint::<parent>::<child>`) carries a reporting contract
-and reports blocked decisions and completion; an *independent* Stint (`stint::<topic>`) owes
-nothing further and names a durable destination for its output instead.
+creator checks the ACK's sender name against the row `claude agents --json` holds for the jobId
+the spawn line printed. Every brief names a durable destination for the session's output; what
+the Stint is after the handshake is set by the rest of it: a *supervised* Stint
+(`stint::<parent>::<child>`) carries a reporting contract and reports blocked decisions and
+completion; an *independent* Stint (`stint::<topic>`) owes nothing further.
 
 `--remote-control` is separable: what it buys is the app bridge alone. The messaging socket
 comes from the backgrounded launch itself and the name from `-n`, so `SendMessage`, the fleet

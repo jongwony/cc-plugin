@@ -127,8 +127,9 @@ each against the context it holds; its creator's context stays on the creator's 
 
 This skill's reach ends at the **handshake**. The spawned session sends one ACK to its
 creator on start, and the creator checks that the ACK came from the session it meant to
-spawn — the name it pinned and the `cwd` that `claude agents --json` reports for that row.
-A spawn is complete when that check passes, and what follows is set by the brief.
+spawn — the ACK's sender name against the `name` on the row `claude agents --json` holds
+for the jobId the spawn line printed. A spawn is complete when that check passes, and what
+follows is set by the brief.
 
 After the handshake a session is one of two things. A **supervised** Stint carries a
 supervision contract in its brief and reports under it. An **independent** Stint carries
@@ -144,12 +145,13 @@ A supervised Stint is named after its creator; an independent one after its own 
     stint::<topic>               # independent
 
 `stint` is the fixed first segment marking the row as a spawned session. `::` is the
-namespace connector, used at every boundary. `<parent>` is the session that created and
-supervises this Stint, written as a short form of that session's own topic — read off the
-creator, not derived and not coined. Two Stints supervised by one session therefore carry
-the same token and Stints under different supervisors do not, which is the grouping the
-convention exists for. `<child>` describes this Stint freely, distinctly enough to tell it
-from its siblings — `stint::comment-review::port` beside `stint::comment-review::review`.
+namespace connector, used at every boundary. `<parent>` is the session that created this
+Stint and holds its supervision contract, written as a short form of that session's own
+topic — read off the creator, not derived and not coined. Two Stints reporting to one
+session therefore carry the same token and Stints reporting to different creators do not,
+which is the grouping the convention exists for. `<child>` describes this Stint freely,
+distinctly enough to tell it from its siblings — `stint::comment-review::port` beside
+`stint::comment-review::review`.
 `<topic>` describes an independent Stint's work the same way, with no creator token
 because nothing groups under a creator that owes it no report.
 
@@ -171,7 +173,7 @@ that cannot carry the bridge flag is named no differently and addressed no diffe
 
 The creator reports the name with the spawn line, and the handshake ACK is the only
 confirmation that follows. `<child>` and `<topic>` it describes; `<parent>` it renders from
-its own topic, the same way across every Stint it supervises, so siblings match without
+its own topic, the same way across every Stint that reports to it, so siblings match without
 either of them having to look anything up.
 
 ## Talking to it
@@ -239,19 +241,24 @@ A spawned session never reads this file. Everything it owes anyone is carried in
 > `SendMessage` — a first send to a peer is answered with a re-send request unless it
 > carries the ref, and names collide.
 
-**A supervised brief adds the supervision contract**, and the creator becomes its supervisor:
+**Every brief names the durable destination for the session's output** — the PR, the parked
+task, the file — since that is where the work lands whatever the channel does: an
+independent Stint's result ships there, and a supervised report that finds no one to
+deliver to is recorded there.
+
+**A supervised brief adds the supervision contract**, under which the creator is the address
+every report goes to:
 
 > Report to the same address, resolving it through `ListAgents` before each send. Send your
 > state whenever progress depends on a decision outside your authority, and a completion
 > report naming the durable output (PR, parked task) and the verification you performed.
 > Continue authorized work without waiting for a reply to a report; work that depends on
-> an unresolved decision stays paused. If no listing row matches your supervisor, record
-> the undelivered report at the brief's durable output destination.
+> an unresolved decision stays paused. If no listing row matches your creator, record the
+> undelivered report at the brief's durable output destination.
 
-**An independent brief carries no contract**, and instead names a durable destination for
-the output and a disposition for a decision the session cannot make alone — where to park
-it, or which default to take. Nothing else is owed after the ACK, and the durable output
-ships regardless of the channel.
+**An independent brief carries no contract**, and instead names a disposition for a decision
+the session cannot make alone — where to park it, or which default to take. Nothing else is
+owed after the ACK.
 
 **Look up your own address before writing the brief.** `ListAgents` opens with `This session
 is <name> [<ref>]`, and that exact string — ref included — is what `<creator-address>` takes.
@@ -261,11 +268,14 @@ picks the nearest plausible row. The failure is silent from this end — the spa
 worker runs, and its ACK reaches a stranger or nobody. Distinct from the `<parent>` token
 above, which is a topic short-form this session renders without a lookup.
 
-**Verify the ACK against the intended session.** The ACK's sender name is the one pinned
-with `-n`, and the row `claude agents --json` holds for that name carries the `cwd` the
-`cd` selected. Both matching the spawn line is what completes the handshake; either
-differing means the ACK came from another session, and the spawn is treated as not yet
-confirmed.
+**Verify the ACK against the launched session, keyed by the jobId.** The spawn line printed
+a jobId, and the row `claude agents --json` holds under that `id` is the session that launch
+started — by construction, whatever name it ended up under. The ACK's sender name matching
+that row's `name` is what completes the handshake; a differing name means the ACK came from
+another session, and the spawn is treated as not yet confirmed. The name pinned with `-n`
+and the `cd` are what was asked for, not what was launched: a collision can rename the
+session, and with `--worktree` the row's `cwd` is the worktree under `.claude/worktrees/`
+rather than the directory the `cd` selected. Read both from the row.
 
 ## Receiving
 

@@ -379,7 +379,7 @@ Notes to pass on when relevant:
   on a binary update or on the next attach. What comes back is a fresh process, and both the
   messaging socket and the app bridge are decided at launch — whether a restarted worker returns
   addressable and app-reachable is untested, so re-read `ListAgents` and re-check
-  `bridgeSessionId` before relying on either. For a keep-alive host, see the `rc-pool` skill.
+  `bridgeSessionId` before relying on either.
 - An already-running session cannot become addressable later; the socket is decided once at
   launch, so an old session must be restarted to join.
 - `claude daemon status` reaches the supervisor that hosts every background session — the handle

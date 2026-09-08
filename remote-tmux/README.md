@@ -1,12 +1,9 @@
 # remote-tmux
 
 A `claude remote-control` toolkit for reaching sessions from the Claude app (claude.ai/code +
-mobile). The running session *is* the aperture — no bridge process in between. It ships two
-skills:
-
-- **`remote-spawn`** — spawn one worker session, script-free (below).
-- **`rc-pool`** — keep a self-restarting `--spawn worktree --capacity N` pool host alive per
-  project (see the `rc-pool` section at the end).
+mobile). The running session *is* the aperture — no bridge process in between. It ships one
+skill, **`remote-spawn`**: spawn one worker session, script-free, and carry its lifecycle
+(below).
 
 ## remote-spawn — spawn one session
 
@@ -74,27 +71,3 @@ Two caveats worth knowing:
 - `status: "waiting"` in the registry means an unanswered dialog exists, **not** that the
   session is stuck; it still takes app input and peer messages. Judge by how long
   `statusUpdatedAt` has been frozen.
-
-## rc-pool — keep a pool host alive
-
-The `rc-pool` skill keeps a **self-restarting, project-singleton** keep-alive for a `claude
-remote-control --spawn worktree --capacity N` pool host — one host per project, hosting a
-pool of on-demand, worktree-isolated sessions in the app.
-
-```bash
-bash scripts/rc-pool.sh toggle <project-dir> [name] [capacity]   # up if down, down if up
-bash scripts/rc-pool.sh up     <project-dir> [name] [capacity]   # default capacity 5
-bash scripts/rc-pool.sh down   <name|dir>                        # graceful SIGTERM + drop
-bash scripts/rc-pool.sh status <name|dir>
-```
-
-This one keeps its tmux pane, for two reasons a backgrounded session cannot cover: the host is
-an interactive TUI that needs a live PTY, and nothing else restarts it when it crashes. It also
-remains the only way to originate a session **without a CLI** — that is what makes it the
-phone's entry point.
-
-The `remote-control` subcommand hard-errors on an untrusted workspace, so trust the project once
-(`claude` in the dir, accept the dialog) before `up`.
-
-Work that another session must reach by message after launch — a follow-up instruction, a
-reply, a supervised report — is spawned via `remote-spawn`, not opened through the pool.

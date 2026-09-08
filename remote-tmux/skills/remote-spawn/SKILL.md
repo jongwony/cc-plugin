@@ -127,9 +127,9 @@ each against the context it holds; its creator's context stays on the creator's 
 
 This skill's reach ends at the **handshake**. The spawned session sends one ACK to its
 creator on start, and the creator checks that the ACK came from the session it meant to
-spawn — the ACK's sender name against the `name` on the row `claude agents --json` holds
-for the jobId the spawn line printed. A spawn is complete when that check passes, and what
-follows is set by the brief.
+spawn — the ACK's sender socket against the one the registry holds for the jobId the spawn
+line printed. A spawn is complete when that check passes, and what follows is set by the
+brief.
 
 After the handshake a session is one of two things. A **supervised** Stint carries a
 supervision contract in its brief and reports under it. An **independent** Stint carries
@@ -270,12 +270,16 @@ above, which is a topic short-form this session renders without a lookup.
 
 **Verify the ACK against the launched session, keyed by the jobId.** The spawn line printed
 a jobId, and the row `claude agents --json` holds under that `id` is the session that launch
-started — by construction, whatever name it ended up under. The ACK's sender name matching
-that row's `name` is what completes the handshake; a differing name means the ACK came from
-another session, and the spawn is treated as not yet confirmed. The name pinned with `-n`
-and the `cd` are what was asked for, not what was launched: a collision can rename the
-session, and with `--worktree` the row's `cwd` is the worktree under `.claude/worktrees/`
-rather than the directory the `cd` selected. Read both from the row.
+started — by construction, whatever name it ended up under. The ACK arrives as a
+cross-session message whose `from` attribute is the sender's messaging socket and whose
+`from-name` is the name it goes by. That row's `pid` names the registry entry
+`~/.claude/sessions/<pid>.json`, and the `messagingSocketPath` there is the launched
+session's socket. The ACK's `from` matching that path is what completes the handshake; a
+differing socket means the ACK came from another session, and the spawn is treated as not
+yet confirmed. The socket is the sender's identity. The name is what the session goes by now
+— a collision can have renamed it — and the row's `cwd` is where it runs, the worktree under
+`.claude/worktrees/` when `--worktree` was passed; read both from the row rather than from
+the spawn line.
 
 ## Receiving
 

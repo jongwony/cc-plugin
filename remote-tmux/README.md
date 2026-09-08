@@ -34,8 +34,8 @@ separate on purpose — see the skill's naming section.
 
 A spawned session is a **Stint**: a bounded piece of work carried in its own context, reachable
 by message. The skill's job ends at the **handshake** — the Stint ACKs its creator once, and the
-creator checks the ACK's sender name against the row `claude agents --json` holds for the jobId
-the spawn line printed. Every brief names a durable destination for the session's output; what
+creator checks the ACK's sender socket against the registry entry for the jobId the spawn line
+printed. Every brief names a durable destination for the session's output; what
 the Stint is after the handshake is set by the rest of it: a *supervised* Stint
 (`stint::<parent>::<child>`) carries a reporting contract and reports blocked decisions and
 completion; an *independent* Stint (`stint::<topic>`) owes nothing further.

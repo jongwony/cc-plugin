@@ -108,13 +108,10 @@ Modifiers, added to any base pattern above:
 - Model and effort — `-m gpt-5.6-sol`, `-r xhigh` (effort defaults to `medium`; `-r` raises it)
 - Capture the answer to a file — `-o <FILE>` writes codex's final message to FILE deterministically
 
-## Following Up
-After `codex` completes, use `AskUserQuestion` to confirm next steps. Restate model/reasoning/sandbox when proposing actions.
-
 ## Error Handling
 - Stop and report failures whenever `codex --version` or a `codex exec` command exits non-zero; request direction before retrying.
 - Before you use high-impact flags (`--sandbox danger-full-access`, `--skip-git-repo-check`) ask the user for permission using AskUserQuestion unless it was already given.
-- When output includes warnings or partial results, summarize them and ask how to adjust using `AskUserQuestion`.
+- When output includes warnings or partial results, report them beside the outcome summary.
 
 ## Reference Guide
 

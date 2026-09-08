@@ -2,8 +2,8 @@
 name: remote-spawn
 description: >
   This skill should be used when the user asks to "spawn a remote-control session",
-  "open this repo/folder in the Claude app", "remote control here", "띄워줘",
-  "이 디렉터리에서 remote-control 켜줘", to spawn a Stint — a session that carries a
+  "open this repo/folder in the Claude app", "remote control here", "spin one up",
+  "turn on remote-control in this directory", to spawn a Stint — a session that carries a
   bounded piece of work in its own context — or to list/message/retire those sessions.
   Use it also whenever a message arrives from another Claude session, and whenever you
   are about to read the peer listing, address a peer, or judge whether one can be

@@ -2,7 +2,7 @@
 name: rc-pool
 description: >
   This skill should be used when the user asks to "start/stop the pool", "toggle the
-  remote-control pool", "keep this project's pool alive", "풀 호스트 띄워줘/내려줘", or to
+  remote-control pool", "keep this project's pool alive", "bring the pool host up/down", or to
   start, stop, or toggle a self-restarting `claude remote-control --spawn worktree` pool
   host for a project. One singleton per project, tmux-tracked, reachable from the Claude app.
 ---
@@ -26,7 +26,7 @@ needs direction escalates to it rather than being driven from outside.
 Run the script and report the result concisely:
 
 ```bash
-# Toggle (up if down, down if up) — the default for "올렸다 내렸다"
+# Toggle (up if down, down if up) — the default for "flip the pool"
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/rc-pool.sh" toggle <project-dir> [name] [capacity]
 
 # Or explicit:

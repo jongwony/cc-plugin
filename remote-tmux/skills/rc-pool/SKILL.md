@@ -10,8 +10,9 @@ description: >
 # Remote-Control Pool-Host Toggle
 
 Toggle a self-restarting pool host — `claude remote-control --spawn worktree --capacity N
---permission-mode bypassPermissions` — for a project. One singleton per project (tmux session
-`rcpool-<name>`); the host hosts a pool of on-demand, worktree-isolated sessions reachable
+--permission-mode bypassPermissions` — for a project. One singleton per project, keyed by the
+project's canonical path (tmux session `rcpool-<sanitized path>`; `[name]` is the host's display
+name only); the host hosts a pool of on-demand, worktree-isolated sessions reachable
 from claude.ai/code + the mobile app.
 
 **What the pool is for, and what it cannot do.** Its purpose is originating a session
@@ -47,4 +48,6 @@ Notes to pass on when relevant:
   worktree-isolated ones).
 - **tmux, not launchd**: the host needs a live pane PTY (it exits on EOF under script/nohup);
   login-session resilient, no autostart — re-run `up` after a reboot.
-- One singleton per project; `name` defaults to the project dir's basename.
+- One singleton per project, keyed by the project dir's path; `name` is the display name and
+  defaults to the dir's basename. `down`/`status` take the dir, or a name — a name that several
+  running hosts share is refused with their dirs listed, so pass the dir then.

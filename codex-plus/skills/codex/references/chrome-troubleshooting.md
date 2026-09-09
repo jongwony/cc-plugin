@@ -1,13 +1,18 @@
 # codex + Chrome — when it misbehaves
 
-Load this after a browser run has failed. Setup, the operation surface and the
-symptom index are in `chrome.md`.
+Load this after a browser run has failed on the browser-client path. Setup, the
+routing rule, the operation surface and the symptom index are in
+`local-control.md`.
 
 Each entry is a failure that reports a cause other than its own.
 
-## No browser tool in the run's inventory → wrong `CODEX_HOME`
+## No browser tool in the run's inventory → check `CODEX_HOME`
 
-The most likely reason this path looks broken, and it is not a browser problem.
+One reason this path looks broken without being a browser problem — check it, but
+the symptom does not diagnose it on its own. A run whose `codex` is the real
+binary with `CODEX_HOME` unset can still fail here, and a bootstrap that builds
+its import path from `process.env.HOME` fails before any tool is reached.
+
 `codex` on `PATH` may be a wrapper that redirects `CODEX_HOME` to a
 project-isolated home, which carries no bundled marketplace — so the chrome plugin
 never loads. `scripts/codex-run.sh` resolves the binary with `command -v codex`

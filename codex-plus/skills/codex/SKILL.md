@@ -129,17 +129,21 @@ Key sections (grep patterns for navigation):
 - `## Choosing an effort rung` - reading the rung off the task instead of off habit
 - `## Subagents` - what a spawned agent inherits, and how to override it
 
-Read the Chrome reference **before** delegating a browser or computer-use task.
-Driving Chrome from codex needs a bootstrap and a tool name that are not
-discoverable from the task, and the most common failure — `codex` on `PATH`
-resolving to a wrapper with its own `CODEX_HOME` — presents as a browser problem
-while all four bundled diagnostics still exit `0`.
+Read the local-control reference **before** delegating a task that drives the
+user's machine — native macOS apps or a browser. Two interfaces reach it and both
+are first-class: `cua.*` through `mcp__cua_repl.js`, which needs no bootstrap, and
+`browser-client.mjs` through `mcp__node_repl__js`, which needs one. Neither the
+routing rule between them nor that bootstrap is discoverable from the task, and
+the bootstrap's own path has to be resolved in your shell before the prompt is
+written — the evaluator has no `process` global to build it from.
 
-**File**: `references/chrome.md`
+**File**: `references/local-control.md`
 
-It carries the setup, the operation surface, and a symptom table. Do not read the
-troubleshooting reference up front — the symptom table says when to load it.
+It carries the routing rule, both surfaces, the tab lifecycle, the scope
+boundaries for Cloud and app-server, and a symptom index. Do not read the
+troubleshooting reference up front — the symptom index says when to load it.
 
 **File**: `references/chrome-troubleshooting.md`
 
 Load it only after a browser run has actually failed, matching the symptom first.
+It covers the browser-client path; a CUA-only task rarely reaches it.

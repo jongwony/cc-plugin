@@ -3,8 +3,10 @@ name: remote-spawn
 description: >
   This skill should be used when the user asks to "spawn a remote-control session",
   "open this repo/folder in the Claude app", "remote control here", "spin one up",
-  "turn on remote-control in this directory", to spawn a Stint — a session that carries a
-  bounded piece of work in its own context — or to list/message/retire those sessions.
+  "turn on remote-control in this directory", to spawn a Stint — a session that carries an
+  independently managed bounded piece of work in its own context — or to
+  list/message/retire those sessions. Current-task work whose result the caller
+  integrates uses native subagents.
   Use it also whenever a message arrives from another Claude session, and whenever you
   are about to read the peer listing, address a peer, or judge whether one can be
   interrupted. It launches a backgrounded `claude` session addressable by `SendMessage`
@@ -26,8 +28,8 @@ reachable from the Claude app:
                              --permission-mode auto -- "<brief>" )
 ```
 
-`<name>` is one of the two shapes under **Naming a spawned session**; `<brief>` carries
-the handshake clause and whatever the session is to be after it, under **The brief**.
+`<name>` follows **Naming a spawned session**; `<brief>` carries the independent work
+and handshake obligations under **The brief**.
 
 It prints `backgrounded · <jobId> · <name>`. Report that back. The four flags are
 independent and each earns its place: `--bg` detaches without a PTY, `--worktree`
@@ -121,60 +123,16 @@ setting, so a class match cannot be inferred from a message having arrived.
 
 ## What a Stint is, and where this skill stops
 
-A Stint is a bounded unit of work that one spawned session carries in its own context.
-Messages reach it through the socket the backgrounded launch gives it, and it processes
-each against the context it holds; its creator's context stays on the creator's side.
-
-This skill's reach ends at the **handshake**. The spawned session sends one ACK to its
-creator on start, and the creator checks that the ACK came from the session it meant to
-spawn — the ACK's sender socket against the one the registry holds for the jobId the spawn
-line printed. A spawn is complete when that check passes, and what follows is set by the
-brief.
-
-After the handshake a session is one of two things. A **supervised** Stint carries a
-supervision contract in its brief and reports under it. An **independent** Stint carries
-no contract and owes its creator nothing further; the creator can still address it, and
-so can the Claude app when the launch took `--remote-control`. Addressing, receiving,
-observing and retiring below read the same for both.
+- **At work allocation:** a Stint is independently managed bounded work carried by a spawned session in its own context. Work whose result the current session must receive and integrate uses native subagents; select fork or fresh context from the modes the active harness provides.
+- **When native subagents lack a required capability:** surface that capability boundary before choosing another execution path; a background session does not become a supervised Stint by substitution.
+- **At Stint handoff:** the creator's context stays with the creator. Supply the brief below; the Stint reads messages against its own context and exercises only the judgment entrusted by the work's governing sources.
+- **At launch completion:** close the spawn through the verified handshake below. The ACK confirms the launched session's identity, not completion of its work.
+- **After the handshake:** the Stint owes no completion report to its creator. Its work and unresolved decisions land at the brief's durable destination. Peer addressing and app access remain available through the launch's capabilities; follow the communication and lifecycle sections below when using them.
 
 ## Naming a spawned session
 
-A supervised Stint is named after its creator; an independent one after its own work:
-
-    stint::<parent>::<child>     # supervised
-    stint::<topic>               # independent
-
-`stint` is the fixed first segment marking the row as a spawned session. `::` is the
-namespace connector, used at every boundary. `<parent>` is the session that created this
-Stint and holds its supervision contract, written as a short form of that session's own
-topic — read off the creator, not derived and not coined. Two Stints reporting to one
-session therefore carry the same token and Stints reporting to different creators do not,
-which is the grouping the convention exists for. `<child>` describes this Stint freely,
-distinctly enough to tell it from its siblings — `stint::comment-review::port` beside
-`stint::comment-review::review`.
-`<topic>` describes an independent Stint's work the same way, with no creator token
-because nothing groups under a creator that owes it no report.
-
-Neither segment may carry whitespace, which is why both substitutions are quoted in the
-command above. That bars the character, not the phrase: a multi-word name stays multi-word
-and hyphenated, since compressing a title into a single token to make it fit throws away
-the reading it was chosen for. The asymmetry is what to hold on to. `<surface>` has a
-validator behind it; the session name passes through none, so there a space is not an error
-but a truncation — unquoted, the name splits and only its first piece reaches the flag,
-leaving the rest as a stray positional and the worker under a name nobody can address it
-by. `--remote-control` takes its name the same way and truncates the same way, so quote
-both.
-
-Every name here is pinned explicitly with `-n`. Where `--remote-control` is passed it then
-deliberately takes the same value as `-n` — they are independent flags, one naming the
-session and one registering the app bridge, and holding them equal is what makes the name
-printed at spawn the same string peers address. Naming is `-n`'s job on its own, so a launch
-that cannot carry the bridge flag is named no differently and addressed no differently.
-
-The creator reports the name with the spawn line, and the handshake ACK is the only
-confirmation that follows. `<child>` and `<topic>` it describes; `<parent>` it renders from
-its own topic, the same way across every Stint that reports to it, so siblings match without
-either of them having to look anything up.
+- **At naming:** use `stint::<topic>`, where `<topic>` describes the independent work. Keep multi-word topics hyphenated and free of whitespace; keep the worktree's `<surface>` token separate.
+- **At launch:** pin the complete name with `-n`; pass the same quoted name to `--remote-control` when present. Report the actual name with the returned spawn line.
 
 ## Talking to it
 
@@ -230,7 +188,7 @@ Delegate that read rather than doing it inline. It is a bounded extract-and-judg
 delegating returns only what the send decision needs while keeping another session's
 conversation out of this one's context.
 
-## The brief — handshake, then what the session is
+## The brief
 
 A spawned session never reads this file. Everything it owes anyone is carried in the brief.
 
@@ -241,32 +199,15 @@ A spawned session never reads this file. Everything it owes anyone is carried in
 > `SendMessage` — a first send to a peer is answered with a re-send request unless it
 > carries the ref, and names collide.
 
-**Every brief names the durable destination for the session's output** — the PR, the parked
-task, the file — since that is where the work lands whatever the channel does: an
-independent Stint's result ships there, and a supervised report that finds no one to
-deliver to is recorded there.
-
-**A supervised brief adds the supervision contract**, under which the creator is the address
-every report goes to:
-
-> Report to the same address, resolving it through `ListAgents` before each send. Send your
-> state whenever progress depends on a decision outside your authority, and a completion
-> report naming the durable output (PR, parked task) and the verification you performed.
-> Continue authorized work without waiting for a reply to a report; work that depends on
-> an unresolved decision stays paused. If no listing row matches your creator, record the
-> undelivered report at the brief's durable output destination.
-
-**An independent brief carries no contract**, and instead names a disposition for a decision
-the session cannot make alone — where to park it, or which default to take. Nothing else is
-owed after the ACK.
+- **For the work:** name the bounded goal, its completion condition, and the durable destination for its output and verification — the PR, parked task, or file. Completion is recorded there; the creator is not a required completion-report recipient.
+- **For judgment:** point to the governing instructions and authorized revisions that establish the Stint's discretion and retained decisions. For a decision it cannot make, name where to park the unresolved matter or a default those sources authorize. Continue independent authorized work; work depending on that decision waits for its settlement. Independence supplies no additional decision grant.
 
 **Look up your own address before writing the brief.** `ListAgents` opens with `This session
 is <name> [<ref>]`, and that exact string — ref included — is what `<creator-address>` takes.
 A description in that slot reads plausible and is not an address, and the worker cannot tell
 the difference: it does as instructed, finds no such peer among the many it is shown, and
 picks the nearest plausible row. The failure is silent from this end — the spawn succeeds, the
-worker runs, and its ACK reaches a stranger or nobody. Distinct from the `<parent>` token
-above, which is a topic short-form this session renders without a lookup.
+worker runs, and its ACK reaches a stranger or nobody.
 
 **Verify the ACK against the launched session, keyed by the jobId.** The spawn line printed
 a jobId, and the row `claude agents --json` holds under that `id` is the session that launch
@@ -296,12 +237,7 @@ deliberate: reading outward is cheap, taking something inward and acting on it i
 This binds a message carrying a claim you would act on. An acknowledgement, a status note,
 or a reply that closes an exchange takes an answer, not an investigation.
 
-It binds what a Stint sends too, which is why the discipline sits in this file rather than
-anywhere on the delegation side. The handshake ACK and every supervised report travel by
-`SendMessage` — the brief instructs it — so they arrive on this inbound path and not as a
-completion notification from a dispatched agent. Nothing on the harvest-a-delegated-result
-side fires on them: an inbound message is the one moment in a session's lifecycle that
-somebody else starts, so a creator waiting on a notification is not waiting on this.
+- **On a Stint message:** apply the same claim check when adopting its content. The handshake ACK arrives through peer messaging and is checked for launch identity; it is not a native subagent result notification or a work-completion signal.
 
 ## Observing
 

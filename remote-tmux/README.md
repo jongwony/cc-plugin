@@ -13,7 +13,7 @@ addressable by `SendMessage` from other sessions, and — on a launch that takes
 
 ```bash
 ( cd ~/src/foo && claude --bg --worktree foo \
-                         --remote-control "stint::foo::build" -n "stint::foo::build" \
+                         --remote-control "stint::foo-build" -n "stint::foo-build" \
                          --permission-mode auto -- "<brief>" )
 
 claude agents --json     # fleet view (no TTY needed)
@@ -29,13 +29,17 @@ along with the peer ref other sessions address it by — so neither is safe to c
 `--remote-control` registers the app bridge. The worktree token and the session name are
 separate on purpose — see the skill's naming section.
 
-A spawned session is a **Stint**: a bounded piece of work carried in its own context, reachable
-by message. The skill's job ends at the **handshake** — the Stint ACKs its creator once, and the
-creator checks the ACK's sender socket against the registry entry for the jobId the spawn line
-printed. Every brief names a durable destination for the session's output; what
-the Stint is after the handshake is set by the rest of it: a *supervised* Stint
-(`stint::<parent>::<child>`) carries a reporting contract and reports blocked decisions and
-completion; an *independent* Stint (`stint::<topic>`) owes nothing further.
+A **Stint** is independently managed bounded work carried in a spawned session's own
+context, named `stint::<topic>`. Work whose result the current session receives and
+integrates belongs to native subagents, using the context modes available in that harness.
+
+The spawn completes at the **handshake**: the Stint ACKs its creator once, and the creator
+checks the ACK's sender socket against the registry entry for the returned jobId. This
+confirms launch identity. The Stint completes its work at the durable destination named
+in its brief, with its output and verification; it owes no completion report to the creator.
+The brief also identifies the sources of its decision authority and where to park decisions
+it cannot make, or a source-authorized default. Independent work retains those limits.
+Retiring the resident session is a separate lifecycle operation.
 
 `--remote-control` is separable: what it buys is the app bridge alone. The messaging socket
 comes from the backgrounded launch itself and the name from `-n`, so `SendMessage`, the fleet

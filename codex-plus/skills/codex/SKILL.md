@@ -67,8 +67,8 @@ When the delegated task is image generation or image editing:
 
 - Include `$imagegen` in the prompt so downstream clients treat it as an explicit image-generation request.
 - Keep the local prompt here minimal and task-specific.
-- Defer prompt construction details to the installed `imagegen` skill when available.
-- Use `references/image-gen-models-prompting-guide.ipynb` only as the backing reference for model choice, prompt structure, text rendering, edits, and multi-image workflows.
+- Defer prompt construction details to the installed `imagegen` skill when available. Codex's bundled copy predates GPT-Image-2.5: it names `gpt-image-2` as the CLI/API default and routes a transparent background to `gpt-image-1.5`. Name `gpt-image-2.5-flare` instead — GPT-Image-2 quality or better at roughly half the latency — and `gpt-image-2.5-sunburst` where the cost of the task is a retry on an edit: multi-turn editing, identity or layout that has to survive several passes, campaign and product work where the precision is what is being paid for. 2.5 renders alpha natively from `background: "transparent"` with `output_format` `png` or `webp`, and its quality ladder runs `low|medium|high|xhigh|max|auto`.
+- Read OpenAI's GPT Image 2.5 prompting guide — https://developers.openai.com/api/docs/guides/image-prompting — for model parameters, per-use-case prompt structure, text rendering, edits, multi-image workflows, and migrating a workflow off an earlier model. It carries reference sections for GPT Image 2, 1.5 and 1 as well.
 
 ## Running a Task
 1. Run on `gpt-6-astra` at `medium` unless the caller named otherwise. Designation normally arrives upstream, in the request itself, so a model or effort already named there IS the answer — do not re-ask it.
@@ -128,12 +128,6 @@ Key sections (grep patterns for navigation):
 - `## Reconcile before switching` - what to send when astra's answer contradicts evidence already in hand
 - `## Choosing an effort rung` - reading the rung off the task instead of off habit
 - `## Subagents` - what a spawned agent inherits, and how to override it
-
-Read the image reference when the delegated task involves image generation, image editing, slides, diagrams, ads, UI mockups, in-image text, or image prompt tuning.
-
-**File**: `references/image-gen-models-prompting-guide.ipynb`
-
-Use the notebook directly instead of duplicating its per-use-case guidance here.
 
 Read the Chrome reference **before** delegating a browser or computer-use task.
 Driving Chrome from codex needs a bootstrap and a tool name that are not

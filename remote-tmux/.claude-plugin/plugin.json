@@ -1,7 +1,7 @@
 {
   "name": "remote-tmux",
-  "description": "`claude remote-control` toolkit: spawn backgrounded worker sessions that are addressable by SendMessage and, on a launch that takes --remote-control, reachable from claude.ai/code and the mobile app (remote-spawn skill)",
-  "version": "5.5.0",
+  "description": "`claude remote-control` toolkit: /remote-spawn launches independent Stints and manages peer-addressable sessions, with Claude app access on launches that register --remote-control",
+  "version": "6.0.0",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

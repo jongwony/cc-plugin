@@ -68,7 +68,13 @@ When the delegated task is image generation or image editing:
 - Include `$imagegen` in the prompt so downstream clients treat it as an explicit image-generation request.
 - Keep the local prompt here minimal and task-specific.
 - Defer prompt construction details to the installed `imagegen` skill when available.
-- Use `references/image-gen-models-prompting-guide.ipynb` only as the backing reference for model choice, prompt structure, text rendering, edits, and multi-image workflows.
+- Use `references/image-gen-models-prompting-guide.ipynb` as the backing reference for prompt structure, text rendering, edits, and multi-image workflows. Its model roster predates GPT-Image-2.5; the block below carries model choice.
+
+### Model roster (supersedes the notebook's §1.1 table)
+
+`gpt-image-2.5-flare` is the default: GPT-Image-2 quality or better at roughly half the latency. Reach for `gpt-image-2.5-sunburst` where the cost of the task is a retry on an edit — multi-turn editing, identity or layout that has to survive several passes, campaign and product work where the precision is what is being paid for; it spends generation time to buy that control.
+
+Two facts the notebook predates. Quality runs `low|medium|high|xhigh|max|auto`, so the top rungs its table stops short of are available. And transparency is native — `background: "transparent"` with `output_format` `png` or `webp` — which retires the downstream background-removal step its §5.4 prescribes.
 
 ## Running a Task
 1. Run on `gpt-6-astra` at `medium` unless the caller named otherwise. Designation normally arrives upstream, in the request itself, so a model or effort already named there IS the answer — do not re-ask it.

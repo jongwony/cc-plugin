@@ -92,7 +92,7 @@ When the delegated task is image generation or image editing:
    - **Multiple models**: issue parallel subagent calls (one per model) in a single response — same prompt, sandbox, and effort, different `-m`. Each returns its own `SESSION_ID`.
 5. Record each returned `SESSION_ID` against its purpose/model. This {purpose → SESSION_ID} map is the only resume handle.
 6. Resume: write new instructions to a fresh `<scratchpad>/codex_prompt_<suffix>.txt`, then delegate to a Bash subagent running `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> <scratchpad>/codex_prompt_<suffix>.txt`. Resume is always by explicit id, which stays deterministic under parallel sessions. The session keeps its original model/effort/sandbox settings. `-C` is the exception: `codex exec resume` has no `--cd`, so pass the same `-C <DIR>` again and the wrapper restores it before handing off. Omit it and the resumed turn runs wherever the subagent happens to be, re-resolving every pointer against that tree without saying so.
-7. Summarize each outcome to the user; for parallel work, surface which `SESSION_ID` maps to which branch. Inform the user: "Resume anytime with 'codex resume'."
+7. Summarize each outcome to the user; for parallel work, surface which `SESSION_ID` maps to which branch. Provide a runnable `codex resume <SESSION_ID>` command for each session, including `-C <DIR>` when a working directory was specified.
 
 ### Quick Reference
 Each command below runs **inside a Bash subagent**, which returns the outcome summary plus the `session id: <uuid>` line as `SESSION_ID: <uuid>`.
@@ -135,17 +135,14 @@ Read the image reference when the delegated task involves image generation, imag
 
 Use the notebook directly instead of duplicating its per-use-case guidance here.
 
-Read the Chrome reference **before** delegating a browser or computer-use task.
-Driving Chrome from codex needs a bootstrap and a tool name that are not
-discoverable from the task, and the most common failure — `codex` on `PATH`
-resolving to a wrapper with its own `CODEX_HOME` — presents as a browser problem
-while all four bundled diagnostics still exit `0`.
+Read the computer-use reference **before** delegating a browser or native-app
+task. Carry its runtime-discovery, effect-verification, and output-handling
+requirements into the delegated prompt; the downstream run may not load this
+skill itself.
 
-**File**: `references/chrome.md`
+**File**: [references/computer-use.md](references/computer-use.md)
 
-It carries the setup, the operation surface, and a symptom table. Do not read the
-troubleshooting reference up front — the symptom table says when to load it.
+It covers selecting the exposed control surface and verifying browser and
+native-app actions. Load the troubleshooting reference only after a failed run:
 
-**File**: `references/chrome-troubleshooting.md`
-
-Load it only after a browser run has actually failed, matching the symptom first.
+**File**: [references/computer-use-troubleshooting.md](references/computer-use-troubleshooting.md)

@@ -26,14 +26,15 @@ HOOK="$CLAUDE_DIR/hooks/codex-auth-restore.sh"
 command -v claude >/dev/null 2>&1 || { echo "Error: claude CLI not found." >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "Error: python3 not found." >&2; exit 1; }
 
-# --- Codex CLI: the npm download is the slowest step, so it runs alongside the
-# plugin installs and is joined at the end.
+# --- Codex CLI: install alongside the plugins and join at the end.
 codex_pid=""
 codex_log=$(mktemp)
 if ! command -v codex >/dev/null 2>&1; then
-  command -v npm >/dev/null 2>&1 || { echo "Error: npm not found; cannot install the Codex CLI." >&2; exit 1; }
-  echo "Codex CLI not found; installing @openai/codex in the background..."
-  npm install -g @openai/codex > "$codex_log" 2>&1 &
+  echo "Codex CLI not found; installing in the background..."
+  (
+    export CODEX_NON_INTERACTIVE=true
+    curl -fsSL https://chatgpt.com/codex/install.sh | sh
+  ) > "$codex_log" 2>&1 &
   codex_pid=$!
 fi
 
@@ -93,11 +94,12 @@ if [ -n "$codex_pid" ]; then
   if wait "$codex_pid"; then
     echo "Installed the Codex CLI."
   else
-    echo "Error: npm install -g @openai/codex failed:" >&2
+    echo "Error: Codex CLI install failed:" >&2
     cat "$codex_log" >&2
     rm -f "$codex_log"
     exit 1
   fi
+  export PATH="${CODEX_INSTALL_DIR:-$HOME/.local/bin}:$PATH"
   command -v codex >/dev/null 2>&1 || { echo "Error: Codex CLI is still not on PATH after install." >&2; exit 1; }
 fi
 rm -f "$codex_log"

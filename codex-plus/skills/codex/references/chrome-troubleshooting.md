@@ -31,8 +31,15 @@ Two signals mislead here:
   `~/.codex/config.toml` while the run reads another one.
 
 Do not re-check these — they are ruled out: the Chrome extension, its native-host
-manifest, sandbox mode, working directory, project trust, and the `browser_use` /
-`plugins` / `in_app_browser` flags.
+manifest, sandbox mode, and the `browser_use` / `plugins` / `in_app_browser` flags.
+
+- The run's working directory is **not** ruled out → check it first, per the
+  launch procedure in `SKILL.md`, before spending a turn here.
+- What was observed: a run whose `-C` named a path absent from
+  `[projects."…"]` in `~/.codex/config.toml` reported no evaluator in its
+  inventory, and the same prompt passed unchanged once `-C` named a listed path.
+- What that establishes is the dependence, not its mechanism → do not report it
+  as "an unlisted path drops every MCP tool".
 
 ## `scroll()` returned success and the page did not move
 

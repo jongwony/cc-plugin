@@ -26,6 +26,9 @@ Decide per operation, not per task. Name the chosen interface in the prompt.
 - Browser work that is short, or long but non-repetitive, and the accessibility
   tree exposes the controls → CUA. Prefer element indices; fall back to
   coordinates only when no accessibility element is available.
+- "Exposes the controls" is observed, not assumed → a fresh `getAXState()`
+  identifies the intended control and carries the action needed. It does not →
+  browser-client.
 - Browser work needs DOM ground truth, read-only page evaluation, console logs,
   content export, file choosers, JS dialogs, browser history, or clipboard →
   browser-client. CUA's `Target` has no equivalent member.
@@ -38,9 +41,16 @@ Decide per operation, not per task. Name the chosen interface in the prompt.
 
 ## Switching interfaces mid-task
 
-- Switching → verify the intended browser, profile and tab first, and take fresh
-  state before acting. Handles and element indices do not transfer between the
-  two interfaces.
+- Switching → take fresh state on the receiving interface, then verify browser,
+  profile and tab before acting. Handles and element indices do not transfer
+  between the two interfaces.
+- Addressing the target on the receiving interface → use the ids that interface
+  just supplied, not a name carried across.
+  `cua.getTab(id, { browser: "Chrome" })` answers `Browser is not available:
+  Chrome`; the `browserId` from fresh state succeeds.
+- Matching one tab across the two interfaces → URL and title are evidence, not
+  identity. Two tabs carrying both → distinguish them on further evidence, or
+  report the switch blocked. Never pick one.
 - One interface unavailable → use the other only when its documented capabilities
   satisfy the same operation on the same target. Otherwise report the missing
   capability rather than substituting a weaker operation.
@@ -52,6 +62,12 @@ Decide per operation, not per task. Name the chosen interface in the prompt.
 No bootstrap. `cua` is a global in `mcp__cua_repl.js`; state persists across
 calls. `cua.getApp()`, `cua.getTab()` and `cua.createBrowserTab()` return the
 binding and print the current UI state in the same result.
+
+- First call of a session, or first after a reset → exactly one `cua.*` call in
+  that invocation. No second call, no wait, no snapshot alongside it.
+- Its result carries the documentation → read that before continuing, and use
+  only members it or this file names. This is the version-current source; nothing
+  here restates it.
 
 ```typescript
 const state = await cua.getState();              // { apps, browsers[].tabs }
@@ -154,6 +170,9 @@ browser.history(opts)                     // may prompt for approval; never spec
 - Optional capabilities are discovered, not assumed:
   `await (await tab.capabilities.get("cdp")).documentation()`, likewise
   `pageAssets` on a tab and `viewport` on a browser.
+- A member this file does not name → `await browser.documentation()` first: it
+  returns browser guidance plus the core API reference, version-current. Do not
+  infer a signature.
 - Further topics load on demand:
   `await agent.documentation.get("browser-troubleshooting" | "local-web-development" | "file-uploads" | "chrome-file-upload-troubleshooting" | "screenshots")`.
 
@@ -217,10 +236,17 @@ Match the observed string, then act.
 - `Detached while handling command` on an input — every browser-client input
   path refuses the same way; do not retry them. CUA is unobserved here — route
   it by "Switching interfaces mid-task", not as a retry.
+- `Computer Use was not approved to use <app>` — the native operation is blocked
+  pending supported authorization; neither this file nor the API is at fault.
+  Name the app and the denied step, return that condition to the caller, and
+  stop. Do not retry a different app.
 - `scrollY` unchanged after `scroll()` returned — the page manages its own scroll
   and the call reports success either way.
-- `browsers.get("chrome")` throws, or no browser tool appears in the run's
-  inventory — load [`chrome-troubleshooting.md`](chrome-troubleshooting.md).
+- No evaluator (`mcp__cua_repl.js`, `mcp__node_repl__js`) appears in the run's
+  inventory — check the execution context first, per the launch procedure in
+  `SKILL.md`. Diagnose no further here.
+- `browsers.get("chrome")` throws — load
+  [`chrome-troubleshooting.md`](chrome-troubleshooting.md).
 
 Anything else: report the failing step with its evidence rather than working
 around it.

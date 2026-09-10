@@ -87,6 +87,10 @@ When the delegated task is image generation or image editing:
 3. Craft prompt per Context Classification and Prompt Template — classify context, write to `<scratchpad>/codex_prompt_<suffix>.txt`.
 4. Delegate execution to a Bash subagent (Task tool) — never run `codex-run.sh` directly in the main session. This keeps codex's verbose banner and full output out of the main context. Give the subagent:
    - the exact command: `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh [options] <scratchpad>/codex_prompt_<suffix>.txt` with `-m MODEL` / `-r EFFORT` / `-s SANDBOX` / `-C DIR`, or `-S <SESSION_ID>` to resume.
+   - **`-C` names the execution context, and the wrapper checks nothing about it.** It passes the directory through for new and resumed runs alike, so the tools a task needs are not guaranteed by the command having been accepted:
+     - The task needs a specific tool (an evaluator, an MCP server) → confirm it is present in that directory before reading its absence as a task or document failure.
+     - `-C` changes between runs of the same work → re-confirm; a capability present under the previous directory is not carried by the resume.
+     - Observed: a run whose `-C` named a path absent from `[projects."…"]` in `~/.codex/config.toml` reported no evaluator in its inventory, and the same prompt passed unchanged once `-C` named a listed path. The dependence is established; the mechanism is not — do not report it as "an unlisted path drops every MCP tool".
    - return contract: run the command and return ONLY (a) a concise outcome summary and (b) the session id. codex prints `session id: <uuid>` to stderr; the subagent extracts that line verbatim and returns it as `SESSION_ID: <uuid>`. The wrapper does no parsing — stderr is left unsuppressed precisely so the subagent can read the session id and any failure straight from the output.
    - **Single model**: one subagent call.
    - **Multiple models**: issue parallel subagent calls (one per model) in a single response — same prompt, sandbox, and effort, different `-m`. Each returns its own `SESSION_ID`.
@@ -104,7 +108,7 @@ Base patterns:
 - Resume a session — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> <scratchpad>/codex_prompt_<suffix>.txt`; the explicit id is the resume path, deterministic under parallel sessions.
 
 Modifiers, added to any base pattern above:
-- Different working directory — `-C <DIR>`; pass it again on resume (step 6)
+- Different working directory — `-C <DIR>`; pass it again on resume (step 6), and confirm the task's required tools are present there (step 4)
 - Model and effort — `-m gpt-5.6-sol`, `-r xhigh` (effort defaults to `medium`; `-r` raises it)
 - Capture the answer to a file — `-o <FILE>` writes codex's final message to FILE deterministically
 

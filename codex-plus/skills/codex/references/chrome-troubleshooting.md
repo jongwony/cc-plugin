@@ -43,11 +43,11 @@ return.
 ## `Detached while handling command` on an input
 
 Page-specific, not an API defect — ordinary form pages take input fine. On a page
-that does this, **every input path fails the same way**: `locator.type`,
-`locator.fill`, `locator.pressSequentially`, `cua.type`, `cua.keypress`,
-`dom_cua.type`, `dom_cua.keypress`. Coordinate focus still succeeds, so the field
-is reachable; the write is what fails. No wait length repairs it, and the locator
-is not stale — diagnostics report a match on one visible input.
+that does this, **every browser-client input path fails the same way**:
+`locator.type`, `locator.fill`, `locator.pressSequentially`. Coordinate focus
+still succeeds, so the field is reachable; the write is what fails. No wait
+length repairs it, and the locator is not stale — diagnostics report a match on
+one visible input.
 
 `locator.press()` is the one to watch: it can return **no error** and still leave
 the field empty. A call completing is not evidence that anything landed.

@@ -214,8 +214,9 @@ Match the observed string, then act.
   name.
 - A call returned cleanly and the effect is absent — expected for effect-only
   calls. Confirm with `evaluate` rather than reading the return.
-- `Detached while handling command` on an input — the page refuses every input
-  path. Do not try the others.
+- `Detached while handling command` on an input — every browser-client input
+  path refuses the same way; do not retry them. CUA is unobserved here — route
+  it by "Switching interfaces mid-task", not as a retry.
 - `scrollY` unchanged after `scroll()` returned — the page manages its own scroll
   and the call reports success either way.
 - `browsers.get("chrome")` throws, or no browser tool appears in the run's

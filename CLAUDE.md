@@ -112,6 +112,27 @@ as a user-level SessionStart hook: the environment's variables reach the
 session but not the setup script, so the Codex login is restored from
 `CODEX_AUTH_JSON_B64` there.
 
+An **OpenAI Codex cloud** environment takes one line in its own setup-script
+field, and gets Claude Code inside it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/codex-cloud-setup.sh | bash
+```
+
+`scripts/codex-cloud-setup.sh` installs the Claude Code CLI, runs both
+marketplaces' installers, adds the opt-in epistemic-protocols plugins,
+persists the login, and registers Tavily's remote MCP server. Three Codex
+cloud constraints govern any edit to it:
+
+- Internet reaches the setup phase only — off by default during the agent
+  phase — so every network step finishes inside the script.
+- Secrets are stripped before the agent phase, so `CLAUDE_CODE_OAUTH_TOKEN`
+  (or `ANTHROPIC_API_KEY`) is written into `~/.claude/settings.json`'s `env`
+  block here rather than through a SessionStart hook.
+- `claude mcp add` has no `--bearer-token-env-var`, and `${VAR}` expansion is
+  `.mcp.json`-only, so `TAVILY_API_KEY` is resolved at setup time into the user
+  config, and registration is skipped when it is unset.
+
 ## Workflow
 
 Test inside Claude Code: `/plugin marketplace add <repo>`, then `/plugin install

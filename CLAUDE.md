@@ -119,13 +119,17 @@ field, and gets Claude Code inside it:
 curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/codex-cloud-setup.sh | bash
 ```
 
-`scripts/codex-cloud-setup.sh` installs the Claude Code CLI, runs both
-marketplaces' installers, adds the opt-in epistemic-protocols plugins,
-persists the login, and registers Tavily's remote MCP server. Three Codex
-cloud constraints govern any edit to it:
+`scripts/codex-cloud-setup.sh` installs the Claude Code CLI with the native
+installer (`https://claude.ai/install.sh`), runs both marketplaces'
+installers, adds the opt-in epistemic-protocols plugins, persists the login,
+and registers Tavily's remote MCP server. Four Codex cloud constraints govern
+any edit to it:
 
 - Internet reaches the setup phase only — off by default during the agent
   phase — so every network step finishes inside the script.
+- The agent phase is a separate process inheriting no `export`, and the
+  installer's `$HOME/.local/bin` is not on the default PATH, so the binary is
+  symlinked into a directory already on PATH.
 - Secrets are stripped before the agent phase, so `CLAUDE_CODE_OAUTH_TOKEN`
   (or `ANTHROPIC_API_KEY`) is written into `~/.claude/settings.json`'s `env`
   block here rather than through a SessionStart hook.

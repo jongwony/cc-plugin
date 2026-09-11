@@ -24,8 +24,12 @@
 # only place that can see them, here the setup script is the only place that
 # can see a Secret.
 #
-# The default `universal` image runs as root with npm and python3 present, so
-# no sudo and no runtime bootstrap.
+# The default `universal` image runs as plain root with curl and python3
+# present. The CLI comes from the native installer, which downloads a platform
+# binary and so carries no Node dependency at all — no version floor to meet at
+# install time and no optional-dependency resolution to fail inside a
+# container, the two ways the npm route breaks there. Its sudo guard fires only
+# when SUDO_USER names a real user, so plain root passes.
 
 set -o pipefail
 
@@ -34,11 +38,14 @@ CLAUDE_DIR="$HOME/.claude"
 SETTINGS="$CLAUDE_DIR/settings.json"
 
 command -v python3 >/dev/null 2>&1 || { echo "Error: python3 not found." >&2; exit 1; }
+# The Claude Code installer takes curl or wget; this script's own fetches below
+# are curl, so curl is what it requires.
+command -v curl >/dev/null 2>&1 || { echo "Error: curl not found." >&2; exit 1; }
 
-# --- Claude Code CLI. Unlike cloud-setup.sh, the slow npm install cannot run
-# alongside the plugin installs: `claude plugin install` is what the installers
-# below call, so the dependency runs the other way. What does overlap is the
-# network fetch of the two installer scripts, which needs nothing local.
+# --- Claude Code CLI. Unlike cloud-setup.sh, the install cannot run alongside
+# the plugin installs: `claude plugin install` is what the installers below
+# call, so the dependency runs the other way. What does overlap is the network
+# fetch of the two installer scripts, which needs nothing local.
 claude_log=$(mktemp)
 cc_installer=$(mktemp)
 ep_installer=$(mktemp)
@@ -48,17 +55,55 @@ curl -fsSL "$RAW/epistemic-protocols/main/scripts/install.sh" -o "$ep_installer"
 ep_pid=$!
 
 if ! command -v claude >/dev/null 2>&1; then
-  command -v npm >/dev/null 2>&1 || { echo "Error: npm not found; cannot install the Claude Code CLI." >&2; exit 1; }
-  echo "Claude Code CLI not found; installing @anthropic-ai/claude-code..."
-  if ! npm install -g @anthropic-ai/claude-code > "$claude_log" 2>&1; then
-    echo "Error: npm install -g @anthropic-ai/claude-code failed:" >&2
+  echo "Claude Code CLI not found; running the native installer..."
+  # rc is captured off the pipeline itself — `if ! cmd` would replace the
+  # installer's status with the negation, losing the 137 the OOM case turns on.
+  rc=0
+  { curl -fsSL https://claude.ai/install.sh | bash; } > "$claude_log" 2>&1 || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "Error: the Claude Code installer failed (exit $rc):" >&2
     cat "$claude_log" >&2
+    # 137 is the kernel OOM killer; the installer needs roughly 512MB free and
+    # prints nothing of its own when the signal lands.
+    [ "$rc" -eq 137 ] && echo "Exit 137 is an out-of-memory kill — the installer needs about 512MB free." >&2
     rm -f "$claude_log" "$cc_installer" "$ep_installer"
     exit 1
   fi
   echo "Installed the Claude Code CLI."
 fi
 rm -f "$claude_log"
+
+# --- PATH. The installer puts the binary in $HOME/.local/bin, which is not on
+# the default PATH, and the agent phase is a separate process that inherits no
+# `export` from here. A symlink into a directory already on PATH is what
+# survives, assuming nothing about which shell init the agent phase reads.
+if ! command -v claude >/dev/null 2>&1; then
+  claude_bin=""
+  for c in "$HOME/.local/bin/claude" "$HOME/.claude/local/claude"; do
+    [ -x "$c" ] && { claude_bin="$c"; break; }
+  done
+  [ -n "$claude_bin" ] || { echo "Error: the installer reported success but no claude binary was found." >&2; exit 1; }
+
+  linked=""
+  for d in /usr/local/bin /usr/bin; do
+    case ":$PATH:" in *":$d:"*) ;; *) continue ;; esac
+    [ -d "$d" ] && [ -w "$d" ] || continue
+    if ln -sf "$claude_bin" "$d/claude"; then linked="$d/claude"; break; fi
+  done
+
+  if [ -n "$linked" ]; then
+    echo "Linked $claude_bin to $linked so the agent phase finds it on PATH."
+  else
+    # No writable PATH directory: fall back to the shell init files, which do
+    # assume the agent phase reads one of them.
+    for rcfile in "$HOME/.bashrc" "$HOME/.profile"; do
+      # shellcheck disable=SC2016  # $HOME must stay literal, to expand when the rc is read
+      grep -qsF '.local/bin' "$rcfile" || echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$rcfile"
+    done
+    export PATH="$HOME/.local/bin:$PATH"
+    echo "No writable directory on PATH; appended \$HOME/.local/bin to ~/.bashrc and ~/.profile instead." >&2
+  fi
+fi
 command -v claude >/dev/null 2>&1 || { echo "Error: Claude Code CLI is not on PATH after install." >&2; exit 1; }
 
 # --- Login. CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`) is the headless

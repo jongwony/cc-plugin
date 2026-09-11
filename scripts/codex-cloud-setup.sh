@@ -61,6 +61,43 @@ fi
 rm -f "$claude_log"
 command -v claude >/dev/null 2>&1 || { echo "Error: Claude Code CLI is not on PATH after install." >&2; exit 1; }
 
+# --- Login. CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`) is the headless
+# path; ANTHROPIC_API_KEY is the fallback. Either may be supplied as a Secret,
+# which this script is the last thing to see, so it is persisted into the
+# settings `env` block where the agent phase still finds it. A missing login is
+# reported, not fatal — the environment still builds, and the CLI is there for
+# whoever supplies one later.
+# This precedes every `claude` call below: unlike cloud-setup.sh, which runs
+# against an already-authenticated CLI, the one installed above has no login.
+# It touches no network, so the background fetches keep overlapping the install.
+mkdir -p "$CLAUDE_DIR"
+auth_var=""
+for v in CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY; do
+  if [ -n "${!v:-}" ]; then auth_var="$v"; break; fi
+done
+
+if [ -n "$auth_var" ]; then
+  # The value is read from the environment python3 inherits, never from argv,
+  # so it stays out of the process table.
+  if python3 - "$SETTINGS" "$auth_var" <<'PY'
+import json, os, sys
+path, key = sys.argv[1], sys.argv[2]
+settings = json.load(open(path)) if os.path.exists(path) else {}
+settings.setdefault("env", {})[key] = os.environ[key]
+with open(path, "w") as f:
+    json.dump(settings, f, indent=2)
+    f.write("\n")
+PY
+  then
+    chmod 600 "$SETTINGS"
+    echo "Persisted $auth_var into $SETTINGS for the agent phase."
+  else
+    echo "Error: could not write $SETTINGS; the login was not persisted." >&2
+  fi
+else
+  echo "Neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY is set; claude will have no login until one is supplied. Generate one with \`claude setup-token\` and add it to the environment's variables or secrets."
+fi
+
 # --- Marketplaces: each installer is idempotent and leaves its opt-in plugins out.
 wait "$cc_pid" && bash "$cc_installer" || echo "  Skipped: cc-plugin marketplace" >&2
 wait "$ep_pid" && bash "$ep_installer" || echo "  Skipped: epistemic-protocols marketplace" >&2
@@ -91,40 +128,6 @@ ensure_plugin() {
 
 ensure_plugin epistemic-cooperative@epistemic-protocols
 ensure_plugin route@epistemic-protocols
-
-# --- Login. CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`) is the headless
-# path; ANTHROPIC_API_KEY is the fallback. Either may be supplied as a Secret,
-# which this script is the last thing to see, so it is persisted into the
-# settings `env` block where the agent phase still finds it. A missing login is
-# reported, not fatal — the environment still builds, and the CLI is there for
-# whoever supplies one later.
-mkdir -p "$CLAUDE_DIR"
-auth_var=""
-for v in CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY; do
-  if [ -n "${!v:-}" ]; then auth_var="$v"; break; fi
-done
-
-if [ -n "$auth_var" ]; then
-  # The value is read from the environment python3 inherits, never from argv,
-  # so it stays out of the process table.
-  if python3 - "$SETTINGS" "$auth_var" <<'PY'
-import json, os, sys
-path, key = sys.argv[1], sys.argv[2]
-settings = json.load(open(path)) if os.path.exists(path) else {}
-settings.setdefault("env", {})[key] = os.environ[key]
-with open(path, "w") as f:
-    json.dump(settings, f, indent=2)
-    f.write("\n")
-PY
-  then
-    chmod 600 "$SETTINGS"
-    echo "Persisted $auth_var into $SETTINGS for the agent phase."
-  else
-    echo "Error: could not write $SETTINGS; the login was not persisted." >&2
-  fi
-else
-  echo "Neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY is set; claude will have no login until one is supplied. Generate one with \`claude setup-token\` and add it to the environment's variables or secrets."
-fi
 
 # --- Tavily MCP: how the epistemic-cooperative goal-research skill reaches
 # external search. The codex side of cloud-setup.sh keeps the key off disk with

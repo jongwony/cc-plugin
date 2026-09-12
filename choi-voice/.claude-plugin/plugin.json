@@ -1,0 +1,9 @@
+{
+  "name": "choi-voice",
+  "description": "Writing-voice profiles for polishing drafts in Jongwon Choi's own tone — currently the LinkedIn post profile (/choi-voice:linkedin-voice-polish)",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

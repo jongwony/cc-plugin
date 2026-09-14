@@ -48,12 +48,12 @@ the change.
 
 ## Conventions
 
-- **Helper scripts: Python by default; Bun TypeScript when the script's
-  counterpart is a page the plugin ships.** *Python* = PEP 723 + uv — inline
-  script metadata (`# /// script … ///`), `dependencies = []` declared even when
-  empty, invoked as `uv run scripts/x.py`. *Bun TypeScript* — `bun
-  scripts/x.ts`. Both are prerequisites rather than vendored artifacts; a skill
-  that needs one says so, and says how to install it.
+- **Helper scripts.** A Python script prefers inline uv environment setup —
+  PEP 723 script metadata (`# /// script … ///`) with `dependencies = []`
+  declared even when empty, run as `uv run scripts/x.py`. A TypeScript script
+  runs with `bun scripts/x.ts`. Whatever runtime a script needs is a
+  prerequisite rather than a vendored artifact: the skill says so, and says how
+  to install it.
 - **Agent vs Skill.** Agent = how to behave (principles, boundaries, error
   philosophy). Skill = what to do (workflow, procedures, commands). A
   `skills:`-loaded skill is the single home for its workflow; the agent adds only

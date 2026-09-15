@@ -88,6 +88,11 @@
       "name": "chrome-agent",
       "source": "./chrome-agent",
       "description": "Chrome operator subagent (sonnet) — delegate end-to-end browser flows to the Claude in Chrome extension, keeping screenshots and DOM out of the main context"
+    },
+    {
+      "name": "choi-voice",
+      "source": "./choi-voice",
+      "description": "Writing-voice polish profiles (LinkedIn)"
     }
   ]
 }

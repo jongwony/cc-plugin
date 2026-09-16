@@ -110,7 +110,7 @@ Modifiers, added to any base pattern above:
 
 ## Error Handling
 - Stop and report failures whenever `codex --version` or a `codex exec` command exits non-zero; request direction before retrying.
-- Before you use high-impact flags (`--sandbox danger-full-access`, `--skip-git-repo-check`) ask the user for permission using AskUserQuestion unless it was already given.
+- Before you select `-s danger-full-access`, ask the user for permission using AskUserQuestion unless it was already given. `--skip-git-repo-check` is not a choice you make: the wrapper passes it on every run, because a prompt file in a scratchpad is routinely outside any repository.
 - When output includes warnings or partial results, report them beside the outcome summary.
 
 ## Reference Guide

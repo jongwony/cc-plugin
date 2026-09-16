@@ -1,6 +1,6 @@
 {
   "name": "claude-plus",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Claude Code CLI integration (fable consult, execution delegation, session management)",
   "author": {
     "name": "Jongwon Choi",

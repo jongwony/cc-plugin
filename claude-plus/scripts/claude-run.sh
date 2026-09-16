@@ -15,13 +15,16 @@ CDPATH=
 # fable is what this plugin exists to reach. A consult wants a judgment from a
 # model that is not the one already holding the question, and every caller of
 # this wrapper — Claude Code or Codex — is a different model than fable.
+# Execution delegation is the exception and takes `-m opus`; the default does
+# not cover it, so skills/claude/SKILL.md requires the caller to pass it.
 readonly DEFAULT_MODEL="fable"
-# medium is a starting point, not a ceiling. Raising effort is a per-call
-# judgment made from the task in front of the caller; a default cannot read the
-# task, so pinning the top of the ladder here spends it on every run that never
-# needed it. The ladder is low|medium|high|xhigh|max. Callers escalate
-# deliberately.
-readonly DEFAULT_EFFORT="medium"
+# high, because of what this wrapper is for. Reaching for it means reaching past
+# the loop already running the task — for more model and more thinking than that
+# loop has — and a default one rung down quietly gives back part of what was
+# being asked for. The ladder is low|medium|high|xhigh|max, and it is still a
+# starting point: callers escalate to xhigh or max, or drop to medium or low for
+# work that does not need the depth.
+readonly DEFAULT_EFFORT="high"
 # auto lets the run proceed unattended. `claude -p` is headless: there is no
 # one to answer a permission prompt, so a mode that prompts is a mode that
 # hangs. What holds a run to its lane is the role its prompt declares —
@@ -43,10 +46,13 @@ usage() {
 Usage: claude-run.sh [options] <prompt_file>
 
 Options:
-  -m, --model MODEL      Model alias or full name (default: fable)
-  -r, --effort EFFORT    Effort level: low|medium|high|xhigh|max (default:
-                         medium, a starting point rather than a ceiling —
-                         escalate per task)
+  -m, --model MODEL      Model alias or full name (default: fable; an execution
+                         delegation passes -m opus, which the default does not
+                         cover)
+  -r, --effort EFFORT    Effort level: low|medium|high|xhigh|max (default: high,
+                         since reaching for this wrapper means reaching past the
+                         loop already running the task — still a starting point,
+                         so escalate or drop it per task)
   -p, --permission-mode MODE
                          Permission mode: acceptEdits|auto|bypassPermissions|
                          manual|dontAsk|plan (default: auto). A headless run

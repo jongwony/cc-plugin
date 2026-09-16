@@ -10,9 +10,19 @@ Two uses share one path: **delegating execution** to a Claude session, and
 `scripts/claude-run.sh`, which owns the invocation; this file owns what to send
 and what to accept back.
 
-The default model is `fable`. A consult is worth asking for because the
-answering model is not the one already holding the question — keep it that way
-when overriding.
+## Which model
+
+The two uses take different models, and only one of them is the wrapper's
+default.
+
+- **Consult, and everything else** — `fable`. It is the wrapper's default, so
+  pass no `-m`.
+- **Execution delegation** — **pass `-m opus`.** The wrapper does not default to
+  it. Omit the flag on an execution run and the work silently goes to fable
+  instead, which is not what an execution run is for.
+
+A consult is worth asking for because the answering model is not the one already
+holding the question — keep it that way when overriding either.
 
 ## Where this runs
 
@@ -43,6 +53,9 @@ by harness.
   Claude-specific capability or an existing Claude conversation, or when a
   decision wants a judgment from a different model. Keep ordinary work in the
   current harness otherwise.
+- Settle which of the two uses this is before building the command, because it
+  fixes the model: an execution run takes `-m opus`, a consult takes the
+  default. See **Which model**.
 - Write the prompt to a file under the calling session's scratchpad, named with
   a short unique suffix — `<scratchpad>/claude_prompt_<suffix>.txt`, as an
   absolute path. Parallel runs each get their own file; one shared name and they

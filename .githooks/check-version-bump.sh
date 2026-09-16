@@ -6,7 +6,8 @@
 # its {plugin}/.claude-plugin/plugin.json "version" VALUE must change in the same
 # change-set. Re-emitting the same version line (reformat / key reorder) does NOT
 # count. Non-semantic top-level files (README.md, README_ko.md, LICENSE,
-# .gitignore, .gitattributes) and .claude-plugin/ meta do not require a bump.
+# .gitignore, .gitattributes) and a plugin's own manifest dirs (.claude-plugin/,
+# .codex-plugin/) do not require a bump.
 # A new plugin (no prior plugin.json) is satisfied by having a version at all.
 #
 # Modes:
@@ -97,7 +98,9 @@ for pj in "${plugins[@]}"; do
   content=0
   for f in "${changed[@]}"; do
     case "$f" in "$pdir"/*) ;; *) continue ;; esac           # under this plugin
-    case "$f" in "$pdir"/.claude-plugin/*) continue ;; esac   # skip .claude-plugin/ meta
+    # Skip a plugin's own manifest directories. Both are top-level metadata in
+    # the same sense: .claude-plugin/ for Claude Code, .codex-plugin/ for Codex.
+    case "$f" in "$pdir"/.claude-plugin/*|"$pdir"/.codex-plugin/*) continue ;; esac
     rel=${f#"$pdir"/}
     case "$rel" in
       */*) : ;;                                               # nested file → semantic content

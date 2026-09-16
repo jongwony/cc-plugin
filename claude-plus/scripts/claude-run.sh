@@ -55,7 +55,9 @@ Options:
   -C, --cwd DIR          Working directory for the run. `claude` has no --cd of
                          its own, so this script cd's there before handing off.
                          Pass it again when resuming: pointers in the prompt
-                         re-resolve against whatever tree the run lands in
+                         re-resolve against whatever tree the run lands in.
+                         It does NOT relocate the prompt file, -o or -D — those
+                         are resolved first, against the caller's directory
   -a, --add-dir DIR      Extra readable directory (repeatable). An access
                          grant, not a substitute for -C
   -S, --session-id ID    Resume that session by UUID (deterministic; the only

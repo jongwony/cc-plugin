@@ -17,14 +17,25 @@ when overriding.
 
 ## Where this runs
 
-- This skill loads in more than one harness. Reach the wrapper at
-  `${CLAUDE_PLUGIN_ROOT}/scripts/claude-run.sh`; when the harness leaves that
-  variable unexpanded, find the installed copy with
-  `ls -d ~/.claude/plugins/cache/cc-plugin/claude-plus ~/.codex/plugins/cache/cc-plugin/claude-plus/* 2>/dev/null`
-  and use the `scripts/claude-run.sh` under it.
+This skill loads in more than one harness, and how to reach the wrapper differs
+by harness.
+
+- **The wrapper is always `../../scripts/claude-run.sh` relative to this file** —
+  resolve it from the directory this SKILL.md was loaded from. That holds in
+  every harness and under every install layout, so prefer it.
+- `${CLAUDE_PLUGIN_ROOT}/scripts/claude-run.sh` is the same file where that
+  variable is set. Claude Code sets it; **Codex does not** — it is a Claude Code
+  variable, and was observed unset in a fresh Codex session with this plugin
+  installed. Use it only after confirming it is non-empty.
 - Run `claude-run.sh -h` for the flag set, and `command -v claude` before
   depending on the CLI. Report an unavailable executable or a missing
   integration before the work that depends on it.
+- **Invocation files are caller-relative.** The prompt file, `-o` and `-D`
+  resolve against the directory the wrapper is invoked from, and they are
+  resolved before `-C` takes effect — so a relative path names a caller-side
+  file, never one under the `-C` tree. Pass absolute paths for all three. `-C`
+  governs where the run executes, which is what the *pointers inside the prompt*
+  resolve against; that is a different question and the one `-C` is for.
 - All prompts sent to `claude` are written in English.
 
 ## Select and prepare
@@ -34,8 +45,10 @@ when overriding.
   decision wants a judgment from a different model. Keep ordinary work in the
   current harness otherwise.
 - Write the prompt to a file under the calling session's scratchpad, named with
-  a short unique suffix — `<scratchpad>/claude_prompt_<suffix>.txt`. Parallel
-  runs each get their own file; one shared name and they overwrite each other.
+  a short unique suffix — `<scratchpad>/claude_prompt_<suffix>.txt`, as an
+  absolute path. Parallel runs each get their own file; one shared name and they
+  overwrite each other. Where the harness announces no scratchpad directory,
+  fall back to a directory under `${TMPDIR:-/tmp}`.
 - State in every prompt the **role** the run is acting in, read from what the
   request actually asks for. A headless run has no approval step, so the role is
   what holds it to its lane.
@@ -48,10 +61,11 @@ when overriding.
   instructions rather than restating them.
 - When the task needs a specific skill, plugin or MCP server, verify it is
   available in the target environment and name it in the prompt.
-- Select the actual project directory with `-C`, and write invocation-file paths
-  so they resolve from there. `-a/--add-dir` grants extra reads; it does not
-  replace the working directory. Apply the current task's repository isolation
-  rules to delegated edits.
+- Select the actual project directory with `-C`: it is where the run executes,
+  so it is what the prompt's pointers resolve against. The invocation files are
+  not among them — see **Where this runs**. `-a/--add-dir` grants extra reads; it
+  does not replace the working directory. Apply the current task's repository
+  isolation rules to delegated edits.
 
 ## Run and observe
 

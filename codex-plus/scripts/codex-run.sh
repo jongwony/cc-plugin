@@ -1,5 +1,5 @@
 #!/bin/bash
-# codex-run.sh — Parameterized CLI wrapper for codex exec.
+# codex-run.sh — Parameterized CLI wrapper for codex exec and codex review.
 # Single entry point for all codex invocations. Run with -h for usage.
 
 set -euo pipefail
@@ -41,10 +41,16 @@ SANDBOX="$DEFAULT_SANDBOX"
 SESSION_ID=""
 CWD=""
 OUTPUT_FILE=""
+REVIEW=0
+REVIEW_BASE=""
+REVIEW_COMMIT=""
+REVIEW_TITLE=""
+REVIEW_UNCOMMITTED=0
 
 usage() {
   cat <<'USAGE'
 Usage: codex-run.sh [options] <prompt_file>
+       codex-run.sh --review [scope] [options] [prompt_file]
 
 Options:
   -m, --model MODEL      Model name (default: gpt-6-astra)
@@ -72,6 +78,29 @@ Options:
                          capture, decoupled from stdout banner noise)
   -h, --help             Show this help
 
+Review mode (`codex review`: the review rubric as system prompt, prioritized
+findings as the answer):
+      --review           Run `codex review` instead of `codex exec`
+  -b, --base BRANCH      Scope: the changes against BRANCH (merge base with HEAD)
+      --commit SHA       Scope: the changes introduced by SHA
+      --title TITLE      Commit title shown in the review summary (with --commit)
+      --uncommitted      Scope: staged, unstaged and untracked changes
+
+  `codex review` takes exactly one target: a scope flag or custom instructions,
+  never both — clap rejects `--base main "<prompt>"`. This wrapper accepts a
+  scope AND a prompt file together and composes the one target codex allows:
+  the scope sentence codex would have rendered for that flag (merge base
+  resolved here, in the target cwd, the way codex resolves it), a blank line,
+  then the prompt file — sent as custom instructions on stdin. A scope alone is
+  passed through as the flag; a prompt file alone is passed through as custom
+  instructions. One scope at a time.
+
+  `codex review` has no -m, -C, --sandbox or --output-last-message of its own:
+  -m/-r/-s become `-c` config overrides, -C becomes a cd before the handoff,
+  and -o captures stdout (the final message is all codex writes there; the
+  banner and `session id:` go to stderr). -S is rejected: a review is not
+  resumable.
+
 codex prints "session id: <uuid>" to stderr on every run. stderr is not
 suppressed, so the caller (a subagent) reads that line directly and resumes
 that exact session later with -S. Resume is always by explicit id — there is
@@ -81,6 +110,8 @@ Examples (<scratchpad> = the calling session's scratchpad directory):
   codex-run.sh <scratchpad>/codex_prompt_a3f9.txt
   codex-run.sh -m gpt-5.6-terra -r xhigh <scratchpad>/codex_prompt_a3f9.txt
   codex-run.sh -S 019e3eff-c191-7401-bffb-bb8c31ac37c7 <scratchpad>/codex_prompt_a3f9.txt
+  codex-run.sh --review -b main -r high -C ~/repo -o <scratchpad>/review_a3f9.md <scratchpad>/codex_prompt_a3f9.txt
+  codex-run.sh --review --uncommitted -C ~/repo
 USAGE
   exit "${1:-0}"
 }
@@ -94,6 +125,9 @@ USAGE
 # no such check — their values are always handed through to codex, so an empty
 # one is codex's to reject in the open rather than something this script
 # swallows. The asymmetry is the point; it is not an oversight to even out.
+# The review scopes (-b, --commit, --title) are in the first group: an empty
+# scope value would be read below as "no scope given" and silently change which
+# target codex reviews.
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -m|--model) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; MODEL="$2"; shift 2 ;;
@@ -102,19 +136,38 @@ while [[ $# -gt 0 ]]; do
     -C|--cwd) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; CWD="$2"; shift 2 ;;
     -S|--session-id) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; SESSION_ID="$2"; shift 2 ;;
     -o|--output-last-message) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; OUTPUT_FILE="$2"; shift 2 ;;
+    --review) REVIEW=1; shift ;;
+    -b|--base) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; REVIEW_BASE="$2"; shift 2 ;;
+    --commit) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; REVIEW_COMMIT="$2"; shift 2 ;;
+    --title) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; REVIEW_TITLE="$2"; shift 2 ;;
+    --uncommitted) REVIEW_UNCOMMITTED=1; shift ;;
     -h|--help) usage 0 ;;
     -*) echo "Unknown option: $1" >&2; usage 1 ;;
     *) [[ -z "${PROMPT_FILE:-}" ]] || { echo "Error: only one prompt file is accepted, got \"$PROMPT_FILE\" and \"$1\"" >&2; usage 1; }; PROMPT_FILE="$1"; shift ;;
   esac
 done
 
-# Validate prompt file
-if [[ -z "${PROMPT_FILE:-}" ]]; then
-  echo "Error: prompt_file is required" >&2
-  usage 1
+# Review-mode argument shape. Scope flags outside --review are rejected rather
+# than ignored: a caller who typed -b expected a diff to be reviewed.
+REVIEW_SCOPES=0
+[[ -n "$REVIEW_BASE" ]] && REVIEW_SCOPES=$((REVIEW_SCOPES + 1))
+[[ -n "$REVIEW_COMMIT" ]] && REVIEW_SCOPES=$((REVIEW_SCOPES + 1))
+[[ "$REVIEW_UNCOMMITTED" -eq 1 ]] && REVIEW_SCOPES=$((REVIEW_SCOPES + 1))
+if [[ "$REVIEW" -eq 1 ]]; then
+  [[ -z "$SESSION_ID" ]] || { echo "Error: --review cannot resume a session (-S); a review is a fresh run" >&2; usage 1; }
+  [[ "$REVIEW_SCOPES" -le 1 ]] || { echo "Error: --review takes one scope: -b/--base, --commit or --uncommitted" >&2; usage 1; }
+  [[ -z "$REVIEW_TITLE" || -n "$REVIEW_COMMIT" ]] || { echo "Error: --title requires --commit" >&2; usage 1; }
+  [[ "$REVIEW_SCOPES" -eq 1 || -n "${PROMPT_FILE:-}" ]] || { echo "Error: --review needs a scope (-b/--base, --commit, --uncommitted), a prompt file, or both" >&2; usage 1; }
+else
+  [[ "$REVIEW_SCOPES" -eq 0 && -z "$REVIEW_TITLE" ]] || { echo "Error: -b/--base, --commit, --title and --uncommitted apply to --review only" >&2; usage 1; }
+  # Validate prompt file (exec mode: always required)
+  if [[ -z "${PROMPT_FILE:-}" ]]; then
+    echo "Error: prompt_file is required" >&2
+    usage 1
+  fi
 fi
 
-if [[ ! -f "$PROMPT_FILE" ]]; then
+if [[ -n "${PROMPT_FILE:-}" && ! -f "$PROMPT_FILE" ]]; then
   echo "Error: prompt file not found: $PROMPT_FILE" >&2
   exit 1
 fi
@@ -126,11 +179,13 @@ fi
 # ending in one would resolve to a different sibling and read it without a word.
 # Reject that shape up front instead. Every path operand is passed after `--`,
 # so a leading dash is a directory name here, never an option.
-if [[ "$PROMPT_FILE" == *$'\n'* || "$OUTPUT_FILE" == *$'\n'* ]]; then
+if [[ "${PROMPT_FILE:-}" == *$'\n'* || "$OUTPUT_FILE" == *$'\n'* ]]; then
   echo "Error: paths containing newlines are not supported" >&2
   exit 1
 fi
-PROMPT_FILE="$(cd -P -- "$(dirname -- "$PROMPT_FILE")" && pwd -P)/$(basename -- "$PROMPT_FILE")"
+if [[ -n "${PROMPT_FILE:-}" ]]; then
+  PROMPT_FILE="$(cd -P -- "$(dirname -- "$PROMPT_FILE")" && pwd -P)/$(basename -- "$PROMPT_FILE")"
+fi
 if [[ -n "$OUTPUT_FILE" ]]; then
   OUTPUT_DIR="$(cd -P -- "$(dirname -- "$OUTPUT_FILE")" 2>/dev/null && pwd -P)" || {
     echo "Error: output directory not found: $(dirname -- "$OUTPUT_FILE")" >&2
@@ -148,7 +203,82 @@ CODEX_BIN="$(command -v codex)" || {
 }
 [[ "$CODEX_BIN" == /* ]] || CODEX_BIN="$PWD/$CODEX_BIN"
 
-# Build codex argv. Resume iff a session id was given.
+# The scope sentence `codex review` renders for a scope flag, reproduced here so
+# a scope and custom instructions can share the one target codex accepts. The
+# wording is codex's own (codex-rs/prompts/src/review_request.rs); the merge base
+# is resolved the way codex resolves it — against the branch's upstream when
+# the remote is ahead of the local branch, else the local branch — and the
+# wording without a sha is codex's own fallback when no merge base exists.
+review_scope_sentence() {
+  if [[ "$REVIEW_UNCOMMITTED" -eq 1 ]]; then
+    printf '%s' "Review the current code changes (staged, unstaged, and untracked files) and provide prioritized findings."
+  elif [[ -n "$REVIEW_COMMIT" ]]; then
+    if [[ -n "$REVIEW_TITLE" ]]; then
+      printf 'Review the code changes introduced by commit %s ("%s"). Provide prioritized, actionable findings.' "$REVIEW_COMMIT" "$REVIEW_TITLE"
+    else
+      printf 'Review the code changes introduced by commit %s. Provide prioritized, actionable findings.' "$REVIEW_COMMIT"
+    fi
+  else
+    local ref="$REVIEW_BASE" upstream merge_base
+    if upstream="$(git rev-parse --abbrev-ref --verify --quiet "$REVIEW_BASE@{upstream}" 2>/dev/null)" \
+      && [[ -n "$upstream" ]] \
+      && git merge-base --is-ancestor "$REVIEW_BASE" "$upstream" 2>/dev/null \
+      && [[ "$(git rev-parse "$REVIEW_BASE" 2>/dev/null)" != "$(git rev-parse "$upstream" 2>/dev/null)" ]]; then
+      ref="$upstream"
+    fi
+    if merge_base="$(git merge-base HEAD "$ref" 2>/dev/null)" && [[ -n "$merge_base" ]]; then
+      printf "Review the code changes against the base branch '%s'. The merge base commit for this comparison is %s. Run \`git diff %s\` to inspect the changes relative to %s. Provide prioritized, actionable findings." "$REVIEW_BASE" "$merge_base" "$merge_base" "$REVIEW_BASE"
+    else
+      printf "Review the code changes against the base branch '%s'. Start by finding the merge diff between the current branch and %s's upstream e.g. (\`git merge-base HEAD \"\$(git rev-parse --abbrev-ref \"%s@{upstream}\")\"\`), then run \`git diff\` against that SHA to see what changes we would merge into the %s branch. Provide prioritized, actionable findings." "$REVIEW_BASE" "$REVIEW_BASE" "$REVIEW_BASE" "$REVIEW_BASE"
+    fi
+  fi
+}
+
+# Build codex argv.
+if [[ "$REVIEW" -eq 1 ]]; then
+  # `codex review` carries none of exec's flags: model, effort and sandbox go
+  # through -c (verified on 0.154.0: the banner reports the overridden values),
+  # the cwd is entered here because there is no --cd, and the final message is
+  # captured from stdout because there is no --output-last-message.
+  CODEX_ARGS=(review -c "model=\"$MODEL\"" -c "model_reasoning_effort=\"$EFFORT\"" -c "sandbox_mode=\"$SANDBOX\"")
+  [[ "$SANDBOX" == "workspace-write" ]] && CODEX_ARGS+=(-c "sandbox_workspace_write.network_access=true")
+  if [[ -n "$CWD" ]]; then
+    cd -P -- "$CWD"
+  fi
+  if [[ "$REVIEW_SCOPES" -eq 1 && -z "${PROMPT_FILE:-}" ]]; then
+    # Scope alone: codex renders the target itself.
+    [[ "$REVIEW_UNCOMMITTED" -eq 1 ]] && CODEX_ARGS+=(--uncommitted)
+    [[ -n "$REVIEW_BASE" ]] && CODEX_ARGS+=(--base "$REVIEW_BASE")
+    [[ -n "$REVIEW_COMMIT" ]] && CODEX_ARGS+=(--commit "$REVIEW_COMMIT")
+    [[ -n "$REVIEW_TITLE" ]] && CODEX_ARGS+=(--title "$REVIEW_TITLE")
+    STDIN_SOURCE=/dev/null
+  elif [[ "$REVIEW_SCOPES" -eq 1 ]]; then
+    # Scope + instructions: one custom target, scope sentence first.
+    CODEX_ARGS+=(-)
+    SCOPE_SENTENCE="$(review_scope_sentence)"
+    STDIN_SOURCE="$(mktemp "${TMPDIR:-/tmp}/codex-review.XXXXXX")"
+    { printf '%s\n\n' "$SCOPE_SENTENCE"; cat -- "$PROMPT_FILE"; } > "$STDIN_SOURCE"
+  else
+    # Instructions alone: custom target as written.
+    CODEX_ARGS+=(-)
+    STDIN_SOURCE="$PROMPT_FILE"
+  fi
+  # Hand off. stdout is the final message alone (the banner and the session id
+  # go to stderr), so -o is a copy of stdout rather than a separate channel:
+  # tee, not exec, so the file is complete when this script exits. The shell
+  # stays alive here for that and for removing the composed stdin file; codex's
+  # exit code is carried through either way.
+  status=0
+  if [[ -n "$OUTPUT_FILE" ]]; then
+    "$CODEX_BIN" "${CODEX_ARGS[@]}" < "$STDIN_SOURCE" | tee -- "$OUTPUT_FILE" || status=$?
+  else
+    "$CODEX_BIN" "${CODEX_ARGS[@]}" < "$STDIN_SOURCE" || status=$?
+  fi
+  [[ "$STDIN_SOURCE" != "${PROMPT_FILE:-}" && "$STDIN_SOURCE" != /dev/null ]] && rm -f -- "$STDIN_SOURCE"
+  exit "$status"
+fi
+
+# exec mode. Resume iff a session id was given.
 CODEX_ARGS=(exec --skip-git-repo-check)
 [[ -n "$OUTPUT_FILE" ]] && CODEX_ARGS+=(--output-last-message "$OUTPUT_FILE")
 if [[ -n "$SESSION_ID" ]]; then

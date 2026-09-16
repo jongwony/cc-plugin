@@ -1,7 +1,7 @@
 ---
 name: codex-plus
 description: |
-  This skill should be used when the user asks to "run codex", "use codex CLI", "delegate to codex", "codex resume", or "continue with codex". Executes tasks via OpenAI Codex CLI with model selection, reasoning effort configuration, and session management.
+  This skill should be used when the user asks to "run codex", "use codex CLI", "delegate to codex", "codex review", "codex resume", or "continue with codex". Executes tasks via OpenAI Codex CLI with model selection, reasoning effort configuration, and session management.
 ---
 
 # Codex Skill Guide
@@ -61,6 +61,14 @@ A consult asks codex to judge a decision rather than carry out work — the reas
 
 **Leave the sandbox at its default, and no ask when the caller already decided.** Do not reach for `-s`: the default is `workspace-write` with network access, and a consult routinely needs the network to check a claim against a live source rather than against its own recollection. The default permits writes, so what keeps a consult from editing is the reviewing role declared above — not the sandbox. When the caller arrives with the model and reasoning effort already fixed, use those and skip the model/effort question in `## Running a Task` step 1.
 
+## Review Mode (a diff, under codex's rubric)
+
+A review asks codex to find defects in a set of changes; a consult asks it to judge a decision. When the deliverable is prioritized findings against a diff — a branch before merge, one commit, the working tree — run `codex review` through the wrapper's `--review` instead of writing a reviewing role into an `exec` prompt: codex supplies its own review rubric as the system prompt and answers with findings ranked `[P1]`…, each anchored to `file:line`. Keep a consult for a decision with no diff to anchor to.
+
+**One target.** `codex review` accepts exactly one target — a scope flag (`--base`, `--commit`, `--uncommitted`) or custom instructions — and refuses the two together. The wrapper takes both: give a scope with `-b BRANCH` / `--commit SHA [--title T]` / `--uncommitted` **and** a prompt file, and it composes the single custom target codex allows — the scope sentence codex itself renders for that flag (merge base resolved in the target tree), then the prompt file. Write the prompt file per `## Context Classification` as for a consult, minus the scope: state what to look hardest for, what prior rounds already covered, and the contract the code is to be read against. A scope alone reviews under codex's default wording; a prompt file alone is the custom target as written, and then the prompt must name the diff itself.
+
+**Same wrapper, three differences.** `-m`, `-r`, `-s` and `-C` apply as in a task run. The answer arrives on stdout, so `-o <FILE>` is how the reviewer's own words come back through the Bash subagent — pass it, with the per-invocation path uniqueness a consult uses. A review is a fresh run every time: there is no `-S` resume, and a follow-up is a new `--review` with a new prompt file. The subagent's return contract is unchanged (outcome summary plus `SESSION_ID`).
+
 ## Image Generation Requests
 
 When the delegated task is image generation or image editing:
@@ -101,6 +109,7 @@ Base patterns:
 - Neither writes nor network — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s read-only <scratchpad>/codex_prompt_<suffix>.txt`
 - Write outside the workspace — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s danger-full-access <scratchpad>/codex_prompt_<suffix>.txt`
 - Resume a session — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> -m <SAME_MODEL> -r <SAME_EFFORT> <scratchpad>/codex_prompt_<suffix>.txt`; the explicit id is the resume path, deterministic under parallel sessions.
+- Review a diff with instructions — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh --review -b <BASE_BRANCH> -C <DIR> -o <scratchpad>/codex_review_<suffix>.md <scratchpad>/codex_prompt_<suffix>.txt` (`--commit <SHA>` or `--uncommitted` in place of `-b`; the prompt file may be omitted for codex's default wording; `-S` does not apply)
 
 Modifiers, added to any base pattern above:
 - Different working directory — `-C <DIR>`; pass it again on resume (step 6)

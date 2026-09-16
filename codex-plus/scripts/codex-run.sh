@@ -63,7 +63,11 @@ Options:
                          resuming: `codex exec resume` has no --cd of its own,
                          so this script cd's there before handing off
   -S, --session-id ID    Resume a specific session by UUID (deterministic;
-                         the only resume path — there is no --last fallback)
+                         the only resume path — there is no --last fallback).
+                         A resumed turn does not inherit the session's model or
+                         effort: pass -m and -r again to stay on them, or the
+                         turn runs on whatever config.toml says. -s cannot be
+                         set on resume at all
   -o, --output-last-message FILE
                          Also write codex's final message to FILE (deterministic
                          capture, decoupled from stdout banner noise)
@@ -149,19 +153,26 @@ CODEX_BIN="$(command -v codex)" || {
 CODEX_ARGS=(exec --skip-git-repo-check)
 [[ -n "$OUTPUT_FILE" ]] && CODEX_ARGS+=(--output-last-message "$OUTPUT_FILE")
 if [[ -n "$SESSION_ID" ]]; then
-  # Warn if non-default options are passed with resume (they are ignored —
-  # the session keeps its original settings).
-  IGNORED=()
-  [[ "$MODEL" != "$DEFAULT_MODEL" ]] && IGNORED+=("-m $MODEL")
-  [[ "$EFFORT" != "$DEFAULT_EFFORT" ]] && IGNORED+=("-r $EFFORT")
-  [[ "$SANDBOX" != "$DEFAULT_SANDBOX" ]] && IGNORED+=("-s $SANDBOX")
-  if [[ ${#IGNORED[@]} -gt 0 ]]; then
-    echo "Warning: resume ignores options: ${IGNORED[*]} (uses session settings)" >&2
+  # A resumed turn does NOT inherit the session's model or effort. codex reads
+  # both from the flags and config in force at resume time, so passing nothing
+  # runs the turn on whatever ~/.codex/config.toml happens to say — a different
+  # model from the one the session was recorded with, and codex says so itself:
+  # "This session was recorded with model X but is resuming with Y". Forward
+  # them, so the resumed turn runs on what the caller asked for. `-m` and `-c`
+  # are both accepted by `codex exec resume`.
+  #
+  # The caller must pass -m/-r again to stay on the same model, exactly as with
+  # -C below; this script keeps no memory of a session it did not start.
+  CODEX_ARGS+=(-m "$MODEL" --config "model_reasoning_effort=$EFFORT")
+  # -s is the one that genuinely cannot be set here: `codex exec resume` has no
+  # --sandbox and exits 2 on it. The session's sandbox stands.
+  if [[ "$SANDBOX" != "$DEFAULT_SANDBOX" ]]; then
+    echo "Warning: resume ignores -s $SANDBOX (the sandbox is fixed when the session is created)" >&2
   fi
-  # -C is NOT one of them. `codex exec resume` has no --cd, so a resumed turn
-  # runs in whatever cwd it inherits — not the session's original directory.
-  # Restore the scope here; otherwise every pointer in the prompt silently
-  # re-resolves against the caller's tree.
+  # -C is ignored for a different reason: `codex exec resume` has no --cd, so a
+  # resumed turn runs in whatever cwd it inherits — not the session's original
+  # directory. Restore the scope here; otherwise every pointer in the prompt
+  # silently re-resolves against the caller's tree.
   if [[ -n "$CWD" ]]; then
     cd -P -- "$CWD"
   fi

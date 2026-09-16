@@ -19,15 +19,16 @@ Sources, and how each line is marked:
 
 ## Model facts
 
-- Effort ladder: `low` `medium` `high` `xhigh` `max`. **No `none` rung** — sol,
-  terra and luna each support `none` and default to `medium`; astra drops it.
+- Effort ladder: `low` `medium` `high` `xhigh` `max` `ultra`. **No `none` rung**
+  — terra and luna take `none` and run at it; astra rejects it and the request
+  errors. A rung that works elsewhere on the menu is not portable here.
 - Context window 1,050,000 tokens; max output 128,000 tokens.
 - Knowledge cutoff 2026-04-30 — anything later needs retrieval, and the prompt
   says so rather than assuming the model will notice.
-- Price per 1M tokens: $10 in, $1 cached in, $12.50 cache writes, $50 out —
-  2.5x sol on both ends, so a run that only needs a workhorse belongs on
-  `gpt-5.6-sol`. Prompts over 272K input tokens bill at 2x input and 1.5x output
-  for the whole request.
+- Price per 1M tokens: $10 in, $1 cached in, $12.50 cache writes, $50 out — five
+  times `gpt-5.6-terra` on both ends, so a run that does not need astra's
+  capability belongs on terra or luna. Prompts over 272K input tokens bill at 2x
+  input and 1.5x output for the whole request.
 - Stop sending `temperature`, `top_p`, `top_logprobs`. `codex-run.sh` never sent
   them, so nothing in this skill changes — recorded so a future flag is not
   added. `[secondary]`
@@ -87,13 +88,14 @@ Sources, and how each line is marked:
 - `medium` is the wrapper default and the starting point. OpenAI's guidance is to
   compare a rung against its neighbours on representative work rather than assume
   the highest wins.
-- Raise to `high`/`xhigh`/`max` for reasoning depth, not for task size. A long
-  mechanical task does not need a higher rung; a short load-bearing judgment may.
+- Raise to `high`/`xhigh`/`max`/`ultra` for reasoning depth, not for task size.
+  A long mechanical task does not need a higher rung; a short load-bearing
+  judgment may.
 - `low` is for latency-bound work. Runs here are unattended, so a cheap wrong
   answer costs a resume instead of saving time.
-- astra is more capable than the `gpt-5.6-sol` default it replaced, so work that
-  needed `high` there often lands at `medium` here. Verify on the task rather
-  than carrying the old rung across.
+- A rung is not portable across models: the same work that needs `high` on terra
+  or luna often lands at `medium` on astra. Read the rung off the task on the
+  model you are actually running, rather than carrying one across.
 
 ## Subagents
 

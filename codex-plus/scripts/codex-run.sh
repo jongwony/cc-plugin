@@ -18,11 +18,10 @@ readonly DEFAULT_MODEL="gpt-6-astra"
 # task, so pinning the top of the ladder here spends it on every run that never
 # needed it. OpenAI's own guidance for the current generation is to start at
 # medium and compare against neighbours on representative work rather than
-# assume the highest effort wins. astra is a more capable model than the sol
-# default it replaced, so the same work lands at a lower rung than it used to.
-# Callers escalate to high, xhigh or max deliberately.
+# assume the highest effort wins. Callers escalate to high, xhigh or max
+# deliberately.
 #
-# astra's ladder is low|medium|high|xhigh|max. It has no `none` rung, unlike
+# astra's ladder is low|medium|high|xhigh|max|ultra. It has no `none` rung, unlike
 # the gpt-5.6 family — passing one is codex's error to report, not this
 # script's to pre-empt.
 readonly DEFAULT_EFFORT="medium"
@@ -49,7 +48,7 @@ Usage: codex-run.sh [options] <prompt_file>
 
 Options:
   -m, --model MODEL      Model name (default: gpt-6-astra)
-  -r, --effort EFFORT    Reasoning effort: low|medium|high|xhigh|max (default:
+  -r, --effort EFFORT    Reasoning effort: low|medium|high|xhigh|max|ultra (default:
                          medium, a starting point rather than a ceiling —
                          escalate per task. astra has no `none` rung)
   -s, --sandbox SANDBOX  Sandbox: read-only|workspace-write|danger-full-access
@@ -63,7 +62,11 @@ Options:
                          resuming: `codex exec resume` has no --cd of its own,
                          so this script cd's there before handing off
   -S, --session-id ID    Resume a specific session by UUID (deterministic;
-                         the only resume path — there is no --last fallback)
+                         the only resume path — there is no --last fallback).
+                         A resumed turn does not inherit the session's model or
+                         effort: pass -m and -r again to stay on them, or the
+                         turn runs on whatever config.toml says. -s cannot be
+                         set on resume at all
   -o, --output-last-message FILE
                          Also write codex's final message to FILE (deterministic
                          capture, decoupled from stdout banner noise)
@@ -76,7 +79,7 @@ no most-recent fallback, so it is never a race under parallel sessions.
 
 Examples (<scratchpad> = the calling session's scratchpad directory):
   codex-run.sh <scratchpad>/codex_prompt_a3f9.txt
-  codex-run.sh -m gpt-5.6-sol -r xhigh <scratchpad>/codex_prompt_a3f9.txt
+  codex-run.sh -m gpt-5.6-terra -r xhigh <scratchpad>/codex_prompt_a3f9.txt
   codex-run.sh -S 019e3eff-c191-7401-bffb-bb8c31ac37c7 <scratchpad>/codex_prompt_a3f9.txt
 USAGE
   exit "${1:-0}"
@@ -149,19 +152,26 @@ CODEX_BIN="$(command -v codex)" || {
 CODEX_ARGS=(exec --skip-git-repo-check)
 [[ -n "$OUTPUT_FILE" ]] && CODEX_ARGS+=(--output-last-message "$OUTPUT_FILE")
 if [[ -n "$SESSION_ID" ]]; then
-  # Warn if non-default options are passed with resume (they are ignored —
-  # the session keeps its original settings).
-  IGNORED=()
-  [[ "$MODEL" != "$DEFAULT_MODEL" ]] && IGNORED+=("-m $MODEL")
-  [[ "$EFFORT" != "$DEFAULT_EFFORT" ]] && IGNORED+=("-r $EFFORT")
-  [[ "$SANDBOX" != "$DEFAULT_SANDBOX" ]] && IGNORED+=("-s $SANDBOX")
-  if [[ ${#IGNORED[@]} -gt 0 ]]; then
-    echo "Warning: resume ignores options: ${IGNORED[*]} (uses session settings)" >&2
+  # A resumed turn does NOT inherit the session's model or effort. codex reads
+  # both from the flags and config in force at resume time, so passing nothing
+  # runs the turn on whatever ~/.codex/config.toml happens to say — a different
+  # model from the one the session was recorded with, and codex says so itself:
+  # "This session was recorded with model X but is resuming with Y". Forward
+  # them, so the resumed turn runs on what the caller asked for. `-m` and `-c`
+  # are both accepted by `codex exec resume`.
+  #
+  # The caller must pass -m/-r again to stay on the same model, exactly as with
+  # -C below; this script keeps no memory of a session it did not start.
+  CODEX_ARGS+=(-m "$MODEL" --config "model_reasoning_effort=$EFFORT")
+  # -s is the one that genuinely cannot be set here: `codex exec resume` has no
+  # --sandbox and exits 2 on it. The session's sandbox stands.
+  if [[ "$SANDBOX" != "$DEFAULT_SANDBOX" ]]; then
+    echo "Warning: resume ignores -s $SANDBOX (the sandbox is fixed when the session is created)" >&2
   fi
-  # -C is NOT one of them. `codex exec resume` has no --cd, so a resumed turn
-  # runs in whatever cwd it inherits — not the session's original directory.
-  # Restore the scope here; otherwise every pointer in the prompt silently
-  # re-resolves against the caller's tree.
+  # -C is ignored for a different reason: `codex exec resume` has no --cd, so a
+  # resumed turn runs in whatever cwd it inherits — not the session's original
+  # directory. Restore the scope here; otherwise every pointer in the prompt
+  # silently re-resolves against the caller's tree.
   if [[ -n "$CWD" ]]; then
     cd -P -- "$CWD"
   fi

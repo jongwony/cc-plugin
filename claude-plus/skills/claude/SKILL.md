@@ -1,7 +1,6 @@
 ---
 name: claude-plus
-description: |
-  This skill should be used when the user asks to "consult fable", "ask fable", "run claude", "delegate to claude", "claude resume", or "continue with claude" — and whenever a decision wants a second judgment from a model that is not the one holding the question. Runs bounded work through the Claude Code CLI with model selection, effort configuration, and session management.
+description: Use when the user asks to consult fable, ask fable, run claude, delegate to claude, claude resume, or continue with claude — and whenever a decision wants a second judgment from a model that is not the one holding the question. Runs bounded work through the Claude Code CLI with model selection, effort configuration, and session management.
 ---
 
 # Claude Plus

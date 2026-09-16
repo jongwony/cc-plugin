@@ -17,6 +17,13 @@ set -eo pipefail
 
 REPO="jongwony/cc-plugin"
 MARKETPLACE="cc-plugin"
+# Where the marketplace is fetched from. The default is the published repo, which
+# is what a real install wants and what the curl one-liner gets. Point it at a
+# checkout to exercise a branch before it is merged:
+#   CC_PLUGIN_MARKETPLACE_SOURCE=/path/to/worktree bash scripts/codex-install.sh
+# `codex plugin marketplace add` accepts a local path, owner/repo[@ref], or a
+# Git URL, so anything it takes works here.
+SOURCE="${CC_PLUGIN_MARKETPLACE_SOURCE:-https://github.com/$REPO}"
 
 command -v codex >/dev/null 2>&1 || { echo "Error: codex CLI not found. Install the OpenAI Codex CLI first." >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "Error: python3 not found." >&2; exit 1; }
@@ -24,8 +31,8 @@ command -v python3 >/dev/null 2>&1 || { echo "Error: python3 not found." >&2; ex
 # `add` fails when the marketplace is already configured, which is the common
 # case on a re-run; `upgrade` is what refreshes an existing git snapshot. Run
 # both and let each be the no-op the other's state makes it.
-echo "Adding marketplace..."
-codex plugin marketplace add "https://github.com/$REPO" < /dev/null 2>/dev/null || true
+echo "Adding marketplace from $SOURCE..."
+codex plugin marketplace add "$SOURCE" < /dev/null 2>/dev/null || true
 codex plugin marketplace upgrade "$MARKETPLACE" < /dev/null 2>/dev/null || true
 
 # Codex clones the marketplace to a root of its own choosing, and reports it.

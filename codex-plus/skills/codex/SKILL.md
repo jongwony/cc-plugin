@@ -77,7 +77,7 @@ When the delegated task is image generation or image editing:
 
    Models:
    - `gpt-6-astra` — the default, used whenever no model was named. OpenAI's most capable model, for complex and demanding end-to-end work. It is also what `~/.codex/config.toml` already selects for interactive codex, so a run through this wrapper and a run the user starts by hand now land on the same model.
-   - `gpt-5.6-luna` — $0.20/$1.20 per 1M tokens, a fiftieth of astra's, for cost-sensitive high-volume work: browser / computer-use E2E runs and implementation that writes a lot of code, usually at `xhigh` with `-f` for the fast service tier.
+   - `gpt-5.6-luna` — $0.20/$1.20 per 1M tokens, for cost-sensitive high-volume work: browser / computer-use E2E runs and implementation that writes a lot of code, usually at `xhigh` with `-f` for the fast service tier.
 
    Reasoning effort is selected once and applied identically to all chosen models. `medium` is the wrapper's default and the starting point here — raise it to `high`, `xhigh`, `max` or `ultra` where the task's reasoning depth warrants. astra's ladder is `low|medium|high|xhigh|max|ultra` and has no `none` rung. `low` exists but is for latency-bound work; runs from this skill are unattended, where a cheap wrong answer costs a resume rather than saving time.
 

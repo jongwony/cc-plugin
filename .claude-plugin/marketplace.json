@@ -20,6 +20,11 @@
       "description": "Enhanced OpenAI Codex CLI integration (multi-model, context classification)"
     },
     {
+      "name": "claude-plus",
+      "source": "./claude-plus",
+      "description": "Claude Code CLI integration (fable consult, execution delegation, session management)"
+    },
+    {
       "name": "pdf-split",
       "source": "./pdf-split",
       "description": "PDF chapter splitting"

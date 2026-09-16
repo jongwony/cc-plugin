@@ -98,6 +98,21 @@ Each plugin installs whether or not its prerequisite is present. The macOS-only
 plugins are opt-in: the script names them in `SKIP_PLUGINS`, checks that list
 against the manifest on every run, and prints the install command for each.
 
+The OpenAI Codex CLI reads the same `.claude-plugin/marketplace.json` and can
+install any plugin listed there, so which ones it *should* install is a separate
+question. That opt-in is per-plugin and marked by a
+`{plugin}/.codex-plugin/plugin.json`, which also carries the richer manifest
+Codex's interface reads:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/codex-install.sh | bash
+```
+
+`scripts/codex-install.sh` registers the marketplace with `codex plugin
+marketplace add`, then installs exactly the plugins carrying that marker —
+detected from the manifest and the tree Codex itself resolved, so adding one
+later needs no edit to the script.
+
 A Claude Code cloud environment takes one line in its setup-script field:
 
 ```bash

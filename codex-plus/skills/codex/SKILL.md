@@ -77,9 +77,8 @@ When the delegated task is image generation or image editing:
 
    Models:
    - `gpt-6-astra` — the default, used whenever no model was named. OpenAI's most capable model, for complex and demanding end-to-end work. It is also what `~/.codex/config.toml` already selects for interactive codex, so a run through this wrapper and a run the user starts by hand now land on the same model.
-   - `gpt-5.6-sol` — the previous default; a reliable agentic workhorse for everyday tasks. The pick when capability is not what the task is short of, and astra's per-token cost is not worth paying.
-   - `gpt-5.6-terra` — balances intelligence and cost: half sol's price ($2/$12 against $4/$20) one reasoning tier below it, with the same effort ladder and the same 1.05M context. Both model cards rate speed "Fast", so reach for terra to spend less, not to finish sooner.
-   - `gpt-5.6-luna` — a "Fast and affordable agentic coding model" in codex's own registry; the cost-efficient pick for browser / computer-use E2E runs and implementation work that writes a lot of code, usually at `xhigh`.
+   - `gpt-5.6-terra` — balances intelligence and cost at $2/$12 per 1M tokens, a fifth of astra's, with the same 1.05M context. The middle pick: reach for it when capability is not what the task is short of, but the work is more than bulk. Its card rates speed "Fast", the same as astra's, so terra spends less rather than finishing sooner.
+   - `gpt-5.6-luna` — $0.20/$1.20, ten times cheaper again, for cost-sensitive high-volume work: browser / computer-use E2E runs and implementation that writes a lot of code, usually at `xhigh`.
 
    Reasoning effort is selected once and applied identically to all chosen models. `medium` is the wrapper's default and the starting point here — raise it to `high`, `xhigh` or `max` where the task's reasoning depth warrants. astra's ladder is `low|medium|high|xhigh|max` and has no `none` rung. `low` exists but is for latency-bound work; runs from this skill are unattended, where a cheap wrong answer costs a resume rather than saving time.
 
@@ -91,7 +90,7 @@ When the delegated task is image generation or image editing:
    - **Single model**: one subagent call.
    - **Multiple models**: issue parallel subagent calls (one per model) in a single response — same prompt, sandbox, and effort, different `-m`. Each returns its own `SESSION_ID`.
 5. Record each returned `SESSION_ID` against its purpose/model. This {purpose → SESSION_ID} map is the only resume handle.
-6. Resume: write new instructions to a fresh `<scratchpad>/codex_prompt_<suffix>.txt`, then delegate to a Bash subagent running `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> <scratchpad>/codex_prompt_<suffix>.txt`. Resume is always by explicit id, which stays deterministic under parallel sessions. **A resumed turn inherits none of the session's settings except its sandbox** — pass `-m`, `-r` and `-C` again to stay where the session was. Omit `-m`/`-r` and codex takes them from `~/.codex/config.toml`, so a consult started on `gpt-5.6-sol` comes back on whatever that file names; omit `-C` and the turn runs wherever the subagent happens to be, re-resolving every pointer against that tree. Only `-s` is fixed at session creation and cannot be set on resume at all.
+6. Resume: write new instructions to a fresh `<scratchpad>/codex_prompt_<suffix>.txt`, then delegate to a Bash subagent running `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> <scratchpad>/codex_prompt_<suffix>.txt`. Resume is always by explicit id, which stays deterministic under parallel sessions. **A resumed turn inherits none of the session's settings except its sandbox** — pass `-m`, `-r` and `-C` again to stay where the session was. Omit `-m`/`-r` and codex takes them from `~/.codex/config.toml`, so a consult started on `gpt-5.6-terra` comes back on whatever that file names; omit `-C` and the turn runs wherever the subagent happens to be, re-resolving every pointer against that tree. Only `-s` is fixed at session creation and cannot be set on resume at all.
 7. Summarize each outcome to the user; for parallel work, surface which `SESSION_ID` maps to which branch. Inform the user: "Resume anytime with 'codex resume'."
 
 ### Quick Reference
@@ -105,7 +104,7 @@ Base patterns:
 
 Modifiers, added to any base pattern above:
 - Different working directory — `-C <DIR>`; pass it again on resume (step 6)
-- Model and effort — `-m gpt-5.6-sol`, `-r xhigh` (effort defaults to `medium`; `-r` raises it); pass both again on resume (step 6)
+- Model and effort — `-m gpt-5.6-terra`, `-r xhigh` (effort defaults to `medium`; `-r` raises it); pass both again on resume (step 6)
 - Capture the answer to a file — `-o <FILE>` writes codex's final message to FILE deterministically
 
 ## Error Handling

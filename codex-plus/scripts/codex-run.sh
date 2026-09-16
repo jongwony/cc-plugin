@@ -18,9 +18,8 @@ readonly DEFAULT_MODEL="gpt-6-astra"
 # task, so pinning the top of the ladder here spends it on every run that never
 # needed it. OpenAI's own guidance for the current generation is to start at
 # medium and compare against neighbours on representative work rather than
-# assume the highest effort wins. astra is a more capable model than the sol
-# default it replaced, so the same work lands at a lower rung than it used to.
-# Callers escalate to high, xhigh or max deliberately.
+# assume the highest effort wins. Callers escalate to high, xhigh or max
+# deliberately.
 #
 # astra's ladder is low|medium|high|xhigh|max. It has no `none` rung, unlike
 # the gpt-5.6 family — passing one is codex's error to report, not this
@@ -80,7 +79,7 @@ no most-recent fallback, so it is never a race under parallel sessions.
 
 Examples (<scratchpad> = the calling session's scratchpad directory):
   codex-run.sh <scratchpad>/codex_prompt_a3f9.txt
-  codex-run.sh -m gpt-5.6-sol -r xhigh <scratchpad>/codex_prompt_a3f9.txt
+  codex-run.sh -m gpt-5.6-terra -r xhigh <scratchpad>/codex_prompt_a3f9.txt
   codex-run.sh -S 019e3eff-c191-7401-bffb-bb8c31ac37c7 <scratchpad>/codex_prompt_a3f9.txt
 USAGE
   exit "${1:-0}"

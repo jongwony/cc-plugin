@@ -124,13 +124,14 @@ resume — read `references/resume.md`.
 
 ## Collect and verify
 
-- The wrapper exits zero only when it established success: the process exited
-  zero, the stream carried a result event with subtype `success` and no error
-  flag, and every stream line parsed. Any other outcome — including one it could
-  not validate — exits nonzero and is a failed or incomplete run. Preserve the
-  run directory's diagnostic files; `run.json` names the reason in
-  `verdict_reasons`. A created session or a written output file is not task
-  completion.
+- **Exit zero is the pass.** The wrapper checks the run for you and exits
+  nonzero on anything short of an established success. Treat a nonzero exit as a
+  failed or incomplete run, preserve the run directory, and read the reason from
+  `run.json`'s `verdict_reasons`. A created session or a written output file is
+  not task completion.
+- When a refusal is surprising, or the outcome has to be judged without
+  re-running it, read `references/verdict.md` — it carries the four conditions
+  behind the exit status and how to read the artifacts.
 - Reconcile `run.json` against the durable task record: `assigned_session_id`
   against `first_event_session_id`, and both against what was recorded at
   launch.

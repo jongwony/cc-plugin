@@ -72,8 +72,11 @@ Edit `version` in `{plugin}/.claude-plugin/plugin.json`.
 **Bump-on-change.** When a plugin's meaningful files change in a change-set, that
 plugin's `version` must actually change (re-ordering/reformatting alone does not
 count). Exception: a plugin's own top-level metadata and boilerplate — the same
-name one directory down counts as content. A `git rm` of a meaningful file
-counts. A new plugin satisfies it via its initial version.
+name one directory down counts as content. The exception covers presentation,
+not component selection: `.codex-plugin/plugin.json` is exempt only while its
+`skills` selector is unmoved, and adding or deleting that manifest moves it. A
+`git rm` of a meaningful file counts. A new plugin satisfies it via its initial
+version.
 
 Logic SSOT: `.githooks/check-version-bump.sh` (pure bash), which also holds the
 exception list. Two entry points call it, and they share the rule while differing
@@ -97,6 +100,21 @@ so adding or retiring a plugin needs no edit to it, and re-running it is safe.
 Each plugin installs whether or not its prerequisite is present. The macOS-only
 plugins are opt-in: the script names them in `SKIP_PLUGINS`, checks that list
 against the manifest on every run, and prints the install command for each.
+
+The OpenAI Codex CLI reads the same `.claude-plugin/marketplace.json` and can
+install any plugin listed there, so which ones it *should* install is a separate
+question. That opt-in is per-plugin and marked by a
+`{plugin}/.codex-plugin/plugin.json`, which also carries the richer manifest
+Codex's interface reads:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/codex-install.sh | bash
+```
+
+`scripts/codex-install.sh` registers the marketplace with `codex plugin
+marketplace add`, then installs exactly the plugins carrying that marker —
+detected from the manifest and the tree Codex itself resolved, so adding one
+later needs no edit to the script.
 
 A Claude Code cloud environment takes one line in its setup-script field:
 

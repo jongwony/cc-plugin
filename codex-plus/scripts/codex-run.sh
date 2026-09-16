@@ -21,9 +21,9 @@ readonly DEFAULT_MODEL="gpt-6-astra"
 # assume the highest effort wins. Callers escalate to high, xhigh or max
 # deliberately.
 #
-# astra's ladder is low|medium|high|xhigh|max|ultra. It has no `none` rung, unlike
-# the gpt-5.6 family — passing one is codex's error to report, not this
-# script's to pre-empt.
+# astra's ladder is what `codex debug models` reports for it. It has no
+# `none` rung, unlike the gpt-5.6 family — passing one is codex's error to
+# report, not this script's to pre-empt.
 readonly DEFAULT_EFFORT="medium"
 # workspace-write, not read-only, for one reason: the network. codex exposes no
 # network switch under read-only — the toggle lives in the
@@ -49,7 +49,7 @@ Usage: codex-run.sh [options] <prompt_file>
 
 Options:
   -m, --model MODEL      Model name (default: gpt-6-astra)
-  -r, --effort EFFORT    Reasoning effort: low|medium|high|xhigh|max|ultra (default:
+  -r, --effort EFFORT    Reasoning effort: low|medium|high|xhigh|max (default:
                          medium, a starting point rather than a ceiling —
                          escalate per task. astra has no `none` rung)
   -f, --fast             Request codex's fast (priority) service tier. codex has

@@ -111,14 +111,19 @@ resume — read `references/resume.md`.
 
 ## Collect and verify
 
-- The wrapper exits nonzero when the process failed, when the stream carried no
-  result event, or when the result reports `is_error`. Treat any of those as a
-  failed or incomplete run and preserve the run directory's diagnostic files.
-  A created session or a written output file is not task completion.
+- The wrapper exits zero only when it established success: the process exited
+  zero, the stream carried a result event with subtype `success` and no error
+  flag, and every stream line parsed. Any other outcome — including one it could
+  not validate — exits nonzero and is a failed or incomplete run. Preserve the
+  run directory's diagnostic files; `run.json` names the reason in
+  `verdict_reasons`. A created session or a written output file is not task
+  completion.
 - Reconcile `run.json` against the durable task record: `assigned_session_id`
   against `first_event_session_id`, and both against what was recorded at
   launch.
 - Read the answer from `final.md`, or from the `-o` destination for a consult.
+  Neither exists when the result carried no answer text; the wrapper says so
+  rather than writing an empty stand-in.
 - Before reporting success, inspect the claimed artifact and run the checks its
   use calls for. Keep three things distinct in the report: what the run claimed,
   what this session verified, and what neither covered.

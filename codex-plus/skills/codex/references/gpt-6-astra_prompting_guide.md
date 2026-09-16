@@ -19,9 +19,9 @@ Sources, and how each line is marked:
 
 ## Model facts
 
-- Effort ladder: `low` `medium` `high` `xhigh` `max`. **No `none` rung** — terra
-  and luna take `none` and run at it; astra rejects it and the request errors.
-  A rung that works elsewhere on the menu is not portable here.
+- Effort ladder: `low` `medium` `high` `xhigh` `max` `ultra`. **No `none` rung**
+  — terra and luna take `none` and run at it; astra rejects it and the request
+  errors. A rung that works elsewhere on the menu is not portable here.
 - Context window 1,050,000 tokens; max output 128,000 tokens.
 - Knowledge cutoff 2026-04-30 — anything later needs retrieval, and the prompt
   says so rather than assuming the model will notice.
@@ -88,8 +88,9 @@ Sources, and how each line is marked:
 - `medium` is the wrapper default and the starting point. OpenAI's guidance is to
   compare a rung against its neighbours on representative work rather than assume
   the highest wins.
-- Raise to `high`/`xhigh`/`max` for reasoning depth, not for task size. A long
-  mechanical task does not need a higher rung; a short load-bearing judgment may.
+- Raise to `high`/`xhigh`/`max`/`ultra` for reasoning depth, not for task size.
+  A long mechanical task does not need a higher rung; a short load-bearing
+  judgment may.
 - `low` is for latency-bound work. Runs here are unattended, so a cheap wrong
   answer costs a resume instead of saving time.
 - A rung is not portable across models: the same work that needs `high` on terra

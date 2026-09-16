@@ -6,8 +6,10 @@
 # its {plugin}/.claude-plugin/plugin.json "version" VALUE must change in the same
 # change-set. Re-emitting the same version line (reformat / key reorder) does NOT
 # count. Non-semantic top-level files (README.md, README_ko.md, LICENSE,
-# .gitignore, .gitattributes) and a plugin's own manifest dirs (.claude-plugin/,
-# .codex-plugin/) do not require a bump.
+# .gitignore, .gitattributes) and .claude-plugin/ meta do not require a bump.
+# .codex-plugin/plugin.json is exempt only while its "skills" selector is
+# unchanged: that field selects shipped components, so moving it — including by
+# adding or deleting the manifest — does require a bump.
 # A new plugin (no prior plugin.json) is satisfied by having a version at all.
 #
 # Modes:
@@ -82,13 +84,18 @@ done < <(find . \( -name node_modules -o -name .git \) -prune -o \
   -name plugin.json -path '*/.claude-plugin/plugin.json' -print0 2>/dev/null)
 [ "${#plugins[@]}" -eq 0 ] && exit 0
 
-# Extract the "version" value from plugin.json content on stdin (empty if absent).
-# Anchored to line start so a "version" substring inside another value can't match;
-# assumes the conventional pretty-printed plugin.json with one top-level version key.
+# Extract a string field's value from plugin.json content on stdin (empty if
+# absent). Anchored to line start and requiring the colon, so neither a substring
+# inside another value nor a bare array element of the same name can match;
+# assumes the conventional pretty-printed plugin.json with one such key.
 # sed reads all of stdin (no early-exit reader) so the upstream `git show` never
 # gets SIGPIPE — keeps the pipeline well-behaved under `set -o pipefail`.
+extract_field() {
+  sed -nE "s/^[[:space:]]*\"$1\"[[:space:]]*:[[:space:]]*\"([^\"]*)\".*/\1/p"
+}
+
 extract_version() {
-  sed -nE 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p'
+  extract_field version
 }
 
 violations=0
@@ -98,9 +105,22 @@ for pj in "${plugins[@]}"; do
   content=0
   for f in "${changed[@]}"; do
     case "$f" in "$pdir"/*) ;; *) continue ;; esac           # under this plugin
-    # Skip a plugin's own manifest directories. Both are top-level metadata in
-    # the same sense: .claude-plugin/ for Claude Code, .codex-plugin/ for Codex.
-    case "$f" in "$pdir"/.claude-plugin/*|"$pdir"/.codex-plugin/*) continue ;; esac
+    # .claude-plugin/ is where the version itself lives, so exempting it whole is
+    # structural: a bump would otherwise be a change demanding its own bump.
+    case "$f" in "$pdir"/.claude-plugin/*) continue ;; esac
+    # .codex-plugin/plugin.json is NOT symmetrical to that. Most of it is
+    # presentation, but "skills" selects which components the plugin ships, and a
+    # selector that moves changes what this version delivers. Exempt the file
+    # only while the selector is unmoved; adding or deleting the manifest moves it
+    # by definition, and either changes what the Codex installer picks up.
+    # Anything else under .codex-plugin/ is not a manifest and stays content.
+    case "$f" in
+      "$pdir"/.codex-plugin/plugin.json)
+        old_sel=$(git show "${old_prefix}${f}" 2>/dev/null | extract_field skills) || old_sel=""
+        new_sel=$(git show "${new_prefix}${f}" 2>/dev/null | extract_field skills) || new_sel=""
+        if [ "$old_sel" = "$new_sel" ]; then continue; fi
+        ;;
+    esac
     rel=${f#"$pdir"/}
     case "$rel" in
       */*) : ;;                                               # nested file → semantic content

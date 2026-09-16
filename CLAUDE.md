@@ -72,8 +72,11 @@ Edit `version` in `{plugin}/.claude-plugin/plugin.json`.
 **Bump-on-change.** When a plugin's meaningful files change in a change-set, that
 plugin's `version` must actually change (re-ordering/reformatting alone does not
 count). Exception: a plugin's own top-level metadata and boilerplate — the same
-name one directory down counts as content. A `git rm` of a meaningful file
-counts. A new plugin satisfies it via its initial version.
+name one directory down counts as content. The exception covers presentation,
+not component selection: `.codex-plugin/plugin.json` is exempt only while its
+`skills` selector is unmoved, and adding or deleting that manifest moves it. A
+`git rm` of a meaningful file counts. A new plugin satisfies it via its initial
+version.
 
 Logic SSOT: `.githooks/check-version-bump.sh` (pure bash), which also holds the
 exception list. Two entry points call it, and they share the rule while differing

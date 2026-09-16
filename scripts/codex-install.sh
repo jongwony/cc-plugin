@@ -75,21 +75,32 @@ if [[ -z "$codex_plugins" ]]; then
   exit 0
 fi
 
+# `codex plugin add` exits 0 when it reinstalls a plugin that is already
+# present, so there is no benign nonzero status to absorb here: every failure is
+# a real one. Let its stderr through and carry the failure to this script's own
+# exit status — an installer that reports success while installing nothing is
+# how a missing plugin gets discovered later, by its absence.
 installed=0
-skipped=0
+failed=0
 for p in $codex_plugins; do
-  if codex plugin add "$p@$MARKETPLACE" < /dev/null 2>/dev/null; then
+  if codex plugin add "$p@$MARKETPLACE" < /dev/null; then
     installed=$((installed + 1))
   else
-    echo "  Skipped: $p"
-    skipped=$((skipped + 1))
+    status=$?
+    echo "  Failed: $p (codex plugin add exited $status)" >&2
+    failed=$((failed + 1))
   fi
 done
 
 echo ""
 echo "Installed $installed plugin(s) for Codex."
-[[ $skipped -gt 0 ]] && echo "$skipped skipped (already installed or unavailable)."
 for p in $other_plugins; do
-  echo "Claude Code only (no .codex-plugin manifest): $p"
+  echo "Not selected for Codex installation (no .codex-plugin marker): $p"
 done
 echo "Each plugin's SKILL.md states the prerequisite it needs, if any."
+
+if [[ $failed -gt 0 ]]; then
+  echo "" >&2
+  echo "Error: $failed plugin(s) failed to install." >&2
+  exit 1
+fi

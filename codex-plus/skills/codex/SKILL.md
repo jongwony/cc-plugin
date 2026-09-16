@@ -28,7 +28,7 @@ Before writing the prompt file, classify available context on two orthogonal axe
 **Rules**:
 - **Pointers**: Provide file paths, grep patterns, test commands. Reserve copying for what codex cannot re-derive.
 - **Session Context**: Extract only what is already known from the current conversation. Organize as intent, constraints, and preferences.
-- **No collection requests**: The prompt carries only user-specific information already in hand; when codex needs more, the user supplies it on resume. This bounds the prompt file only — pre-prompt orchestration stays free, so `AskUserQuestion` for model selection is fine.
+- **No collection requests**: The prompt carries only user-specific information already in hand; when codex needs more, the user supplies it on resume. This bounds the prompt file only — pre-prompt orchestration stays free, so the `AskUserQuestion` permission gate in Error Handling is fine.
 
 ### Prompt Template
 
@@ -71,16 +71,12 @@ When the delegated task is image generation or image editing:
 - Read OpenAI's GPT Image 2.5 prompting guide — https://developers.openai.com/api/docs/guides/image-prompting — for model parameters, per-use-case prompt structure, text rendering, edits, multi-image workflows, and migrating a workflow off an earlier model. It carries reference sections for GPT Image 2, 1.5 and 1 as well.
 
 ## Running a Task
-1. Run on `gpt-6-astra` at `medium` unless the caller named otherwise. Designation normally arrives upstream, in the request itself, so a model or effort already named there IS the answer — do not re-ask it.
+1. Run on `gpt-6-astra` at `medium`. Whatever the caller named upstream — a model, an effort, a service tier, several models at once — overrides that default and IS the answer: pass it through and do not re-ask it.
 
-   Ask (via `AskUserQuestion`, a **single prompt with two questions**; model selection is **multi-select**, so several models can run in parallel) only where the choice is genuinely open: neither model nor effort was named, and the task's shape does not settle them.
-
-   Models:
-   - `gpt-6-astra` — the default, used whenever no model was named. OpenAI's most capable model, for complex and demanding end-to-end work. It is also what `~/.codex/config.toml` already selects for interactive codex, so a run through this wrapper and a run the user starts by hand now land on the same model.
-   - `gpt-5.6-terra` — balances intelligence and cost at $2/$12 per 1M tokens, a fifth of astra's, with the same 1.05M context. The middle pick: reach for it when capability is not what the task is short of, but the work is more than bulk. Its card rates speed "Fast", the same as astra's, so terra spends less rather than finishing sooner.
-   - `gpt-5.6-luna` — $0.20/$1.20, ten times cheaper again, for cost-sensitive high-volume work: browser / computer-use E2E runs and implementation that writes a lot of code, usually at `xhigh`.
-
-   Reasoning effort is selected once and applied identically to all chosen models. `medium` is the wrapper's default and the starting point here — raise it to `high`, `xhigh`, `max` or `ultra` where the task's reasoning depth warrants. astra's ladder is `low|medium|high|xhigh|max|ultra` and has no `none` rung. `low` exists but is for latency-bound work; runs from this skill are unattended, where a cheap wrong answer costs a resume rather than saving time.
+   What an override may name:
+   - **Model** — any slug `codex debug models` lists.
+   - **Effort** — `low`, `medium`, `high`, `xhigh`, `max`. A model's ladder may stop short of `max`, and a parallel run needs an effort every model in it takes; `codex debug models` reports each model's ladder.
+   - **Service tier** — `-f`, under the caveat in the Quick Reference.
 
 2. Select sandbox mode. Omitting `-s` gives `workspace-write` **with network access** — codex offers no network under `read-only` at all, so this is the only mode short of full access that has any. Pass `-s read-only` when a run must neither touch the tree nor reach off-machine; `-s danger-full-access` only when it must write outside the workspace. Because the default already permits writes, what bounds a run that is meant to only read is the role its prompt declares — state it.
 3. Craft prompt per Context Classification and Prompt Template — classify context, write to `<scratchpad>/codex_prompt_<suffix>.txt`.
@@ -90,7 +86,7 @@ When the delegated task is image generation or image editing:
    - **Single model**: one subagent call.
    - **Multiple models**: issue parallel subagent calls (one per model) in a single response — same prompt, sandbox, and effort, different `-m`. Each returns its own `SESSION_ID`.
 5. Record each returned `SESSION_ID` against its purpose/model. This {purpose → SESSION_ID} map is the only resume handle.
-6. Resume: write new instructions to a fresh `<scratchpad>/codex_prompt_<suffix>.txt`, then delegate to a Bash subagent running `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> <scratchpad>/codex_prompt_<suffix>.txt`. Resume is always by explicit id, which stays deterministic under parallel sessions. **A resumed turn inherits none of the session's settings except its sandbox** — pass `-m`, `-r` and `-C` again to stay where the session was. Omit `-m`/`-r` and codex takes them from `~/.codex/config.toml`, so a consult started on `gpt-5.6-terra` comes back on whatever that file names; omit `-C` and the turn runs wherever the subagent happens to be, re-resolving every pointer against that tree. Only `-s` is fixed at session creation and cannot be set on resume at all.
+6. Resume: write new instructions to a fresh `<scratchpad>/codex_prompt_<suffix>.txt`, then delegate to a Bash subagent running `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> <scratchpad>/codex_prompt_<suffix>.txt`. Resume is always by explicit id, which stays deterministic under parallel sessions. **A resumed turn inherits none of the session's settings except its sandbox** — pass `-m`, `-r`, `-C` and `-f` again to stay where the session was. Omit `-m`/`-r` and codex takes them from `~/.codex/config.toml`, so a consult comes back on whatever that file names; omit `-C` and the turn runs wherever the subagent happens to be, re-resolving every pointer against that tree. Only `-s` is fixed at session creation and cannot be set on resume at all.
 7. Summarize each outcome to the user; for parallel work, surface which `SESSION_ID` maps to which branch. Inform the user: "Resume anytime with 'codex resume'."
 
 ### Quick Reference
@@ -104,7 +100,8 @@ Base patterns:
 
 Modifiers, added to any base pattern above:
 - Different working directory — `-C <DIR>`; pass it again on resume (step 6)
-- Model and effort — `-m gpt-5.6-terra`, `-r xhigh` (effort defaults to `medium`; `-r` raises it); pass both again on resume (step 6)
+- Model and effort — `-m MODEL`, `-r EFFORT` (effort defaults to `medium`; `-r` raises it); pass both again on resume (step 6)
+- Fast service tier — `-f`; a request rather than a guarantee, since codex drops the tier without an error where the model does not carry it (`codex debug models` lists what each one has). Pass it again on resume (step 6)
 - Capture the answer to a file — `-o <FILE>` writes codex's final message to FILE deterministically
 
 ## Error Handling

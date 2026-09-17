@@ -82,16 +82,16 @@ Resolving a conflict between two directives: applicability to the case in front 
 - Coherence (exclude extraneous) d = 0.86, 18/19 — Mayer (2021) — WR. It licenses cutting extraneous material, not compressing mechanism.
 - People prefer simpler, fewer-cause explanations even against probability — Lombrozo (2007), *Cognitive Psychology* 55 — MOD. Reader preference is therefore not a guide to how much to cut.
 
-### Leave the terminal inference to the reader; place other prompts as specific questions at the seam
+### Name the terminal inference as the reader's to draw, and stop there
 
 - Generation effect d ≈ 0.40; retrieval practice g ≈ 0.50 — Slamecka & Graf (1978); Bertsch et al. (2007); Rowland (2014); Adesope, Trevisan & Sundararajan (2017) — WR.
 - Self-explanation g = 0.55 (69 effects, 64 reports, n ≈ 5,917); scaffolded prompts beat open ones — Chi, Bassok, Lewis, Reimann & Glaser (1989), *Cognitive Science* 13; Bisra, Liu, Nesbit, Salimi & Winne (2018), *Educ Psych Rev* 30(3), 703–725; Berthold, Eysink & Renkl (2009) — WR.
 - Several difficulties raise retention while lowering immediate performance and subjective fluency — Bjork & Bjork (2011); Bjork (1994) — WR as a family, DISP in parts (disfluent fonts failed replication). This means a reader's fluency judgment can diverge from their learning; it does not predict that a given explanation will feel worse.
 - Explaining drives generalization and also overgeneralization from insufficient evidence — Williams & Lombrozo (2010), *Cognitive Science* — MOD. Pair a generative prompt with a counterexample where the reader could overreach.
 
-### Close by checking at the level the explanation was pitched at; assent is not evidence
+### One turn, and it closes; no comprehension check, and assent is not evidence
 
-- Confidence in explanatory understanding drops sharply once a step-by-step causal account is demanded — Rozenblit & Keil (2002), *Cognitive Science* 26(5), 521–562; Alter, Oppenheimer & Zemla (2010), *JPSP* — WR for the core effect, MOD for scope. The recorded boundary excludes facts, procedures and narratives, which is why the mechanism check is scoped to mechanism questions.
+- Confidence in explanatory understanding drops sharply once a step-by-step causal account is demanded — Rozenblit & Keil (2002), *Cognitive Science* 26(5), 521–562; Alter, Oppenheimer & Zemla (2010), *JPSP* — WR for the core effect, MOD for scope. The recorded boundary excludes facts, procedures and narratives. This grounds what assent is worth, not a check run here: verifying the reader's own account is `/grasp`'s contract.
 - The illusion tracks the conflation of functional with mechanistic understanding — Rozenblit & Keil (2002) and later mechanistic-vs-functional prompt work — MOD.
 
 ### Deliberately not carried

@@ -28,17 +28,12 @@ Read them off the session before writing. Where the session does not settle one,
 - Carry an analogy only with all three: the correspondence stated element by element, the point where it stops holding said in the same breath, and a re-description in the target's own vocabulary so what the reader keeps is the target. Where two analogies both map cleanly, comparing them beats elaborating one. Drop an analogy that would need its own explanation.
 - Give two examples that vary on surface and hold structure constant. For a reader without the schema, trace one of them completely, step by step. For a reader with it, one contrast pair or edge case replaces the traced instance.
 - Cut extraneous material, not mechanism. Where the question is a mechanism question, the steps producing the function are the answer.
-- Leave the terminal inference — the one the reader is now equipped to make — to the reader, and say it is theirs. Place any other prompt as a specific question at the seam it belongs to.
-
-## Close
-
-Check at the level the explanation was pitched at: for a mechanism question, ask for the steps between two named points; for a functional question, a functional answer is a correct one. Assent — "that was clear" — is not evidence at any level.
-
-Where the answer comes back incomplete, re-read the four coordinates rather than the reader: one of schema, foil, level, or wrong model was misjudged.
+- Name the terminal inference — the one the reader is now equipped to make — as theirs to draw, and stop there. State it; do not ask it.
 
 ## Bounds
 
 - Explain where the reader is missing material they do not hold — usually a first encounter with the target. Where they already hold an account of it and what is missing is their own verified grasp of it — usually a second or later encounter — hand off to `/grasp` where it is loaded; explaining is not verifying.
+- One turn, and it closes. Ask no comprehension check and pose no question the reader is expected to answer back: whether the explanation landed is not settled here, and assent would not settle it anywhere. A question only where two readings of the four coordinates would produce different explanations.
 - Propose or make edits only when asked; explaining is not changing.
 - Separate what is read from the material from what is inference, and say where a claim rests on something not in front of you.
 - For code: name the entry point, trace the path, say what each layer is responsible for, and cite as `file_path:line`.

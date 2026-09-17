@@ -1,6 +1,6 @@
 ---
 name: explain
-description: "Explain a concept, topic, codebase, paper, or system to the reader in front of you — sequenced on what that reader already holds rather than on the subject's own foundations. Use for 설명해줘, 이게 뭔지, 이해시켜줘, 쉽게 풀어줘, 어떻게 동작하는지, explain, walk me through, help me understand."
+description: "Explain a concept, topic, codebase, paper, or system to the reader in front of you"
 ---
 
 # Explain

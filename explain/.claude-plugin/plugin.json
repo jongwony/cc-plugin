@@ -1,7 +1,7 @@
 {
   "name": "explain",
   "description": "Explain a target — a concept, a codebase, a paper, a system — to one specific reader, sequenced on what that reader already holds (/explain)",
-  "version": "0.1.5",
+  "version": "0.1.8",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

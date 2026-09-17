@@ -98,6 +98,11 @@
       "name": "choi-voice",
       "source": "./choi-voice",
       "description": "Writing-voice polish profiles (LinkedIn)"
+    },
+    {
+      "name": "explain",
+      "source": "./explain",
+      "description": "Explain a concept, codebase, paper, or system to one specific reader — sequenced on what that reader already holds, with the cognitive-science evidence behind each directive"
     }
   ]
 }

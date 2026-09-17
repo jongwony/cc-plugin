@@ -9,7 +9,7 @@ Fix the reader model first: the four coordinates below are its contents. Every d
 
 ## Four coordinates
 
-Read them off the session before writing. Where there is no session to read, read them off the request itself: the vocabulary the requester chose, what they asked *for* as against what they asked *about*, and the level their phrasing already sits at. Where that still does not settle one, state the reading being used in a clause and continue; ask only where two readings would produce different explanations.
+Read them off the session before writing. Where the session does not settle one, state the reading being used in a clause and continue; ask only where two readings would produce different explanations.
 
 - **Schema** — what the reader holds *about this specific target*. Assess knowledge of the concrete target separately from knowledge of the concepts it is built from, and sequence each part on its own reading. A term the reader used correctly is evidence about that term, not about the pattern around it; seniority is not evidence at all.
   - Without the schema: one element per unit.
@@ -30,26 +30,11 @@ Read them off the session before writing. Where there is no session to read, rea
 - Cut extraneous material, not mechanism. Where the question is a mechanism question, the steps producing the function are the answer.
 - Leave the terminal inference — the one the reader is now equipped to make — to the reader, and say it is theirs. Place any other prompt as a specific question at the seam it belongs to.
 
-## Revise as you go
-
-The coordinates are running state, not a one-time read. Evidence about them is asymmetric: the reader shows understanding only by producing something — a restatement in their own words, a correct next step, an application — and shows its absence far more cheaply, by asking. Assent, silence, and continued attention are not evidence. So one question revises a coordinate immediately; raising one takes production.
-
-| The reader | Revise |
-|---|---|
-| asks what a term means | Schema, for that term |
-| "why not X?", "I thought it would be X" | Foil — X is the foil, now stated |
-| asserts a mechanism, wrongly | Wrong model — now in evidence, so its branch applies |
-| asks what it actually does | Level — up |
-| "yes, but how" | Level — down |
-| restates correctly in their own words | Schema, for what they restated |
-
-Carry the revision into the rest of the explanation rather than repeating the last part louder. Where an answer comes back incomplete, a coordinate was misjudged — that is a reading about the explanation, not about the reader.
-
-Once a name is settled on for something, keep it for the rest of the explanation; switching costs the reader, who settled on it too. Where they supply their own name, that one wins.
-
 ## Close
 
-Check at the level the explanation was pitched at: for a mechanism question, ask for the steps between two named points; for a functional question, a functional answer is a correct one. "That was clear" is not evidence at any level.
+Check at the level the explanation was pitched at: for a mechanism question, ask for the steps between two named points; for a functional question, a functional answer is a correct one. Assent — "that was clear" — is not evidence at any level.
+
+Where the answer comes back incomplete, re-read the four coordinates rather than the reader: one of schema, foil, level, or wrong model was misjudged.
 
 ## Bounds
 

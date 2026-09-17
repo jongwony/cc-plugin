@@ -89,17 +89,6 @@ Resolving a conflict between two directives: applicability to the case in front 
 - Several difficulties raise retention while lowering immediate performance and subjective fluency — Bjork & Bjork (2011); Bjork (1994) — WR as a family, DISP in parts (disfluent fonts failed replication). This means a reader's fluency judgment can diverge from their learning; it does not predict that a given explanation will feel worse.
 - Explaining drives generalization and also overgeneralization from insufficient evidence — Williams & Lombrozo (2010), *Cognitive Science* — MOD. Pair a generative prompt with a counterexample where the reader could overreach.
 
-### Revise as you go — the coordinates are running state
-
-- Understanding is not delivered, it is **grounded**: participants build common ground incrementally, and the speaker proceeds only on positive evidence that the last contribution landed — Clark & Brennan (1991), "Grounding in communication," in Resnick, Levine & Teasley (eds.), *Perspectives on Socially Shared Cognition*, APA, 127–149; Clark & Wilkes-Gibbs (1986), *Cognition* 22(1), 1–39 — WR as a descriptive account of dialogue.
-- The evidence types form a strength order — continued attention and acknowledgment are the cheapest and weakest, a relevant next contribution is stronger, and demonstration is strongest — Clark & Brennan (1991), taxonomy of positive evidence — MOD as a graded claim; the taxonomy is well established, the ordering is theoretical rather than separately measured. This is what makes an upward revision cost production while a question revises downward at once.
-- The accompanying least-collaborative-effort principle is **disputed**: a Map Task corpus study found stronger support for least *individual* effort — Davies (2007), *Pragmatics* 17(2), 203–230 — DISP. Nothing in this skill rests on it.
-- Speakers plan egocentrically and adjust toward the addressee afterwards, so the adjustment is incomplete under load — the monitoring-and-adjustment account; see also curse of knowledge above — MOD. Supports revising on the reader's signal rather than on the explainer's estimate of how it went.
-
-### Once a name is settled on, keep it; the reader's own name wins
-
-- **Conceptual pacts / lexical entrainment**: partners converge on a term for a referent and reuse it, and breaking the pact costs comprehension time — Brennan & Clark (1996), *JEP: Learning, Memory, and Cognition* 22(6), 1482–1493; Metzing & Brennan (2003), *J Memory & Language* 49 — WR. The effect is partner-specific, which is why the reader's own term takes precedence over the explainer's.
-
 ### Close by checking at the level the explanation was pitched at; assent is not evidence
 
 - Confidence in explanatory understanding drops sharply once a step-by-step causal account is demanded — Rozenblit & Keil (2002), *Cognitive Science* 26(5), 521–562; Alter, Oppenheimer & Zemla (2010), *JPSP* — WR for the core effect, MOD for scope. The recorded boundary excludes facts, procedures and narratives, which is why the mechanism check is scoped to mechanism questions.

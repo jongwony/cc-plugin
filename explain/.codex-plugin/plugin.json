@@ -1,0 +1,32 @@
+{
+  "name": "explain",
+  "version": "0.1.4",
+  "description": "Explain a concept, codebase, paper, or system to one specific reader, sequenced on what that reader already holds",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  },
+  "homepage": "https://github.com/jongwony/cc-plugin",
+  "repository": "https://github.com/jongwony/cc-plugin",
+  "keywords": [
+    "cc-plugin",
+    "skills",
+    "explain"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Explain",
+    "shortDescription": "Explain something to the reader in front of you, not to a generic beginner",
+    "longDescription": "Fixes the reader model first — what they already hold about this target, what they expected instead, the level they asked at, and the wrong model they may be running — then explains the difference. Scaffolding that helps a novice costs an expert, so the same target is explained two different ways rather than at two different lengths.",
+    "developerName": "Jongwon Choi",
+    "category": "Productivity",
+    "capabilities": [
+      "Read"
+    ],
+    "websiteURL": "https://github.com/jongwony/cc-plugin",
+    "defaultPrompt": [
+      "Explain this module to me"
+    ],
+    "brandColor": "#D97757"
+  }
+}

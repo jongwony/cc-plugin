@@ -38,6 +38,7 @@ Where the answer comes back incomplete, re-read the four coordinates rather than
 
 ## Bounds
 
+- Explain where the reader is missing material they do not hold — usually a first encounter with the target. Where they already hold an account of it and what is missing is their own verified grasp of it — usually a second or later encounter — hand off to `/grasp` where it is loaded; explaining is not verifying.
 - Propose or make edits only when asked; explaining is not changing.
 - Separate what is read from the material from what is inference, and say where a claim rests on something not in front of you.
 - For code: name the entry point, trace the path, say what each layer is responsible for, and cite as `file_path:line`.

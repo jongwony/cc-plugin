@@ -1,6 +1,6 @@
 {
   "name": "explain",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Explain a concept, codebase, paper, or system to one specific reader, sequenced on what that reader already holds",
   "author": {
     "name": "Jongwon Choi",

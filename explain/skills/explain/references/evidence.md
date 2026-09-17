@@ -91,7 +91,7 @@ Resolving a conflict between two directives: applicability to the case in front 
 
 ### One turn, and it closes; no comprehension check, and assent is not evidence
 
-- Confidence in explanatory understanding drops sharply once a step-by-step causal account is demanded — Rozenblit & Keil (2002), *Cognitive Science* 26(5), 521–562; Alter, Oppenheimer & Zemla (2010), *JPSP* — WR for the core effect, MOD for scope. The recorded boundary excludes facts, procedures and narratives. This grounds what assent is worth, not a check run here: verifying the reader's own account is `/grasp`'s contract.
+- Confidence in explanatory understanding drops sharply once a step-by-step causal account is demanded — Rozenblit & Keil (2002), *Cognitive Science* 26(5), 521–562; Alter, Oppenheimer & Zemla (2010), *JPSP* — WR for the core effect, MOD for scope. The recorded boundary excludes facts, procedures and narratives. This grounds what assent is worth, which is why the turn closes on the explanation rather than on a reading of how it landed.
 - The illusion tracks the conflation of functional with mechanistic understanding — Rozenblit & Keil (2002) and later mechanistic-vs-functional prompt work — MOD.
 
 ### Deliberately not carried

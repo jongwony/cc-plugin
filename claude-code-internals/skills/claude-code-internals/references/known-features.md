@@ -503,15 +503,36 @@ Two zero-context sonnet subagents, identical dashboard task and data with 5 embe
 
 The `Artifact` tool renders an HTML/Markdown file to a **default-private page hosted on claude.ai**. Both the model-facing `name` and `userFacingName` are literally `Artifact` (symbol `S2o`, `yb="Artifact"`). It is `isReadOnly:false` and `isConcurrencySafe:false` — each publish mutates server state.
 
+> **Drift notice (v2.1.199 → v2.1.275) — not an RE pass.**
+> Everything else in this section is verbatim from the 2.1.199 binary; this block is not. It is read from (a) the live `Artifact` tool description in a 2.1.275 session and (b) the 2.1.275 CHANGELOG line *"Changed the Artifact tool to ask for a one-word tab icon on a first publish instead of an emoji favicon"*. Roughly 76 versions separate the measurement below from this note. For RE-grade confirmation re-run `strings -n 6` against `~/.local/share/claude/versions/2.1.275`.
+>
+> **Two measured rows are now contradicted.**
+>
+> - **`favicon` — deprecated.** Its live description reads *"Deprecated; Claude omits it and uses `icon`."* The replacement is **`icon`**: one short generic word (chart, calendar, recipe, code, map), max 40 chars, a plain signifier and never a brand name. Sent on a first publish, omitted on redeploy so the artifact keeps the icon it has; ignored on an artifact created from an Artifact type.
+> - **`url` — no longer owner-only.** The live description accepts an artifact the person owns **or was given edit access to** (a read of it reports `writer`), against the measured `role==="owner"`.
+>
+> **The v2.1.199 schema predates an `action` axis entirely.** The tool now dispatches on `action` ∈ {`publish` (default), `list`, `read`, `delete`, `open`, `pin`, `unpin`, `quickstart`}, which makes per-param requiredness action-dependent rather than fixed as the table below records it.
+>
+> **Parameter families the table predates** — names as the live description carries them; semantics not re-measured:
+>
+> | Family | Params |
+> |--------|--------|
+> | Multi-file publishing | `files`, `root`, `overwrite_unread` |
+> | Asset store | `asset`, `file_paths`, `from_url`, `asset_ids`, `path`, `paths`, `out_dir` |
+> | Artifact types | `type_url`, `type`, `type_query`, `auto_open`; the `quickstart` action takes `intent`, `design_systems` |
+> | Other | `pin`, `contract` (runtime version pin/upgrade), `page`, `prompt`, `scope`, `after` |
+>
+> **Sibling tools now exist.** `ArtifactComments` (comment threads on a published page) and `ArtifactData` (the page's shared database) are separate tools alongside `Artifact`, both named in its live description. Neither is covered anywhere in this file.
+
 ### Input Schema (`T2o`, Zod `strictObject`)
 
 | Param | Req | Notes |
 |-------|-----|-------|
 | `file_path` | yes | `.html`/`.md` path; basename is fallback `<title>` |
-| `favicon` | yes | 1–2 emoji, max 32 chars, no markup; keep stable across redeploys |
+| `favicon` | yes | 1–2 emoji, max 32 chars, no markup; keep stable across redeploys — **deprecated ≥ v2.1.275**, see drift notice above |
 | `description` | no | max 1000; gallery-card subtitle |
 | `label` | no | max 60; version name shown in the claude.ai **version picker** |
-| `url` | no | redeploy target; **must be an artifact the user owns** (`role==="owner"`) |
+| `url` | no | redeploy target; **must be an artifact the user owns** (`role==="owner"`) — **widened ≥ v2.1.275** to include edit-access artifacts, see drift notice above |
 | `force` | no | skip baseVersion/conflict check (overwrite) |
 | `capabilities` | no | added only when `Xfe.isFrameMcpEnabled()` — MCP/connector grants |
 
@@ -583,7 +604,7 @@ Related flags: `tengu_cobalt_plinth_fern` (baseVersion), `tengu_frame_publish_co
 
 ### Local Traces — session-scoped RAM only
 
-- `file_path → url` mapping lives in **in-memory app state** (`frameUrls[file_path] = {url, updatedAt, title, favicon, capabilities}`), not on disk → this is why "same file path redeploys to the same URL **within a session**."
+- `file_path → url` mapping lives in **in-memory app state** (`frameUrls[file_path] = {url, updatedAt, title, favicon, capabilities}` — `favicon` is the v2.1.199 field name, see the drift notice on its deprecation in the tool schema), not on disk → this is why "same file path redeploys to the same URL **within a session**."
 - Version-view map `artifactReadVersions[slug]` (for baseVersion checks) is likewise app state.
 - **No `~/.claude` cache of artifact URLs/IDs**; a fresh session mints a new URL and the `url` param is the only way to target an existing artifact. (`tengu_cobalt_plinth_reader_persist`, default off, hints at future disk persistence.)
 

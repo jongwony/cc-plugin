@@ -100,6 +100,11 @@
       "description": "Writing-voice polish profiles (LinkedIn)"
     },
     {
+      "name": "place",
+      "source": "./place",
+      "description": "Placement audit — a read-only pass routing each clause of LLM-facing instruction prose to one destination: standing surface, invocation surface, on-demand reference, ledger, or delete"
+    },
+    {
       "name": "explain",
       "source": "./explain",
       "description": "Explain a concept, codebase, paper, or system to one specific reader — sequenced on what that reader already holds, with the cognitive-science evidence behind each directive"

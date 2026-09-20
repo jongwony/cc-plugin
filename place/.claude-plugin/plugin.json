@@ -1,0 +1,9 @@
+{
+  "name": "place",
+  "description": "Placement audit — a read-only pass routing each clause of LLM-facing instruction prose to one destination: standing surface, invocation surface, on-demand reference, ledger, or delete (/place)",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

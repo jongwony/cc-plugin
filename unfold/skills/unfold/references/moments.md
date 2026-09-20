@@ -10,8 +10,10 @@ A line cannot be laid on a chart whose contents are unknown. Before either
 write moment, read the selected root issue's description (the five sections:
 Problem, Proposed outcome, Affected, Constraints, Open questions) and its
 decision comments in order, since the sections are not rewritten and the
-decision lines are where the current direction lives. This is the one body
-loaded; every other issue stays metadata-only.
+decision lines are where the current direction lives. This is the one chart
+loaded, and every other issue stays metadata-only. The restriction is on
+charts: a body a write is about to change — the runbook `close` updates — is
+read in that write's own step.
 
 ## decide — decision log (write, one comment)
 

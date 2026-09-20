@@ -30,9 +30,10 @@ follow-up — and the read each write needs first.
 
 - **Write only structure and decisions**: new workstream issues, `blockedBy`
   edges, runbook documents, one-line decision comments.
-- **Read at need, never cache-and-trust**: issue status, milestone progress %,
-  and dependency edges are system-maintained or derived on read. A write reads
-  what it is about to change, immediately before changing it.
+- **Read at need, never cache-and-trust**: issue status and milestone progress
+  % are system-maintained. Dependency edges are not — they are stored
+  structure, written by hand under the bullet above. A write reads what it is
+  about to change, immediately before changing it.
 - **Never hand-write state**: do not set issue status, milestone completion,
   or live-system facts (deploy/image existence) in Linear. Status flows from
   PR events; live facts are read from their source (CI, registry, ArgoCD)

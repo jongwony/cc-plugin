@@ -1,5 +1,5 @@
 {
-  "description": "unfold plugin hooks. PreToolUse on the edit tools carries the write-intent trigger to the moment it fires: the turn a session is about to write to a repository is the turn its unit's chart has to be open. The script stays silent outside the repositories whose charts this plugin routes to, and emits once per session so the reminder lands before the first write rather than beside every one. Best-effort throughout: any internal fault exits 0 and injects nothing.",
+  "description": "unfold plugin hooks. PreToolUse on the edit tools carries the write-intent trigger to the moment it fires: the turn a session is about to write to a repository is the turn its unit's chart has to be open. SessionStart clears the once-per-epoch marker, so compaction — which drops the injected line out of context — does not leave the rest of the session without the trigger. The script stays silent outside the repositories whose charts this plugin routes to. Best-effort throughout: any internal fault exits 0 and injects nothing.",
   "hooks": {
     "PreToolUse": [
       {
@@ -7,7 +7,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pretooluse_chart.sh",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/chart_trigger.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/chart_trigger.sh",
             "timeout": 5
           }
         ]

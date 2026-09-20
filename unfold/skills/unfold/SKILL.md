@@ -70,7 +70,8 @@ and structure deltas.
   is wanted, why, under which constraints, and what is still open. Load that
   one chart and nothing beside it; a chart the intent did not select is
   contamination, not context. This plugin ships a PreToolUse hook that carries
-  this trigger to the edit tools once per session, staying silent outside the
+  this trigger to the edit tools once per context epoch — compaction drops the
+  injected line, so SessionStart resets it — staying silent outside the
   repositories whose charts it routes to (`UNFOLD_CHART_OWNERS`). A host that
   loads plugin hooks delivers the trigger without a reader having reached this
   bullet; a host that does not is why the bullet is here.

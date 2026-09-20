@@ -69,10 +69,10 @@ and structure deltas.
   first write, by catalog match (below). The unit's chart is its project's root issue: what
   is wanted, why, under which constraints, and what is still open. Load that
   one chart and nothing beside it; a chart the intent did not select is
-  contamination, not context. This plugin ships a PreToolUse hook that carries
-  this trigger to the edit tools once per context epoch — compaction drops the
-  injected line, so SessionStart resets it — staying silent outside the
-  repositories whose charts it routes to (`UNFOLD_CHART_OWNERS`). A host that
+  contamination, not context. Recognizing the intent is the work, so the trigger
+  belongs where the intent forms, not where a write executes. A host that wants
+  it to fire unasked binds it on an always-loaded surface of its own; this skill
+  states the trigger and delivers it nowhere. A host that
   loads plugin hooks delivers the trigger without a reader having reached this
   bullet; a host that does not is why the bullet is here.
 

@@ -22,14 +22,18 @@ The only recurring hand-write. Template (one line, plus optional basis):
 1. Identify the anchor the decision belongs to: the workstream issue whose
    path was chosen (default), or the project itself when the decision spans
    workstreams. Ambiguous → ask which issue or project anchors the decision.
-2. Draft the comment from the template; show the draft. Write it at the
+2. A slot the session cannot fill from what the user actually settled — the
+   `이유:` a path was taken, the `배제:` it displaced — is asked, not
+   inferred. Ask before drafting that line (`/inquire` where that protocol
+   is loaded; a direct question where it is not) and draft from the answer.
+3. Draft the comment from the template; show the draft. Write it at the
    moment the direction changes, not at the end of the session: a session
    the user is steering can change direction more than once, and a session
    switch loses what was not yet on the chart.
-3. The user culls: a line is dropped when it is derivable from what the
+4. The user culls: a line is dropped when it is derivable from what the
    chart already records, when a mechanical fix produced it rather than a
    choice, or when it does not match the unit's intent.
-4. On confirmation, `save_comment` with `issueId` — or `projectId` for a
+5. On confirmation, `save_comment` with `issueId` — or `projectId` for a
    project-scoped decision; the tool accepts exactly one parent.
 
 A decision that changes the dependency topology is not just a comment — it is

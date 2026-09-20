@@ -69,7 +69,11 @@ and structure deltas.
   first write, by catalog match (below). The unit's chart is its project's root issue: what
   is wanted, why, under which constraints, and what is still open. Load that
   one chart and nothing beside it; a chart the intent did not select is
-  contamination, not context.
+  contamination, not context. This plugin ships a PreToolUse hook that carries
+  this trigger to the edit tools once per session, staying silent outside the
+  repositories whose charts it routes to (`UNFOLD_CHART_OWNERS`). A host that
+  loads plugin hooks delivers the trigger without a reader having reached this
+  bullet; a host that does not is why the bullet is here.
 
 ## Project resolution
 

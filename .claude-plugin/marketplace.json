@@ -77,7 +77,7 @@
     {
       "name": "unfold",
       "source": "./unfold",
-      "description": "Linear loop moment router — unfold the whole picture, next unblocked actions, runbook invariants, decision log, and roadmap from Linear; write only structure and decisions, never state"
+      "description": "Linear loop moment router — opens the unit's chart when the session shows an intent to write to a repository, and unfolds the whole picture, next unblocked actions, runbook invariants, decision log, and roadmap from Linear; write only structure and decisions, never state"
     },
     {
       "name": "comment-review",

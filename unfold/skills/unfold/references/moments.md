@@ -32,6 +32,11 @@ statuses — not the whole project.
 
 Purpose: start the session from the externalized whole, not from memory.
 
+0. **Read the chart** — the selected root issue's description (the five
+   sections: Problem, Proposed outcome, Affected, Constraints, Open questions)
+   and its decision comments in order, since the sections are not rewritten
+   and the decision lines are where the current direction lives. This is the
+   one body the moment loads; every other issue stays metadata-only.
 1. `get_project` — name, target date, initiative.
 2. `list_milestones` — gates in sortOrder with auto progress %. The current
    gate = earliest milestone with progress < 100.
@@ -39,8 +44,9 @@ Purpose: start the session from the externalized whole, not from memory.
 4. `list_documents` — surface the runbook document title + link (do not load
    its body unless asked).
 
-Emit: one compact block — project · current gate (+%) · unblocked next
-actions (issue key + title) · runbook pointer. Three to six lines.
+Emit: one compact block — the chart's direction as it stands after its last
+decision line · project · current gate (+%) · unblocked next actions (issue
+key + title) · runbook pointer. Four to eight lines.
 
 ## next — next action
 
@@ -67,8 +73,14 @@ The only recurring hand-write. Template (one line, plus optional basis):
    path was chosen (default), or the project itself when the decision spans
    workstreams (e.g. a roadmap path selection). Ambiguous → ask which issue
    or project anchors the decision.
-2. Draft the comment from the template; show the draft.
-3. On confirmation, `save_comment` with `issueId` — or `projectId` for a
+2. Draft the comment from the template; show the draft. Write it at the
+   moment the direction changes, not at the end of the session: a session
+   the user is steering can change direction more than once, and a session
+   switch loses what was not yet on the chart.
+3. The user culls: a line is dropped when it is derivable from what the
+   chart already records, when a mechanical fix produced it rather than a
+   choice, or when it does not match the unit's intent.
+4. On confirmation, `save_comment` with `issueId` — or `projectId` for a
    project-scoped decision; the tool accepts exactly one parent.
 
 A decision that changes the dependency topology is not just a comment — it is
@@ -96,9 +108,18 @@ Checklist the session against the structure in Linear; write only deltas:
    `save_document` update — structure and order only, never current status.
 4. **Distilled handoff produced?** (a cold, self-contained runbook for a
    fresh session) → `save_document` as a project document.
-5. Everything else (progress, status, percentages) — explicitly NOT written.
+5. **Unit closing?** The close is an explicit act, never inferred from the
+   last merge. → `save_comment` on the unit's root issue: a closing note
+   saying what landed (the commit and PR locators that carry the
+   then-record) and what is still open. A follow-up issue born here is
+   never an orphan: `save_issue` with `relatedTo` (or `blockedBy`) the root
+   issue and one pointer line to the closing note in its description — a
+   locator, not a restatement of the intent — so the fresh context that
+   picks it up starts from the chart rather than from someone's recall.
+6. Everything else (progress, status, percentages) — explicitly NOT written.
 
-Show the delta list as a draft; write each item on confirmation.
+Show the delta list as a draft; the user culls it (derivable, mechanical, or
+off-intent lines drop); write each surviving item on confirmation.
 
 ## roadmap — path selection over gates
 

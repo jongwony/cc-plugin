@@ -8,9 +8,12 @@ description: |
   (next), "배포 순서" / "머지 전 확인" / "deploy order" (deploy), "이 길로
   가는 이유 기록" / "결정 남겨줘" / "log this decision" (decide), "세션 정리"
   / "구조 변경 반영" / "wrap up the span" (close), "로드맵" / "게이트 어디까지
-  왔지" / "roadmap" (roadmap). Reads current state from Linear via MCP;
-  writes ONLY structure and decisions (never status). Invoked as
-  /unfold [moment] [project].
+  왔지" / "roadmap" (roadmap). Also fires without being named: when the
+  accumulated context and the utterance show an intent to write to a
+  repository, open the unit's chart first — match that intent against the
+  catalog of project root issues and load that one chart, nothing else.
+  Reads current state from Linear via MCP; writes ONLY structure and
+  decisions (never status). Invoked as /unfold [moment] [project].
 ---
 
 # Unfold — Linear Loop Moment Router
@@ -39,7 +42,10 @@ and structure deltas.
   state of a backfilled issue — one created for work finished before the
   issue existed — is set once at creation, because no PR event will ever
   fire for it; this is a one-time creation fact, not ongoing mirroring,
-  and automation owns the state from then on.
+  and automation owns the state from then on. The unit's explicit close is
+  the other: a root issue has no PR of its own to complete it, so enacting
+  the user's closure decision sets its terminal state once, together with
+  the closing note — a decision carried out, not progress mirrored.
 
 ## Invocation
 
@@ -57,6 +63,18 @@ and structure deltas.
 - No moment argument: infer from the utterance; when nothing matches,
   default to `open` (the most common moment).
 - Korean voice input is expected — match aliases semantically, not literally.
+- **Write-intent trigger.** When the accumulated context and the utterance
+  show an intent to write to a repository — an edit, a branch, a worktree, a
+  spawn — and no chart is open for that unit yet, `open` fires before the
+  first write, by catalog match (below). The unit's chart is its project's root issue: what
+  is wanted, why, under which constraints, and what is still open. Load that
+  one chart and nothing beside it; a chart the intent did not select is
+  contamination, not context. Recognizing the intent is the work, so the trigger
+  belongs where the intent forms, not where a write executes. A host that wants
+  it to fire unasked binds it on an always-loaded surface of its own; this skill
+  states the trigger and delivers it nowhere. A host that
+  loads plugin hooks delivers the trigger without a reader having reached this
+  bullet; a host that does not is why the bullet is here.
 
 ## Project resolution
 
@@ -67,8 +85,17 @@ Resolve the target Linear project in this order; never hardcode project IDs:
    present, the current worktree/branch's issue identifier like `FD-123`) and
    query Linear (`list_projects` with a name query, or `get_issue` on the
    identifier and read its project).
-3. Ambiguous or no match: list the user's in-progress lead projects and ask
-   once. Reuse the resolved project for the rest of the session.
+3. **Catalog match** (the write-intent path, and the fallback when 1–2 give
+   nothing): the catalog is the root issues of the user's projects — the
+   in-progress projects first, plus a root issue the accumulated context and
+   utterance make plainly relevant even though its project is not in
+   progress. Match the intent against that catalog; one match opens that
+   chart. No match: propose a new root issue for the unit as a `close`-style
+   structure write, draft first — never open a neighbour's chart instead.
+4. Still ambiguous: list the candidates and ask once. The resolved chart is
+   reused while the write target and the intent stay the same unit; a switch
+   to another repository or another unit re-runs the match, because a chart
+   that is open is not thereby the chart this write belongs to.
 
 ## Tool loading
 
@@ -89,8 +116,8 @@ moment. Summary:
 | `open` | project, milestones (%), open issues + relations + blocker statuses, documents | — | current gate + % · unblocked next actions · runbook pointer |
 | `next` | open issues + relations + blocker statuses | — | unblocked list only, ranked |
 | `deploy` | runbook document | — | ordering invariants section only |
-| `decide` | the target issue | `save_comment` | one-line decision log (draft → confirm → write) |
-| `close` | this session's work | `save_issue` / `save_document` | structure-delta checklist → minimal writes |
+| `decide` | the target issue | `save_comment` | one-line decision log, at the moment the direction changes (draft → user culls → write) |
+| `close` | this session's work | `save_issue` / `save_document` / `save_comment` | structure-delta checklist + closing note on the root issue + a relation and one pointer on each follow-up → user culls → minimal writes |
 | `roadmap` | initiative, member projects, milestones, decision comments | — (path decisions route to `decide`) | gate timeline + open path decisions |
 
 ## Output discipline
@@ -100,6 +127,11 @@ moment. Summary:
   Do not dump full issue lists or document bodies.
 - Every write moment shows a draft first and writes only on user confirmation
   (a decision comment and a structure delta are outward, team-visible acts).
+  The user culls the draft, and three reasons drop a line: it is derivable by
+  reasoning from what is already recorded, it is the product of a mechanical
+  fix rather than a choice, or it does not match the unit's intent. Only the
+  slow layer is written — structure and decisions — never a state the next
+  read would refresh anyway.
 - When a read reveals stale structure (an edge or runbook contradicting
   reality), surface it as a proposed structure fix — do not silently rewrite.
 

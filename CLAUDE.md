@@ -46,6 +46,15 @@ surfaces. Changing one is a revision of a durable instruction layer, which is
 the moment `premise/instruction-authoring.md` governs — read it before drafting
 the change.
 
+**Which surface a clause belongs on — and at which loading tier — routes through
+`/place`.** Read it when writing or moving a clause rather than deciding by hand;
+it carries the tier weighting that separates a standing surface from a skill body
+from a reference. This project's host bindings: its ledger is the commit-message
+history, the default this project does not depart from; its enforcement channel is
+`.githooks/check-version-bump.sh` with the CI workflow that shares its logic; its
+load tiers are this file and skill frontmatter descriptions at Tier 0, a
+`SKILL.md` or `agents/*.md` body at Tier 1, and `references/` at Tier 2.
+
 ## Conventions
 
 - **Helper scripts.** A Python script prefers inline uv environment setup —

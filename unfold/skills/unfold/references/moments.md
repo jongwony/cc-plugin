@@ -32,6 +32,11 @@ statuses — not the whole project.
 
 Purpose: start the session from the externalized whole, not from memory.
 
+0. **Read the chart** — the selected root issue's description (the five
+   sections: Problem, Proposed outcome, Affected, Constraints, Open questions)
+   and its decision comments in order, since the sections are not rewritten
+   and the decision lines are where the current direction lives. This is the
+   one body the moment loads; every other issue stays metadata-only.
 1. `get_project` — name, target date, initiative.
 2. `list_milestones` — gates in sortOrder with auto progress %. The current
    gate = earliest milestone with progress < 100.
@@ -39,8 +44,9 @@ Purpose: start the session from the externalized whole, not from memory.
 4. `list_documents` — surface the runbook document title + link (do not load
    its body unless asked).
 
-Emit: one compact block — project · current gate (+%) · unblocked next
-actions (issue key + title) · runbook pointer. Three to six lines.
+Emit: one compact block — the chart's direction as it stands after its last
+decision line · project · current gate (+%) · unblocked next actions (issue
+key + title) · runbook pointer. Four to eight lines.
 
 ## next — next action
 

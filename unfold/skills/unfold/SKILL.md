@@ -42,7 +42,10 @@ and structure deltas.
   state of a backfilled issue — one created for work finished before the
   issue existed — is set once at creation, because no PR event will ever
   fire for it; this is a one-time creation fact, not ongoing mirroring,
-  and automation owns the state from then on.
+  and automation owns the state from then on. The unit's explicit close is
+  the other: a root issue has no PR of its own to complete it, so enacting
+  the user's closure decision sets its terminal state once, together with
+  the closing note — a decision carried out, not progress mirrored.
 
 ## Invocation
 
@@ -62,8 +65,8 @@ and structure deltas.
 - Korean voice input is expected — match aliases semantically, not literally.
 - **Write-intent trigger.** When the accumulated context and the utterance
   show an intent to write to a repository — an edit, a branch, a worktree, a
-  spawn — and no chart is open yet, `open` fires before the first write, by
-  catalog match (below). The unit's chart is its project's root issue: what
+  spawn — and no chart is open for that unit yet, `open` fires before the
+  first write, by catalog match (below). The unit's chart is its project's root issue: what
   is wanted, why, under which constraints, and what is still open. Load that
   one chart and nothing beside it; a chart the intent did not select is
   contamination, not context.
@@ -84,8 +87,10 @@ Resolve the target Linear project in this order; never hardcode project IDs:
    progress. Match the intent against that catalog; one match opens that
    chart. No match: propose a new root issue for the unit as a `close`-style
    structure write, draft first — never open a neighbour's chart instead.
-4. Still ambiguous: list the candidates and ask once. Reuse the resolved
-   project for the rest of the session.
+4. Still ambiguous: list the candidates and ask once. The resolved chart is
+   reused while the write target and the intent stay the same unit; a switch
+   to another repository or another unit re-runs the match, because a chart
+   that is open is not thereby the chart this write belongs to.
 
 ## Tool loading
 

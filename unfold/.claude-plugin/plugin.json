@@ -1,7 +1,7 @@
 {
   "name": "unfold",
-  "description": "Linear loop moment router — opens the unit's chart when the session shows an intent to write to a repository, and unfolds the whole picture, next unblocked actions, runbook invariants, decision log, and roadmap from Linear; write only structure and decisions, never state",
-  "version": "0.4.2",
+  "description": "Linear chart writer — logs a decision at the moment the direction changes and closes a unit with its structure delta, closing note, and a letter of introduction for the follow-up; asks rather than infers what the user settled, reads the unit's chart before the first write, and writes only structure and decisions, never state",
+  "version": "0.5.2",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

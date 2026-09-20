@@ -1,67 +1,17 @@
 # Unfold — Per-Moment Procedures
 
-Detailed execution for each moment. All reads treat Linear as the source of
-truth for structure and current issue/milestone state; live-system facts (image
-in a registry, deploy applied) are never read from Linear — go to their source.
+Detailed execution for `decide` and `close`. Both read Linear as the source of
+truth for structure and current issue state; live-system facts (image in a
+registry, deploy applied) are never read from Linear — go to their source.
 
-## Shared: unblocked derivation
+## Shared: read the chart before writing
 
-Linear's [issue-relations docs](https://linear.app/docs/issue-relations)
-describe a resolved blocker's relation moving under Related in the issue
-sidebar. API/MCP reads can still return the original `blocks`/`blockedBy`
-relation after completion. The MCP exposes no server-side `unblocked`
-filter — derive client-side:
-
-1. `list_issues` scoped to the project, excluding completed/canceled states.
-2. For candidates, `get_issue` with `includeRelations: true`.
-3. For each distinct `blockedBy` issue, obtain its `statusType` (`get_issue`
-   unless already known from another bounded read).
-4. `unblocked(i)` ≡ `i.statusType` is not completed/canceled ∧ every
-   `relations.blockedBy` issue has `statusType` completed.
-5. Rank: In Progress first, then Todo within the earliest un-done milestone
-   (gate order = milestone sortOrder), then priority.
-
-`canceled` blockers do not satisfy step 4; Linear's docs do not say whether
-`canceled` counts as resolved.
-
-Keep calls bounded: derive relations only for issues in the earliest one or
-two open gates, deduplicate `blockedBy` IDs, and fetch only unknown blocker
-statuses — not the whole project.
-
-## open — span-open orient
-
-Purpose: start the session from the externalized whole, not from memory.
-
-0. **Read the chart** — the selected root issue's description (the five
-   sections: Problem, Proposed outcome, Affected, Constraints, Open questions)
-   and its decision comments in order, since the sections are not rewritten
-   and the decision lines are where the current direction lives. This is the
-   one body the moment loads; every other issue stays metadata-only.
-1. `get_project` — name, target date, initiative.
-2. `list_milestones` — gates in sortOrder with auto progress %. The current
-   gate = earliest milestone with progress < 100.
-3. Unblocked derivation (above) within the current gate.
-4. `list_documents` — surface the runbook document title + link (do not load
-   its body unless asked).
-
-Emit: one compact block — the chart's direction as it stands after its last
-decision line · project · current gate (+%) · unblocked next actions (issue
-key + title) · runbook pointer. Four to eight lines.
-
-## next — next action
-
-Subset of `open` when orientation is already established: run the unblocked
-derivation only and emit the ranked unblocked list. If empty, say which
-blocker is holding the front (the blocking issue and its status) — that IS
-the next action's location.
-
-## deploy — pre-merge/deploy ordering check
-
-1. `list_documents` → `get_document` on the runbook.
-2. Extract and emit ONLY the ordering-invariants section (the runbook's
-   sequence rules: what must precede what; parallel-safe sets).
-3. Do not emit status; the question at this moment is "is the order I'm
-   about to act in legal", not "where are we".
+A line cannot be laid on a chart whose contents are unknown. Before either
+write moment, read the selected root issue's description (the five sections:
+Problem, Proposed outcome, Affected, Constraints, Open questions) and its
+decision comments in order, since the sections are not rewritten and the
+decision lines are where the current direction lives. This is the one body
+loaded; every other issue stays metadata-only.
 
 ## decide — decision log (write, one comment)
 
@@ -71,8 +21,7 @@ The only recurring hand-write. Template (one line, plus optional basis):
 
 1. Identify the anchor the decision belongs to: the workstream issue whose
    path was chosen (default), or the project itself when the decision spans
-   workstreams (e.g. a roadmap path selection). Ambiguous → ask which issue
-   or project anchors the decision.
+   workstreams. Ambiguous → ask which issue or project anchors the decision.
 2. Draft the comment from the template; show the draft. Write it at the
    moment the direction changes, not at the end of the session: a session
    the user is steering can change direction more than once, and a session
@@ -121,37 +70,15 @@ Checklist the session against the structure in Linear; write only deltas:
 Show the delta list as a draft; the user culls it (derivable, mechanical, or
 off-intent lines drop); write each surviving item on confirmation.
 
-## roadmap — path selection over gates
-
-1. `get_initiative` / `list_initiatives` for the umbrella; `list_projects`
-   or the initiative's member projects.
-2. Per project: `list_milestones` — gate ladder with %.
-3. Decision layer: `list_comments` with `projectId` per member project
-   (the project-anchored decision threads `decide` writes) plus
-   `list_issues` scoped to the project for hold/paused-type states.
-   Distinguish by thread state: a thread whose latest message is a
-   `결정:` record is a RESOLVED decision — emit as context, not as open;
-   a thread ending in an open question, and any hold-state issue, is an
-   OPEN path decision. Issue-anchored decisions belong to their
-   workstream's `open`/`next` view — roadmap deliberately reads only the
-   project layer.
-4. Emit the gate timeline: which gate each project sits at, which gates are
-   blocked on which (project dependencies are end-to-start only), the open
-   path decisions from step 3, and the latest resolved decisions as
-   context.
-5. A path decision made here → route to `decide` (comment on the issue or a
-   project-level comment via `save_comment` with `projectId`).
-
 ## Caveats learned in the field
 
 - Milestones have no explicit sortOrder parameter on write; creation order
   fixes display order. Plan gate creation order accordingly.
-- Milestone/Initiative entities are absent from Linear webhooks — any local
-  cache of gate % must be pull-based (refresh at session start / on demand).
 - Project health (On track / At risk) is permanently manual in Linear — do
   not treat it as auto-derived state, and do not hand-write it as part of
   this skill's moments.
 - The GitHub integration transitions issue status only when the team's Git
   automations mapping is configured (Team Settings → Workflow) and the PR
   references the issue (identifier in branch name, or magic word in the PR
-  description). When automation seems dead, check those two wires first.
+  description). When automation seems dead, check those two wires first —
+  the never-hand-write-state rule assumes that chain is live.

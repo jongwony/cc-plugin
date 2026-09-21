@@ -84,9 +84,9 @@ section, and it changes no direction.
    lists, projections as values of the axis that determines them, departures
    with their per-item destinations — together with the content each
    relocation write will carry, not just where it goes. The user culls
-   (mechanical, off-intent; an axis's representation and its absorbed list
-   are not cullable as derivable — see SKILL.md §Output discipline). On
-   confirmation, the writes land in this order:
+   (derivable, mechanical, off-intent — derivability does not reach an
+   axis's representation or its absorbed list). On confirmation, the writes
+   land in this order:
    - a departure to another section of the same root description rides in the
      same `save_issue` as the rewritten Open questions;
    - a departure to another issue or document is its own `save_issue` /

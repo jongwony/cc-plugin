@@ -112,7 +112,7 @@ Detailed per-moment procedures and write templates live in
 | Moment | Reads | Writes | Emit |
 |---|---|---|---|
 | `decide` | the chart (root issue description + decision comments), then the anchor the decision belongs to | `save_comment` | one-line decision log, at the moment the direction changes (draft → user culls → write) |
-| `group` | the chart's open items and its decision comments, in order, plus the body of each relocation destination before changing it | `save_issue` (root description) / `save_issue` / `save_document` (a released item's destination) | axes each naming what it absorbed + every non-axis classified as projection or different-object, with its disposition → user culls → rewritten Open questions |
+| `group` | the chart's open items and its decision comments, in order, plus the body of each relocation destination before changing it | `save_issue` (root description) / `save_issue` or `save_document` (a released item's destination) | axes each naming what it absorbed + every non-axis classified as projection or different-object, with its disposition → user culls → rewritten Open questions |
 | `close` | the chart, then current structure (issues + relations, documents) | `save_issue` / `save_document` / `save_comment` | structure-delta checklist + closing note on the root issue + a relation and one pointer on each follow-up → user culls → minimal writes |
 
 ## Output discipline

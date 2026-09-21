@@ -31,7 +31,9 @@ follow-up — and the read each write needs first.
 
 - **Write only structure and decisions**: new workstream issues, `blockedBy`
   edges, runbook documents, one-line decision comments, a regrouped Open
-  questions section.
+  questions section and the relocation of an item that regrouping releases —
+  into another section of the same root description, or into the issue or
+  document that item belongs to.
 - **Read at need, never cache-and-trust**: issue status and milestone progress
   % are system-maintained. Dependency edges are not — they are stored
   structure, written by hand under the bullet above. A write reads what it is
@@ -110,7 +112,7 @@ Detailed per-moment procedures and write templates live in
 | Moment | Reads | Writes | Emit |
 |---|---|---|---|
 | `decide` | the chart (root issue description + decision comments), then the anchor the decision belongs to | `save_comment` | one-line decision log, at the moment the direction changes (draft → user culls → write) |
-| `group` | the chart's open items and its decision comments, in order | `save_issue` (root description) | axes each naming what it absorbed + every non-axis classified as projection or different-object, with its disposition → user culls → rewritten Open questions |
+| `group` | the chart's open items and its decision comments, in order, plus the body of each relocation destination before changing it | `save_issue` (root description) / `save_issue` / `save_document` (a released item's destination) | axes each naming what it absorbed + every non-axis classified as projection or different-object, with its disposition → user culls → rewritten Open questions |
 | `close` | the chart, then current structure (issues + relations, documents) | `save_issue` / `save_document` / `save_comment` | structure-delta checklist + closing note on the root issue + a relation and one pointer on each follow-up → user culls → minimal writes |
 
 ## Output discipline
@@ -120,9 +122,11 @@ Detailed per-moment procedures and write templates live in
   outward, team-visible acts). The user culls the draft, and three reasons
   drop a line: it is derivable by reasoning from what is already recorded, it
   is the product of a mechanical fix rather than a choice, or it does not
-  match the unit's intent. Only the
-  slow layer is written — structure and decisions — never a state the next
-  read would refresh anyway.
+  match the unit's intent. Derivability drops an assertion, never a
+  representation a moment is required to produce: a `group` axis and the list
+  of what it absorbed are derivable from the originals by construction, and
+  that is what they are for. Only the slow layer is written — structure and
+  decisions — never a state the next read would refresh anyway.
 - When the pre-write read reveals stale structure (an edge or runbook
   contradicting reality), surface it as a proposed structure fix — do not
   silently rewrite.

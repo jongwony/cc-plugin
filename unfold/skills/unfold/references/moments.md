@@ -18,7 +18,8 @@ read in that write's own step.
 
 ## decide — decision log (write, one comment)
 
-The only recurring hand-write. Template (one line, plus optional basis):
+Written each time the direction changes. Template (one line, plus optional
+basis):
 
 > 결정: <chosen path>. 이유: <one-line why>. 배제: <rejected alternative — why not>.
 
@@ -45,24 +46,22 @@ also a `close`-style structure delta (edge change). Do both.
 ## group — collapse the open set into axes (write, open-set regroup)
 
 The Open questions section accumulates: each item was written at a different
-moment, from a different source, and stands on its own. Read together they are
-usually fewer questions than they are lines. This moment rewrites how the open
-set is carried — it is the one moment that rewrites a description section, and
-it changes no direction.
+moment, from a different source, and stands on its own. This moment rewrites
+how the open set is carried — it is the one moment that rewrites a description
+section, and it changes no direction.
 
 0. **Read the chart's open items and its decision comments, in order** — the
-   same pre-write read the other moments require. A collapse performed against
-   a stale reading of the open set produces axes for questions a decision
-   comment has already settled.
+   same pre-write read the other moments require. A decision already known to
+   be pending is written as its own `decide` line before this read, so the
+   read includes it. A collapse performed against a stale reading of the open
+   set produces axes for questions a decision comment has already settled.
 1. **Draw the axes.** An axis is one independent question the unit must
    decide. Items that differ only in when or where they surfaced belong to one
    axis; a source (an open question, an immediate repair, a design sketch) is
    not an axis.
 2. **Every axis names what it absorbed.** Under each axis, list the original
-   items it took. Without that list the collapse reads as items having been
-   dropped, and the next reader cannot tell a merge from a deletion. The
-   absorbed list is the product of this moment, not a courtesy — it is written
-   to the chart, not just shown in the draft.
+   items it took. The absorbed list is written to the chart, not just shown
+   in the draft.
 3. **Classify every item that is not an axis by *why* it is not, and give the
    two kinds different dispositions:**
    - **Projection onto another axis** — it looked independent but is
@@ -73,21 +72,28 @@ it changes no direction.
      run). It leaves the Open questions section, and where each of its
      contents goes — which section, which issue, which document — is stated
      per item.
-
-   Lumping the two together loses the difference between "still open, just
-   filed elsewhere" and "not this unit's question".
-4. **A grouping is not a decision.** If the collapse changed the direction —
-   an axis resolved while being drawn, an option ruled out — that is a
+4. **A grouping is not a decision.** A collapse that changed the direction —
+   an axis resolved while being drawn, an option ruled out — carries a
    separate `decide` line; the two moments compose rather than substitute.
-   Write the `decide` comment first, so step 0's read of this moment includes
-   it and the rewritten section does not carry a settled axis as open.
+   Which case it is fixes where that line goes: a decision known to be
+   pending before the collapse starts is written before step 0 (above); a
+   decision discovered while drawing axes is written now, and the regrouping
+   then restarts from step 0 against the chart that line is on. A rewritten
+   section must not carry a settled axis as open.
 5. Draft the rewritten Open questions section — axes with their absorbed
    lists, projections as values of the axis that determines them, departures
-   with their per-item destinations — and show it. The user culls (derivable,
-   mechanical, off-intent). On confirmation, `save_issue` on the root issue
-   with the rewritten description; an item whose destination is another
-   section, issue, or document is written in the same delta, so nothing
-   leaves the chart without landing somewhere.
+   with their per-item destinations — together with the content each
+   relocation write will carry, not just where it goes. The user culls
+   (mechanical, off-intent; an axis's representation and its absorbed list
+   are not cullable as derivable — see SKILL.md §Output discipline). On
+   confirmation, the writes land in this order:
+   - a departure to another section of the same root description rides in the
+     same `save_issue` as the rewritten Open questions;
+   - a departure to another issue or document is its own `save_issue` /
+     `save_document`, its body read immediately before it is changed, and it
+     lands **before** the root rewrite removes the item;
+   - the root `save_issue` last. Nothing leaves the chart before it has
+     landed somewhere.
 
 Write template for one axis:
 

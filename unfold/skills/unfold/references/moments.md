@@ -1,23 +1,25 @@
 # Unfold — Per-Moment Procedures
 
-Detailed execution for `decide` and `close`. Both read Linear as the source of
-truth for structure and current issue state; live-system facts (image in a
-registry, deploy applied) are never read from Linear — go to their source.
+Detailed execution for `decide`, `group`, and `close`. All three read Linear
+as the source of truth for structure and current issue state; live-system
+facts (image in a registry, deploy applied) are never read from Linear — go to
+their source.
 
 ## Shared: read the chart before writing
 
-A line cannot be laid on a chart whose contents are unknown. Before either
-write moment, read the selected root issue's description (the five sections:
+A line cannot be laid on a chart whose contents are unknown. Before any write
+moment, read the selected root issue's description (the five sections:
 Problem, Proposed outcome, Affected, Constraints, Open questions) and its
-decision comments in order, since the sections are not rewritten and the
-decision lines are where the current direction lives. This is the one chart
-loaded, and every other issue stays metadata-only. The restriction is on
+decision comments in order, since the sections are rewritten only by `group`
+and the decision lines are where the current direction lives. This is the one
+chart loaded, and every other issue stays metadata-only. The restriction is on
 charts: a body a write is about to change — the runbook `close` updates — is
 read in that write's own step.
 
 ## decide — decision log (write, one comment)
 
-The only recurring hand-write. Template (one line, plus optional basis):
+Written each time the direction changes. Template (one line, plus optional
+basis):
 
 > 결정: <chosen path>. 이유: <one-line why>. 배제: <rejected alternative — why not>.
 
@@ -40,6 +42,66 @@ The only recurring hand-write. Template (one line, plus optional basis):
 
 A decision that changes the dependency topology is not just a comment — it is
 also a `close`-style structure delta (edge change). Do both.
+
+## group — collapse the open set into axes (write, open-set regroup)
+
+The Open questions section accumulates: each item was written at a different
+moment, from a different source, and stands on its own. This moment rewrites
+how the open set is carried — it is the one moment that rewrites a description
+section, and it changes no direction.
+
+0. **Read the chart's open items and its decision comments, in order** — the
+   same pre-write read the other moments require. A decision already known to
+   be pending is written as its own `decide` line before this read, so the
+   read includes it. A collapse performed against a stale reading of the open
+   set produces axes for questions a decision comment has already settled.
+1. **Draw the axes.** An axis is one independent question the unit must
+   decide. Items that differ only in when or where they surfaced belong to one
+   axis; a source (an open question, an immediate repair, a design sketch) is
+   not an axis.
+2. **Every axis names what it absorbed.** Under each axis, list the original
+   items it took. The absorbed list is written to the chart, not just shown
+   in the draft.
+3. **Classify every item that is not an axis by *why* it is not, and give the
+   two kinds different dispositions:**
+   - **Projection onto another axis** — it looked independent but is
+     determined once another axis is fixed. It stays on the chart, written as
+     a *value* of that axis rather than as an item of its own.
+   - **A different object** — an axis of something other than what this unit
+     must decide (how the investigation came to know things, how the work is
+     run). It leaves the Open questions section, and where each of its
+     contents goes — which section, which issue, which document — is stated
+     per item.
+4. **A grouping is not a decision.** A collapse that changed the direction —
+   an axis resolved while being drawn, an option ruled out — carries a
+   separate `decide` line; the two moments compose rather than substitute.
+   Which case it is fixes where that line goes: a decision known to be
+   pending before the collapse starts is written before step 0 (above); a
+   decision discovered while drawing axes is written now, and the regrouping
+   then restarts from step 0 against the chart that line is on. A rewritten
+   section must not carry a settled axis as open.
+5. Draft the rewritten Open questions section — axes with their absorbed
+   lists, projections as values of the axis that determines them, departures
+   with their per-item destinations — together with the content each
+   relocation write will carry, not just where it goes. The user culls
+   (derivable, mechanical, off-intent — derivability does not reach an
+   axis's representation or its absorbed list). On confirmation, the writes
+   land in this order:
+   - a departure to another section of the same root description rides in the
+     same `save_issue` as the rewritten Open questions;
+   - a departure to another issue or document is its own `save_issue` /
+     `save_document`, its body read immediately before it is changed, and it
+     lands **before** the root rewrite removes the item;
+   - the root `save_issue` last. Nothing leaves the chart before it has
+     landed somewhere.
+
+Write template for one axis:
+
+> **축 N — <the question this axis decides>**
+> 흡수: <original item>; <original item>; <original item>
+> 값: <projection written as a value of this axis>
+>
+> 이 단위의 물음이 아님: <item> → <where its contents went>
 
 ## close — span-close structure delta (write)
 

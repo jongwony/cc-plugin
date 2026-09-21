@@ -1,10 +1,11 @@
 ---
 name: unfold
 description: |
-  This skill should be used at the two moments in multi-PR / multi-project
+  This skill should be used at the three moments in multi-PR / multi-project
   work where a hand belongs on the unit's chart in Linear: "이 길로 가는 이유
-  기록" / "결정 남겨줘" / "log this decision" (decide), "세션 정리" / "구조
-  변경 반영" / "이 단위 닫자" / "wrap up the unit" (close). Also applies
+  기록" / "결정 남겨줘" / "log this decision" (decide), "열린 것들 축으로
+  묶어줘" / "축 정리" / "collapse the open questions" (group), "세션 정리" /
+  "구조 변경 반영" / "이 단위 닫자" / "wrap up the unit" (close). Also applies
   without being named: when the accumulated context and the utterance show an
   intent to write to a repository, the unit's chart is read before the first
   write — matched against the catalog of project root issues, that one chart
@@ -17,8 +18,8 @@ description: |
 A unit of work has a chart outside the codebase: its project's root issue in
 Linear, whose five sections say what is wanted, why, under which constraints,
 and what is still open, and whose decision comments say where the direction
-stands now. This skill covers the two moments where a human hand belongs on
-that chart: a decision, and a structure delta.
+stands now. This skill covers the three moments where a human hand belongs on
+that chart: a decision, a regrouping of the open set, and a structure delta.
 
 Reading the chart on its own is outside this skill; the adopting host carries
 that on its always-loaded surface. What is here is the convention for writing
@@ -29,7 +30,10 @@ follow-up — and the read each write needs first.
 ## Core rule — pace layering
 
 - **Write only structure and decisions**: new workstream issues, `blockedBy`
-  edges, runbook documents, one-line decision comments.
+  edges, runbook documents, one-line decision comments, a regrouped Open
+  questions section and the relocation of an item that regrouping releases —
+  into another section of the same root description, or into the issue or
+  document that item belongs to.
 - **Read at need, never cache-and-trust**: issue status and milestone progress
   % are system-maintained. Dependency edges are not — they are stored
   structure, written by hand under the bullet above. A write reads what it is
@@ -54,11 +58,13 @@ follow-up — and the read each write needs first.
 | Moment | Aliases (EN / KO) | Kind |
 |---|---|---|
 | `decide` | decision, path, 결정, 왜 이 순서 | **write** (one comment) |
+| `group` | axes, collapse, regroup, 축 정리, 정렬, 묶기 | **write** (open-set regroup) |
 | `close` | span-close, wrap-up, 세션 정리, 구조 반영 | **write** (structure delta) |
 
 - No moment argument: infer from the utterance. A direction being chosen is
-  `decide`; a unit's structure or its end is `close`. Genuinely ambiguous →
-  name both and ask once.
+  `decide`; an accumulated open set being collapsed into axes is `group`; a
+  unit's structure or its end is `close`. Genuinely ambiguous → name the
+  candidates and ask once.
 - Korean voice input is expected — match aliases semantically, not literally.
 - **Write-intent trigger.** When the accumulated context and the utterance
   show an intent to write to a repository — an edit, a branch, a worktree, a
@@ -106,23 +112,28 @@ Detailed per-moment procedures and write templates live in
 | Moment | Reads | Writes | Emit |
 |---|---|---|---|
 | `decide` | the chart (root issue description + decision comments), then the anchor the decision belongs to | `save_comment` | one-line decision log, at the moment the direction changes (draft → user culls → write) |
+| `group` | the chart's open items and its decision comments, in order, plus the body of each relocation destination before changing it | `save_issue` (root description) / `save_issue` or `save_document` (a released item's destination) | axes each naming what it absorbed + every non-axis classified as projection or different-object, with its disposition → user culls → rewritten Open questions |
 | `close` | the chart, then current structure (issues + relations, documents) | `save_issue` / `save_document` / `save_comment` | structure-delta checklist + closing note on the root issue + a relation and one pointer on each follow-up → user culls → minimal writes |
 
 ## Output discipline
 
 - Every write moment shows a draft first and writes only on user confirmation
-  (a decision comment and a structure delta are outward, team-visible acts).
-  The user culls the draft, and three reasons drop a line: it is derivable by
-  reasoning from what is already recorded, it is the product of a mechanical
-  fix rather than a choice, or it does not match the unit's intent. Only the
-  slow layer is written — structure and decisions — never a state the next
-  read would refresh anyway.
+  (a decision comment, a regrouped open set, and a structure delta are all
+  outward, team-visible acts). The user culls the draft, and three reasons
+  drop a line: it is derivable by reasoning from what is already recorded, it
+  is the product of a mechanical fix rather than a choice, or it does not
+  match the unit's intent. Derivability drops an assertion, never a
+  representation a moment is required to produce: a `group` axis and the list
+  of what it absorbed are derivable from the originals by construction, and
+  that is what they are for. Only the slow layer is written — structure and
+  decisions — never a state the next read would refresh anyway.
 - When the pre-write read reveals stale structure (an edge or runbook
   contradicting reality), surface it as a proposed structure fix — do not
   silently rewrite.
 
 ## Additional Resources
 
-- **`references/moments.md`** — the pre-write chart read, the `decide` and
-  `close` procedures, decision-comment and structure-delta templates, and the
-  field caveats that bound what may be written.
+- **`references/moments.md`** — the pre-write chart read, the `decide`,
+  `group`, and `close` procedures, decision-comment, axis-collapse, and
+  structure-delta templates, and the field caveats that bound what may be
+  written.

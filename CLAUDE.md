@@ -130,9 +130,13 @@ as a user-level SessionStart hook: the environment's variables reach the
 session but not the setup script, so the Codex login is restored from
 `CODEX_AUTH_JSON_B64` there.
 
-It also registers Linear's remote MCP server for Claude Code at user scope,
-behind `scripts/linear-mcp-headers.sh` — a `headersHelper`, which Claude Code
-runs when it opens the connection. The helper emits an `Authorization` header
+It also registers Linear's remote MCP server for Claude Code as
+`linear-personal` at user scope, behind `scripts/linear-mcp-headers.sh` — a
+`headersHelper`, which Claude Code runs when it opens the connection. The name
+is distinct because an environment may already reach Linear through an
+account-level connector this script does not control, and user scope is the
+only one that works: a repo-resident entry runs its helper only under persisted
+workspace trust, and project scope waits on an interactive approval as well. The helper emits an `Authorization` header
 when the session's `LINEAR_API_KEY` is set and an empty object when it is not,
 so the key takes precedence wherever the environment supplies one and the OAuth
 path stays available where it does not. A static `headers` entry cannot do

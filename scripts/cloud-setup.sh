@@ -125,6 +125,17 @@ fi
 # object when it does not, which is why the OAuth path survives an environment
 # without a key: a static `headers` entry replaces OAuth rather than preceding
 # it, so a rejected header would fail the connection instead of falling back.
+# The name is `linear-personal` rather than `linear` because an environment may
+# already reach Linear through an account-level connector this script does not
+# control. A distinct name lets the two stand side by side and says which one
+# this is, instead of shadowing a server whose account may differ.
+#
+# User scope is the only one that works here. A project- or local-scope entry is
+# repo-resident, and a repo-resident headersHelper runs only where the workspace
+# carries persisted trust — without it Claude Code reports `headersHelper not
+# run` and falls back to OAuth, so the key is ignored. Project scope also waits
+# on an interactive approval no setup script can give.
+#
 # Unlike `codex mcp add`, `claude mcp add-json` refuses a name that already
 # exists instead of overwriting it, so the entry is dropped first and a re-run
 # converges on the shape below rather than keeping whatever an earlier run
@@ -133,8 +144,8 @@ fi
 if curl -fsSL "$RAW/cc-plugin/main/scripts/linear-mcp-headers.sh" -o "$LINEAR_HEADERS"; then
   chmod +x "$LINEAR_HEADERS"
   linear_json=$(python3 -c 'import json,sys; print(json.dumps({"type":"http","url":"https://mcp.linear.app/mcp","headersHelper":sys.argv[1]}))' "$LINEAR_HEADERS")
-  claude mcp remove linear --scope user >/dev/null 2>&1 || true
-  if claude mcp add-json linear "$linear_json" --scope user < /dev/null; then
+  claude mcp remove linear-personal --scope user >/dev/null 2>&1 || true
+  if claude mcp add-json linear-personal "$linear_json" --scope user < /dev/null; then
     echo "Registered the Linear MCP server; set LINEAR_API_KEY in the environment's variables to use it in place of OAuth."
   else
     echo "Error: could not register the Linear MCP server." >&2

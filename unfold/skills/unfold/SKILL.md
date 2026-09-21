@@ -30,7 +30,8 @@ follow-up — and the read each write needs first.
 ## Core rule — pace layering
 
 - **Write only structure and decisions**: new workstream issues, `blockedBy`
-  edges, runbook documents, one-line decision comments.
+  edges, runbook documents, one-line decision comments, a regrouped Open
+  questions section.
 - **Read at need, never cache-and-trust**: issue status and milestone progress
   % are system-maintained. Dependency edges are not — they are stored
   structure, written by hand under the bullet above. A write reads what it is

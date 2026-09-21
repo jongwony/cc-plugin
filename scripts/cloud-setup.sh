@@ -13,15 +13,17 @@
 # finish within about five minutes. Environment variables are not in its
 # process env — that is why the Codex login is restored by the hook below
 # rather than here — so anything that needs them belongs in the hook. The
-# Tavily registration is the exception that stays here: Codex reads the key
-# from the session's TAVILY_API_KEY at call time, so no value is needed now
-# and none is written to disk.
+# Tavily and Linear registrations are the exceptions that stay here: each
+# reads its key from the session at call time — Codex from TAVILY_API_KEY, and
+# Linear through the headersHelper below — so no value is needed now and none
+# is written to disk.
 
 set -o pipefail
 
 RAW="https://raw.githubusercontent.com/jongwony"
 CLAUDE_DIR="$HOME/.claude"
 HOOK="$CLAUDE_DIR/hooks/codex-auth-restore.sh"
+LINEAR_HEADERS="$CLAUDE_DIR/hooks/linear-mcp-headers.sh"
 
 command -v claude >/dev/null 2>&1 || { echo "Error: claude CLI not found." >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "Error: python3 not found." >&2; exit 1; }
@@ -113,5 +115,42 @@ if codex mcp add tavily --url https://mcp.tavily.com/mcp/ --bearer-token-env-var
   echo "Registered the Tavily MCP server for Codex; set TAVILY_API_KEY in the environment's variables to enable it."
 else
   echo "Error: could not register the Tavily MCP server for Codex." >&2
+fi
+
+# --- Linear MCP for Claude Code: the remote server, authenticated by whatever
+# the session supplies. `claude mcp add` has no flag for a credential read at
+# call time, so the entry goes in as JSON carrying a `headersHelper` — a command
+# Claude Code runs when it opens the connection. The helper emits an
+# Authorization header from LINEAR_API_KEY when the session has one and an empty
+# object when it does not, which is why the OAuth path survives an environment
+# without a key: a static `headers` entry replaces OAuth rather than preceding
+# it, so a rejected header would fail the connection instead of falling back.
+# The name is `linear-personal` rather than `linear` because an environment may
+# already reach Linear through an account-level connector this script does not
+# control. A distinct name lets the two stand side by side and says which one
+# this is, instead of shadowing a server whose account may differ.
+#
+# User scope is the only one that works here. A project- or local-scope entry is
+# repo-resident, and a repo-resident headersHelper runs only where the workspace
+# carries persisted trust — without it Claude Code reports `headersHelper not
+# run` and falls back to OAuth, so the key is ignored. Project scope also waits
+# on an interactive approval no setup script can give.
+#
+# Unlike `codex mcp add`, `claude mcp add-json` refuses a name that already
+# exists instead of overwriting it, so the entry is dropped first and a re-run
+# converges on the shape below rather than keeping whatever an earlier run
+# left. Removing an absent name also exits non-zero — that is the ordinary
+# first-run case, and it is discarded.
+if curl -fsSL "$RAW/cc-plugin/main/scripts/linear-mcp-headers.sh" -o "$LINEAR_HEADERS"; then
+  chmod +x "$LINEAR_HEADERS"
+  linear_json=$(python3 -c 'import json,sys; print(json.dumps({"type":"http","url":"https://mcp.linear.app/mcp","headersHelper":sys.argv[1]}))' "$LINEAR_HEADERS")
+  claude mcp remove linear-personal --scope user >/dev/null 2>&1 || true
+  if claude mcp add-json linear-personal "$linear_json" --scope user < /dev/null; then
+    echo "Registered the Linear MCP server; set LINEAR_API_KEY in the environment's variables to use it in place of OAuth."
+  else
+    echo "Error: could not register the Linear MCP server." >&2
+  fi
+else
+  echo "Error: could not fetch linear-mcp-headers.sh; the Linear MCP server was not registered." >&2
 fi
 echo "Cloud environment ready."

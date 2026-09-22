@@ -129,12 +129,11 @@ command continues X.` The option filter drops `--resume` and its value and keeps
 everything else, so with a `--` separator any surviving flag forks, and without
 one, more than a single trailing token does.
 
-**It applies to background jobs only.** The `own-options` branch sits behind a
-test for saved background-job state, so a headless run started by
-`claude-run.sh` has none and its resume continues whatever flags accompany it.
-That is why `references/resume.md` can tell the wrapper's `-S` path to re-pass
-`-C` while SKILL.md tells a Stint's resume to pass nothing: two mechanisms, not
-a contradiction. Only the running-session check reaches both.
+**The `own-options` branch reaches background jobs only.** It sits behind a test
+for saved background-job state, so a session started any other way — a headless
+`claude -p` run, for one — has none, and its resume continues whatever flags
+accompany it. Only the running-session check reaches both. SKILL.md's
+pass-nothing rule is written for the background case, which is what a Stint is.
 
 This corrects two earlier readings. An *Observed* run had flags alongside
 `--resume` start a second job; the rule drawn from it — that any flag forks —

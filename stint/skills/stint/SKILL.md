@@ -1,24 +1,26 @@
 ---
-name: claude-sessions
-description: Use when work belongs in a Claude session other than this one — consulting another model for a judgment, delegating bounded work whose result this session collects, spawning an independent Stint, or standing up monitoring that wakes on an event, on a clock, or on its own rounds. Use it also whenever a message arrives from another session, before addressing a peer, and when listing, observing, resuming or retiring any of them.
+name: stint
+description: Use when work belongs in a session of its own rather than this one — spawning an independent Stint, or standing up monitoring that wakes on an event, on a clock, or on its own rounds. Use it also whenever a message arrives from another session, before addressing a peer, and when listing, observing, resuming or retiring any of them.
 ---
 
-# Claude Sessions
+# Stint
 
-Work that runs in a session other than this one. This skill chooses **which contract** the
-work is under, **what wakes it**, and writes the brief. It does not implement monitoring —
-each wake mechanism below is already built, and the choice between them is the work here.
+Independently managed bounded work, carried by a session other than this one. This skill
+decides **whether work belongs in such a session at all**, **what wakes it**, and writes the
+brief. It does not implement monitoring — each wake mechanism below is already built, and the
+choice between them is the work here.
 
-## Which contract
+## Does it belong in a session of its own
 
 - **Ask first: can this session discharge its responsibility without receiving the completed
   work?** That question, not whether the caller waits, decides everything below.
-- **No → caller-integrated.** The run's answer must come back and be checked and used here.
-  Consults and delegated execution are this. Go to **Caller-integrated runs**.
-- **Yes → independent.** Completion is recorded at the brief's durable destination and the
-  creator is not a required recipient. Stints and monitors are this. Go to **Which wake**.
-- **Work the current session must integrate, done in this same context, is neither** — use a
-  native subagent.
+- **Yes → a Stint or a monitor.** Completion is recorded at the brief's durable destination and
+  the creator is not a required recipient. Go to **Which wake**.
+- **No → it stays here.** A result this session must collect and check is a native subagent
+  when it belongs in this same context, and otherwise a prompt written and run against a CLI.
+  `references/prompting.md` carries what such a prompt owes and what establishes that it
+  succeeded; there is no wrapper, and a consult is one of these rather than a mode of this
+  skill.
 
 ## Which wake
 
@@ -71,94 +73,7 @@ Independent work needs something to start it. Route to exactly one.
   nothing. It records how each of these was established, including that a command taking no
   argument discards one without complaint.
 
-## Caller-integrated runs
-
-Both uses go through `scripts/claude-run.sh`, which owns the invocation.
-
-### Which model
-
-- **Consult, and everything else** — `fable`. It is the wrapper's default, so pass no `-m`.
-- **Execution delegation** — pass `-m opus`. The wrapper does not default to it, and omitting
-  the flag sends the work to fable instead.
-
-### Where this runs
-
-- **The wrapper is `../../scripts/claude-run.sh` relative to this file** — resolve it from the
-  directory this SKILL.md was loaded from. That holds in every harness and install layout.
-- `${CLAUDE_PLUGIN_ROOT}/scripts/claude-run.sh` is the same file where that variable is set.
-  Claude Code sets it; Codex does not. Use it only after confirming it is non-empty.
-- Run `claude-run.sh -h` for the flag set, and `command -v claude` before depending on the
-  CLI. Report an unavailable executable before the work that depends on it.
-- **Invocation files are caller-relative.** The prompt file, `-o` and `-D` resolve against the
-  directory the wrapper is invoked from, before `-C` takes effect. Pass absolute paths for all
-  three. `-C` governs where the run executes, which is what the prompt's pointers resolve
-  against.
-- All prompts sent to `claude` are written in English.
-
-### Select and prepare
-
-- Write the prompt to `<scratchpad>/claude_prompt_<suffix>.txt` as an absolute path, with a
-  short unique suffix. Parallel runs each get their own file. Fall back to a directory under
-  `${TMPDIR:-/tmp}` where the harness announces no scratchpad.
-- State the **role** the run acts in. A headless run has no approval step, so the declared role
-  is what holds it to its lane.
-- Carry what the run cannot re-derive; point at everything else. Test each item: can the run
-  reach this with its own tools from the directory it runs in? Yes → pass a path, pattern or
-  command. No → copy it in.
-- Name the goal, the completion condition, the output destination, the permitted actions, and
-  the decisions the user has kept. Point at governing instructions rather than restating them.
-- Verify a needed skill, plugin or MCP server is available in the target environment and name
-  it in the prompt.
-- Select the project directory with `-C`. `-a/--add-dir` grants extra reads and does not
-  replace the working directory. Apply the current task's repository isolation rules to
-  delegated edits.
-
-### Run and observe
-
-- Record the run in a durable task record outside the run directory: the session id the wrapper
-  prints, the task identity, and the working directory. The run directory is disposable.
-- Read the wrapper's stdout for `RUN_DIR:` and `SESSION_ID:`, plus `RESUMED:` or `FORKED_FROM:`
-  when either applies. A `SESSION_ID_MISMATCH:` line means the id that actually exists is the
-  one the stream reported — record that one.
-- An empty completion file alone does not establish a stall. Text deltas, tool events and final
-  results are distinct signals — read all three alongside process status.
-- Before any mutating retry, confirm the prior process ended.
-
-### Consult mode
-
-- **The role is reviewing.** Say so in the prompt. The permission mode permits writes, so the
-  declared role is what keeps a consult from editing.
-- **Carry the decision**: what is being chosen, the approach so far and where it is still
-  uncommitted, and **what would change the answer**. Everything else goes through the pointer
-  test above.
-- **Take the reviewer's own words.** Pass `-o <FILE>` and read that file; a summary discards
-  what mattered. Give it per-invocation uniqueness, plus the model name when consulting several
-  in parallel.
-- Pass the same `-C` again when resuming a consult — the pointers mean nothing without the tree
-  they were written against.
-
-### Collect and verify
-
-- **Exit zero is the pass.** The wrapper exits nonzero on anything short of an established
-  success. Preserve the run directory and read `run.json`'s `verdict_reasons`. A created session
-  or a written output file is not task completion.
-- Read `references/verdict.md` when a refusal is surprising or the outcome must be judged
-  without re-running it.
-- Reconcile `run.json` against the durable task record: `assigned_session_id` against
-  `first_event_session_id`, and both against what was recorded at launch.
-- Read the answer from `final.md`, or from the `-o` destination for a consult. Neither exists
-  when the result carried no answer text.
-- Before reporting success, inspect the claimed artifact and run the checks its use calls for.
-  Keep three things distinct: what the run claimed, what this session verified, and what neither
-  covered.
-- In the final response, link the artifact, give the session id, say whether the conversation
-  was new, resumed or forked, and state the verification outcome.
-- To continue an identified session — a correction within the launching turn, a later resume, a
-  fork, or a failed resume — read `references/resume.md`.
-
-## Independent work — Stints
-
-A Stint is independently managed bounded work carried by a spawned session in its own context.
+## Spawning a Stint
 
 ```bash
 ( cd <project-dir> && claude --bg --worktree <surface> \

@@ -1,0 +1,34 @@
+{
+  "name": "stint",
+  "version": "1.1.0",
+  "description": "Independently managed bounded work in a session of its own: spawn a Stint, or stand up a monitor that wakes on an event, a clock, or its own rounds",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  },
+  "homepage": "https://github.com/jongwony/cc-plugin",
+  "repository": "https://github.com/jongwony/cc-plugin",
+  "keywords": [
+    "cc-plugin",
+    "skills",
+    "stint"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Stint",
+    "shortDescription": "Spawn independent bounded work, or a monitor that wakes on its own",
+    "longDescription": "Decides whether work belongs in a session of its own at all — the test is whether this session can discharge its responsibility without receiving the completed work — and then which wake it takes: an event source, a schedule, or a session driving its own rounds to a completion condition someone else can check. From Codex the launch is fire-and-forget and is verified through the CLI.",
+    "developerName": "Jongwon Choi",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/jongwony/cc-plugin",
+    "defaultPrompt": [
+      "Spawn a Stint to drive this to completion"
+    ],
+    "brandColor": "#D97757"
+  }
+}

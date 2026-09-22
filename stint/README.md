@@ -1,31 +1,27 @@
-# claude-sessions
+# stint
 
-Work that belongs in a Claude session other than the one you are in. This plugin decides
-**which contract** the work is under and **what wakes it**, then writes the brief. It
-implements no monitoring of its own — every wake mechanism it routes to already exists.
+A **Stint** is independently managed bounded work, carried by a session other than the one
+you are in. This plugin decides **whether work belongs in such a session at all** and **what
+wakes it**, then writes the brief. It implements no monitoring of its own — every wake
+mechanism it routes to already exists.
 
-It replaces two plugins: `claude-plus` (consult and delegated execution through a CLI
-wrapper) and `remote-tmux` (the `/remote-spawn` skill for independent Stints). They were
-split on whether the caller waits, which turned out to be the wrong seam.
+It replaces `remote-tmux` (the `/remote-spawn` skill) and absorbs what survived of
+`claude-plus`, whose CLI wrapper is gone: a run whose result the caller must collect is a
+prompt you write and run yourself, not a mode of this plugin.
 
-## The seam that actually divides the work
-
-One question sorts everything:
+## The one question
 
 > Can the calling session discharge its responsibility **without receiving the completed
 > work**?
 
-**Caller-integrated** — the answer is *no*.
+**Yes → a Stint or a monitor**, which is what this plugin is for. Output and verification land
+at the brief's durable destination; nobody in particular must receive them, and the creator is
+not a required recipient.
 
-- Satisfied when the result comes back, gets checked, and gets used here.
-- This session must receive it.
-- Its shapes: a consult, a delegated execution run.
-
-**Independent** — the answer is *yes*.
-
-- Satisfied when output and verification land at the brief's durable destination.
-- Nobody in particular must receive it; the creator is not a required recipient.
-- Its shapes: a Stint, a monitor.
+**No → it stays where it is.** A result this session must collect and check is a native
+subagent when it belongs in the same context, and otherwise a prompt run against a CLI.
+`skills/stint/references/prompting.md` carries what such a prompt owes and what establishes
+that it succeeded. A consult is one of these.
 
 Waiting is a consequence, not the definition. A Stint's creator does wait — for one launch
 acknowledgement that confirms the worker's identity. That acknowledgement is not the work
@@ -59,6 +55,11 @@ file appearing at a named path, a check turning green. A completion condition on
 can judge is the one to refuse and rewrite, because work with no checkable end is work whose
 record never closes.
 
+The same holds at the other end. A routine fired on a schedule outlives the work it carries,
+and it cannot retire itself — `RemoteTrigger` is disabled inside every session a routine
+fires. So whoever creates a recurrence names the person who will end it and hands them the
+trigger id.
+
 ## The Codex boundary
 
 What divides the boundary is tool versus shell. The tools belong to Claude Code alone:
@@ -89,32 +90,25 @@ Code. Building against it buys a coupling that goes stale without a failure sign
 ## Pieces
 
 ```
-claude-sessions/
+stint/
 ├── .claude-plugin/plugin.json          Claude Code manifest
 ├── .codex-plugin/plugin.json           Codex manifest
 ├── README.md                           this file
-├── scripts/
-│   ├── claude-run.sh                   the wrapper every caller-integrated run goes through
-│   └── claude-run-extract.py           pulls the answer and the verdict out of a run
-└── skills/claude-sessions/
+└── skills/stint/
     ├── SKILL.md                        the operative surface
     └── references/
         ├── harness.md                  what the harness was observed to do, and on what evidence
-        ├── resume.md                   continuing, forking, and failed resumes
-        └── verdict.md                  the four conditions behind the wrapper's exit status
+        └── prompting.md                a prompt whose result the caller collects
 ```
 
 ## Checking it works
 
 ```bash
-# the wrapper is reachable and self-describes
-./scripts/claude-run.sh -h
-
 # the CLI surfaces the skill depends on
 claude agents --json
-command -v claude && command -v gh
+command -v claude
 ```
 
-A caller-integrated run passes when `claude-run.sh` exits zero; anything else means the run
-fell short of an established success, and `run.json`'s `verdict_reasons` says how. A created
-session or a written output file is not completion.
+A spawn is confirmed when the row `claude agents --json` holds under the returned jobId is
+live and carries the expected name, and the worker's ACK arrives from that row's socket. A
+created session is not a confirmed one, and an ACK is not the work coming back.

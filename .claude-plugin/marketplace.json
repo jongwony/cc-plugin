@@ -20,9 +20,9 @@
       "description": "Enhanced OpenAI Codex CLI integration (multi-model, context classification)"
     },
     {
-      "name": "claude-sessions",
-      "source": "./claude-sessions",
-      "description": "Work that runs in a Claude session other than this one: consult, delegate, spawn an independent Stint, or stand up an event/clock/self-round monitor"
+      "name": "stint",
+      "source": "./stint",
+      "description": "Independently managed bounded work in a session of its own: spawn a Stint, or stand up an event/clock/self-round monitor"
     },
     {
       "name": "pdf-split",

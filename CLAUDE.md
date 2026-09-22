@@ -58,6 +58,13 @@ the change.
   philosophy). Skill = what to do (workflow, procedures, commands). A
   `skills:`-loaded skill is the single home for its workflow; the agent adds only
   behavior it does not carry.
+- **Branch naming.** Where a unit of work has a chart outside this repository, the
+  branch carries that chart's issue identifier — `roo-39-description`, or after a
+  type prefix where one is used. Resolving the chart from the repository's name
+  reaches nothing: this repository is not a project in the tracker the charts live
+  in, so the branch is the only handle a session arrives with. One branch carries
+  one unit, since every pull request opened from it is filed under the identifier
+  the branch carries.
 - **Importing external-tool capability — 3 tests, all required.** (1)
   *Irreducibility*: not reproducible from existing primitives (ergonomic wrappers
   stay inside scripts). (2) *Environment neutrality*: a protocol-level capability

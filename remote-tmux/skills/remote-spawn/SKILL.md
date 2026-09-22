@@ -78,6 +78,11 @@ can span several, so no fixed mapping from branch to session name holds. Sharing
 special form — `--worktree <surface>` is find-or-create, so a second Stint passing an
 existing name joins that worktree and its branch rather than colliding.
 
+Where the unit has a chart outside the repository, `<surface>` leads with that chart's
+issue identifier, so the `worktree-<surface>` branch carries it (`CLAUDE.md` §Conventions,
+Branch naming). A unit spanning several worktrees repeats the identifier across them, and
+Stints sharing one worktree are working the same unit.
+
 **The `cd` is what picks the project.** There is no flag for it — `--add-dir` grants tool
 access to extra paths but does not set the session's project; the spawned session simply
 inherits the launching shell's working directory. `--worktree` additionally requires that

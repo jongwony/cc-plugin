@@ -1,9 +1,0 @@
-{
-  "name": "claude-plus",
-  "description": "Claude Code CLI integration (fable consult, execution delegation, session management)",
-  "version": "0.8.0",
-  "author": {
-    "name": "Jongwon Choi",
-    "url": "https://github.com/jongwony"
-  }
-}

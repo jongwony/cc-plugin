@@ -67,6 +67,19 @@ Answer it on a PR whose `/autofix-pr` call printed no already-watching line.
 
 ## `RemoteTrigger`
 
+**No CLI subcommand creates a routine, a schedule or a webhook.** *Read*, from
+the `claude --help` subcommand list at 2.1.278, so the claim is bounded to that
+version. This is what keeps the event and clock wakes on the tool side of the
+Codex boundary: `claude --cloud` creates or re-attaches a session, which covers
+the self-round wake, and nothing in the CLI reaches the other two. Re-derive it
+from the same listing when the binary moves.
+
+**`environment_id` comes from the environment listing.** *Exercised.* The listing
+returns each environment's `env_` id beside a human-readable name, which is what
+makes selection possible without guessing. The CLI's `--environment` flag is a
+different value — its help names a self-hosted `ccpool_` id — so it does not
+supply this one.
+
 **It is the tool path, and it has no first-token constraint.** *Exercised.*
 `create` followed by `run` produced a routine and fired it; `get_run_log` showed
 the prompt reaching a sandbox that allocated and launched Claude Code. This is
@@ -94,10 +107,15 @@ per-PR subscription. Fire it once before depending on it.
 
 ## Sessions, jobs and worktrees
 
-**A resume carrying any flag forks a copy rather than continuing.** *Exercised.*
-A background session keeps its own saved options; passing flags alongside
-`--resume` started a second job, and the spawn line said so in as many words.
-Resume without flags to continue the same job.
+**A resume against a running session forks a copy.** *Observed.* Passing flags
+alongside `--resume` started a second job, and the spawn line said so in as many
+words. The rule first drawn from that run — that any flag forks — overreached:
+the session resumed against was a background Stint, which is by construction
+already running, so the running state was never held fixed. `claude --help`
+settles the mechanism: `--bg` with `--resume` continues that session under the
+same id, and starts a copy only when the session is already running.
+`--fork-session` is the flag that forks on purpose. Re-run it against a stopped
+session to close the remaining gap.
 
 **`claude rm` takes the worktree only from the job that created it.** *Exercised,
 by contrast.* Two jobs shared one worktree — one created it, the other was

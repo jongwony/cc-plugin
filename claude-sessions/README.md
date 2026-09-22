@@ -15,12 +15,17 @@ One question sorts everything:
 > Can the calling session discharge its responsibility **without receiving the completed
 > work**?
 
-| | Caller-integrated | Independent |
-|---|---|---|
-| Answer to the question | No | Yes |
-| What satisfies it | The result comes back, gets checked, gets used here | Output and verification land at the brief's durable destination |
-| Who must receive it | This session | Nobody in particular — the creator is not a required recipient |
-| Shape | A consult, a delegated execution run | A Stint, a monitor |
+**Caller-integrated** — the answer is *no*.
+
+- Satisfied when the result comes back, gets checked, and gets used here.
+- This session must receive it.
+- Its shapes: a consult, a delegated execution run.
+
+**Independent** — the answer is *yes*.
+
+- Satisfied when output and verification land at the brief's durable destination.
+- Nobody in particular must receive it; the creator is not a required recipient.
+- Its shapes: a Stint, a monitor.
 
 Waiting is a consequence, not the definition. A Stint's creator does wait — for one launch
 acknowledgement that confirms the worker's identity. That acknowledgement is not the work
@@ -56,10 +61,17 @@ record never closes.
 
 ## The Codex boundary
 
-Exactly two surfaces belong to Claude Code alone: the `ListAgents` and `SendMessage` tools.
-Everything else — the spawn line, `--remote-control`, `claude agents --json`, `logs`,
-`attach`, `stop`, `rm`, `claude --cloud`, and reading the session registry — is shell, and
-Codex reaches all of it.
+What divides the boundary is tool versus shell. The tools belong to Claude Code alone:
+`ListAgents`, `SendMessage`, and `RemoteTrigger`. Everything reached by a CLI command — the
+spawn line, `--remote-control`, `claude agents --json`, `logs`, `attach`, `stop`, `rm`,
+`claude --cloud`, and reading the session registry — is shell, and Codex reaches all of it.
+
+That puts the three wake mechanisms on two sides. A session that drives its own rounds needs
+only a session to run, and `claude --cloud` creates or re-attaches one from any shell, so
+Codex reaches the self-round wake. The event and clock wakes are created by `RemoteTrigger`,
+and no CLI subcommand creates a routine, a schedule, or a webhook — so from Codex those route
+through a Claude session holding the tool, rather than through a CLI equivalent that does not
+exist.
 
 So a Codex-driven launch is fire-and-forget: the handshake clause leaves the brief, because
 the creator is not an addressable peer, and `claude agents --json` verifies the launch in its

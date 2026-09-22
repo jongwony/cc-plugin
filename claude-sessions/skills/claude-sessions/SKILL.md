@@ -195,6 +195,10 @@ A Stint is independently managed bounded work carried by a spawned session in it
 - **`<surface>` and the session name are separate tokens.** `--worktree` runs its argument
   through a validator stricter than git's refname rules; keep it a plain hyphenated token. It is
   find-or-create, so a second Stint passing an existing name joins that worktree.
+- **Where the unit has a chart outside the repository, `<surface>` leads with that chart's
+  issue identifier**, so the `worktree-<surface>` branch carries it (`CLAUDE.md` §Conventions,
+  Branch naming). A unit spanning several worktrees repeats the identifier across them, and
+  Stints sharing one worktree are working the same unit.
 - **The `cd` picks the project** — there is no flag for it, and `--worktree` requires that
   directory to be inside a git repo. Keep it in a subshell.
 - **A worktree-isolated session cannot make that `cd`.** Leave the worktree first and spawn from
@@ -317,16 +321,18 @@ claude rm  <jobId>     # retires it: removes worktree and job state
 ### Resuming
 
 ```bash
-( cd <its-cwd> && claude --resume <sessionId> -- "<next instruction>" )
+( cd <its-cwd> && claude --bg --resume <sessionId> -- "<next instruction>" )
 ```
 
-- **Any flag on a resume forks a copy rather than continuing the session.** A background session
-  keeps its own saved options, and the spawn line says so when it happens. Resume without flags
-  to continue the same job; pass flags only when a separate copy is what is wanted.
+- **What forks a copy is the session already running, not the flags.** `--bg` with `--resume`
+  continues that session in the background under the same id, and starts a copy — saying so —
+  only when the session is already running. `--fork-session` is the flag that forks on purpose.
+- **Carry `--bg` on a background session's resume.** Without it the resume runs in the
+  foreground and blocks the caller, which is the opposite of what an independent Stint is for.
 - **Resume restores the conversation, not the working directory**, so the same `cd` applies.
   `claude agents --json` reports each session's `cwd`.
-- **A new sessionId is minted** — resume the newest one next time. `jobId` is the first 8 hex
-  characters of `sessionId`.
+- **The sessionId is reused, not minted** — a resume keeps the original id unless
+  `--fork-session` asks for a new one. `jobId` is the first 8 hex characters of `sessionId`.
 - Nothing revives a crashed worker on its own, but restarts happen on a binary update or the
   next attach. Both the messaging socket and the app bridge are decided at launch, so re-read
   `ListAgents` and re-check `bridgeSessionId` before relying on either.
@@ -341,6 +347,10 @@ claude rm  <jobId>     # retires it: removes worktree and job state
 - **`create`** takes a body whose `job_config.ccr` carries `environment_id` (required — the
   server rejects a body without it), `events[].data.message.content` as the prompt, and
   `session_context` for `allowed_tools` and `model`.
+- **`environment_id` is read from the environment listing, never invented.** List the
+  environments and select by the human-readable name each carries. The CLI's `--environment`
+  is not this value — it takes a self-hosted `ccpool_` id, while a routine takes the `env_` id
+  the listing returns.
 - **`run`** fires a routine immediately and returns the run's `session_id`. Use it to verify a
   routine before leaving it to its schedule.
 - **`create_webhook_trigger`** attaches an event source to an existing routine — the source and
@@ -358,9 +368,17 @@ claude rm  <jobId>     # retires it: removes worktree and job state
 
 ## The Codex boundary
 
-- **Only two surfaces are Claude Code's alone:** `ListAgents` and `SendMessage`. The spawn line,
+- **What divides the boundary is tool versus shell.** A tool is Claude Code's alone; a CLI
+  command is not. `ListAgents`, `SendMessage` and `RemoteTrigger` are tools. The spawn line,
   `--remote-control`, `claude agents --json`, `logs`, `attach`, `stop`, `rm`, `claude --cloud`
-  and reading the session registry are all shell, and Codex reaches them.
+  and reading the session registry are shell, and Codex reaches them.
+- **From Codex, reach an independent session through `claude --cloud`.** It takes a
+  description, a session id or a claude.ai/code URL, so it both creates and re-attaches. That
+  covers the self-round wake, whose only requirement is a session that runs.
+- **The event and clock wakes do not cross.** They are created by `RemoteTrigger`, and no CLI
+  subcommand creates a routine, a schedule or a webhook. From Codex, route work needing either
+  wake through a Claude session that holds the tool, rather than reaching for a CLI equivalent
+  that does not exist.
 - **A Codex-driven launch is fire-and-forget.** Drop the handshake clause from the brief — the
   creator is not a peer and the worker has no one to ACK.
 - **Verify a Codex-driven launch with `claude agents --json`**: the row under the returned jobId

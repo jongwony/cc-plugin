@@ -16,7 +16,7 @@ CDPATH=
 # model that is not the one already holding the question, and every caller of
 # this wrapper — Claude Code or Codex — is a different model than fable.
 # Execution delegation is the exception and takes `-m opus`; the default does
-# not cover it, so skills/claude/SKILL.md requires the caller to pass it.
+# not cover it, so skills/claude-sessions/SKILL.md requires the caller to pass it.
 readonly DEFAULT_MODEL="fable"
 # high, because of what this wrapper is for. Reaching for it means reaching past
 # the loop already running the task — for more model and more thinking than that
@@ -28,7 +28,7 @@ readonly DEFAULT_EFFORT="high"
 # auto lets the run proceed unattended. `claude -p` is headless: there is no
 # one to answer a permission prompt, so a mode that prompts is a mode that
 # hangs. What holds a run to its lane is the role its prompt declares —
-# skills/claude/SKILL.md requires every prompt to state one — not the mode.
+# skills/claude-sessions/SKILL.md requires every prompt to state one — not the mode.
 readonly DEFAULT_PERMISSION_MODE="auto"
 
 MODEL="$DEFAULT_MODEL"

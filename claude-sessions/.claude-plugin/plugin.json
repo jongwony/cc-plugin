@@ -1,7 +1,7 @@
 {
   "name": "claude-sessions",
   "description": "Work that runs in a Claude session other than this one: consult another model, delegate bounded work this session collects, spawn an independent Stint, or stand up a monitor that wakes on an event, a clock, or its own rounds",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

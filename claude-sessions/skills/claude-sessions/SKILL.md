@@ -47,6 +47,9 @@ Independent work needs something to start it. Route to exactly one.
   one, and it refuses — open the PR first.
 - **Skip it where there is nothing to watch.** A repository with no `pull_request`-triggered
   workflow and no reviewer on its pull requests emits neither CI failures nor review comments.
+- Read `references/harness.md` for what `/autofix-pr` was observed to do, and for what about it
+  is still unsettled — notably whether a plain PR conversation comment reaches the session it
+  spawns.
 
 ## Every brief names an observable completion condition
 
@@ -67,6 +70,9 @@ Independent work needs something to start it. Route to exactly one.
   it. Several take no argument, so the message carrying one carries nothing else.
 - **A spawn whose first act is a built-in therefore costs two messages** — the command, then
   the brief with its handshake clause. Take the tool path instead of paying that.
+- Read `references/harness.md` before working around a dispatch that appears to have done
+  nothing. It records how each of these was established, including that a command taking no
+  argument discards one without complaint.
 
 ## Caller-integrated runs
 
@@ -193,6 +199,12 @@ A Stint is independently managed bounded work carried by a spawned session in it
   directory to be inside a git repo. Keep it in a subshell.
 - **A worktree-isolated session cannot make that `cd`.** Leave the worktree first and spawn from
   the project directory. The guard reads where the command lands, so rephrasing does not help.
+- **Resolve the project with `git rev-parse --show-toplevel`, not by path shape.** Isolation
+  cuts from the enclosing repository of the working directory, and a directory holding
+  repositories can itself sit inside one — a worktree taken there lands in the wrong repository
+  and the guard then refuses every route to the intended one. Where it refuses, move the
+  working directory into the real repository; a command composed to satisfy the guard
+  reproduces what it exists to prevent (`references/harness.md`).
 - **Spawn into the project's own development checkout**, never a managed tree such as
   `~/.claude/plugins/`.
 - **The `--` ends option parsing.** Without it the brief is parsed as options and consumed
@@ -332,7 +344,9 @@ claude rm  <jobId>     # retires it: removes worktree and job state
 - **`run`** fires a routine immediately and returns the run's `session_id`. Use it to verify a
   routine before leaving it to its schedule.
 - **`create_webhook_trigger`** attaches an event source to an existing routine — the source and
-  scope, the event list, a structured filter, and the `routine_trigger_id` to fire.
+  scope, the event list, a structured filter, and the `routine_trigger_id` to fire. **Fire it
+  once before depending on it**: its body shape is taken from the tool description and has not
+  been checked against a real repository (`references/harness.md`).
 - **Schedule with `cron_expression` for a recurrence** and `run_once_at` for a single future
   moment.
 - **`list_runs` then `get_run_log`** to see what a routine did. An empty list does not prove a
@@ -353,6 +367,9 @@ claude rm  <jobId>     # retires it: removes worktree and job state
   is live and carries the expected name. That check replaces the ACK.
 - **Never open a session's messaging socket.** `/tmp/cc-socks/<pid>.sock` accepts any same-uid
   connection and speaks nothing first; it is unpublished, the registry advertises a negotiated
-  `peerProtocol`, and no negotiator is published for a non-Claude process.
+  `peerProtocol`, and no negotiator is published for a non-Claude process. `references/harness.md`
+  carries what a connect attempt does and does not establish.
+- **Claude reaches a Codex thread on a published surface.** `codex queue --thread <id> --message
+  <text>` needs no token and no `--remote`, and persists against a thread that is not running.
 - **App reachability survives the boundary.** `--remote-control` is a CLI flag, so a
   Codex-spawned Stint still appears in claude.ai/code and the mobile app.

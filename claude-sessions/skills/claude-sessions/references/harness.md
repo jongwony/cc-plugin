@@ -1,0 +1,155 @@
+# What the harness actually does
+
+Read this when a dispatch did nothing and raised no error, when a command's
+argument appears to be ignored, when a monitor was created but receives nothing,
+when a worktree lands somewhere unexpected, or when deciding whether a surface is
+safe to build on.
+
+SKILL.md carries the rule. This file carries what each rule rests on, so a later
+session can tell a settled behaviour from an assumption and knows which ones to
+re-check when the harness moves.
+
+**Provenance is marked on every item.** *Exercised* means this was run and the
+result observed. *Read* means it comes from a string in the binary or a tool
+description and was never fired — treat those as leads that still need a run.
+
+## Dispatching a built-in command
+
+**A built-in slash command is dispatched only as the first token of a message.**
+The same text anywhere else in the message is read as prose: nothing runs, and no
+error marks it. *Exercised, three ways.* `/autofix-pr` placed at step 2 of a
+spawn brief produced no effect at all — the spawned session performed the steps
+around it and went idle. The same session, resumed with `/autofix-pr` as the
+whole message, dispatched and spawned a cloud session. *Read:* the binary
+registers these as commands parsed at the head of an utterance.
+
+**A command registered with no argument discards one silently.** *Exercised.*
+`/autofix-pr 198` and `/autofix-pr feat/claude-sessions` both behaved exactly as
+the bare call — same refusal, same target resolution. *Read:* that command's
+registration carries no argument hint.
+
+**So a message carrying a built-in carries nothing else.** A spawn whose first
+act is a built-in costs two messages: the command, then the brief with its
+handshake clause and its work. This is the reason SKILL.md prefers the tool path,
+not a two-message procedure to adopt — `RemoteTrigger` has no such constraint and
+can be called anywhere in a turn.
+
+## `/autofix-pr`
+
+**It targets the current checkout's branch and nothing else.** *Exercised.* It
+refuses on the default branch, naming the checkout it inspected, and refuses when
+no open PR matches the branch. Neither a PR number nor a branch name passed as an
+argument changes what it resolves.
+
+**It spawns a cloud session on the PR's branch and subscribes that session to the
+PR.** *Exercised.* It prints the session link. It is idempotent per PR: a second
+call while a session is already running for that PR returns the existing link
+rather than spawning again.
+
+**Delivery is webhook-driven, not polling.** *Read:* `subscribePR`,
+`getPRWebhookTargets` and `fetchInboxMessage` sit together in the remote-bridge.
+Nothing observed contradicts this, but the event path itself was not exercised.
+
+**The watch is exclusive per pull request, not per repository.** *Exercised, by
+contrast.* One repository's PR returned `Autofix is on, but webhook events won't
+reach the cloud session: a Claude agent is already watching this PR`; a different
+repository's PR, from the same account and machine minutes later, returned no
+such line. A second watcher runs and receives nothing, so the spawned session is
+resident and useless. Read that line rather than treating a printed session link
+as proof the watch took.
+
+**Unsettled.** Whether a plain PR conversation comment reaches a watching
+session, and whether the repository owner's own comment is filtered as a
+self-authored event. The attempt to establish this ran against a PR that already
+had another watcher holding its webhook, which is exactly the condition under
+which no comment reaches the new session — so it settled nothing either way.
+Answer it on a PR whose `/autofix-pr` call printed no already-watching line.
+
+## `RemoteTrigger`
+
+**It is the tool path, and it has no first-token constraint.** *Exercised.*
+`create` followed by `run` produced a routine and fired it; `get_run_log` showed
+the prompt reaching a sandbox that allocated and launched Claude Code. This is
+the whole reason the tool path is preferred: a brief can call it in the middle of
+a turn, where a slash command would have to lead its own message.
+
+**`job_config` must set `ccr.environment_id`.** *Exercised.* A body without it is
+rejected with `translate job_config v1→v2: job_config must set
+ccr.environment_id or ccr.self_hosted_runner_pool_id`.
+
+**That body shape has already moved once.** *Observed.* Routines created earlier
+carry no `environment_id` and still list and run, so the server translates the
+older shape while requiring the newer one on create. Expect the shape to move
+again and read the error rather than a remembered body.
+
+**There is no delete action.** *Exercised.* The available actions are list, get,
+create, update, run, `create_webhook_trigger`, `list_runs` and `get_run_log`.
+Retirement is `update` with `enabled: false`; the routine stays listed with its
+`run_once_at` intact but does not fire.
+
+**`create_webhook_trigger` is unverified.** *Read* — from the tool description
+only. It was never fired, so its body shape has not been checked against a real
+repository, and neither has whether it coexists with `/autofix-pr`'s
+per-PR subscription. Fire it once before depending on it.
+
+## Sessions, jobs and worktrees
+
+**A resume carrying any flag forks a copy rather than continuing.** *Exercised.*
+A background session keeps its own saved options; passing flags alongside
+`--resume` started a second job, and the spawn line said so in as many words.
+Resume without flags to continue the same job.
+
+**`claude rm` takes the worktree only from the job that created it.** *Exercised,
+by contrast.* Two jobs shared one worktree — one created it, the other was
+spawned into it. Retiring the second reported the removal alone; retiring the
+first named the worktree path and removed it. The retirement report is where that
+distinction shows, so read the line rather than predicting which case applies.
+
+**Worktree isolation cuts from the enclosing repository of the session's working
+directory, which is not always the directory that looks like the project.**
+*Exercised, as a failure.* A session working in a path that looked like a project
+root had that path resolve to a much higher toplevel — a home directory that was
+itself a repository. Isolation taken from there cut a worktree in the home
+repository, and every route from it to the intended project was refused by the
+worktree guard: `git -C`, a `cd`, and a computed shell program alike.
+
+- **Route by `git rev-parse --show-toplevel`, never by path shape.** A directory
+  containing repositories is not necessarily outside one.
+- **Where the guard refuses, the repair is the routing.** The guard reads where a
+  command lands, not how it is written, so a command composed to satisfy it
+  reproduces exactly what it exists to prevent. Move the session's working
+  directory into the real repository and re-run.
+
+## The peer socket, and what to stand on instead
+
+**A session publishes its own messaging surface.** *Observed.* The registry entry
+at `~/.claude/sessions/<pid>.json` carries `messagingSocketPath`, `peerProtocol`
+and `peerFeatures`, and the key file beside it holds a `peerToken` at mode 600.
+
+**Connection is not the barrier; framing is.** *Exercised.* Any process of the
+same uid can connect to a live session's socket. The server then sends nothing —
+no banner, no challenge — and holds the connection open waiting for the client to
+speak a protocol that is not published. A dead session's socket refuses the
+connection outright, which is the liveness signal and the only thing a connect
+attempt usefully establishes.
+
+**Do not build a client for it.** The surface advertises a negotiated
+`peerProtocol` and a feature list while publishing no negotiator for a non-Claude
+process. A client written against it is a coupling to a version that announced it
+would move, and it will go stale without any failure signal.
+
+**Stand on the published surfaces instead**: the CLI subcommands and
+`RemoteTrigger`.
+
+**Claude → Codex already works on one.** *Exercised.* `codex queue --thread <id>
+--message <text>` reaches the app-server daemon from a plain shell — no token, no
+`--remote` — and the message persists against a thread that is not running,
+delivered when that thread resumes. Addressing a thread that does not exist
+returns a JSON-RPC error naming the lookup, which is how to tell an unreachable
+daemon from an unknown thread.
+
+**The reverse direction has no published inbound command at all.** *Observed.*
+The `claude` CLI carries no `queue`, `send` or `message` subcommand; the only
+inbound path is the in-session `SendMessage` tool. That asymmetry is why a
+Codex-driven launch is fire-and-forget and verifies itself with `claude agents
+--json` rather than an ACK.

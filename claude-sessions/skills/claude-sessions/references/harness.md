@@ -74,11 +74,22 @@ Codex boundary: `claude --cloud` creates or re-attaches a session, which covers
 the self-round wake, and nothing in the CLI reaches the other two. Re-derive it
 from the same listing when the binary moves.
 
-**`environment_id` comes from the environment listing.** *Exercised.* The listing
-returns each environment's `env_` id beside a human-readable name, which is what
-makes selection possible without guessing. The CLI's `--environment` flag is a
-different value — its help names a self-hosted `ccpool_` id — so it does not
-supply this one.
+**`environment_id` comes from the `Claude_Code_Remote` MCP server, not from
+`RemoteTrigger`.** *Exercised.* `list_environments` returns each environment's
+`env_` id beside a human-readable name, which is what makes selection possible
+without guessing. `RemoteTrigger`'s own action list has no environment action —
+the tool's `create` requires the id and supplies no way to obtain it. The CLI's
+`--environment` flag is a third value — its help names a self-hosted `ccpool_`
+id — so it does not supply this one either.
+
+**The built-in `RemoteTrigger` tool is off inside anything it fires.** *Read*,
+from the installed 2.1.278 tool definition:
+`isEnabled(){return Un()&&mt()&&!a.CLAUDE_CODE_REMOTE&&Gt("allow_remote_sessions")&&Gt(yK)}`.
+`CLAUDE_CODE_REMOTE` is set in a remote worker, so a routine's run cannot call
+the tool that created it, and no run can retire its own schedule. This is also
+why a session can reach routines through the `Claude_Code_Remote` MCP server
+while the built-in tool is unavailable in it: they are two surfaces, and only
+the built-in one carries this condition.
 
 **It is the tool path, and it has no first-token constraint.** *Exercised.*
 `create` followed by `run` produced a routine and fired it; `get_run_log` showed
@@ -107,15 +118,30 @@ per-PR subscription. Fire it once before depending on it.
 
 ## Sessions, jobs and worktrees
 
-**A resume against a running session forks a copy.** *Observed.* Passing flags
-alongside `--resume` started a second job, and the spawn line said so in as many
-words. The rule first drawn from that run — that any flag forks — overreached:
-the session resumed against was a background Stint, which is by construction
-already running, so the running state was never held fixed. `claude --help`
-settles the mechanism: `--bg` with `--resume` continues that session under the
-same id, and starts a copy only when the session is already running.
-`--fork-session` is the flag that forks on purpose. Re-run it against a stopped
-session to close the remaining gap.
+**A resume forks on either of two conditions, and flags are one of them.**
+*Read*, from the installed 2.1.278 classifier. It returns `copy` with reason
+`running` when any live process holds the session — so a running session forks
+however the command is written — and, for a *stopped* background job, `copy`
+with reason `own-options` when the command carries anything beyond the
+instruction. Its own message says why: `background session X keeps its own saved
+options, so the flags you passed started a copy as Y. Without flags, the same
+command continues X.` The option filter drops `--resume` and its value and keeps
+everything else, so with a `--` separator any surviving flag forks, and without
+one, more than a single trailing token does.
+
+**It applies to background jobs only.** The `own-options` branch sits behind a
+test for saved background-job state, so a headless run started by
+`claude-run.sh` has none and its resume continues whatever flags accompany it.
+That is why `references/resume.md` can tell the wrapper's `-S` path to re-pass
+`-C` while SKILL.md tells a Stint's resume to pass nothing: two mechanisms, not
+a contradiction. Only the running-session check reaches both.
+
+This corrects two earlier readings. An *Observed* run had flags alongside
+`--resume` start a second job; the rule drawn from it — that any flag forks —
+was right for the stopped case and silent about the running one. The correction
+then drawn from `claude --help` — that only a running session forks — was wrong
+in the other direction, and re-passing `--bg` on a stopped job is exactly the
+`own-options` fork. Read the classifier, not the help text, when this moves.
 
 **`claude rm` takes the worktree only from the job that created it.** *Exercised,
 by contrast.* Two jobs shared one worktree — one created it, the other was
@@ -131,12 +157,10 @@ itself a repository. Isolation taken from there cut a worktree in the home
 repository, and every route from it to the intended project was refused by the
 worktree guard: `git -C`, a `cd`, and a computed shell program alike.
 
-- **Route by `git rev-parse --show-toplevel`, never by path shape.** A directory
-  containing repositories is not necessarily outside one.
-- **Where the guard refuses, the repair is the routing.** The guard reads where a
-  command lands, not how it is written, so a command composed to satisfy it
-  reproduces exactly what it exists to prevent. Move the session's working
-  directory into the real repository and re-run.
+Two things that run showed, beyond the failure itself: a directory containing
+repositories is not necessarily outside one, and the refusals tracked where each
+command landed rather than how it was written. SKILL.md carries what to do about
+both.
 
 ## The peer socket, and what to stand on instead
 
@@ -151,13 +175,10 @@ speak a protocol that is not published. A dead session's socket refuses the
 connection outright, which is the liveness signal and the only thing a connect
 attempt usefully establishes.
 
-**Do not build a client for it.** The surface advertises a negotiated
-`peerProtocol` and a feature list while publishing no negotiator for a non-Claude
-process. A client written against it is a coupling to a version that announced it
-would move, and it will go stale without any failure signal.
-
-**Stand on the published surfaces instead**: the CLI subcommands and
-`RemoteTrigger`.
+**The surface announces its own movement.** *Observed.* It advertises a
+negotiated `peerProtocol` and a feature list while publishing no negotiator for a
+non-Claude process — which is what a client written against it would couple to.
+SKILL.md carries the prohibition that follows.
 
 **Claude → Codex already works on one.** *Exercised.* `codex queue --thread <id>
 --message <text>` reaches the app-server daemon from a plain shell — no token, no

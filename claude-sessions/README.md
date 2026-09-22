@@ -73,10 +73,12 @@ and no CLI subcommand creates a routine, a schedule, or a webhook — so from Co
 through a Claude session holding the tool, rather than through a CLI equivalent that does not
 exist.
 
-So a Codex-driven launch is fire-and-forget: the handshake clause leaves the brief, because
-the creator is not an addressable peer, and `claude agents --json` verifies the launch in its
-place. App reachability survives intact, since `--remote-control` is a CLI flag rather than a
-tool.
+So a Codex-driven launch is fire-and-forget: the handshake clause leaves the brief, because the
+creator is not an addressable peer, and a check on the launch stands in its place. Which check
+depends on the route — `claude agents --json` lists local sessions, so it confirms a background
+spawn but never sees a cloud one, which is confirmed by opening the claude.ai/code link it
+prints instead. App reachability survives either way, since `--remote-control` is a CLI flag
+rather than a tool.
 
 One line that does not move: a session's messaging socket at `/tmp/cc-socks/<pid>.sock` is
 never opened directly. It accepts any connection from the same user and then says nothing,
@@ -97,6 +99,7 @@ claude-sessions/
 └── skills/claude-sessions/
     ├── SKILL.md                        the operative surface
     └── references/
+        ├── harness.md                  what the harness was observed to do, and on what evidence
         ├── resume.md                   continuing, forking, and failed resumes
         └── verdict.md                  the four conditions behind the wrapper's exit status
 ```

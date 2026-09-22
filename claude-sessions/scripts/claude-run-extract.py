@@ -115,10 +115,15 @@ def main(argv):
         with open(os.path.join(run_dir, "final.md"), "w", encoding="utf-8") as fh:
             fh.write(answer)
 
-    # Success is established, not assumed: a result event, the success subtype,
-    # no error flag, and a stream that parsed end to end. Anything short of all
-    # four is a failure, including a subtype this version does not know.
+    # Success is established, not assumed. The four conditions are verdict.md's:
+    # the process exited 0, the stream carried a result event, that event is a
+    # success with no error flag, and every line parsed. Anything short of all
+    # four is a failure, including a subtype this version does not know. Each
+    # one that fails names itself in verdict_reasons, the process status
+    # included — verdict.md promises that list covers all four.
     reasons = []
+    if int(exit_status) != 0:
+        reasons.append(f"the claude process exited {int(exit_status)}")
     if result_event is None:
         reasons.append("the stream carried no result event")
     else:

@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-Guidance for Claude Code when working in this repository.
-
 ## Northstar
 
 This repository is an **Extended Mind** — a space that extends my present
@@ -10,34 +8,13 @@ artifacts, born and dying along the hermeneutic circle. When anything conflicts,
 one measure decides: **fidelity to present understanding outranks artifact
 continuity.**
 
-From that single measure:
-
-- **Solve at the root, not the margin** (fundamental first) — but *fundamental ≠
-  maximal*. Remove the root cost (a deferred assumption, a legacy shim) at the
-  source, keeping the change surface minimal. A patch that looks small but defers
-  a cost is not minimal: measure "minimal" by lifetime cost, not diff size.
-- **The only constituency is the present self.** External compatibility, legacy,
-  and future-proofing are by-products, not targets — preserve only what serves
-  the present understanding.
-- **Change is metabolism.** Skills are re-derived, not preserved; an artifact
-  earns its place by serving the current understanding with the least drag.
-
 ## Architecture
 
 A plugin marketplace, layered by rate of change — slower layers underneath,
 faster ones composed on top (code > procedure > data):
 
-- `.claude-plugin/marketplace.json` — plugin list + source paths (no versions)
-- `{plugin}/.claude-plugin/plugin.json` — name, version, description
-- `{plugin}/skills/{name}/SKILL.md` — user-invoked via `/name`
-- `{plugin}/agents/{name}.md` — auto-delegated via the Task tool
-- `{plugin}/.mcp.json` — external-tool integration (optional)
+- `.claude-plugin/marketplace.json` — plugin list + source paths
 - `external-plugin/{name}/` — third-party integrations, kept separate
-
-Put API docs and examples in `references/`, helper scripts in `scripts/`.
-Frontmatter shapes (skill/agent YAML, multi-skill loading, tool restriction, MCP
-HTTP/Command forms) are re-derivable from existing siblings — read a neighbor to
-see the current shape.
 
 ## Revising a surface
 
@@ -48,24 +25,13 @@ the change.
 
 ## Conventions
 
-- **Helper scripts.** A Python script prefers inline uv environment setup —
-  PEP 723 script metadata (`# /// script … ///`) with `dependencies = []`
-  declared even when empty, run as `uv run scripts/x.py`. A TypeScript script
-  runs with `bun scripts/x.ts`. Whatever runtime a script needs is a
-  prerequisite rather than a vendored artifact: the skill says so, and says how
-  to install it.
+- **Helper scripts.** Whatever runtime a script needs is a prerequisite rather
+  than a vendored artifact: the skill says so, and says how to install it.
 - **Agent vs Skill.** Agent = how to behave (principles, boundaries, error
-  philosophy). Skill = what to do (workflow, procedures, commands). A
-  `skills:`-loaded skill is the single home for its workflow; the agent adds only
-  behavior it does not carry.
+  philosophy). Skill = what to do (workflow, procedures, commands).
 - **Branch naming.** Where a unit of work has a chart outside this repository, the
   branch carries that chart's issue identifier — `roo-39-description`, or after a
-  type prefix where one is used — and that branch carries one unit, since every
-  pull request opened from it is filed under the identifier it carries. Resolving
-  the chart from the repository's name reaches nothing: this repository is not a
-  project in the tracker the charts live in, so the branch is the only handle a
-  session arrives with. Work with no chart has no identifier to carry, and the
-  branch is named for what it changes.
+  type prefix where one is used.
 - **Importing external-tool capability — 3 tests, all required.** (1)
   *Irreducibility*: not reproducible from existing primitives (ergonomic wrappers
   stay inside scripts). (2) *Environment neutrality*: a protocol-level capability
@@ -75,21 +41,9 @@ the change.
 
 ## Versioning
 
-Edit `version` in `{plugin}/.claude-plugin/plugin.json`.
-
-**Bump-on-change.** When a plugin's meaningful files change in a change-set, that
-plugin's `version` must actually change (re-ordering/reformatting alone does not
-count). Exception: a plugin's own top-level metadata and boilerplate — the same
-name one directory down counts as content. The exception covers presentation,
-not component selection: `.codex-plugin/plugin.json` is exempt only while its
-`skills` selector is unmoved, and adding or deleting that manifest moves it. A
-`git rm` of a meaningful file counts. A new plugin satisfies it via its initial
-version.
-
 Logic SSOT: `.githooks/check-version-bump.sh` (pure bash), which also holds the
 exception list. Two entry points call it, and they share the rule while differing
-in baseline: the local pre-commit hook (`git config core.hooksPath .githooks`,
-once per clone; best-effort, bypassable) compares the staged index against `HEAD`,
+in baseline: the local pre-commit hook compares the staged index against `HEAD`,
 CI (`.github/workflows/version-bump-check.yml`, the real gate; not bypassable)
 against the merge-base with the PR base. A later commit on a branch therefore
 needs its own bump to pass the hook after CI is already satisfied by an earlier
@@ -97,8 +51,7 @@ one, so such a branch carries one bump per such commit.
 
 ## Install
 
-Four entry points, each one line. Each script's header carries what it does
-and the constraints that govern editing it; read it before changing one.
+Four entry points, each one line.
 
 Every plugin in the marketplace, for Claude Code:
 

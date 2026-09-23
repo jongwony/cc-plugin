@@ -42,11 +42,11 @@ nothing emits an event for the thing being watched. A recurrence is **one** rout
 schedule — not a series of single-moment routines standing in for an interval, which is how
 a hand-rolled poller accumulates.
 
-`/autofix-pr` is not one of the three wakes. It is a command a person types directly, or
-wires to pull-request creation, and this plugin does not dispatch it. It touches this plugin
-through one fact: it holds a pull request's single webhook recipient, so before adding an
-event watch on a pull request, check that nothing already watches it — whether a webhook
-routine coexists with that watch has not been tested.
+`/autofix-pr` is not one of the three wakes. A person types it, or a background Stint makes
+it the whole of its first prompt — it has no tool twin. It touches the event wake through
+one fact: it holds a pull request's single webhook recipient, so before adding an event
+watch on a pull request, check that nothing already watches it — whether a webhook routine
+coexists with that watch has not been tested.
 
 ## Every brief names an observable completion condition
 
@@ -65,20 +65,20 @@ trigger id.
 What divides the boundary is tool versus shell. The tools belong to Claude Code alone:
 `ListAgents`, `SendMessage`, and `RemoteTrigger`. Everything reached by a CLI command — the
 spawn line, `--remote-control`, `claude agents --json`, `logs`, `attach`, `stop`, `rm`,
-`claude --cloud`, and reading the session registry — is shell, and Codex reaches all of it.
+`claude -p --cloud`, and reading the session registry — is shell, and Codex reaches all of it.
 
 That puts the three wake mechanisms on two sides. A session that drives its own rounds needs
-only a session to run, and `claude --cloud` creates or re-attaches one from any shell, so
-Codex reaches the self-round wake. The event and clock wakes are created by `RemoteTrigger`,
+only a session to run, and the background spawn line starts one from any shell, so Codex
+reaches the self-round wake. `claude --cloud` does not serve here: creating a cloud session
+with it requires an interactive terminal, and from a shell it only sends a message to a
+session that already exists. The event and clock wakes are created by `RemoteTrigger`,
 and no CLI subcommand creates a routine, a schedule, or a webhook — so from Codex those route
 through a Claude session holding the tool, rather than through a CLI equivalent that does not
 exist.
 
 So a Codex-driven launch is fire-and-forget: the handshake clause leaves the brief, because the
-creator is not an addressable peer, and a check on the launch stands in its place. Which check
-depends on the route — `claude agents --json` lists local sessions, so it confirms a background
-spawn but never sees a cloud one, which is confirmed by opening the claude.ai/code link it
-prints instead. App reachability survives either way, since `--remote-control` is a CLI flag
+creator is not an addressable peer, and a check on the launch stands in its place:
+`claude agents --json` shows the spawned job's row. App reachability survives either way, since `--remote-control` is a CLI flag
 rather than a tool.
 
 One line that does not move: a session's messaging socket at `/tmp/cc-socks/<pid>.sock` is

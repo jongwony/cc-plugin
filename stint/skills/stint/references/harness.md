@@ -30,15 +30,44 @@ registration carries no argument hint.
 
 **So a message carrying a built-in carries nothing else.** A spawn whose first
 act is a built-in costs two messages: the command, then the brief with its
-handshake clause and its work. This is the reason SKILL.md prefers the tool path,
-not a two-message procedure to adopt — `RemoteTrigger` has no such constraint and
-can be called anywhere in a turn.
+handshake clause and its work. Where a tool exposes the same capability, the tool
+is called instead and no session is spawned for it; the twin table below says
+which commands have one.
+
+## Where each path dispatches a built-in
+
+*Read* from the 2.1.280 binary except where marked. The non-interactive command
+set is the prompt-type skills plus the `local` commands that declare
+non-interactive support; `local-jsx` commands are excluded from it.
+
+| Path | What dispatches | Mark |
+|---|---|---|
+| `claude --bg … -- "<prompt>"` | Every built-in, `local-jsx` included — the worker is an interactive session under a pty host, and the positional prompt is parsed as typed input | *Exercised* for `/autofix-pr` as the whole message; *Read* otherwise |
+| `claude -p "<prompt>"` | The non-interactive set only | *Read* |
+| A routine's `events[].data.message.content` | The non-interactive set only; `local-jsx` arrives as text | *Read* (likely) |
+| A cloud session | The non-interactive set; the attach TUI posts some commands as text and refuses others with `/X isn't available in cloud sessions yet` | *Read* |
+| `SendMessage`, peer and Remote Control inbound | Nothing — every such enqueue forces `skipSlashCommands` | *Read* |
+
+## Built-ins and their tool twins
+
+| Command | Twin | Gap |
+|---|---|---|
+| `/subtask` | `Agent`, `fork` subagent | None of consequence |
+| `/code-review` | `Skill` `code-review` | None |
+| `/schedule` | `RemoteTrigger` | The skill adds the environment lookup |
+| `/loop` | `CronCreate` / `CronList` / `CronDelete` | Local, not cloud |
+| `/fork` | `Agent` fork in the background, for the in-conversation variant | The variant that opens a new background session has none |
+| `/goal` | `ProposeGoal` | Refused in background, cloud and agent contexts — so no twin where a Stint runs |
+| `/autofix-pr` | None | `create_webhook_trigger` binds events to a routine, not to a live session |
+
+*Read*, 2.1.280. `/autofix-pr` is also disabled where the session is remote, so it
+dispatches from a `--bg` Stint on this machine and not from a cloud one.
 
 ## `/autofix-pr`
 
-A person runs this command directly or wires it to pull-request creation; stint does
-not dispatch it. It bears on stint through one fact, its per-PR webhook exclusivity,
-which an event watch added on the same pull request may run into. The rest of this
+A person types this command, or a `--bg` Stint leads its initial prompt with it —
+it has no tool twin. It also bears on stint's event wake through its per-PR webhook
+exclusivity, which an event watch added on the same pull request may run into. The rest of this
 section is the observation record, and the evidence for the dispatch rule above.
 
 **It targets the current checkout's branch and nothing else.** *Exercised.* It
@@ -78,8 +107,8 @@ printed no already-watching line.
 **No CLI subcommand creates a routine, a schedule or a webhook.** *Read*, from
 the `claude --help` subcommand list at 2.1.278, so the claim is bounded to that
 version. This is what keeps the event and clock wakes on the tool side of the
-Codex boundary: `claude --cloud` creates or re-attaches a session, which covers
-the self-round wake, and nothing in the CLI reaches the other two. Re-derive it
+Codex boundary: the `--bg` spawn line covers the self-round wake from a shell,
+and nothing in the CLI reaches the other two. Re-derive it
 from the same listing when the binary moves.
 
 **`environment_id` comes from the `Claude_Code_Remote` MCP server, not from
@@ -101,9 +130,20 @@ the built-in one carries this condition.
 
 **It is the tool path, and it has no first-token constraint.** *Exercised.*
 `create` followed by `run` produced a routine and fired it; `get_run_log` showed
-the prompt reaching a sandbox that allocated and launched Claude Code. This is
-the whole reason the tool path is preferred: a brief can call it in the middle of
-a turn, where a slash command would have to lead its own message.
+the prompt reaching a sandbox that allocated and launched Claude Code. A tool has
+no first-token constraint, so a turn can call it anywhere.
+
+**`RemoteTrigger` and `claude --cloud` end in the same kind of session and are not
+twins.** *Read*, 2.1.280, except where marked. Both produce cloud sessions under
+`/v1/code/sessions`. `RemoteTrigger` manages routines — stored session templates,
+their schedules and their webhook bindings — needs no terminal, has no action that
+messages or attaches to a session, and is off under `CLAUDE_CODE_REMOTE`.
+`claude --cloud` creates one session and attaches to it, and creating requires an
+interactive terminal — *Exercised*: without one it prints `Error: --cloud requires
+an interactive terminal.`, and combined with `--print` it is refused as
+interactive-only. `claude -p "<msg>" --cloud <session_id|url>` sends one message
+to an existing session and returns without waiting. The one other headless
+creator is `-p --environment <ccpool_…>`, on a self-hosted pool only.
 
 **`job_config` must set `ccr.environment_id`.** *Exercised.* A body without it is
 rejected with `translate job_config v1→v2: job_config must set

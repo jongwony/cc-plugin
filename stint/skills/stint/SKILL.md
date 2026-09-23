@@ -42,8 +42,8 @@ Independent work needs something to start it. Route to exactly one.
   repository can emit neither CI failures nor review comments. Read that from the pull
   request's own checks and reviewers, never from the workflow triggers: a `push`-triggered
   workflow also posts its check runs against a PR's head commit.
-- **A pull request may already be watched by `/autofix-pr`.** That command is typed by a
-  person, not dispatched from here, and it holds the PR's single webhook recipient; whether a
+- **A pull request may already be watched by `/autofix-pr`.** It holds the PR's single webhook
+  recipient, whether a person typed it or a `--bg` Stint led with it; whether a
   `create_webhook_trigger` routine coexists with it is unverified. Check for a running watch
   before adding one — `references/harness.md` carries what was observed.
 
@@ -57,16 +57,25 @@ Independent work needs something to start it. Route to exactly one.
 - **Name the durable destination in the same breath** — the pull request, the parked task, the
   file. Completion is recorded there.
 
-## Tool path, not slash path
+## Where a built-in is called from
 
-- **Prefer `RemoteTrigger` over a slash command** when both would reach the same place. It is
-  a tool, so it can be called anywhere in a turn.
-- **A built-in command dispatches only as the first token of a message, and it takes the whole
-  message.** The same text inside a brief is read as prose, nothing runs, and no error marks
-  it. Several take no argument, so the message carrying one carries nothing else.
-- Read `references/harness.md` before working around a dispatch that appears to have done
-  nothing. It records how each of these was established, including that a command taking no
-  argument discards one without complaint.
+- **A tool twin exists → call the tool, and wrap nothing in a session.** `/subtask` → `Agent`
+  with the `fork` subagent; `/code-review` → `Skill` `code-review`; `/schedule` →
+  `RemoteTrigger`; `/loop` → the `Cron*` tools (local, not cloud).
+- **No twin → the command is the whole initial prompt of a `--bg` Stint.** The `--bg` worker is
+  an interactive session, so it dispatches interactive-only commands — `/autofix-pr`, a
+  session-level `/fork` — and `/goal`, whose `ProposeGoal` twin is refused in background, cloud
+  and agent contexts. That message carries nothing else; the brief follows as the next one.
+- **A built-in dispatches only as the first token of a message**, and takes the whole message.
+  The same text inside a brief is prose: nothing runs, and no error marks it. A command taking
+  no argument discards one silently.
+- **A routine's prompt, a `-p` run and a cloud session dispatch only non-interactive commands**
+  — prompt skills, and commands with a non-interactive form. An interactive-only command
+  arrives there as plain text.
+- **`SendMessage` and Remote Control inbound never dispatch a command.** A built-in cannot be
+  handed to a running session that way.
+- Read `references/harness.md` for the per-path dispatch table and the twin table, and before
+  working around a dispatch that appears to have done nothing.
 
 ## When Codex is on either end
 

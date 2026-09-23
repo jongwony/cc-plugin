@@ -6,21 +6,22 @@ carries what changes when the creator holds shell but no tool.
 
 - **What divides the boundary is tool versus shell.** A tool is Claude Code's
   alone; a CLI command is not. `ListAgents`, `SendMessage` and `RemoteTrigger`
-  are tools. The spawn line, `--remote-control`, `claude agents --json`, `logs`,
-  `attach`, `stop`, `rm`, `claude --cloud` and reading the session registry are
-  shell, and Codex reaches them.
-- **From Codex, reach an independent session through `claude --cloud`.** It
-  takes a description, a session id or a claude.ai/code URL, so it both creates
-  and re-attaches. That covers the self-round wake, whose only requirement is a
-  session that runs.
+  are tools — and `RemoteTrigger` is also off inside any cloud session. The
+  spawn line, `--remote-control`, `claude agents --json`, `logs`, `attach`,
+  `stop`, `rm`, `claude -p --cloud` and reading the session registry are shell,
+  and Codex reaches them.
+- **From Codex, the independent-session route is the `--bg` spawn line.** It
+  needs no terminal, and it covers the self-round wake, whose only requirement
+  is a session that runs. `claude --cloud` cannot create a session from Codex:
+  creating one requires an interactive terminal.
+- **`claude -p "<msg>" --cloud <session_id|url>` sends one message to a cloud
+  session that already exists** and returns without waiting for the reply.
+  `claude -p "<task>" --environment <ccpool_…>` creates one headlessly, but only
+  on a self-hosted pool.
 - **A Codex-driven launch is fire-and-forget.** Drop the handshake clause from
   the brief — the creator is not a peer and the worker has no one to ACK.
-- **Verify the launch on the surface that carries it, and they differ by
-  route.** A background spawn is verified with `claude agents --json`: the row
-  under the returned jobId is live and carries the expected name. A
-  `claude --cloud` session is not in that listing at all — it lists local
-  sessions only — so verify that one by opening the claude.ai/code link it
-  prints. Either check replaces the ACK.
+- **Verify the launch with `claude agents --json`**: the row under the returned
+  jobId is live and carries the expected name. That check replaces the ACK.
 - **Never open a session's messaging socket.** `/tmp/cc-socks/<pid>.sock`
   accepts any same-uid connection and speaks nothing first; it is unpublished,
   the registry advertises a negotiated `peerProtocol`, and no negotiator is

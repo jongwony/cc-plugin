@@ -154,6 +154,17 @@ carry no `environment_id` and still list and run, so the server translates the
 older shape while requiring the newer one on create. Expect the shape to move
 again and read the error rather than a remembered body.
 
+**Where a routine's pieces sit in the body.** *Carried from SKILL.md, not
+re-exercised here.* `job_config.ccr` carries `environment_id`,
+`events[].data.message.content` is the prompt, and `session_context` carries
+`allowed_tools` and `model`. `run` fires a routine immediately and returns the
+run's `session_id` — the way to verify a routine before leaving it to its
+schedule.
+
+**An empty `list_runs` does not prove a routine never fired.** *Carried from
+SKILL.md, not re-exercised here.* A fire refused before a session existed leaves
+no row, so check the routine itself with `get` for `enabled` and `next_run_at`.
+
 **There is no delete action.** *Exercised.* The available actions are list, get,
 create, update, run, `create_webhook_trigger`, `list_runs` and `get_run_log`.
 Retirement is `update` with `enabled: false`; the routine stays listed with its
@@ -208,6 +219,44 @@ Two things that run showed, beyond the failure itself: a directory containing
 repositories is not necessarily outside one, and the refusals tracked where each
 command landed rather than how it was written. SKILL.md carries what to do about
 both.
+
+## Launch mechanics
+
+Items below moved out of SKILL.md after an ablation showed a reader reached each
+obligation without them. Unless marked otherwise they are *carried*: stated
+there before, not re-exercised in the pass that moved them.
+
+**The `--bg` worker is an interactive session under a pty host the daemon
+holds.** *Read*, 2.1.280: the worker is launched as `--bg-pty-host <sock> <cols>
+<rows> -- <file> [args...]`. The creator needs no terminal of its own, which is
+why a shell with no TTY — Codex, or a tool call — can spawn one. An earlier
+reading that `--bg` runs "without a PTY" was wrong on the worker's side.
+
+**`--worktree <surface>` cuts branch `worktree-<surface>` from
+`origin/<default>`, or reuses it.** It is find-or-create, so a second Stint
+passing an existing name joins that worktree. Its argument goes through a
+validator stricter than git's refname rules; a plain hyphenated token passes.
+`<surface>` and the session name are separate tokens.
+
+**`-n` pins a permanent name; `--remote-control` registers the app bridge.**
+`--remote-control`'s name argument is optional, so a brief placed right after it
+is taken as that name and vanishes. The `--` ends option parsing — without it
+the brief is parsed as options and consumed silently.
+
+**A session answers to several identifiers.** The session id names the
+conversation, a pid names the process and titles the registry file, and `[ref]`
+is a display token for one listing; look each up rather than deriving one from
+another. `jobId` is the first 8 hex characters of `sessionId`, and a resume
+keeps the original `sessionId` unless `--fork-session` asks for a new one.
+
+**`status` is a rough interruptibility signal.** `busy` covers generating and
+having a delegated task in flight alike; `waiting` means an unanswered dialog
+exists. How long `statusUpdatedAt` has been frozen is what judges a stall.
+
+**Restarts happen on a binary update or the next attach.** Nothing revives a
+crashed worker on its own. Both the messaging socket and the app bridge are
+decided at launch, so after a restart re-read `ListAgents` and re-check
+`bridgeSessionId` before relying on either.
 
 ## The peer socket, and what to stand on instead
 

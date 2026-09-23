@@ -26,11 +26,12 @@ choice between them is the work here.
 
 Independent work needs something to start it. Route to exactly one.
 
-| What wakes it | Mechanism |
-|---|---|
-| An external event | `RemoteTrigger` `create_webhook_trigger` — an event source attached to a routine |
-| A time or an interval | A routine's `cron_expression`, or `run_once_at` for a single future moment |
-| Its own rounds | A Stint spawn — the session drives itself until its completion condition |
+- **An external event** → `RemoteTrigger` `create_webhook_trigger`, an event source attached
+  to a routine.
+- **A time or an interval** → a routine's `cron_expression`, or `run_once_at` for a single
+  future moment.
+- **Its own rounds** → a Stint spawn; the session drives itself until its completion
+  condition.
 
 - **An event source exists → use it.** Reach for the clock only when nothing emits an event
   for the thing being watched.

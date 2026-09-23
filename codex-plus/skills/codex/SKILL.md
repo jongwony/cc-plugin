@@ -65,7 +65,7 @@ When the delegated task is image generation or image editing:
 
    What a choice may name:
    - **Model** — any slug `codex debug models` lists.
-   - **Effort** — `low`, `medium`, `high`, `xhigh`, `max`, `ultra`. A model's ladder may stop short of `max` or `ultra`, and a parallel run needs an effort every model in it takes; `codex debug models` reports each model's ladder.
+   - **Effort** — `low`, `medium`, `high`, `xhigh`, `max`. A model's ladder may stop short of `max`, and a parallel run needs an effort every model in it takes; `codex debug models` reports each model's ladder.
    - **Service tier** — `-f`, under the caveat in the Quick Reference.
 
 2. Select sandbox mode. Omitting `-s` gives `workspace-write` **with network access** — codex offers no network under `read-only` at all, so this is the only mode short of full access that has any. Pass `-s read-only` when a run must neither touch the tree nor reach off-machine; `-s danger-full-access` only when it must write outside the workspace. Because the default already permits writes, what bounds a run that is meant to only read is the role its prompt declares — state it.

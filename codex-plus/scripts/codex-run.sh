@@ -49,7 +49,7 @@ Usage: codex-run.sh [options] <prompt_file>
 
 Options:
   -m, --model MODEL      Model name (default: gpt-6-astra)
-  -r, --effort EFFORT    Reasoning effort: low|medium|high|xhigh|max|ultra (default:
+  -r, --effort EFFORT    Reasoning effort: low|medium|high|xhigh|max (default:
                          medium, a starting point rather than a ceiling —
                          escalate per task. astra has no `none` rung)
   -f, --fast             Request codex's fast (priority) service tier. codex has

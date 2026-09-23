@@ -86,7 +86,7 @@ Sources, and how each line is marked:
 - `medium` is the wrapper's fallback and the starting point. OpenAI's guidance is to
   compare a rung against its neighbours on representative work rather than assume
   the highest wins.
-- Raise to `high`/`xhigh`/`max`/`ultra` for reasoning depth, not for task size.
+- Raise to `high`/`xhigh`/`max` for reasoning depth, not for task size.
   A long mechanical task does not need a higher rung; a short load-bearing
   judgment may.
 - `low` is for latency-bound work. Runs here are unattended, so a cheap wrong

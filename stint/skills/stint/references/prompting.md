@@ -16,9 +16,6 @@ run does what the prompt says and nothing checks it mid-flight.
 - **Carry what the run cannot re-derive; point at everything else.** Test each
   item: can the run reach this with its own tools from the directory it runs in?
   Yes → pass a path, a pattern, or a command. No → copy it in.
-- **Name the goal, the completion condition, the output destination, the
-  permitted actions, and the decisions the user has kept.** Point at governing
-  instructions rather than restating them.
 - **For a decision it cannot make**, name where to park it, or a default those
   same sources authorize.
 - **Carry the decision itself when the run is a consult**: what is being chosen,
@@ -69,15 +66,9 @@ and skipping the bad line left the success standing.
   https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices
   — before writing a prompt file, and again whenever a run stopped early, asked a
   question instead of deciding, or returned a claim its artifacts do not support.
-- Navigate that page by heading: `## Model-specific guidance` for per-model
-  differences, `## General principles` for clarity, examples and XML structuring,
-  `## Output and formatting`, `## Tool use`, `## Thinking and reasoning` for
-  effort and extended thinking, `## Agentic systems` for unattended runs, stop
-  conditions and subagents, `## Capability-specific tips`,
-  `## Migration considerations`.
-- For the technique index and interactive tutorials, read the prompt engineering
-  overview —
-  https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview
+- The page opens with a `## Model-specific guidance` table linking one prompting
+  page per model; read the page for the model the prompt will run on before the
+  techniques that follow.
 - For the harness a prompt runs against rather than the model it prompts, read
   Claude Code's programmatic-run page — https://code.claude.com/docs/en/headless —
   and its CLI reference — https://code.claude.com/docs/en/cli-reference. Verify a

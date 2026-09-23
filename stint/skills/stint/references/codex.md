@@ -14,6 +14,10 @@ carries what changes when the creator holds shell but no tool.
   needs no terminal, and it covers the self-round wake, whose only requirement
   is a session that runs. `claude --cloud` cannot create a session from Codex:
   creating one requires an interactive terminal.
+- **A `--bg` spawn does not exit on its own.** Its session stops after the
+  turn, but the process stays up until `claude stop` — so a Codex-driven
+  launch names who runs `claude stop` and `claude rm`: the brief, or the Codex
+  creator after its launch check (`references/harness.md`).
 - **`claude -p "<msg>" --cloud <session_id|url>` sends one message to a cloud
   session that already exists** and returns without waiting for the reply.
   `claude -p "<task>" --environment <ccpool_…>` creates one headlessly, but only

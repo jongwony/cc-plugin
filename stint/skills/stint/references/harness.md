@@ -232,6 +232,14 @@ holds.** *Read*, 2.1.280: the worker is launched as `--bg-pty-host <sock> <cols>
 why a shell with no TTY — Codex, or a tool call — can spawn one. An earlier
 reading that `--bg` runs "without a PTY" was wrong on the worker's side.
 
+**A `--bg` worker does not exit when its turn ends.** *Exercised*, once, 2.1.280,
+tool-less prompt. The job reached `state: done`, `status: idle` with its answer
+written, and its pid stayed alive until `claude stop`, after which the row read
+`state: done`, `status: null`. The process was a pre-warmed `claude bg-spare` the
+daemon handed over. So `--bg` plus `claude stop` does what `claude -p` does, but
+only once someone runs the stop; `claude logs` gives TUI frames, not a
+stream-json result or an exit status, so the answer is read from the transcript.
+
 **`--worktree <surface>` cuts branch `worktree-<surface>` from
 `origin/<default>`, or reuses it.** It is find-or-create, so a second Stint
 passing an existing name joins that worktree. Its argument goes through a

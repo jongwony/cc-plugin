@@ -20,9 +20,9 @@
       "description": "Enhanced OpenAI Codex CLI integration (multi-model, context classification)"
     },
     {
-      "name": "claude-plus",
-      "source": "./claude-plus",
-      "description": "Claude Code CLI integration (fable consult, execution delegation, session management)"
+      "name": "stint",
+      "source": "./stint",
+      "description": "Independently managed bounded work in a session of its own: spawn a Stint, or stand up an event/clock/self-round monitor"
     },
     {
       "name": "pdf-split",
@@ -53,11 +53,6 @@
       "name": "voice-dictation",
       "source": "./voice-dictation",
       "description": "Push-to-talk voice dictation daemon (whisper.cpp) transcribing speech into the active window"
-    },
-    {
-      "name": "remote-tmux",
-      "source": "./remote-tmux",
-      "description": "`claude remote-control` toolkit: /remote-spawn launches independent Stints and manages peer-addressable sessions, with Claude app access on launches that register --remote-control"
     },
     {
       "name": "hourly-digest",

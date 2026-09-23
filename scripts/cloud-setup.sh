@@ -62,6 +62,7 @@ else:
 ensure_plugin() {
   local id="$1"
   claude plugin install "$id" < /dev/null || { echo "  Skipped: $id" >&2; return 0; }
+  claude plugin update "$id" < /dev/null || true
   if [ "$(plugin_state "$id")" = "disabled" ]; then
     claude plugin enable "$id" < /dev/null || true
   fi

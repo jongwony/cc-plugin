@@ -10,8 +10,10 @@ continuity.**
 
 ## Architecture
 
-A plugin marketplace, layered by rate of change — slower layers underneath,
-faster ones composed on top (code > procedure > data):
+A plugin marketplace, layered by how often each layer changes: the one that
+changes least sits at the bottom and each more frequently changed one is
+composed on top of it — code (`scripts/`) at the bottom, procedure (`SKILL.md`,
+`agents/*.md`) above it, and data (`references/`, the manifests) on top:
 
 - `.claude-plugin/marketplace.json` — plugin list + source paths
 

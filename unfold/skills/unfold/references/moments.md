@@ -138,6 +138,42 @@ Checklist the session against the structure in Linear; write only deltas:
 Show the delta list as a draft; the user culls it (derivable, mechanical, or
 off-intent lines drop); write each surviving item on confirmation.
 
+## intake — sort the Triage inbox (act, then report)
+
+The Triage state is where findings from any surface land: an issue created by
+a team member bypasses the inbox, so an emitter sets `state: Triage`
+explicitly. `intake` sorts that inbox into the charts it belongs to. It is the
+one moment that acts before reporting, so it takes only acts that are both
+reversible and plain, and leaves everything else where it is.
+
+0. **Read** the team's issues in the Triage state (`list_issues` with
+   `state: Triage`), then the catalog — the project root issues, as in
+   Project resolution step 3.
+1. **Classify each item**, first match wins:
+   - **Chart root** — its description opens by declaring itself a unit's
+     chart. It is not an intake item: move it to Backlog.
+   - **Plain duplicate** — the same finding as an existing open issue, by
+     its described observation, not by a shared topic: set `duplicateOf`.
+   - **Single plain match** — exactly one root issue in the catalog is the
+     chart this item's finding bears on, by that chart's Problem or Open
+     questions: set its `project` to the chart's project, add `relatedTo`
+     the root issue, move it to Backlog.
+   - **Otherwise** — no match, several, or a match that is itself a
+     judgment (the item would change a chart's direction, or opens a unit
+     of its own): leave it in Triage.
+2. **Write only those fields** — state, `project`, `relatedTo`,
+   `duplicateOf`. No description, comment, Open-questions rewrite or new
+   issue: those stay with `decide`, `group` and `close`, where the user
+   culls a draft.
+3. **Report once, after acting**, one line per item: what it was, what moved
+   and why (the chart or the duplicate it matched, with the sentence that
+   matched), and how to undo it (the prior state and fields). Items left in
+   Triage are listed with their candidate charts and what kept each from
+   being plain.
+
+Run on a clock with `/loop 1d /unfold intake`; each firing is the same
+single pass.
+
 ## Caveats learned in the field
 
 - Milestones have no explicit sortOrder parameter on write; creation order

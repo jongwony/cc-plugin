@@ -7,8 +7,10 @@ against the model in use; the notes below keep that attribution. Scoped to what 
 tool-holding** run — the shape `codex-run.sh` produces. General prompt craft
 that did not change with the generation is not repeated here.
 
-Lines are read off OpenAI's model pages (`developers.openai.com/api/docs/models/<slug>`)
-and model guidance (`.../guides/latest-model`) unless marked otherwise.
+Lines are read off OpenAI's model pages
+(https://developers.openai.com/api/docs/models/<slug>) and its GPT-6 prompting
+guide (https://developers.openai.com/api/docs/guides/latest-model), which carries
+what this file does not.
 
 ## Model facts
 

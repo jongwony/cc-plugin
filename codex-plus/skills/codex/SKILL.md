@@ -68,6 +68,10 @@ run came back having stopped early or asked a question instead of deciding.
 
 **File**: `references/gpt-6_prompting_guide.md`
 
+That file keeps only what changes for an unattended `codex exec` run. For the rest of
+prompting the gpt-6 family — its best practices and migration notes — read OpenAI's
+guide itself: https://developers.openai.com/api/docs/guides/latest-model
+
 - Before delegating browser or native computer-use work, read
   `references/computer-use.md` and pass it to the child prompt. Select the entry
   point from that child's actual tools and returned runtime documentation.

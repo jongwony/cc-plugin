@@ -284,9 +284,10 @@ delivered when that thread resumes. Addressing a thread that does not exist
 returns a JSON-RPC error naming the lookup, which is how to tell an unreachable
 daemon from an unknown thread.
 
-**The reverse direction goes through `-p` and `--resume`.** *Observed.* The
+**The reverse direction goes through the `--bg` spawn and `--resume`.** *Observed.* The
 `claude` CLI carries no `queue`, `send` or `message` subcommand. New work starts
-with `claude -p`, and a stopped session takes a message through
+with a `--bg` spawn, stopped with `claude stop` once done — which covers what
+`claude -p` does, that being a run that disconnects after its first stop — and a stopped session takes a message through
 `claude --resume <sessionId> -- "<msg>"`. Those are the slow layer. A running
 session's inbound path is the fast one: a resume of it starts a copy (the
 classifier above), and every peer-origin message is forced to

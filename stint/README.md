@@ -81,10 +81,10 @@ creator is not an addressable peer, and a check on the launch stands in its plac
 `claude agents --json` shows the spawned job's row. App reachability survives either way, since `--remote-control` is a CLI flag
 rather than a tool.
 
-From Codex, a Claude session is reached through the CLI — `claude -p` for new work,
+From Codex, a Claude session is reached through the CLI — a `--bg` spawn for new work (`claude stop` once it is done covers what `claude -p` would),
 `claude --resume <sessionId> -- "<msg>"` for a session that has stopped — so Codex has no
 reason to open a session's messaging socket; that socket belongs to the `SendMessage` tool.
-Reaching into a session that is still running is not built on: that path is guarded against injection and still moving, while `-p` and `--resume` are the slow layer.
+Reaching into a session that is still running is not built on: that path is guarded against injection and still moving, while the `--bg` spawn and `--resume` are the slow layer.
 
 ## Pieces
 

@@ -22,14 +22,15 @@ carries what changes when the creator holds shell but no tool.
   the brief — the creator is not a peer and the worker has no one to ACK.
 - **Verify the launch with `claude agents --json`**: the row under the returned
   jobId is live and carries the expected name. That check replaces the ACK.
-- **Codex reaches a Claude session through the CLI.** `claude -p "<task>"`
-  starts new headless work, and `claude --resume <sessionId> -- "<msg>"`
-  continues a session that has stopped. Those cover what a Codex creator
-  needs, so a session's messaging socket (`/tmp/cc-socks/<pid>.sock`) stays
-  with the `SendMessage` tool that speaks it.
+- **Codex reaches a Claude session through the CLI.** New work is the `--bg`
+  spawn line above — `claude stop <jobId>` once its work is done covers what
+  `claude -p` would — and `claude --resume <sessionId> -- "<msg>"` continues a
+  session that has stopped. Those cover what a Codex creator needs, so a
+  session's messaging socket (`/tmp/cc-socks/<pid>.sock`) stays with the
+  `SendMessage` tool that speaks it.
 - **Do not build on reaching into a running Claude session from Codex.** That
   path is guarded against injection and still moving. Wait for the session to
-  stop and resume it, or start new work with `claude -p`.
+  stop and resume it, or start new work with a `--bg` spawn.
 - **Claude reaches a Codex thread through the CLI too.** `codex queue
   --thread <id> --message <text>` needs no token and no `--remote`, and persists
   against a thread that is not running.

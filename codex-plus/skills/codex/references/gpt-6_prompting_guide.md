@@ -29,11 +29,11 @@ and model guidance (`.../guides/latest-model`) unless marked otherwise.
 - Runs from this skill are headless: `codex exec` has no approval step and no one
   to answer mid-run. A question therefore lands in the final message, and the
   answer costs a `-S` resume.
-- So every prompt states, in the `## Task` section: how far to go without
-  checking back, and what "done" is.
+- So every prompt states how far to go without checking back, and what "done"
+  is.
 - Where a question is unavoidable, direct the model to **carry on under a stated
   assumption and name the assumption in its answer**, rather than stopping. The
   user resolves it on resume with the work already advanced.
 - The exception is a prompt whose stated deliverable admits a question back —
-  it says so in `## Task`. A reviewing role alone does not: a review still
+  the prompt says so. A reviewing role alone does not: a review still
   delivers its judgment, with any assumption named.

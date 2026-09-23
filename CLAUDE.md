@@ -51,32 +51,10 @@ one, so such a branch carries one bump per such commit.
 
 ## Install
 
-Four entry points, each one line.
-
 Every plugin in the marketplace, for Claude Code:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/install.sh | bash
-```
-
-The plugins that opt into the OpenAI Codex CLI, an opt-in marked per-plugin by a
-`{plugin}/.codex-plugin/plugin.json`:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/codex-install.sh | bash
-```
-
-A Claude Code cloud environment's setup-script field:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/cloud-setup.sh | bash
-```
-
-An OpenAI Codex cloud environment's own setup-script field, which gets Claude
-Code inside it:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/codex-cloud-setup.sh | bash
 ```
 
 ## Workflow

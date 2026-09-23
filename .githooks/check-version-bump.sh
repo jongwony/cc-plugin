@@ -2,7 +2,7 @@
 # Enforce per-plugin version bumps. Single source of truth for both the
 # pre-commit hook (index mode) and CI (range mode).
 #
-# Rule (see CLAUDE.md "버전 업데이트"): when a plugin's semantic files change,
+# Rule: when a plugin's semantic files change,
 # its {plugin}/.claude-plugin/plugin.json "version" VALUE must change in the same
 # change-set. Re-emitting the same version line (reformat / key reorder) does NOT
 # count. Non-semantic top-level files (README.md, README_ko.md, LICENSE,

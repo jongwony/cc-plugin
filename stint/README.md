@@ -97,6 +97,7 @@ stint/
 └── skills/stint/
     ├── SKILL.md                        the operative surface
     └── references/
+        ├── codex.md                    what changes when Codex is on either end
         ├── harness.md                  what the harness was observed to do, and on what evidence
         └── prompting.md                a prompt whose result the caller collects
 ```

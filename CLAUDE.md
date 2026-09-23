@@ -97,8 +97,8 @@ one, so such a branch carries one bump per such commit.
 
 ## Install
 
-Four entry points, each one line. `scripts/CLAUDE.md` carries what each script
-does and the constraints that govern editing it; read it before changing one.
+Four entry points, each one line. Each script's header carries what it does
+and the constraints that govern editing it; read it before changing one.
 
 Every plugin in the marketplace, for Claude Code:
 

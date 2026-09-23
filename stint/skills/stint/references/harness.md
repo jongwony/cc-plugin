@@ -177,7 +177,7 @@ attempt usefully establishes.
 **The surface announces its own movement.** *Observed.* It advertises a
 negotiated `peerProtocol` and a feature list while publishing no negotiator for a
 non-Claude process — which is what a client written against it would couple to.
-SKILL.md carries the prohibition that follows.
+`references/codex.md` carries the prohibition that follows.
 
 **Claude → Codex already works on one.** *Exercised.* `codex queue --thread <id>
 --message <text>` reaches the app-server daemon from a plain shell — no token, no
@@ -189,5 +189,5 @@ daemon from an unknown thread.
 **The reverse direction has no published inbound command at all.** *Observed.*
 The `claude` CLI carries no `queue`, `send` or `message` subcommand; the only
 inbound path is the in-session `SendMessage` tool. That asymmetry is why a
-Codex-driven launch is fire-and-forget and verifies itself with `claude agents
---json` rather than an ACK.
+Codex-driven launch is fire-and-forget and is confirmed by a launch check
+rather than an ACK; `references/codex.md` carries which check fits which route.

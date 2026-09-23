@@ -10,6 +10,8 @@ description: |
 All prompts passed to `codex` MUST be in English.
 
 ## Prompt Delivery
+Read `references/prompting.md` before writing the prompt file: the role every prompt declares, what a prompt judging a decision carries, and how the model is chosen.
+
 1. Generate a short unique suffix (e.g., `a3f9`, timestamp fragment, or task keyword) for this invocation
 2. Write the prompt to `<scratchpad>/codex_prompt_<suffix>.txt` using the Write tool — `<scratchpad>` is the session's scratchpad directory, the `/private/tmp/…/scratchpad` path announced in the system prompt; writes there run without permission prompts. When no scratchpad directory is announced, fall back to `/private/tmp`.
 3. Execute via wrapper script: `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh [options] <scratchpad>/codex_prompt_<suffix>.txt`
@@ -49,18 +51,6 @@ Structure `<scratchpad>/codex_prompt_<suffix>.txt` with these sections:
 
 Omit empty sections.
 
-## Consult Mode (review, not execution)
-
-A consult asks codex to judge a decision rather than carry out work — the reasoning is the deliverable, not a changed file. Four things differ from a task run.
-
-**Declare the role.** Every prompt this skill sends names the role codex is acting in, taken from what the request actually asks for rather than from a fixed set; a consult names a **reviewing** role — codex is asked what it thinks of a decision, not to implement it. Make that call yourself and write it down rather than leaving it to be inferred from the prompt's shape.
-
-**Carry the decision; point at everything else.** The part codex cannot re-derive with its own tools is the decision — what is being chosen, the approach taken so far and where it is still uncommitted, and the item most often omitted: **what would change the answer**, the evidence or outcome that would flip it. State those. Everything else goes through `## Context Classification`'s test: a pointer when codex can re-derive it under `-C DIR`, copied in when it cannot — in practice the session-bound evidence that left no trace on disk. Codex searches for itself, and handing it the tools beats transcribing what the search would have found. A consult invites follow-up, so pass the same `-C` again when you resume one: the pointers mean nothing without the tree they were written against.
-
-**Take the reviewer's own words, not the summary.** The run goes through a Bash subagent, so its outcome summary is normally all that comes back — which for a consult discards the part that mattered. Pass `-o <FILE>` to write codex's final message verbatim, then read that file instead of relying on the summary. Give that path the same per-invocation uniqueness as the prompt file, plus the model name when consulting several in parallel — one shared path and the reviewers overwrite each other, leaving an answer that reads complete but is not the one you think.
-
-**Leave the sandbox at its default, and no ask when the caller already decided.** Do not reach for `-s`: the default is `workspace-write` with network access, and a consult routinely needs the network to check a claim against a live source rather than against its own recollection. The default permits writes, so what keeps a consult from editing is the reviewing role declared above — not the sandbox. When the caller arrives with the model and reasoning effort already fixed, use those and skip the model/effort question in `## Running a Task` step 1.
-
 ## Image Generation Requests
 
 When the delegated task is image generation or image editing:
@@ -71,15 +61,15 @@ When the delegated task is image generation or image editing:
 - Read OpenAI's GPT Image 2.5 prompting guide — https://developers.openai.com/api/docs/guides/image-prompting — for model parameters, per-use-case prompt structure, text rendering, edits, multi-image workflows, and migrating a workflow off an earlier model. It carries reference sections for GPT Image 2, 1.5 and 1 as well.
 
 ## Running a Task
-1. Run on `gpt-6-astra` at `medium`. Whatever the caller named upstream — a model, an effort, a service tier, several models at once — overrides that default and IS the answer: pass it through and do not re-ask it.
+1. Choose the model and effort. Whatever the caller named upstream — a model, an effort, a service tier, several models at once — IS the answer: pass it through and do not re-ask it. Otherwise choose per request, as `references/prompting.md` § Choosing the model and effort says.
 
-   What an override may name:
+   What a choice may name:
    - **Model** — any slug `codex debug models` lists.
-   - **Effort** — `low`, `medium`, `high`, `xhigh`, `max`. A model's ladder may stop short of `max`, and a parallel run needs an effort every model in it takes; `codex debug models` reports each model's ladder.
+   - **Effort** — `low`, `medium`, `high`, `xhigh`, `max`, `ultra`. A model's ladder may stop short of `max` or `ultra`, and a parallel run needs an effort every model in it takes; `codex debug models` reports each model's ladder.
    - **Service tier** — `-f`, under the caveat in the Quick Reference.
 
 2. Select sandbox mode. Omitting `-s` gives `workspace-write` **with network access** — codex offers no network under `read-only` at all, so this is the only mode short of full access that has any. Pass `-s read-only` when a run must neither touch the tree nor reach off-machine; `-s danger-full-access` only when it must write outside the workspace. Because the default already permits writes, what bounds a run that is meant to only read is the role its prompt declares — state it.
-3. Craft prompt per Context Classification and Prompt Template — classify context, write to `<scratchpad>/codex_prompt_<suffix>.txt`.
+3. Craft prompt per Context Classification, Prompt Template and `references/prompting.md` — classify context, write to `<scratchpad>/codex_prompt_<suffix>.txt`.
 4. Delegate execution to a Bash subagent (Task tool) — never run `codex-run.sh` directly in the main session. This keeps codex's verbose banner and full output out of the main context. Give the subagent:
    - the exact command: `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh [options] <scratchpad>/codex_prompt_<suffix>.txt` with `-m MODEL` / `-r EFFORT` / `-s SANDBOX` / `-C DIR`, or `-S <SESSION_ID>` to resume.
    - return contract: run the command and return ONLY (a) a concise outcome summary and (b) the session id. codex prints `session id: <uuid>` to stderr; the subagent extracts that line verbatim and returns it as `SESSION_ID: <uuid>`. The wrapper does no parsing — stderr is left unsuppressed precisely so the subagent can read the session id and any failure straight from the output.
@@ -100,7 +90,7 @@ Base patterns:
 
 Modifiers, added to any base pattern above:
 - Different working directory — `-C <DIR>`; pass it again on resume (step 6)
-- Model and effort — `-m MODEL`, `-r EFFORT` (effort defaults to `medium`; `-r` raises it); pass both again on resume (step 6)
+- Model and effort — `-m MODEL`, `-r EFFORT` (omitted, the wrapper falls back to `gpt-6-astra` at `medium`); pass both again on resume (step 6)
 - Fast service tier — `-f`; a request rather than a guarantee, since codex drops the tier without an error where the model does not carry it (`codex debug models` lists what each one has). Pass it again on resume (step 6)
 - Capture the answer to a file — `-o <FILE>` writes codex's final message to FILE deterministically
 
@@ -111,17 +101,17 @@ Modifiers, added to any base pattern above:
 
 ## Reference Guide
 
-Read the reference before writing a prompt for `gpt-6-astra`, and again whenever a
+Read the prompting guide before writing a prompt for a gpt-6 model, and again whenever a
 run came back having stopped early or asked a question instead of deciding.
 
-**File**: `references/gpt-6-astra_prompting_guide.md`
+**File**: `references/gpt-6_prompting_guide.md`
 
 Key sections (grep patterns for navigation):
-- `## Model facts` - effort ladder, context window, knowledge cutoff, price, parameters to stop sending
-- `## Autonomy and stop conditions` - astra asks non-blocking questions by default; what an unattended `codex exec` prompt has to state in place of that
-- `## Instruction priority` - astra weighs in-context material more heavily, and conflicting guidance in a skill file stops work early
-- `## Context discipline` - why this skill's pointer-over-copy rule matters more under astra rather than less
-- `## Reconcile before switching` - what to send when astra's answer contradicts evidence already in hand
+- `## Model facts` - where a model's ladder, cutoff and price are read, and what the ladder listing omits
+- `## Autonomy and stop conditions` - the model asks non-blocking questions by default (observed with astra); what an unattended `codex exec` prompt has to state in place of that
+- `## Instruction priority` - in-context material weighs more heavily (observed with astra), and conflicting guidance in a skill file stops work early
+- `## Context discipline` - why this skill's pointer-over-copy rule matters more under gpt-6 rather than less
+- `## Reconcile before switching` - what to send when the answer contradicts evidence already in hand
 - `## Choosing an effort rung` - reading the rung off the task instead of off habit
 - `## Subagents` - what a spawned agent inherits, and how to override it
 

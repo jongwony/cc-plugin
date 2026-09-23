@@ -49,7 +49,7 @@ Usage: codex-run.sh [options] <prompt_file>
 
 Options:
   -m, --model MODEL      Model name (default: gpt-6-astra)
-  -r, --effort EFFORT    Reasoning effort: low|medium|high|xhigh|max (default:
+  -r, --effort EFFORT    Reasoning effort: low|medium|high|xhigh|max|ultra (default:
                          medium, a starting point rather than a ceiling —
                          escalate per task. astra has no `none` rung)
   -f, --fast             Request codex's fast (priority) service tier. codex has
@@ -88,7 +88,7 @@ no most-recent fallback, so it is never a race under parallel sessions.
 
 Examples (<scratchpad> = the calling session's scratchpad directory):
   codex-run.sh <scratchpad>/codex_prompt_a3f9.txt
-  codex-run.sh -m gpt-5.6-luna -r xhigh -f <scratchpad>/codex_prompt_a3f9.txt
+  codex-run.sh -m gpt-6-luna -r xhigh -f <scratchpad>/codex_prompt_a3f9.txt
   codex-run.sh -S 019e3eff-c191-7401-bffb-bb8c31ac37c7 <scratchpad>/codex_prompt_a3f9.txt
 USAGE
   exit "${1:-0}"

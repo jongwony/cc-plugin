@@ -14,7 +14,6 @@ A plugin marketplace, layered by rate of change — slower layers underneath,
 faster ones composed on top (code > procedure > data):
 
 - `.claude-plugin/marketplace.json` — plugin list + source paths
-- `external-plugin/{name}/` — third-party integrations, kept separate
 
 ## Revising a surface
 

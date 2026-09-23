@@ -7,17 +7,12 @@ against the model in use; the notes below keep that attribution. Scoped to what 
 tool-holding** run — the shape `codex-run.sh` produces. General prompt craft
 that did not change with the generation is not repeated here.
 
-Lines are read off OpenAI's model pages
-(https://developers.openai.com/api/docs/models/<slug>) and its GPT-6 prompting
-guide (https://developers.openai.com/api/docs/guides/latest-model), which carries
-what this file does not.
-
 ## Model facts
 
 - Read a model's effort ladder from `codex debug models` and its context window,
-  knowledge cutoff and price from `developers.openai.com/api/docs/models/<slug>`
-  before choosing it. They move with each release, so this file does not copy
-  them.
+  knowledge cutoff and price from
+  https://developers.openai.com/api/docs/models/<slug> before choosing it. They
+  move with each release, so this file does not copy them.
 - The ladder listing omits `none` for every gpt-6 model, yet `gpt-6-sol` and
   `gpt-6-luna` accept it and run at it; `gpt-6-astra` rejects it and the request
   errors. A rung that works elsewhere on the menu is not portable to astra.

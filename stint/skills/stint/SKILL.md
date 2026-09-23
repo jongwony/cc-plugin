@@ -38,20 +38,14 @@ Independent work needs something to start it. Route to exactly one.
 - **A recurrence is one routine.** Where a watch repeats, give it a `cron_expression` or an
   event source; a series of `run_once_at` routines standing in for an interval is the shape
   this replaces.
-- **A pull request is the pre-built case.** `/autofix-pr` resolves the PR from the current
-  branch, spawns a cloud session on it and subscribes that session to the PR.
-- **Read what `/autofix-pr` prints.** A PR carries one webhook recipient: when it reports that
-  an agent is already watching, the session it just spawned receives nothing. Retire it rather
-  than leaving it resident.
-- **`/autofix-pr` requires an open PR on the current branch.** No PR, or a merged or closed
-  one, and it refuses — open the PR first.
-- **Skip it where there is nothing to watch, and read the checks to know.** A repository can
-  emit neither CI failures nor review comments. Establish that from the pull request's own
-  checks and reviewers, never from the workflow triggers: a `push`-triggered workflow also
-  posts its check runs against a PR's head commit.
-- Read `references/harness.md` for what `/autofix-pr` was observed to do, and for what about it
-  is still unsettled — notably whether a plain PR conversation comment reaches the session it
-  spawns.
+- **Before watching a pull request by event, establish that it emits something.** A
+  repository can emit neither CI failures nor review comments. Read that from the pull
+  request's own checks and reviewers, never from the workflow triggers: a `push`-triggered
+  workflow also posts its check runs against a PR's head commit.
+- **A pull request may already be watched by `/autofix-pr`.** That command is typed by a
+  person, not dispatched from here, and it holds the PR's single webhook recipient; whether a
+  `create_webhook_trigger` routine coexists with it is unverified. Check for a running watch
+  before adding one — `references/harness.md` carries what was observed.
 
 ## Every brief names an observable completion condition
 

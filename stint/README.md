@@ -42,11 +42,11 @@ nothing emits an event for the thing being watched. A recurrence is **one** rout
 schedule — not a series of single-moment routines standing in for an interval, which is how
 a hand-rolled poller accumulates.
 
-Pull requests are the pre-built case: `/autofix-pr` finds the open pull request on the
-current branch, spawns a cloud session on it, and subscribes that session to the pull
-request. One caveat it prints and you must read — a pull request has a single webhook
-recipient, so if something is already watching, the session it just spawned receives
-nothing and should be retired rather than left resident.
+`/autofix-pr` is not one of the three wakes. It is a command a person types directly, or
+wires to pull-request creation, and this plugin does not dispatch it. It touches this plugin
+through one fact: it holds a pull request's single webhook recipient, so before adding an
+event watch on a pull request, check that nothing already watches it — whether a webhook
+routine coexists with that watch has not been tested.
 
 ## Every brief names an observable completion condition
 

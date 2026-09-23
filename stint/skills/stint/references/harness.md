@@ -36,6 +36,11 @@ can be called anywhere in a turn.
 
 ## `/autofix-pr`
 
+A person runs this command directly or wires it to pull-request creation; stint does
+not dispatch it. It bears on stint through one fact, its per-PR webhook exclusivity,
+which an event watch added on the same pull request may run into. The rest of this
+section is the observation record, and the evidence for the dispatch rule above.
+
 **It targets the current checkout's branch and nothing else.** *Exercised.* It
 refuses on the default branch, naming the checkout it inspected, and refuses when
 no open PR matches the branch. Neither a PR number nor a branch name passed as an

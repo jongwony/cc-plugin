@@ -58,12 +58,15 @@ such line. A second watcher runs and receives nothing, so the spawned session is
 resident and useless. Read that line rather than treating a printed session link
 as proof the watch took.
 
-**Unsettled.** Whether a plain PR conversation comment reaches a watching
-session, and whether the repository owner's own comment is filtered as a
-self-authored event. The attempt to establish this ran against a PR that already
-had another watcher holding its webhook, which is exactly the condition under
-which no comment reaches the new session — so it settled nothing either way.
-Answer it on a PR whose `/autofix-pr` call printed no already-watching line.
+**An inline review comment reaches the watching session, the repository owner's
+own included.** *Exercised.* Review comments the owner left on a file of a watched
+PR were each followed, within minutes, by a commit on the branch and a threaded
+reply acting on that comment. The session's replies post under the owner's
+account too.
+
+**Unsettled.** Whether a plain PR conversation comment — one not attached to a
+file — reaches a watching session. Answer it on a PR whose `/autofix-pr` call
+printed no already-watching line.
 
 ## `RemoteTrigger`
 

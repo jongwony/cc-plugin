@@ -74,7 +74,8 @@ Options:
                          the only resume path — there is no --last fallback).
                          A resumed turn does not inherit the session's model or
                          effort: pass -m and -r again to stay on them, or the
-                         turn runs on whatever config.toml says. -s cannot be
+                         turn runs on this script's fallback (gpt-6-astra,
+                         medium). -s cannot be
                          set on resume at all
   -o, --output-last-message FILE
                          Also write codex's final message to FILE (deterministic

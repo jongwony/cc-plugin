@@ -12,7 +12,7 @@ Sources, and how each line is marked:
 - **Unmarked** — read off an OpenAI page: the model card
   (`developers.openai.com/api/docs/models/<slug>`), the model guidance
   (`.../guides/latest-model`), or the Codex
-  subagents page (`developers.openai.com/codex/subagents`).
+  subagents page (`learn.chatgpt.com/docs/agent-configuration/subagents`).
 - **`[secondary]`** — not found on an OpenAI page; taken from third-party
   write-ups. Treat as a lead, not a citation.
 - **`[applied]`** — extended from an OpenAI statement to this skill's situation.
@@ -46,8 +46,9 @@ Sources, and how each line is marked:
 - Where a question is unavoidable, direct the model to **carry on under a stated
   assumption and name the assumption in its answer**, rather than stopping. The
   user resolves it on resume with the work already advanced.
-- A genuine consult inverts this: a question is a legitimate deliverable there,
-  and the reviewing role the prompt declares already says so.
+- The exception is a prompt whose stated deliverable admits a question back —
+  it says so in `## Task`. A reviewing role alone does not: a review still
+  delivers its judgment, with any assumption named.
 
 ## Instruction priority
 
@@ -104,7 +105,5 @@ Sources, and how each line is marked:
   model and tool work. Ask for them when the work genuinely splits.
 - A prompt that asks for subagents says how to divide the work, whether codex
   waits for all of them before continuing, and what each returns.
-- Fast scans belong on a cheaper model — `gpt-6-luna` in this family. `[applied]`
-  — the page's own example names `gpt-5.6-terra` against a higher-effort `gpt-5.6`
-  config and predates gpt-6, so its holding for the gpt-6 family is drawn here
-  rather than stated there.
+- Fast, narrowly scoped, repeatable agents belong on `gpt-6-luna`; ambiguous
+  multi-step agents start on `gpt-6-sol`.

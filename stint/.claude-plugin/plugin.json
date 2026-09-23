@@ -1,7 +1,7 @@
 {
   "name": "stint",
   "description": "Independently managed bounded work in a session of its own: spawn a Stint, or stand up a monitor that wakes on an event, a clock, or its own rounds",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

@@ -62,3 +62,23 @@ and skipping the bad line left the success standing.
   mattered.
 - **Before any mutating retry, confirm the prior process ended.**
 - Give the session id and say whether the conversation was new or continued.
+
+## Reference guide
+
+- Read Anthropic's prompting best practices —
+  https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices
+  — before writing a prompt file, and again whenever a run stopped early, asked a
+  question instead of deciding, or returned a claim its artifacts do not support.
+- Navigate that page by heading: `## Model-specific guidance` for per-model
+  differences, `## General principles` for clarity, examples and XML structuring,
+  `## Output and formatting`, `## Tool use`, `## Thinking and reasoning` for
+  effort and extended thinking, `## Agentic systems` for unattended runs, stop
+  conditions and subagents, `## Capability-specific tips`,
+  `## Migration considerations`.
+- For the technique index and interactive tutorials, read the prompt engineering
+  overview —
+  https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview
+- For the harness a prompt runs against rather than the model it prompts, read
+  Claude Code's programmatic-run page — https://code.claude.com/docs/en/headless —
+  and its CLI reference — https://code.claude.com/docs/en/cli-reference. Verify a
+  flag against the installed CLI's `--help` before relying on it.

@@ -6,50 +6,12 @@ description: |
 
 # Codex Skill Guide
 
-## Language
-All prompts passed to `codex` MUST be in English.
-
 ## Prompt Delivery
 Read `references/run-brief.md` before writing the prompt file: the role every prompt declares, what a prompt judging a decision carries, and how the model is chosen.
 
 1. Generate a short unique suffix (e.g., `a3f9`, timestamp fragment, or task keyword) for this invocation
 2. Write the prompt to `<scratchpad>/codex_prompt_<suffix>.txt` using the Write tool — `<scratchpad>` is the session's scratchpad directory, the `/private/tmp/…/scratchpad` path announced in the system prompt; writes there run without permission prompts. When no scratchpad directory is announced, fall back to `/private/tmp`.
 3. Execute via wrapper script: `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh [options] <scratchpad>/codex_prompt_<suffix>.txt`
-
-## Context Classification
-
-Before writing the prompt file, classify available context on two orthogonal axes:
-
-- **AI-verifiable × Session (already available)** — extract paths, patterns, commands as **Pointers**; codex self-verifies them.
-- **AI-verifiable × Exploration (needs collection)** — provide search hints and entry points; codex self-explores from them.
-- **User-specific × Session (already available)** — summarize intent, constraints, and preferences from the current session, **copy-only**.
-- **User-specific × Exploration (needs collection)** — **blocked**; this cell carries no collection requests or questions.
-
-**Test each item before including it**: *"Can codex re-derive this from shared substrate with its own tools?"* — yes → pass a pointer; no → copy it in.
-
-**Rules**:
-- **Pointers**: Provide file paths, grep patterns, test commands. Reserve copying for what codex cannot re-derive.
-- **Session Context**: Extract only what is already known from the current conversation. Organize as intent, constraints, and preferences.
-- **No collection requests**: The prompt carries only user-specific information already in hand; when codex needs more, the user supplies it on resume. This bounds the prompt file only — pre-prompt orchestration stays free, so the `AskUserQuestion` permission gate in Error Handling is fine.
-
-### Prompt Template
-
-Structure `<scratchpad>/codex_prompt_<suffix>.txt` with these sections:
-
-    ## Task
-    [User's request — framed as a complete end-to-end objective]
-
-    ## Pointers
-    - files: [relevant file paths for codex to read/verify]
-    - patterns: [grep patterns or keywords to explore]
-    - commands: [test/build commands if relevant]
-
-    ## Session Context
-    - intent: [user's goal in one sentence]
-    - constraints: [limitations, compatibility requirements]
-    - preferences: [coding style, library choices, conventions]
-
-Omit empty sections.
 
 ## Image Generation Requests
 
@@ -69,7 +31,7 @@ When the delegated task is image generation or image editing:
    - **Service tier** — `-f`, under the caveat in the Quick Reference.
 
 2. Select sandbox mode. Omitting `-s` gives `workspace-write` **with network access** — codex offers no network under `read-only` at all, so this is the only mode short of full access that has any. Pass `-s read-only` when a run must neither touch the tree nor reach off-machine; `-s danger-full-access` only when it must write outside the workspace. Because the default already permits writes, what bounds a run that is meant to only read is the role its prompt declares — state it.
-3. Craft prompt per Context Classification, Prompt Template and `references/run-brief.md` — classify context, write to `<scratchpad>/codex_prompt_<suffix>.txt`.
+3. Write the prompt per `references/run-brief.md` to `<scratchpad>/codex_prompt_<suffix>.txt`.
 4. Delegate execution to a Bash subagent (Task tool) — never run `codex-run.sh` directly in the main session. This keeps codex's verbose banner and full output out of the main context. Give the subagent:
    - the exact command: `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh [options] <scratchpad>/codex_prompt_<suffix>.txt` with `-m MODEL` / `-r EFFORT` / `-s SANDBOX` / `-C DIR`, or `-S <SESSION_ID>` to resume.
    - return contract: run the command and return ONLY (a) a concise outcome summary and (b) the session id. codex prints `session id: <uuid>` to stderr; the subagent extracts that line verbatim and returns it as `SESSION_ID: <uuid>`. The wrapper does no parsing — stderr is left unsuppressed precisely so the subagent can read the session id and any failure straight from the output.
@@ -105,15 +67,6 @@ Read the prompting guide before writing a prompt for a gpt-6 model, and again wh
 run came back having stopped early or asked a question instead of deciding.
 
 **File**: `references/gpt-6_prompting_guide.md`
-
-Key sections (grep patterns for navigation):
-- `## Model facts` - where a model's ladder, cutoff and price are read, and what the ladder listing omits
-- `## Autonomy and stop conditions` - the model asks non-blocking questions by default (observed with astra); what an unattended `codex exec` prompt has to state in place of that
-- `## Instruction priority` - in-context material weighs more heavily (observed with astra), and conflicting guidance in a skill file stops work early
-- `## Context discipline` - why this skill's pointer-over-copy rule matters more under gpt-6 rather than less
-- `## Reconcile before switching` - what to send when the answer contradicts evidence already in hand
-- `## Choosing an effort rung` - reading the rung off the task instead of off habit
-- `## Subagents` - what a spawned agent inherits, and how to override it
 
 - Before delegating browser or native computer-use work, read
   `references/computer-use.md` and pass it to the child prompt. Select the entry

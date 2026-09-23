@@ -287,8 +287,10 @@ daemon from an unknown thread.
 **The reverse direction goes through `-p` and `--resume`.** *Observed.* The
 `claude` CLI carries no `queue`, `send` or `message` subcommand. New work starts
 with `claude -p`, and a stopped session takes a message through
-`claude --resume <sessionId> -- "<msg>"`. A running session has no clean inbound
-path from outside Claude Code: a resume of it starts a copy (the classifier
-above), and `SendMessage` is a tool. That gap, not the socket's framing, is why a
-Codex-driven launch is fire-and-forget and is confirmed by a launch check rather
-than an ACK; `references/codex.md` carries which check fits which route.
+`claude --resume <sessionId> -- "<msg>"`. Those are the slow layer. A running
+session's inbound path is the fast one: a resume of it starts a copy (the
+classifier above), and every peer-origin message is forced to
+`skipSlashCommands` and `isMeta` (*Read*, 2.1.280) — guarded against injection
+and still moving. That, not the socket's framing, is why a Codex-driven launch is
+fire-and-forget and is confirmed by a launch check rather than an ACK;
+`references/codex.md` carries which check fits which route.

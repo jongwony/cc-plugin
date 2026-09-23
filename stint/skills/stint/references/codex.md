@@ -27,8 +27,8 @@ carries what changes when the creator holds shell but no tool.
   continues a session that has stopped. Those cover what a Codex creator
   needs, so a session's messaging socket (`/tmp/cc-socks/<pid>.sock`) stays
   with the `SendMessage` tool that speaks it.
-- **A running Claude session has no clean way in from Codex yet.** Resuming one
-  starts a copy rather than reaching it (SKILL.md §Resuming). Wait for it to
+- **Do not build on reaching into a running Claude session from Codex.** That
+  path is guarded against injection and still moving. Wait for the session to
   stop and resume it, or start new work with `claude -p`.
 - **Claude reaches a Codex thread through the CLI too.** `codex queue
   --thread <id> --message <text>` needs no token and no `--remote`, and persists

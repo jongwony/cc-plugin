@@ -22,11 +22,14 @@ carries what changes when the creator holds shell but no tool.
   the brief — the creator is not a peer and the worker has no one to ACK.
 - **Verify the launch with `claude agents --json`**: the row under the returned
   jobId is live and carries the expected name. That check replaces the ACK.
-- **Never open a session's messaging socket.** `/tmp/cc-socks/<pid>.sock`
-  accepts any same-uid connection and speaks nothing first; it is unpublished,
-  the registry advertises a negotiated `peerProtocol`, and no negotiator is
-  published for a non-Claude process. `references/harness.md` carries what a
-  connect attempt does and does not establish.
-- **Claude reaches a Codex thread on a published surface.** `codex queue
+- **Codex reaches a Claude session through the CLI.** `claude -p "<task>"`
+  starts new headless work, and `claude --resume <sessionId> -- "<msg>"`
+  continues a session that has stopped. Those cover what a Codex creator
+  needs, so a session's messaging socket (`/tmp/cc-socks/<pid>.sock`) stays
+  with the `SendMessage` tool that speaks it.
+- **A running Claude session has no clean way in from Codex yet.** Resuming one
+  starts a copy rather than reaching it (SKILL.md §Resuming). Wait for it to
+  stop and resume it, or start new work with `claude -p`.
+- **Claude reaches a Codex thread through the CLI too.** `codex queue
   --thread <id> --message <text>` needs no token and no `--remote`, and persists
   against a thread that is not running.

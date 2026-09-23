@@ -81,11 +81,10 @@ creator is not an addressable peer, and a check on the launch stands in its plac
 `claude agents --json` shows the spawned job's row. App reachability survives either way, since `--remote-control` is a CLI flag
 rather than a tool.
 
-One line that does not move: a session's messaging socket at `/tmp/cc-socks/<pid>.sock` is
-never opened directly. It accepts any connection from the same user and then says nothing,
-waiting for a client that knows an unpublished framing — and the session registry advertises a
-negotiated protocol version while publishing no negotiator for anything that is not Claude
-Code. Building against it buys a coupling that goes stale without a failure signal.
+From Codex, a Claude session is reached through the CLI — `claude -p` for new work,
+`claude --resume <sessionId> -- "<msg>"` for a session that has stopped — so Codex has no
+reason to open a session's messaging socket; that socket belongs to the `SendMessage` tool.
+A session that is still running has no clean way in from Codex yet: resuming it starts a copy.
 
 ## Pieces
 

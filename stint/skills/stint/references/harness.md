@@ -274,7 +274,8 @@ attempt usefully establishes.
 **The surface announces its own movement.** *Observed.* It advertises a
 negotiated `peerProtocol` and a feature list while publishing no negotiator for a
 non-Claude process — which is what a client written against it would couple to.
-`references/codex.md` carries the prohibition that follows.
+Codex has no need to: the CLI covers what it does (below), and
+`references/codex.md` routes it there.
 
 **Claude → Codex already works on one.** *Exercised.* `codex queue --thread <id>
 --message <text>` reaches the app-server daemon from a plain shell — no token, no
@@ -283,8 +284,11 @@ delivered when that thread resumes. Addressing a thread that does not exist
 returns a JSON-RPC error naming the lookup, which is how to tell an unreachable
 daemon from an unknown thread.
 
-**The reverse direction has no published inbound command at all.** *Observed.*
-The `claude` CLI carries no `queue`, `send` or `message` subcommand; the only
-inbound path is the in-session `SendMessage` tool. That asymmetry is why a
-Codex-driven launch is fire-and-forget and is confirmed by a launch check
-rather than an ACK; `references/codex.md` carries which check fits which route.
+**The reverse direction goes through `-p` and `--resume`.** *Observed.* The
+`claude` CLI carries no `queue`, `send` or `message` subcommand. New work starts
+with `claude -p`, and a stopped session takes a message through
+`claude --resume <sessionId> -- "<msg>"`. A running session has no clean inbound
+path from outside Claude Code: a resume of it starts a copy (the classifier
+above), and `SendMessage` is a tool. That gap, not the socket's framing, is why a
+Codex-driven launch is fire-and-forget and is confirmed by a launch check rather
+than an ACK; `references/codex.md` carries which check fits which route.

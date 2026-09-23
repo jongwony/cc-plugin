@@ -10,7 +10,7 @@ description: |
 All prompts passed to `codex` MUST be in English.
 
 ## Prompt Delivery
-Read `references/prompting.md` before writing the prompt file: the role every prompt declares, what a prompt judging a decision carries, and how the model is chosen.
+Read `references/run-brief.md` before writing the prompt file: the role every prompt declares, what a prompt judging a decision carries, and how the model is chosen.
 
 1. Generate a short unique suffix (e.g., `a3f9`, timestamp fragment, or task keyword) for this invocation
 2. Write the prompt to `<scratchpad>/codex_prompt_<suffix>.txt` using the Write tool — `<scratchpad>` is the session's scratchpad directory, the `/private/tmp/…/scratchpad` path announced in the system prompt; writes there run without permission prompts. When no scratchpad directory is announced, fall back to `/private/tmp`.
@@ -61,7 +61,7 @@ When the delegated task is image generation or image editing:
 - Read OpenAI's GPT Image 2.5 prompting guide — https://developers.openai.com/api/docs/guides/image-prompting — for model parameters, per-use-case prompt structure, text rendering, edits, multi-image workflows, and migrating a workflow off an earlier model. It carries reference sections for GPT Image 2, 1.5 and 1 as well.
 
 ## Running a Task
-1. Choose the model and effort. Whatever the caller named upstream — a model, an effort, a service tier, several models at once — IS the answer: pass it through and do not re-ask it. Otherwise choose per request, as `references/prompting.md` § Choosing the model and effort says.
+1. Choose the model and effort. Whatever the caller named upstream — a model, an effort, a service tier, several models at once — IS the answer: pass it through and do not re-ask it. Otherwise choose per request, as `references/run-brief.md` § Choosing the model and effort says.
 
    What a choice may name:
    - **Model** — any slug `codex debug models` lists.
@@ -69,7 +69,7 @@ When the delegated task is image generation or image editing:
    - **Service tier** — `-f`, under the caveat in the Quick Reference.
 
 2. Select sandbox mode. Omitting `-s` gives `workspace-write` **with network access** — codex offers no network under `read-only` at all, so this is the only mode short of full access that has any. Pass `-s read-only` when a run must neither touch the tree nor reach off-machine; `-s danger-full-access` only when it must write outside the workspace. Because the default already permits writes, what bounds a run that is meant to only read is the role its prompt declares — state it.
-3. Craft prompt per Context Classification, Prompt Template and `references/prompting.md` — classify context, write to `<scratchpad>/codex_prompt_<suffix>.txt`.
+3. Craft prompt per Context Classification, Prompt Template and `references/run-brief.md` — classify context, write to `<scratchpad>/codex_prompt_<suffix>.txt`.
 4. Delegate execution to a Bash subagent (Task tool) — never run `codex-run.sh` directly in the main session. This keeps codex's verbose banner and full output out of the main context. Give the subagent:
    - the exact command: `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh [options] <scratchpad>/codex_prompt_<suffix>.txt` with `-m MODEL` / `-r EFFORT` / `-s SANDBOX` / `-C DIR`, or `-S <SESSION_ID>` to resume.
    - return contract: run the command and return ONLY (a) a concise outcome summary and (b) the session id. codex prints `session id: <uuid>` to stderr; the subagent extracts that line verbatim and returns it as `SESSION_ID: <uuid>`. The wrapper does no parsing — stderr is left unsuppressed precisely so the subagent can read the session id and any failure straight from the output.

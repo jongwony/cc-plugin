@@ -1,0 +1,9 @@
+{
+  "name": "intake",
+  "description": "Linear Triage sorter — reads the team's Triage inbox, moves each item it can place plainly and reversibly (chart root back to Backlog, a plain duplicate marked, a single chart match related and accepted), leaves the rest in Triage, and reports once with an undo per item; writes no descriptions, comments or issues",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

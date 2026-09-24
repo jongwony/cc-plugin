@@ -1,7 +1,7 @@
 {
   "name": "unfold",
-  "description": "Linear chart writer — logs a decision at the moment the direction changes, collapses an accumulated open set into axes that each name what they absorbed, and closes a unit with its structure delta, closing note, and a letter of introduction for the follow-up, and sorts the Triage inbox into the charts it belongs to; asks rather than infers what the user settled, reads the unit's chart before the first write, and writes only structure and decisions, never progress",
-  "version": "0.7.0",
+  "description": "Linear chart writer — logs a decision at the moment the direction changes, collapses an accumulated open set into axes that each name what they absorbed, and closes a unit with its structure delta, closing note, and a letter of introduction for the follow-up; asks rather than infers what the user settled, reads the unit's chart before the first write, and writes only structure and decisions, never state",
+  "version": "0.6.3",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

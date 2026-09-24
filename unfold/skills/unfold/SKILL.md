@@ -5,12 +5,11 @@ description: |
   work where a hand belongs on the unit's chart in Linear: "이 길로 가는 이유
   기록" / "결정 남겨줘" / "log this decision" (decide), "열린 것들 축으로
   묶어줘" / "축 정리" / "collapse the open questions" (group), "세션 정리" /
-  "구조 변경 반영" / "이 단위 닫자" / "wrap up the unit" (close), "수신함 정리"
-  / "triage 처리" / "process the triage inbox" (intake). Also applies
+  "구조 변경 반영" / "이 단위 닫자" / "wrap up the unit" (close). Also applies
   without being named: when the accumulated context and the utterance show an
   intent to write to a repository, the unit's chart is read before the first
   write — matched against the catalog of project root issues, that one chart
-  and nothing beside it. Writes ONLY structure and decisions, never progress.
+  and nothing beside it. Writes ONLY structure and decisions, never status.
   Invoked as /unfold [moment] [project].
 ---
 
@@ -20,9 +19,7 @@ A unit of work has a chart outside the codebase: its project's root issue in
 Linear, whose five sections say what is wanted, why, under which constraints,
 and what is still open, and whose decision comments say where the direction
 stands now. This skill covers the three moments where a human hand belongs on
-that chart — a decision, a regrouping of the open set, and a structure delta —
-and the one moment where none does: sorting the Triage inbox into the charts
-it belongs to.
+that chart: a decision, a regrouping of the open set, and a structure delta.
 
 Reading the chart on its own is outside this skill; the adopting host carries
 that on its always-loaded surface. What is here is the convention for writing
@@ -52,10 +49,7 @@ follow-up — and the read each write needs first.
   and automation owns the state from then on. The unit's explicit close is
   the other: a root issue has no PR of its own to complete it, so enacting
   the user's closure decision sets its terminal state once, together with
-  the closing note — a decision carried out, not progress mirrored. Triage
-  acceptance is the third: an issue leaving the Triage state is admitted to
-  a workflow no PR has touched yet, so `intake` moves it once, as the sort
-  it carries out.
+  the closing note — a decision carried out, not progress mirrored.
 
 ## Invocation
 
@@ -66,12 +60,10 @@ follow-up — and the read each write needs first.
 | `decide` | decision, path, 결정, 왜 이 순서 | **write** (one comment) |
 | `group` | axes, collapse, regroup, 축 정리, 정렬, 묶기 | **write** (open-set regroup) |
 | `close` | span-close, wrap-up, 세션 정리, 구조 반영 | **write** (structure delta) |
-| `intake` | triage, inbox, 수신함, 분류 | **act, then report** (inbox sort) |
 
 - No moment argument: infer from the utterance. A direction being chosen is
   `decide`; an accumulated open set being collapsed into axes is `group`; a
-  unit's structure or its end is `close`; issues waiting in the Triage state
-  are `intake`. Genuinely ambiguous → name the
+  unit's structure or its end is `close`. Genuinely ambiguous → name the
   candidates and ask once.
 - Korean voice input is expected — match aliases semantically, not literally.
 - **Write-intent trigger.** When the accumulated context and the utterance
@@ -122,12 +114,11 @@ Detailed per-moment procedures and write templates live in
 | `decide` | the chart (root issue description + decision comments), then the anchor the decision belongs to | `save_comment` | one-line decision log, at the moment the direction changes (draft → user culls → write) |
 | `group` | the chart's open items and its decision comments, in order, plus the body of each relocation destination before changing it | `save_issue` (root description) / `save_issue` or `save_document` (a released item's destination) | axes each naming what it absorbed + every non-axis classified as projection or different-object, with its disposition → user culls → rewritten Open questions |
 | `close` | the chart, then current structure (issues + relations, documents) | `save_issue` / `save_document` / `save_comment` | structure-delta checklist + closing note on the root issue + a relation and one pointer on each follow-up → user culls → minimal writes |
-| `intake` | the team's Triage issues, then the catalog of root issues | `save_issue` (state, project, `relatedTo`, `duplicateOf`) only | reversible, plain sorts done directly → one after-the-fact report with each item's undo |
 
 ## Output discipline
 
-- Every write moment except `intake` shows a draft first and writes only on
-  user confirmation (a decision comment, a regrouped open set, and a structure delta are all
+- Every write moment shows a draft first and writes only on user confirmation
+  (a decision comment, a regrouped open set, and a structure delta are all
   outward, team-visible acts). The user culls the draft, and three reasons
   drop a line: it is derivable by reasoning from what is already recorded, it
   is the product of a mechanical fix rather than a choice, or it does not
@@ -136,10 +127,6 @@ Detailed per-moment procedures and write templates live in
   of what it absorbed are derivable from the originals by construction, and
   that is what they are for. Only the slow layer is written — structure and
   decisions — never a state the next read would refresh anyway.
-- `intake` inverts that order because every act it may take is reversible
-  and plain: it acts, then reports once. An item whose sort is either
-  irreversible or a judgment stays in Triage for the user; nothing the user
-  would cull is written by it.
 - When the pre-write read reveals stale structure (an edge or runbook
   contradicting reality), surface it as a proposed structure fix — do not
   silently rewrite.
@@ -147,6 +134,6 @@ Detailed per-moment procedures and write templates live in
 ## Additional Resources
 
 - **`references/moments.md`** — the pre-write chart read, the `decide`,
-  `group`, `close`, and `intake` procedures, decision-comment, axis-collapse, and
+  `group`, and `close` procedures, decision-comment, axis-collapse, and
   structure-delta templates, and the field caveats that bound what may be
   written.

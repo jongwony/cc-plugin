@@ -74,7 +74,8 @@ Options:
                          the only resume path — there is no --last fallback).
                          A resumed turn does not inherit the session's model or
                          effort: pass -m and -r again to stay on them, or the
-                         turn runs on whatever config.toml says. -s cannot be
+                         turn runs on this script's fallback (gpt-6-astra,
+                         medium). -s cannot be
                          set on resume at all
   -o, --output-last-message FILE
                          Also write codex's final message to FILE (deterministic
@@ -88,7 +89,7 @@ no most-recent fallback, so it is never a race under parallel sessions.
 
 Examples (<scratchpad> = the calling session's scratchpad directory):
   codex-run.sh <scratchpad>/codex_prompt_a3f9.txt
-  codex-run.sh -m gpt-5.6-luna -r xhigh -f <scratchpad>/codex_prompt_a3f9.txt
+  codex-run.sh -m gpt-6-luna -r xhigh -f <scratchpad>/codex_prompt_a3f9.txt
   codex-run.sh -S 019e3eff-c191-7401-bffb-bb8c31ac37c7 <scratchpad>/codex_prompt_a3f9.txt
 USAGE
   exit "${1:-0}"

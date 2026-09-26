@@ -47,9 +47,12 @@ follow-up — and the read each write needs first.
   issue existed — is set once at creation, because no PR event will ever
   fire for it; this is a one-time creation fact, not ongoing mirroring,
   and automation owns the state from then on. The unit's explicit close is
-  the other: a root issue has no PR of its own to complete it, so enacting
-  the user's closure decision sets its terminal state once, together with
-  the closing note — a decision carried out, not progress mirrored.
+  the other, for a chart no PR links: nothing will ever complete it, so
+  enacting the user's closure decision sets its terminal state once,
+  together with the closing note — a decision carried out, not progress
+  mirrored. Where a PR carries the chart's identifier (branch name or magic
+  word), its merge already moved the chart to its terminal state; `close`
+  reads that state and writes only the closing note and the follow-ups.
 
 ## Invocation
 
@@ -74,6 +77,13 @@ follow-up — and the read each write needs first.
   a write executes: this skill states the trigger and delivers it nowhere, and
   a host that wants it to fire unasked binds it on an always-loaded surface of
   its own.
+- **Post-merge trigger.** When a PR's merge has moved a chart to its terminal
+  state while the chart carries no closing note and still holds open items —
+  its Open questions, or items its latest comments leave open — `close` is
+  owed. The session that observes it nudges `close` for that chart, so the
+  items move to a closing note and follow-ups rather than resting on a
+  finished chart. As with the write-intent trigger, this skill states the
+  condition and a host binds it.
 
 ## Project resolution
 

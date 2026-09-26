@@ -131,10 +131,16 @@ Checklist the session against the structure in Linear; write only deltas:
    `save_document` update — structure and order only, never current status.
 4. **Distilled handoff produced?** (a cold, self-contained runbook for a
    fresh session) → `save_document` as a project document.
-5. **Unit closing?** The close is an explicit act, never inferred from the
-   last merge. → `save_comment` on the unit's root issue: a closing note
-   saying what landed (the commit and PR locators that carry the
-   then-record) and what is still open. A follow-up issue born here is
+5. **Unit closing?** Read the chart's status first: where a PR carries the
+   chart's identifier, its merge may already have moved the chart to its
+   terminal state, and that state stays as automation set it. What remains
+   an explicit act, never inferred from the last merge, is the closing
+   note and the follow-ups — owed whether the status reads open or done,
+   and cued by the post-merge trigger (SKILL.md §Invocation) when a merge
+   finished the chart first. → `save_comment` on the unit's root issue: a
+   closing note saying what landed (the commit and PR locators that carry
+   the then-record) and what is still open. Set the terminal state only for
+   a chart no PR links, once, with the note. A follow-up issue born here is
    never an orphan: `save_issue` with `relatedTo` (or `blockedBy`) the root
    issue and one pointer line to the closing note in its description — a
    locator, not a restatement of the intent — so the fresh context that

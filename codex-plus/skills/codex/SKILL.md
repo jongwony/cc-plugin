@@ -22,6 +22,15 @@ When the delegated task is image generation or image editing:
 - Defer prompt construction details to the installed `imagegen` skill when available. Codex's bundled copy predates GPT-Image-2.5: it names `gpt-image-2` as the CLI/API default and routes a transparent background to `gpt-image-1.5`. Name `gpt-image-2.5-flare` instead — GPT-Image-2 quality or better at roughly half the latency — and `gpt-image-2.5-sunburst` where the cost of the task is a retry on an edit: multi-turn editing, identity or layout that has to survive several passes, campaign and product work where the precision is what is being paid for. 2.5 renders alpha natively from `background: "transparent"` with `output_format` `png` or `webp`, and its quality ladder runs `low|medium|high|xhigh|max|auto`.
 - Read OpenAI's GPT Image 2.5 prompting guide — https://developers.openai.com/api/docs/guides/image-prompting — for model parameters, per-use-case prompt structure, text rendering, edits, multi-image workflows, and migrating a workflow off an earlier model. It carries reference sections for GPT Image 2, 1.5 and 1 as well.
 
+## Goal Requests
+
+When the delegated task is to define, create, or refine a Codex goal — a goal-backed run, an objective with success criteria:
+
+- Include `$define-goal` in the prompt so codex shapes the objective with the `define-goal` skill and sets it through its own goal tools (`get_goal`, `create_goal`), which `codex exec` exposes while the `goals` feature is on (`codex features list`).
+- Keep the local prompt here minimal: the intention, the artifact or system it touches, and any validator or scope bound the caller already named. Leave the objective's wording and its quality bar to the skill.
+- `define-goal` is a curated skill, not bundled: when it is absent from `$CODEX_HOME/skills`, install it once with codex's bundled `skill-installer` — `$CODEX_HOME/skills/.system/skill-installer/scripts/install-skill-from-github.py --repo openai/skills --path skills/.curated/define-goal` — and it is available from the next run.
+- Read the Codex Goals cookbook — https://developers.openai.com/cookbook/examples/codex/using_goals_in_codex — for what a strong goal carries: outcome, verification surface, constraints, boundaries, iteration policy, and the blocked condition.
+
 ## Running a Task
 1. Choose the model and effort. Whatever the caller named upstream — a model, an effort, a service tier, several models at once — IS the answer: pass it through and do not re-ask it. Otherwise choose per request, as `references/run-brief.md` § Choosing the model and effort says.
 

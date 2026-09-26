@@ -30,14 +30,19 @@ basis):
    `이유:` a path was taken, the `배제:` it displaced — is asked, not
    inferred. Ask before drafting that line (`/inquire` where that protocol
    is loaded; a direct question where it is not) and draft from the answer.
-3. Draft the comment from the template; show the draft. Write it at the
+   In a run with no one to answer, the line is parked and reported with the
+   run's result rather than inferred.
+3. Draft the comment from the template. Write it at the
    moment the direction changes, not at the end of the session: a session
    the user is steering can change direction more than once, and a session
    switch loses what was not yet on the chart.
-4. The user culls: a line is dropped when it is derivable from what the
+4. Cull the draft under SKILL.md §Output discipline — the user culls it, or
+   the session does where standing authorization covers the write: a line is
+   dropped when it is derivable from what the
    chart already records, when a mechanical fix produced it rather than a
    choice, or when it does not match the unit's intent.
-5. On confirmation, `save_comment` with `issueId` — or `projectId` for a
+5. On confirmation, or directly where standing authorization covers the
+   write, `save_comment` with `issueId` — or `projectId` for a
    project-scoped decision; the tool accepts exactly one parent.
 
 A decision that changes the dependency topology is not just a comment — it is
@@ -83,10 +88,11 @@ section, and it changes no direction.
 5. Draft the rewritten Open questions section — axes with their absorbed
    lists, projections as values of the axis that determines them, departures
    with their per-item destinations — together with the content each
-   relocation write will carry, not just where it goes. The user culls
-   (derivable, mechanical, off-intent — derivability does not reach an
-   axis's representation or its absorbed list). On confirmation, the writes
-   land in this order:
+   relocation write will carry, not just where it goes. Cull it under
+   SKILL.md §Output discipline (derivable, mechanical, off-intent —
+   derivability does not reach an axis's representation or its absorbed
+   list). On confirmation, or directly where standing authorization covers
+   the writes, they land in this order:
    - a departure to another section of the same root description rides in the
      same `save_issue` as the rewritten Open questions;
    - a departure to another issue or document is its own `save_issue` /
@@ -135,8 +141,9 @@ Checklist the session against the structure in Linear; write only deltas:
    picks it up starts from the chart rather than from someone's recall.
 6. Everything else (progress, status, percentages) — explicitly NOT written.
 
-Show the delta list as a draft; the user culls it (derivable, mechanical, or
-off-intent lines drop); write each surviving item on confirmation.
+Draft the delta list and cull it under SKILL.md §Output discipline
+(derivable, mechanical, or off-intent lines drop); write each surviving item
+on confirmation, or directly where standing authorization covers the write.
 
 ## Caveats learned in the field
 

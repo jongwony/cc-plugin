@@ -23,7 +23,7 @@ that chart: a decision, a regrouping of the open set, and a structure delta.
 
 Reading the chart on its own is outside this skill; the adopting host carries
 that on its always-loaded surface. What is here is the convention for writing
-— the shape of a decision line, what the user culls, the state/structure
+— the shape of a decision line, what the cull drops, the state/structure
 boundary, the closing note and the letter of introduction it hands a
 follow-up — and the read each write needs first.
 
@@ -111,16 +111,20 @@ Detailed per-moment procedures and write templates live in
 
 | Moment | Reads | Writes | Emit |
 |---|---|---|---|
-| `decide` | the chart (root issue description + decision comments), then the anchor the decision belongs to | `save_comment` | one-line decision log, at the moment the direction changes (draft → user culls → write) |
-| `group` | the chart's open items and its decision comments, in order, plus the body of each relocation destination before changing it | `save_issue` (root description) / `save_issue` or `save_document` (a released item's destination) | axes each naming what it absorbed + every non-axis classified as projection or different-object, with its disposition → user culls → rewritten Open questions |
-| `close` | the chart, then current structure (issues + relations, documents) | `save_issue` / `save_document` / `save_comment` | structure-delta checklist + closing note on the root issue + a relation and one pointer on each follow-up → user culls → minimal writes |
+| `decide` | the chart (root issue description + decision comments), then the anchor the decision belongs to | `save_comment` | one-line decision log, at the moment the direction changes (draft → cull → write) |
+| `group` | the chart's open items and its decision comments, in order, plus the body of each relocation destination before changing it | `save_issue` (root description) / `save_issue` or `save_document` (a released item's destination) | axes each naming what it absorbed + every non-axis classified as projection or different-object, with its disposition → cull → rewritten Open questions |
+| `close` | the chart, then current structure (issues + relations, documents) | `save_issue` / `save_document` / `save_comment` | structure-delta checklist + closing note on the root issue + a relation and one pointer on each follow-up → cull → minimal writes |
 
 ## Output discipline
 
-- Every write moment shows a draft first and writes only on user confirmation
-  (a decision comment, a regrouped open set, and a structure delta are all
-  outward, team-visible acts). The user culls the draft, and three reasons
-  drop a line: it is derivable by reasoning from what is already recorded, it
+- Every write moment drafts first and culls the draft before anything is
+  written. Where the adopting host's always-loaded surface grants standing
+  authorization for that write — an approval given when the work was set up,
+  or a class of writes the host lets proceed — the session applies the cull,
+  writes, and reports what was written. Otherwise the draft is shown and
+  written only on user confirmation (a decision comment, a regrouped open
+  set, and a structure delta are all outward, team-visible acts), and the
+  user culls it. In both branches three reasons drop a line: it is derivable by reasoning from what is already recorded, it
   is the product of a mechanical fix rather than a choice, or it does not
   match the unit's intent. Derivability drops an assertion, never a
   representation a moment is required to produce: a `group` axis and the list

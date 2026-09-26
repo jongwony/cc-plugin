@@ -1,6 +1,6 @@
 # Unfold — Per-Moment Procedures
 
-Detailed execution for `decide`, `group`, and `close`. All three read Linear
+Detailed execution for `decide` and `group`. Both read Linear
 as the source of truth for structure and current issue state; live-system
 facts (image in a registry, deploy applied) are never read from Linear — go to
 their source.
@@ -13,8 +13,7 @@ Problem, Proposed outcome, Affected, Constraints, Open questions) and its
 decision comments in order, since the sections are rewritten only by `group`
 and the decision lines are where the current direction lives. This is the one
 chart loaded, and every other issue stays metadata-only. The restriction is on
-charts: a body a write is about to change — the runbook `close` updates — is
-read in that write's own step.
+charts: a body a write is about to change is read in that write's own step.
 
 ## decide — decision log (write, one comment)
 
@@ -45,8 +44,8 @@ basis):
    write, `save_comment` with `issueId` — or `projectId` for a
    project-scoped decision; the tool accepts exactly one parent.
 
-A decision that changes the dependency topology is not just a comment — it is
-also a `close`-style structure delta (edge change). Do both.
+A decision that changes the dependency topology also writes the edge change
+(`save_issue` with `blockedBy` / `removeBlockedBy`) alongside its comment.
 
 ## group — collapse the open set into axes (write, open-set regroup)
 
@@ -108,42 +107,6 @@ Write template for one axis:
 > 값: <projection written as a value of this axis>
 >
 > 이 단위의 물음이 아님: <item> → <where its contents went>
-
-## close — span-close structure delta (write)
-
-Checklist the session against the structure in Linear; write only deltas:
-
-0. **Read current structure first** — `list_issues` scoped to the project
-   (non-archived; `includeRelations` on candidates) and `list_documents`.
-   A delta exists only against this read: an issue, edge, or runbook line
-   already present in Linear is not a delta, and re-writing it creates
-   duplicates or clobbers edits made outside this session.
-
-1. **New workstream emerged?** → `save_issue` (team, project, milestone,
-   `blockedBy`/`blocks` edges, PR links as `links`). State: let automation
-   own it. Backfill exception (mirrors the SKILL.md core rule): an issue
-   created for work finished before it existed gets its state set once at
-   creation — no PR event will ever fire for it; a one-time creation fact,
-   not ongoing state mirroring.
-2. **Dependency changed?** → `save_issue` on the existing issue with
-   `blockedBy`/`removeBlockedBy` etc.
-3. **Runbook stale?** (order/invariant changed this session) →
-   `save_document` update — structure and order only, never current status.
-4. **Distilled handoff produced?** (a cold, self-contained runbook for a
-   fresh session) → `save_document` as a project document.
-5. **Unit closing?** The close is an explicit act, never inferred from the
-   last merge. → `save_comment` on the unit's root issue: a closing note
-   saying what landed (the commit and PR locators that carry the
-   then-record) and what is still open. A follow-up issue born here is
-   never an orphan: `save_issue` with `relatedTo` (or `blockedBy`) the root
-   issue and one pointer line to the closing note in its description — a
-   locator, not a restatement of the intent — so the fresh context that
-   picks it up starts from the chart rather than from someone's recall.
-6. Everything else (progress, status, percentages) — explicitly NOT written.
-
-Draft the delta list and cull it under SKILL.md §Output discipline
-(derivable, mechanical, or off-intent lines drop); write each surviving item
-on confirmation, or directly where standing authorization covers the write.
 
 ## Caveats learned in the field
 

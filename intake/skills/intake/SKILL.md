@@ -55,6 +55,9 @@ through ToolSearch before the first call.
    and why (the chart or duplicate it matched, with the sentence that
    matched), and the undo (its prior state and fields). Items left in Triage
    are listed with their candidate charts and what kept each from being
-   plain.
+   plain. Where two or more of them would open the same new unit of work —
+   the same finding, by the observation each describes, not a shared topic
+   or label — name them together as one candidate unit, with the sentence
+   from each that grounds it; the grouping is reported, never written.
 
 Each firing on a clock is the same single pass.

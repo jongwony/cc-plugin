@@ -1,7 +1,7 @@
 {
   "name": "higgsfield",
   "description": "Generate Seedance 2.5 video on Higgsfield through the higgsfield CLI — multi-shot cinematic clips with native dialogue, image-to-video, audio lipsync, clip edit and extension",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

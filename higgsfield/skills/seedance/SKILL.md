@@ -34,16 +34,16 @@ the session is valid, so check once up front rather than per command.
 
 ## The model — Seedance 2.5 only
 
-Use `seedance_2_5`, and only it: this skill tracks the newest Seedance
-release and nothing older. When the user asks for something 2.5's schema
-does not accept, say so rather than switching to another model.
+Use the newest Seedance release and nothing older — currently
+`seedance_2_5`. When the user asks for something its schema does not
+accept, say so rather than switching to an older model.
 
 Its accepted durations, aspect ratios, resolutions, parameters, and media
 limits move with Higgsfield releases, so no figures are given here.
 
-- `higgsfield model list --video` — confirm `seedance_2_5` is still listed.
-  When a newer Seedance has replaced it, use that one and read its schema
-  before relying on anything below.
+- `higgsfield model list --video` — take the Seedance with the highest
+  version listed. When that is no longer `seedance_2_5`, use it instead and
+  read its schema before relying on anything below.
 - `higgsfield model get seedance_2_5 --json` — the schema: modes, durations,
   aspect ratios, resolutions, parameters with defaults, and the media roles
   each input slot accepts. Pass only what the schema declares; leave the
@@ -51,7 +51,8 @@ limits move with Higgsfield releases, so no figures are given here.
 
 ## Modes
 
-`--mode` decides what the job is and which inputs it takes:
+`--mode` decides what the job is and which inputs it takes; pass it on
+every job rather than relying on the schema's default:
 
 | Mode | Use for |
 |---|---|
@@ -73,7 +74,7 @@ two apart). Any of them needs `--mode omni_reference` or a clip mode.
 | `--image` | a reference image — character, prop, location, style; repeatable |
 | `--start-image` | the first frame |
 | `--end-image` | the last frame, for a transition between two frames |
-| `--video` | a reference clip, or the source clip to edit or extend |
+| `--video` | a reference clip; for the clip modes, the source clip goes in the role `model get` declares |
 | `--audio` | a voice or soundtrack to sync to |
 
 `model get` is the authority when a role is rejected (`Unknown media role`).
@@ -81,12 +82,12 @@ two apart). Any of them needs `--mode omni_reference` or a clip mode.
 ## Sound and speech
 
 Seedance generates sound in the same pass as the picture while
-`--generate_audio` is on, which is its default: ambience, effects, and any
-dialogue the prompt quotes, lip-synced to the speaker. Write the lines into
-the prompt for speech the model voices itself. Pass `--audio` only when the
-user supplies the recording to sync to; an audio reference also needs an
-image or video input beside it. Turn `--generate_audio` off only when the
-user wants a silent clip.
+`--generate_audio` is on: ambience, effects, and any dialogue the prompt
+quotes, lip-synced to the speaker. Read its default from `model get`, and
+pass it explicitly when the brief depends on it — on for dialogue, off for
+a silent clip. Write the lines into the prompt for speech the model voices
+itself. Pass `--audio` only when the user supplies the recording to sync
+to.
 
 ## Drafting the prompt
 
@@ -103,13 +104,14 @@ they already fixed those.
 
 A generation spends the user's Higgsfield credits. The user asking for the
 video is the go-ahead for one run; before a batch or a retry loop, say how
-many runs and ask. `higgsfield generate cost seedance_2_5 [same flags]`
-estimates credits without submitting — use it when the user asks about
-cost.
+many runs and ask. `higgsfield generate cost seedance_2_5 [same flags]
+< prompt.txt` estimates credits without submitting — use it when the user
+asks about cost.
 
-While a clip is still being iterated, draft at the lowest resolution the
-schema accepts and render the final take at the resolution the user wants;
-say which one a run used.
+While a clip is still being iterated, make that run a draft at the lowest
+resolution the schema accepts, say so, and ask before rendering the final
+take at the resolution the user wants — the final render is a second paid
+run.
 
 Seedance prompts run to many lines and carry quotes, so write the prompt
 to a file and pipe it in rather than quoting it on the command line:
@@ -140,8 +142,8 @@ Keep job ids and raw JSON out of the reply unless the user asks for them.
 | `Missing required params: prompt` | the prompt did not reach the CLI — check the stdin redirect |
 | `Invalid values: <param>=<v> (allowed: …)` | pick from the allowed list it prints |
 | `Unknown params: <name>` | the schema does not declare that flag — re-read `model get` |
-| media rejected on a `t2v` job | the job has an input — resubmit with `--mode omni_reference` |
-| a reference-count or audio-reference constraint | the schema's media limits — drop references, or add the image or video an audio reference needs |
+| a media input rejected while `--mode t2v` is set | the job has an input — resubmit with `--mode omni_reference` |
+| a reference-count or reference-combination constraint | the schema's media limits — follow the constraint message: drop references, or add the input it names |
 | job ends `failed`, `nsfw`, or `ip_detected` | content policy or a server-side failure — rephrase; real public figures, sexual content, and trademarked characters are rejected |
 | timeout while waiting | the job is still running — `generate wait <job_id>`, or raise `--wait-timeout` |
 | HTTP 429 | rate limited — back off before retrying |

@@ -108,6 +108,11 @@
       "name": "higgsfield",
       "source": "./higgsfield",
       "description": "Generate Seedance video on Higgsfield through the higgsfield CLI — multi-shot cinematic clips, image-to-video, audio-referenced lipsync"
+    },
+    {
+      "name": "telegram-report",
+      "source": "./telegram-report",
+      "description": "Send-only Telegram report for scheduled routines — posts one message into a fixed forum topic by thread id, with credentials from TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID; never creates topics or reads updates"
     }
   ]
 }

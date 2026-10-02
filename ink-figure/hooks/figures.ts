@@ -1,4 +1,4 @@
-import { drawn, fitLines, type Fitted } from './diagrams.ts'
+import { chosenOf, fitLines, layoutsOf, type Fitted, type Layouts } from './diagrams.ts'
 import { INK, MAX_CELLS, mathOf, type Ink } from './math.ts'
 
 // One pass over a reply: every ```mermaid and ```math fence, in order, with the
@@ -63,42 +63,45 @@ export const fencesOf = (text: string): FenceBlock[] => {
 // least recently used first out, within a count and a byte budget.
 const CACHE_LIMIT = 200
 const CACHE_BYTES = 16 * 1024 * 1024
-const figures = new Map<string, { piece: Piece | null; bytes: number }>()
+type Drawing = { layouts: Layouts } | { math: MathPicture | null }
+const figures = new Map<string, { drawing: Drawing; bytes: number }>()
 let cachedBytes = 0
 
-// A diagram is laid out for the room it has; a formula's picture does not depend on
-// the room, so it is drawn once at the widest an Image takes and compared with the
-// room after the lookup.
+// Neither drawing depends on the room: a diagram's layouts are kept by source and
+// chosen and fitted for the room after the lookup, and a formula is drawn once at
+// the widest an Image takes and compared with the room.
 const figureOf = (block: FenceBlock, columns: number, ink: Ink): Piece | null => {
-  const piece = cachedFigureOf(block, columns, ink)
-  return piece && 'math' in piece && piece.math.columns > columns ? null : piece
+  const drawing = cachedDrawingOf(block, ink)
+  if ('layouts' in drawing) {
+    const art = chosenOf(drawing.layouts, columns)
+    return 'lines' in art ? { diagram: fitLines(art.lines, columns) } : null
+  }
+  return drawing.math && drawing.math.columns <= columns ? { math: drawing.math } : null
 }
 
-const cachedFigureOf = (block: FenceBlock, columns: number, ink: Ink): Piece | null => {
-  const key = (block.lang === 'mermaid' ? [block.lang, columns, block.source] : [block.lang, ink.join(','), block.source]).join('\u0000')
+const cachedDrawingOf = (block: FenceBlock, ink: Ink): Drawing => {
+  const key = (block.lang === 'mermaid' ? [block.lang, block.source] : [block.lang, ink.join(','), block.source]).join('\u0000')
   const hit = figures.get(key)
   if (hit) {
     figures.delete(key)
     figures.set(key, hit)
-    return hit.piece
+    return hit.drawing
   }
-  let piece: Piece | null = null
-  if (block.lang === 'mermaid') {
-    const art = drawn(block.source, columns)
-    if ('lines' in art) piece = { diagram: fitLines(art.lines, columns) }
-  } else {
+  let drawing: Drawing
+  if (block.lang === 'mermaid') drawing = { layouts: layoutsOf(block.source) }
+  else {
     const art = mathOf(block.source, MAX_CELLS, ink)
-    if ('rgba' in art) piece = { math: { ...art, rgba: art.rgba.toBase64(), tex: block.source } }
+    drawing = { math: 'rgba' in art ? { ...art, rgba: art.rgba.toBase64(), tex: block.source } : null }
   }
-  const bytes = piece && 'math' in piece ? piece.math.rgba.length : 0
-  figures.set(key, { piece, bytes })
+  const bytes = 'math' in drawing && drawing.math ? drawing.math.rgba.length : 0
+  figures.set(key, { drawing, bytes })
   cachedBytes += bytes
   while (figures.size > CACHE_LIMIT || cachedBytes > CACHE_BYTES) {
     const [oldest, entry] = figures.entries().next().value!
     figures.delete(oldest)
     cachedBytes -= entry.bytes
   }
-  return piece
+  return drawing
 }
 
 const pushMarkdown = (pieces: Piece[], text: string) => {

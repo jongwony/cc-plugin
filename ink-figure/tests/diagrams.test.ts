@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { displayWidth, drawn, leftToRightOf, plainOf, renderOf, SPACING } from '../hooks/diagrams.ts'
+import { displayWidth, drawn, fitLines, layouts, leftToRightOf, plainOf, renderOf, SPACING } from '../hooks/diagrams.ts'
 import { fencesOf, piecesOf } from '../hooks/figures.ts'
 
 const ENGINE = { type: 'Text', props: {}, children: ['drawn by Claude Code'] }
@@ -299,4 +299,23 @@ test('a source opening with front matter keeps its fence', () => {
 
 test('a definition whose destination is on the next line also sends the reply back whole', () => {
   expect(piecesOf('See [docs][r].\n\n```mermaid\ngraph LR\nA-->B\n```\n\n[r]:\n  https://example.com', 94)).toBe(null)
+})
+
+test('a diagram is laid out once per source: another width only chooses and fits again', () => {
+  const source = 'graph TD\n  Q1[resize probe] --> Q2[second box]\n  Q1 --> Q3[third box]'
+  const fence = '```mermaid\n' + source + '\n```'
+  const before = layouts.runs
+  const wide = piecesOf(fence, 120)
+  expect(layouts.runs).toBe(before + 1)
+  const narrow = piecesOf(fence, 30)
+  const again = piecesOf(fence, 120)
+  expect(layouts.runs).toBe(before + 1)
+  const fresh = (columns: number) => {
+    const art = drawn(source, columns)
+    if (!('lines' in art)) throw new Error(art.error)
+    return fitLines(art.lines, columns)
+  }
+  expect(narrow).toEqual([{ diagram: fresh(30) }])
+  expect(wide).toEqual([{ diagram: fresh(120) }])
+  expect(again).toEqual(wide)
 })

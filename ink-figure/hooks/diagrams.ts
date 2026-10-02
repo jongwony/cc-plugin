@@ -274,10 +274,19 @@ export const fitLines = (lines: readonly (readonly Segment[])[], columns: number
   return { lines: fitted, width, overflow: width - room }
 }
 
-// the sideways layout is tried only when the source's own layout drew
-export const drawn = (source: string, columns: number): Rendered => {
+// Both layouts a source can take, neither depending on the room; the sideways one
+// is tried only when the source's own layout drew. `layouts.runs` counts calls.
+export type Layouts = { base: Rendered; sideways: Rendered | null }
+export const layouts = { runs: 0 }
+export const layoutsOf = (source: string): Layouts => {
+  layouts.runs++
   const base = renderOf(source)
-  if ('error' in base) return base
+  if ('error' in base) return { base, sideways: null }
   const sideways = leftToRightOf(source)
-  return sideways ? pickLayout(base, renderOf(sideways), columns) : base
+  return { base, sideways: sideways ? renderOf(sideways) : null }
 }
+
+export const chosenOf = ({ base, sideways }: Layouts, columns: number): Rendered =>
+  sideways ? pickLayout(base, sideways, columns) : base
+
+export const drawn = (source: string, columns: number): Rendered => chosenOf(layoutsOf(source), columns)

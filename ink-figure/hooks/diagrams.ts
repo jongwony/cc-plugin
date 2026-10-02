@@ -6,7 +6,7 @@ import { renderMermaidAscii } from './vendor/mermaid-ascii.js'
 // Fence detection, kind table, LR flip, pseudo-state trim and the sentinel-colour
 // role recovery are adapted from claude-mermaid (Gal Elmalah, MIT).
 
-export type MermaidBlock = { start: number; end: number; indent: string; source: string }
+export type MermaidBlock = { start: number; end: number; source: string }
 export type Role = 'text' | 'border' | 'line' | 'arrow' | 'corner' | 'junction' | 'accent'
 export type Segment = { text: string; role: Role | null }
 export type Rendered = { lines: Segment[][] } | { error: string }
@@ -14,15 +14,29 @@ export type Fitted = { lines: Segment[][]; width: number; overflow: number }
 
 export const SPACING = { paddingX: 3, paddingY: 1, boxBorderPadding: 1 } as const
 
-const FENCE = /^([ \t]*)(`{3,}|~{3,})[ \t]*mermaid(?![\w-])[^\n]*\n([\s\S]*?)\n[ \t]*\2[ \t]*$/gim
+const FENCE_LINE = /^[ \t]*(`{3,}|~{3,})(.*)$/
+const MERMAID_INFO = /^[ \t]*mermaid(?![\w-])/i
 
+// Fenced code blocks as CommonMark closes them: a fence closes on the same
+// character, at least as long, with nothing after it. Only a mermaid fence that
+// opens while no other fence is open is a figure; one inside another block is
+// that block's text.
 export const mermaidBlocksOf = (text: string): MermaidBlock[] => {
   const blocks: MermaidBlock[] = []
-  for (const match of text.matchAll(FENCE)) {
-    const source = (match[3] ?? '').replace(/\r\n?/g, '\n').trim()
-    if (source === '') continue
-    const start = match.index ?? 0
-    blocks.push({ start, end: start + match[0].length, indent: match[1] ?? '', source })
+  let open: { mark: string; start: number; body: number; mermaid: boolean } | null = null
+  let at = 0
+  for (const line of text.split('\n')) {
+    const next = at + line.length + 1
+    const fence = FENCE_LINE.exec(line)
+    if (open === null) {
+      if (fence && !(fence[1]!.startsWith('`') && fence[2]!.includes('`')))
+        open = { mark: fence[1]!, start: at, body: next, mermaid: MERMAID_INFO.test(fence[2]!) }
+    } else if (fence && fence[1]![0] === open.mark[0] && fence[1]!.length >= open.mark.length && fence[2]!.trim() === '') {
+      const source = text.slice(open.body, Math.max(open.body, at - 1)).replace(/\r\n?/g, '\n').trim()
+      if (open.mermaid && source !== '') blocks.push({ start: open.start, end: at + line.length, source })
+      open = null
+    }
+    at = next
   }
   return blocks
 }

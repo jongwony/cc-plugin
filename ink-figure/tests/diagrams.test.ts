@@ -94,6 +94,18 @@ test('off the terminal the message goes to Claude Code untouched', async ($, on)
   expect(await ui.find({ type: 'Text', text: 'drawn by Claude Code' })).toBeDefined()
 })
 
+test('a mermaid fence shown inside another code block stays that block text', () => {
+  const inner = '```mermaid\ngraph LR\n  A[request] --> B[cache]\n```'
+  expect(piecesOf(`Syntax:\n\n\`\`\`\`markdown\n${inner}\n\`\`\`\`\n\nAfter.`, 94)).toBe(null)
+  expect(piecesOf(`~~~\n${inner}\n~~~`, 94)).toBe(null)
+  expect(piecesOf(`\`\`\`\`markdown\n${inner}\n\`\`\`\`\n\n${inner}`, 94)?.filter(p => 'diagram' in p).length).toBe(1)
+})
+
+test('a fence closes on a run at least as long as its opener', () => {
+  const pieces = piecesOf('````mermaid\ngraph LR\n  A --> B\n`````\n\nAfter.', 94)
+  expect(pieces?.length).toBe(2)
+})
+
 test('a kind the renderer does not draw, or a broken source, keeps its fence', () => {
   expect('error' in renderOf('pie title Pets\n  "Dogs" : 386')).toBe(true)
   expect(piecesOf('```mermaid\npie title Pets\n  "Dogs" : 386\n```', 94)).toBe(null)

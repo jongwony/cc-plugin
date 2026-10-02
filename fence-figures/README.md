@@ -45,7 +45,7 @@ value, drawn blank.
 ```heatmap
 unit: ms
         00h 06h 12h
-서울     12  40  95
+Seoul    12  40  95
 Tokyo    10  33  -
 ```
 ````
@@ -56,7 +56,7 @@ key line below, since names would not fit a two-cell column:
 
 ```text
        1 2 3
-서울   ██████
+Seoul  ██████
 Tokyo  ████
 ██████████ 1 shade ~ 20 ms · 0 to 100 ms, 5 shades · blank = no value
 columns: 1 00h · 2 06h · 3 12h
@@ -73,18 +73,22 @@ boxes, one cell inside them.
 ````markdown
 ```mermaid
 graph LR
-  A[서울 요청] --> B[cache]
-  B --> C[응답]
+  A[request] --> B[cache]
+  B --> C[resp]
 ```
 ````
 
 ```text
-┌───────────┐  ┌───────┐  ┌──────┐
-│           │  │       │  │      │
-│ 서울 요청 ├─►│ cache ├─►│ 응답 │
-│           │  │       │  │      │
-└───────────┘  └───────┘  └──────┘
+┌─────────┐  ┌───────┐  ┌──────┐
+│         │  │       │  │      │
+│ request ├─►│ cache ├─►│ resp │
+│         │  │       │  │      │
+└─────────┘  └───────┘  └──────┘
 ```
+
+The drawings here use ASCII labels because a web page's monospace font does not
+give a Hangul character exactly two columns; in the terminal, where it does,
+Hangul labels such as `서울 요청` line up the same way.
 
 Borders and junctions are drawn cyan, arrows yellow, lines dim, through element
 styles.

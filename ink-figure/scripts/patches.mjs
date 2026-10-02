@@ -1,24 +1,64 @@
 // Source patches applied to beautiful-mermaid (MIT) at bundle time. Each anchor must
 // match upstream exactly once; a mismatch fails the build rather than shipping unpatched.
 export const PATCHES = [
-  // An edge search gives up after MAX_EXPANSIONS; a whole drawing throws past
-  // pathWork.limit expansions across all its searches, and a flowchart or state
-  // diagram past MAX_NODES nodes or MAX_EDGES edges throws before layout, so no
-  // render holds the transcript for long.
+  // An edge search gives up after MAX_EXPANSIONS and marks pathWork.capped; where
+  // that give-up would be drawn as the straight fallback through the boxes between,
+  // the drawing throws instead. A whole drawing throws past pathWork.limit expansions
+  // across all its searches, and every kind throws past its size caps before layout,
+  // so no render holds the transcript or allocates a canvas for long.
   {
     file: /beautiful-mermaid\/src\/ascii\/pathfinder\.ts$/,
     find: '  while (pq.length > 0) {\n    const current = pq.pop()!.coord\n',
     replace:
-      '  const MAX_EXPANSIONS = 40_000\n  let expansions = 0\n' +
-      '  while (pq.length > 0) {\n    if (++expansions > MAX_EXPANSIONS) return null\n' +
+      '  const MAX_EXPANSIONS = 40_000\n  let expansions = 0\n  pathWork.capped = false\n' +
+      '  while (pq.length > 0) {\n    if (++expansions > MAX_EXPANSIONS) { pathWork.capped = true; return null }\n' +
       "    if (++pathWork.spent > pathWork.limit) throw new Error('too complex to lay out')\n" +
       '    const current = pq.pop()!.coord\n',
   },
   {
     file: /beautiful-mermaid\/src\/ascii\/pathfinder\.ts$/,
     find: 'export function getPath(\n',
-    replace: 'export const pathWork = { spent: 0, limit: 400_000 }\n\nexport function getPath(\n',
+    replace: 'export const pathWork = { spent: 0, limit: 400_000, capped: false }\n\nexport function getPath(\n',
   },
+  {
+    file: /beautiful-mermaid\/src\/ascii\/edge-routing\.ts$/,
+    find: "import { getPath, mergePath } from './pathfinder.ts'\n",
+    replace: "import { getPath, mergePath, pathWork } from './pathfinder.ts'\n",
+  },
+  {
+    file: /beautiful-mermaid\/src\/ascii\/edge-routing\.ts$/,
+    find: '  let preferredPath = getPath(graph.grid, prefFrom, prefTo)\n',
+    replace: '  let preferredPath = getPath(graph.grid, prefFrom, prefTo)\n  const preferredCapped = pathWork.capped\n',
+  },
+  {
+    file: /beautiful-mermaid\/src\/ascii\/edge-routing\.ts$/,
+    find: '  let alternativePath = getPath(graph.grid, altFrom, altTo)\n',
+    replace: '  let alternativePath = getPath(graph.grid, altFrom, altTo)\n  const alternativeCapped = pathWork.capped\n',
+  },
+  {
+    file: /beautiful-mermaid\/src\/ascii\/edge-routing\.ts$/,
+    find: '  // Case 4: Both paths failed — create a direct fallback path\n',
+    replace:
+      "  if (preferredCapped || alternativeCapped) throw new Error('an edge too long to route')\n" +
+      '  // Case 4: Both paths failed — create a direct fallback path\n',
+  },
+  {
+    file: /beautiful-mermaid\/src\/ascii\/edge-bundling\.ts$/,
+    find: "import { getPath, mergePath } from './pathfinder.ts'\n",
+    replace:
+      "import { getPath, mergePath, pathWork } from './pathfinder.ts'\n" +
+      "const unrouted = <T>(fallback: T): T => {\n  if (pathWork.capped) throw new Error('an edge too long to route')\n  return fallback\n}\n",
+  },
+  ...[
+    'bundle.sharedPath = sharedPath ? mergePath(sharedPath) : [junction, targetEntry]\n',
+    'edge.pathToJunction = pathToJunction ? mergePath(pathToJunction) : [sourceExit, junction]\n',
+    'bundle.sharedPath = sharedPath ? mergePath(sharedPath) : [sourceExit, junction]\n',
+    'edge.pathToJunction = pathToJunction ? mergePath(pathToJunction) : [junction, targetEntry]\n',
+  ].map(find => ({
+    file: /beautiful-mermaid\/src\/ascii\/edge-bundling\.ts$/,
+    find,
+    replace: find.replace(/ : (\[[^\]]+\])\n$/, ' : unrouted($1)\n'),
+  })),
   {
     file: /beautiful-mermaid\/src\/ascii\/index\.ts$/,
     find: "import { parseMermaid } from '../parser.ts'\n",
@@ -38,6 +78,37 @@ export const PATCHES = [
       '      if (parsed.nodes.size > MAX_NODES || parsed.edges.length > MAX_EDGES)\n' +
       '        throw new Error(`too big to lay out (${parsed.nodes.size} nodes, ${parsed.edges.length} edges)`)\n',
   },
+  ...[
+    [
+      /beautiful-mermaid\/src\/ascii\/sequence\.ts$/,
+      '  const diagram = parseSequenceDiagram(lines)\n',
+      '[diagram.actors.length, 20, "participants"], [diagram.messages.length, 150, "messages"], [diagram.blocks.length, 40, "blocks"], [diagram.notes.length, 60, "notes"]',
+    ],
+    [
+      /beautiful-mermaid\/src\/ascii\/class-diagram\.ts$/,
+      '  const diagram = parseClassDiagram(lines)\n',
+      '[diagram.classes.length, 40, "classes"], [diagram.relationships.length, 80, "relationships"], ' +
+        '[diagram.classes.reduce((n, c) => n + c.attributes.length + c.methods.length, 0), 400, "members"]',
+    ],
+    [
+      /beautiful-mermaid\/src\/ascii\/er-diagram\.ts$/,
+      '  const diagram = parseErDiagram(lines)\n',
+      '[diagram.entities.length, 40, "entities"], [diagram.relationships.length, 80, "relationships"], ' +
+        '[diagram.entities.reduce((n, e) => n + e.attributes.length, 0), 400, "attributes"]',
+    ],
+    [
+      /beautiful-mermaid\/src\/ascii\/xychart\.ts$/,
+      '  const chart = parseXYChart(lines)\n',
+      '[chart.series.length, 8, "series"], [getDataCount(chart), 120, "values per series"]',
+    ],
+  ].map(([file, find, caps]) => ({
+    file,
+    find,
+    replace:
+      find +
+      `  for (const [count, cap, what] of [${caps}] as [number, number, string][])\n` +
+      '    if (count > cap) throw new Error(`too big to lay out (${count} ${what})`)\n',
+  })),
   {
     file: /beautiful-mermaid\/src\/ascii\/draw\.ts$/,
     find:

@@ -222,6 +222,43 @@ test('a diagram too big to lay out quickly keeps its fence at once', () => {
   expect('lines' in drawn(EIGHT, 134)).toBe(true)
 })
 
+test('every kind past its size caps keeps its fence before allocating a canvas; ordinary ones draw', () => {
+  const many = (n: number, line: (i: number) => string) => Array.from({ length: n }, (_, i) => line(i)).join('\n')
+  const started = performance.now()
+  for (const source of [
+    `sequenceDiagram\n${many(600, i => `  A${i}->>A${(i + 1) % 600}: x`)}`,
+    `sequenceDiagram\n${many(151, () => '  A->>B: x')}`,
+    `classDiagram\n${many(50, i => `  C${i} <|-- C${i + 1}`)}`,
+    `erDiagram\n${many(45, i => `  E${i} ||--o{ E${i + 1} : r`)}`,
+  ])
+    expect('error' in renderOf(source)).toBe(true)
+  expect(performance.now() - started).toBeLessThan(500)
+  for (const source of [
+    `sequenceDiagram\n${many(40, i => `  A${i % 6}->>A${(i + 1) % 6}: m${i}`)}`,
+    `classDiagram\n${many(12, i => `  C${i} <|-- C${i + 1}`)}`,
+    `erDiagram\n${many(8, i => `  E${i} ||--o{ E${i + 1} : r`)}`,
+  ])
+    expect('lines' in renderOf(source)).toBe(true)
+})
+
+test('an edge the router gives up on keeps the fence instead of a straight fallback', () => {
+  const chain = (n: number) => ['graph TD', ...Array.from({ length: n }, (_, i) => `  N${i} --> N${i + 1}`)].join('\n')
+  expect(renderOf(chain(25))).toEqual({ error: 'an edge too long to route' })
+  expect('lines' in renderOf(chain(20))).toBe(true)
+})
+
+test('a flowchart header with no direction draws, as mermaid draws it top to bottom', () => {
+  for (const header of ['flowchart', 'graph', 'graph;']) expect(linesOf(`${header}\n  A[start] --> B[end]`).some(l => l.includes('start'))).toBe(true)
+})
+
+test('a Yijing hexagram is one cell and a Hangul Jamo Extended-A initial is two; rows line up', () => {
+  for (const label of ['䷀ yi', 'ꥠ x', '〈x〉']) {
+    const lines = linesOf(`graph LR\n  A["${label}"] --> B[ok]`)
+    expect(new Set(lines.map(displayWidth)).size).toBe(1)
+  }
+  expect('error' in renderOf('graph LR\n  A["ꥠힰ x"] --> B[ok]')).toBe(true)
+})
+
 test('only a top-down flowchart is turned sideways; BT and RL keep the direction written', () => {
   expect(leftToRightOf('graph TD\n  A --> B')).not.toBe(null)
   expect(leftToRightOf('graph td\n  A --> B')).not.toBe(null)

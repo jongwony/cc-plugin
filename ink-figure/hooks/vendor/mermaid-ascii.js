@@ -522,7 +522,7 @@ function isFreeInGrid(grid, c) {
   if (c.x < 0 || c.y < 0) return false;
   return !grid.has(gridKey(c));
 }
-var pathWork = { spent: 0, limit: 4e5 };
+var pathWork = { spent: 0, limit: 4e5, capped: false };
 function getPath(grid, from, to) {
   const pq = new MinHeap();
   pq.push({ coord: from, priority: 0 });
@@ -532,8 +532,12 @@ function getPath(grid, from, to) {
   cameFrom.set(gridKey(from), null);
   const MAX_EXPANSIONS = 4e4;
   let expansions = 0;
+  pathWork.capped = false;
   while (pq.length > 0) {
-    if (++expansions > MAX_EXPANSIONS) return null;
+    if (++expansions > MAX_EXPANSIONS) {
+      pathWork.capped = true;
+      return null;
+    }
     if (++pathWork.spent > pathWork.limit) throw new Error("too complex to lay out");
     const current = pq.pop().coord;
     if (gridCoordEquals(current, to)) {
@@ -1333,9 +1337,11 @@ function determinePath(graph, edge) {
   const prefFrom = gridCoordDirection(edge.from.gridCoord, preferredDir);
   const prefTo = gridCoordDirection(edge.to.gridCoord, preferredOppositeDir);
   let preferredPath = getPath(graph.grid, prefFrom, prefTo);
+  const preferredCapped = pathWork.capped;
   const altFrom = gridCoordDirection(edge.from.gridCoord, alternativeDir);
   const altTo = gridCoordDirection(edge.to.gridCoord, alternativeOppositeDir);
   let alternativePath = getPath(graph.grid, altFrom, altTo);
+  const alternativeCapped = pathWork.capped;
   if (preferredPath !== null && alternativePath !== null) {
     preferredPath = mergePath(preferredPath);
     alternativePath = mergePath(alternativePath);
@@ -1362,6 +1368,7 @@ function determinePath(graph, edge) {
     edge.path = mergePath(alternativePath);
     return;
   }
+  if (preferredCapped || alternativeCapped) throw new Error("an edge too long to route");
   edge.startDir = preferredDir;
   edge.endDir = preferredOppositeDir;
   edge.path = [prefFrom, prefTo];
@@ -1413,6 +1420,10 @@ function calculateLineWidth(graph, line) {
 }
 
 // node_modules/beautiful-mermaid/src/ascii/edge-bundling.ts
+var unrouted = (fallback) => {
+  if (pathWork.capped) throw new Error("an edge too long to route");
+  return fallback;
+};
 function analyzeEdgeBundles(graph) {
   if (graph.config.graphDirection !== "TD") {
     return [];
@@ -1535,12 +1546,12 @@ function routeBundledEdges(graph, bundle) {
     const targetCoord = bundle.sharedNode.gridCoord;
     const targetEntry = dir === "TD" ? { x: targetCoord.x + 1, y: targetCoord.y } : { x: targetCoord.x, y: targetCoord.y + 1 };
     const sharedPath = getPath(graph.grid, junction, targetEntry);
-    bundle.sharedPath = sharedPath ? mergePath(sharedPath) : [junction, targetEntry];
+    bundle.sharedPath = sharedPath ? mergePath(sharedPath) : unrouted([junction, targetEntry]);
     for (const edge of bundle.edges) {
       const sourceCoord = edge.from.gridCoord;
       const sourceExit = dir === "TD" ? { x: sourceCoord.x + 1, y: sourceCoord.y + 2 } : { x: sourceCoord.x + 2, y: sourceCoord.y + 1 };
       const pathToJunction = getPath(graph.grid, sourceExit, junction);
-      edge.pathToJunction = pathToJunction ? mergePath(pathToJunction) : [sourceExit, junction];
+      edge.pathToJunction = pathToJunction ? mergePath(pathToJunction) : unrouted([sourceExit, junction]);
       edge.startDir = dir === "TD" ? Down : Right;
       edge.endDir = dir === "TD" ? Up : Left;
       edge.path = [...edge.pathToJunction, ...bundle.sharedPath.slice(1)];
@@ -1551,12 +1562,12 @@ function routeBundledEdges(graph, bundle) {
     const sourceCoord = bundle.sharedNode.gridCoord;
     const sourceExit = dir === "TD" ? { x: sourceCoord.x + 1, y: sourceCoord.y + 2 } : { x: sourceCoord.x + 2, y: sourceCoord.y + 1 };
     const sharedPath = getPath(graph.grid, sourceExit, junction);
-    bundle.sharedPath = sharedPath ? mergePath(sharedPath) : [sourceExit, junction];
+    bundle.sharedPath = sharedPath ? mergePath(sharedPath) : unrouted([sourceExit, junction]);
     for (const edge of bundle.edges) {
       const targetCoord = edge.to.gridCoord;
       const targetEntry = dir === "TD" ? { x: targetCoord.x + 1, y: targetCoord.y } : { x: targetCoord.x, y: targetCoord.y + 1 };
       const pathToJunction = getPath(graph.grid, junction, targetEntry);
-      edge.pathToJunction = pathToJunction ? mergePath(pathToJunction) : [junction, targetEntry];
+      edge.pathToJunction = pathToJunction ? mergePath(pathToJunction) : unrouted([junction, targetEntry]);
       edge.startDir = dir === "TD" ? Down : Right;
       edge.endDir = dir === "TD" ? Up : Left;
       edge.path = [...bundle.sharedPath, ...edge.pathToJunction.slice(1)];
@@ -3476,6 +3487,8 @@ function ensureActor(diagram, actorIds, id) {
 function renderSequenceAscii(text, config, colorMode, theme) {
   const lines = text.split("\n").map((l) => l.trim()).filter((l) => l.length > 0 && !l.startsWith("%%"));
   const diagram = parseSequenceDiagram(lines);
+  for (const [count, cap, what] of [[diagram.actors.length, 20, "participants"], [diagram.messages.length, 150, "messages"], [diagram.blocks.length, 40, "blocks"], [diagram.notes.length, 60, "notes"]])
+    if (count > cap) throw new Error(`too big to lay out (${count} ${what})`);
   if (diagram.actors.length === 0) return "";
   const useAscii = config.useAscii;
   const H = useAscii ? "-" : "\u2500";
@@ -4059,6 +4072,8 @@ function getMarkerShape(type, useAscii, direction) {
 function renderClassAscii(text, config, colorMode, theme) {
   const lines = text.split("\n").map((l) => l.trim()).filter((l) => l.length > 0 && !l.startsWith("%%"));
   const diagram = parseClassDiagram(lines);
+  for (const [count, cap, what] of [[diagram.classes.length, 40, "classes"], [diagram.relationships.length, 80, "relationships"], [diagram.classes.reduce((n, c) => n + c.attributes.length + c.methods.length, 0), 400, "members"]])
+    if (count > cap) throw new Error(`too big to lay out (${count} ${what})`);
   if (diagram.classes.length === 0) return "";
   const useAscii = config.useAscii;
   const hGap = 4;
@@ -4635,6 +4650,8 @@ function findConnectedComponents(diagram) {
 function renderErAscii(text, config, colorMode, theme) {
   const lines = text.split("\n").map((l) => l.trim()).filter((l) => l.length > 0 && !l.startsWith("%%"));
   const diagram = parseErDiagram(lines);
+  for (const [count, cap, what] of [[diagram.entities.length, 40, "entities"], [diagram.relationships.length, 80, "relationships"], [diagram.entities.reduce((n, e) => n + e.attributes.length, 0), 400, "attributes"]])
+    if (count > cap) throw new Error(`too big to lay out (${count} ${what})`);
   if (diagram.entities.length === 0) return "";
   const useAscii = config.useAscii;
   const hGap = Math.max(6, ...diagram.relationships.flatMap((rel) => splitLines(rel.label)).map((line) => line.length + 3));
@@ -5045,6 +5062,8 @@ function roleToHex(role, theme) {
 function renderXYChartAscii(text, config, colorMode, theme) {
   const lines = text.split("\n").map((l) => l.trim()).filter((l) => l.length > 0 && !l.startsWith("%%"));
   const chart = parseXYChart(lines);
+  for (const [count, cap, what] of [[chart.series.length, 8, "series"], [getDataCount(chart), 120, "values per series"]])
+    if (count > cap) throw new Error(`too big to lay out (${count} ${what})`);
   const ch = config.useAscii ? ASC : UNI;
   if (chart.horizontal) {
     return renderHorizontal(chart, ch, colorMode, theme);

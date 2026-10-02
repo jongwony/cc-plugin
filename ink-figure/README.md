@@ -33,7 +33,8 @@ Then `/reload-plugins` in a running session.
 
 ## Diagrams
 
-Standard mermaid source. A top-down flowchart or state diagram is laid out left
+Standard mermaid source. A top-down flowchart or state diagram (a flowchart
+header with no direction is top-down, as in mermaid) is laid out left
 to right when no label is lost and it fits; a flowchart written `BT`, `RL` or
 `LR` keeps its direction. Spacing is compact: three columns and one row between
 boxes, one cell inside them.
@@ -121,9 +122,13 @@ a sum with stacked limits; a flat expression stays in the text.
 
 - A diagram or chart wider than the terminal is cut with a `… N columns cut`
   line.
-- A flowchart or state diagram with more than 60 nodes or 100 edges, or one
-  whose edges take too long to route, keeps its fence rather than holding the
-  transcript while it is laid out.
+- A diagram past its size caps keeps its fence rather than holding the
+  transcript while it is laid out: 60 nodes or 100 edges for a flowchart or
+  state diagram; 20 participants, 150 messages, 40 blocks or 60 notes for a
+  sequence diagram; 40 classes or entities, 80 relationships or 400 members or
+  attributes for a class or ER diagram; 8 series or 120 values for a chart. So
+  does one with an edge the router gives up on, rather than drawing it as a
+  straight line through the boxes between.
 - `AssistantMessage` is the finest site a mod can draw in, so a reply holding a
   figure is redrawn as Markdown pieces around it. A piece over 10,000
   characters, or one carrying escape codes another mod wrote into the reply,

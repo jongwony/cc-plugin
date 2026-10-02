@@ -118,3 +118,12 @@ test('a series with more or fewer values than categories keeps the fence', () =>
     expect('error' in renderOf(source)).toBe(true)
   expect('lines' in renderOf('xychart-beta\n  line [1, 2, 3]\n  line [3, 2, 1]')).toBe(true)
 })
+
+test('a chart with more values than its size cap keeps the fence at once; an ordinary one draws', () => {
+  const values = (n: number) => Array.from({ length: n }, (_, i) => i % 7).join(', ')
+  const categories = (n: number) => Array.from({ length: n }, (_, i) => `c${i}`).join(', ')
+  const started = performance.now()
+  expect('error' in renderOf(`xychart-beta\n  x-axis [${categories(130)}]\n  line [${values(130)}]`)).toBe(true)
+  expect(performance.now() - started).toBeLessThan(100)
+  expect('lines' in renderOf(`xychart-beta\n  x-axis [${categories(12)}]\n  line [${values(12)}]`)).toBe(true)
+})

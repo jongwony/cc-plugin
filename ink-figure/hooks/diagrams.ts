@@ -40,6 +40,16 @@ export const kindOf = (source: string): string => KINDS.find(([pattern]) => patt
 
 export const MAX_SOURCE_CHARS = 12_000
 
+// a flowchart header with no direction takes mermaid's default, top to bottom, which
+// the renderer needs spelled out
+const directed = (source: string): string => {
+  const lines = source.split('\n')
+  const i = lines.findIndex(line => line.trim() !== '' && !line.trim().startsWith('%%'))
+  if (i < 0 || !/^\s*(flowchart|graph)\s*;?\s*$/i.test(lines[i]!)) return source
+  lines[i] = `${lines[i]!.replace(/\s*;?\s*$/, '')} TD`
+  return lines.join('\n')
+}
+
 // an xychart is drawn only when it holds a line: bars are written as text
 const LINE_SERIES = /^[ \t]*line\b/m
 
@@ -63,12 +73,19 @@ export const leftToRightOf = (source: string): string | null => {
 const EMOJI = /\p{Emoji_Presentation}/u
 export const isWide = (cp: number): boolean =>
   (cp >= 0x1100 && cp <= 0x115f) ||
-  (cp >= 0x2e80 && cp <= 0xa4cf && cp !== 0x303f) ||
+  (cp >= 0x2329 && cp <= 0x232a) ||
+  (cp >= 0x2e80 && cp <= 0xa4cf && cp !== 0x303f && !(cp >= 0x3248 && cp <= 0x324f) && !(cp >= 0x4dc0 && cp <= 0x4dff)) ||
+  (cp >= 0xa960 && cp <= 0xa97f) ||
   (cp >= 0xac00 && cp <= 0xd7a3) ||
   (cp >= 0xf900 && cp <= 0xfaff) ||
-  (cp >= 0xfe30 && cp <= 0xfe4f) ||
+  (cp >= 0xfe10 && cp <= 0xfe19) ||
+  (cp >= 0xfe30 && cp <= 0xfe6f) ||
   (cp >= 0xff00 && cp <= 0xff60) ||
   (cp >= 0xffe0 && cp <= 0xffe6) ||
+  (cp >= 0x16fe0 && cp <= 0x16fe4) ||
+  (cp >= 0x17000 && cp <= 0x18cff) ||
+  (cp >= 0x1b000 && cp <= 0x1b2ff) ||
+  (cp >= 0x1f200 && cp <= 0x1f265) ||
   (cp >= 0x20000 && cp <= 0x3fffd) ||
   EMOJI.test(String.fromCodePoint(cp))
 
@@ -91,7 +108,7 @@ export const displayWidth = (s: string): number => {
 // control character (a tab, an escape) inside a statement, which the terminal
 // draws in some other number of cells or not at all.
 const CELL = '\uE000'
-const UNPLACEABLE = /[\p{M}\p{Cf}\u1160-\u11ff\u{1f1e6}-\u{1f1ff}\u{1f3fb}-\u{1f3ff}\uE000]/u
+const UNPLACEABLE = /[\p{M}\p{Cf}\u1160-\u11ff\ud7b0-\ud7ff\u{1f1e6}-\u{1f1ff}\u{1f3fb}-\u{1f3ff}\uE000]/u
 const CONTROL = /\p{Cc}/u
 const unplaceableOf = (source: string): string | undefined => {
   const mark = UNPLACEABLE.exec(source)?.[0]
@@ -196,7 +213,7 @@ export const renderOf = (source: string, useAscii = false): Rendered => {
   if (!DRAWN_KINDS.has(kind)) return { error: `${kind} diagrams are not drawn` }
   if (kind === 'xychart' && !LINE_SERIES.test(source)) return { error: 'a chart with no line series is written as text' }
   if (source.length > MAX_SOURCE_CHARS) return { error: `too big to draw (${source.length} characters)` }
-  const composed = source.normalize('NFC')
+  const composed = directed(source).normalize('NFC')
   const unplaceable = unplaceableOf(composed)
   if (unplaceable) return { error: `U+${unplaceable.codePointAt(0)!.toString(16).toUpperCase()} cannot be laid out in cells` }
   try {

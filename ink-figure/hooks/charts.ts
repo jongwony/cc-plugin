@@ -216,7 +216,6 @@ export const heatmapOf = (body: string, columns: number): HeatmapChart | null =>
         v === null ? triplets.push(SPACE, DEFAULT_COLOR, DEFAULT_COLOR) : triplets.push(FULL_BLOCK, colorOf(shadeOf(v)), DEFAULT_COLOR)
   const legend: number[] = []
   for (let i = 0; i < count; i++) for (let k = 0; k < 2; k++) legend.push(FULL_BLOCK, colorOf(i), DEFAULT_COLOR)
-  const hi = lo + count * step
   return {
     kind: 'heatmap',
     labels: grid.labels,
@@ -229,7 +228,7 @@ export const heatmapOf = (body: string, columns: number): HeatmapChart | null =>
     cells: packCells(triplets),
     legendColumns: count * 2,
     legendCells: packCells(legend),
-    scale: `1 shade ~ ${withUnit(fmt(step), unit)} · ${fmt(lo)} to ${withUnit(fmt(hi), unit)}${count === 1 ? '' : `, ${count} shades`}${finite.length < grid.values.flat().length ? ' · blank = no value' : ''}`,
+    scale: `1 shade ~ ${withUnit(fmt(step), unit)} · ${fmt(min)} to ${withUnit(fmt(max), unit)}${count === 1 ? '' : `, ${count} shades`}${finite.length < grid.values.flat().length ? ' · blank = no value' : ''}`,
   }
 }
 

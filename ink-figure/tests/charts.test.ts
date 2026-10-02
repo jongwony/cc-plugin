@@ -92,6 +92,11 @@ test('heatmap shades stay within the palette and accept piped tables', () => {
   expect(heatmapOf('a b\nx y', 94)).toBe(null)
 })
 
+test('the legend states the measured range, not the band edges', () => {
+  const chart = heatmapOf('unit: 칸\n      a  b\n1줄  34 34\n3줄  34 40', 94)!
+  expect(chart.scale).toBe('1 shade ~ 1 칸 · 34 to 40 칸, 7 shades')
+})
+
 test('Hangul labels count two columns each', () => {
   expect(displayWidth('서울')).toBe(4)
   expect(displayWidth('api')).toBe(3)

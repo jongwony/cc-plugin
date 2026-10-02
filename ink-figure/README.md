@@ -58,7 +58,7 @@ key line below, since names would not fit a two-cell column:
        1 2 3
 Seoul  ██████
 Tokyo  ████
-██████████ 1 shade ~ 20 ms · 0 to 100 ms, 5 shades · blank = no value
+██████████ 1 shade ~ 20 ms · 10 to 95 ms, 5 shades · blank = no value
 columns: 1 00h · 2 06h · 3 12h
 ```
 

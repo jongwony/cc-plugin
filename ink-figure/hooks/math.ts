@@ -186,6 +186,8 @@ export type Shape = { rings: Point[][]; clip: Clip }
 const box = (x0: number, y0: number, x1: number, y1: number, reverse = false): Point[] =>
   reverse ? [[x0, y0], [x0, y1], [x1, y1], [x1, y0]] : [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
 
+type Paint = { fill: string; stroke: string; strokeWidth: number }
+
 const meet = (a: Clip, b: Clip): Clip =>
   a === null ? b : b === null ? a : [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.min(a[3], b[3])]
 
@@ -204,8 +206,8 @@ export const outlinesOf = (svg: LiteNode): Shape[] => {
     if (!Number.isFinite(n)) throw new Error(`${name}="${value}"`)
     return n
   }
-  // `fill` and `stroke` arrive inherited from the ancestors, as SVG paints them
-  const walk = (node: LiteNode, outer: Matrix, clip: Clip, parent: LiteNode | null, grandparent: LiteNode | null, inherited: { fill: string; stroke: string }) => {
+  // `fill`, `stroke` and `stroke-width` arrive inherited from the ancestors, as SVG paints them
+  const walk = (node: LiteNode, outer: Matrix, clip: Clip, parent: LiteNode | null, grandparent: LiteNode | null, inherited: Paint) => {
     const kind = adaptor.kind(node)
     if (kind === '#text' || kind === '#comment') return
     if (!DRAWN.has(kind)) throw new Error(`cannot fill <${kind}>`)
@@ -213,7 +215,11 @@ export const outlinesOf = (svg: LiteNode): Shape[] => {
     const unhonoured = unhonouredOf(node, kind, node === svg, parent)
     if (unhonoured) throw new Error(`cannot honour ${unhonoured}`)
     if (/\bmjx-(dashed|dotted)\b/.test(attr(node, 'class') ?? '') || attr(node, 'stroke-dasharray') != null) throw new Error('a dashed rule')
-    const paint = { fill: String(attr(node, 'fill') ?? inherited.fill).trim(), stroke: String(attr(node, 'stroke') ?? inherited.stroke).trim() }
+    const paint: Paint = {
+      fill: String(attr(node, 'fill') ?? inherited.fill).trim(),
+      stroke: String(attr(node, 'stroke') ?? inherited.stroke).trim(),
+      strokeWidth: number(node, 'stroke-width', inherited.strokeWidth),
+    }
     let m = times(outer, transformOf(attr(node, 'transform')))
     let shape: Shape | null = null
     const put = (ring: Point[]) => {
@@ -246,6 +252,7 @@ export const outlinesOf = (svg: LiteNode): Shape[] => {
       m = times(m, inner)
     } else if (kind === 'path') {
       if (paint.fill === 'none') throw new Error('an unfilled path')
+      if (paint.stroke !== 'none' && paint.strokeWidth > 0) throw new Error('a stroked path')
       for (const ring of ringsOf(attr(node, 'd') ?? '')) put(ring)
     } else if (kind === 'rect') {
       if (number(node, 'rx') !== 0 || number(node, 'ry') !== 0) throw new Error('a rounded frame')
@@ -270,7 +277,7 @@ export const outlinesOf = (svg: LiteNode): Shape[] => {
     }
     for (const child of adaptor.childNodes(node)) walk(child, m, clip, node, parent, paint)
   }
-  walk(svg, IDENTITY, null, null, null, { fill: 'currentColor', stroke: 'none' })
+  walk(svg, IDENTITY, null, null, null, { fill: 'currentColor', stroke: 'none', strokeWidth: 1 })
   return shapes
 }
 
@@ -375,13 +382,16 @@ const unwrapped = (tex: string): string => {
 }
 
 // What MathJax would build before any bound here can stop it: \pmb sets its
-// argument twice, so its outlines double per nesting, and an alignat column count
-// is allocated as given.
+// argument twice, so its outlines double per nesting; an operator \DeclareMathOperator
+// defines may use earlier ones any number of times, so a chain grows the same way;
+// and an alignat column count is allocated as given.
 const PMB = /\\pmb(?![a-zA-Z])/
+const DECLARE = /\\DeclareMathOperator(?![a-zA-Z])/
 const ALIGNAT = /\\begin\s*\{\s*(?:x{0,2}alignat\*?|alignedat)\s*\}\s*(?:\[[^\]]*\]\s*)?\{\s*(\d+)\s*\}/g
 const MAX_ALIGNAT = 32
 const unboundedOf = (tex: string): string | null => {
   if (PMB.test(tex)) return '\\pmb'
+  if (DECLARE.test(tex)) return '\\DeclareMathOperator'
   for (const [, n] of tex.matchAll(ALIGNAT)) if (Number(n) > MAX_ALIGNAT) return `alignat with ${n} columns`
   return null
 }

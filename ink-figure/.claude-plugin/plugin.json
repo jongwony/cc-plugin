@@ -1,7 +1,7 @@
 {
   "name": "ink-figure",
   "description": "Renders Epistemic Ink mermaid diagrams, line charts and 2-D math as terminal figures — only what transcript text cannot draw; East Asian labels line up",
-  "version": "0.4.11",
+  "version": "0.4.12",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

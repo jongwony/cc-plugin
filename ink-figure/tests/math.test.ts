@@ -1,5 +1,6 @@
 import { expect, test } from 'claude-code/testing'
-import { CELL_PX, INK, inkOf, mathOf, ringsOf, type MathArt } from '../hooks/math.ts'
+import { CELL_PX, INK, inkOf, mathOf, outlinesOf, ringsOf, type MathArt } from '../hooks/math.ts'
+import { adaptor, texToSvg, type LiteNode } from '../hooks/vendor/math/mathjax.js'
 import { piecesOf } from '../hooks/figures.ts'
 
 const ENGINE = { type: 'Text', props: {}, children: ['drawn by Claude Code'] }
@@ -194,7 +195,7 @@ test('a line break MathJax draws as a space keeps the fence; a table row break d
 test('no definition reaches the next fence, not even from one that failed', () => {
   const before = art('\\sin x')
   expect('error' in mathOf('\\DeclareMathOperator{\\sin}{bad}\\nope', 134, INK.dark)).toBe(true)
-  expect('error' in mathOf('\\DeclareMathOperator{\\foo}{foo}\\foo x', 134, INK.dark)).toBe(false)
+  expect('error' in mathOf('\\DeclareMathOperator{\\foo}{foo}\\foo x', 134, INK.dark)).toBe(true)
   const after = art('\\sin x')
   expect(after.width).toBe(before.width)
   expect([...after.rgba]).toEqual([...before.rgba])
@@ -254,6 +255,32 @@ test('TeX whose expansion has no bound keeps the fence at once; a bounded alignm
   expect(performance.now() - started).toBeLessThan(100)
   expect(inked(art('\\begin{alignedat}{2} a&=b & c&=d\\end{alignedat}'))).toBeGreaterThan(0)
   expect(inked(art('\\begin{alignedat}[t]{2} a&=b & c&=d\\end{alignedat}'))).toBeGreaterThan(0)
+})
+
+test('a declared operator keeps the fence before MathJax runs, a chain of them at once; \\operatorname draws', () => {
+  const names = 'abcdefghijklmn'.split('').map(c => `\\${c}${c}`)
+  let chain = `\\DeclareMathOperator{${names[0]}}{x}`
+  for (let i = 1; i < names.length; i++) chain += `\\DeclareMathOperator{${names[i]}}{${names[i - 1]}${names[i - 1]}}`
+  chain += names[names.length - 1]
+  const started = performance.now()
+  expect('error' in mathOf(chain, 134, INK.dark)).toBe(true)
+  expect(performance.now() - started).toBeLessThan(100)
+  expect(inked(art('\\operatorname{argmax}_x f'))).toBeGreaterThan(0)
+})
+
+test('a path whose inherited stroke is drawn keeps the fence; glyphs inherit a zero stroke width', () => {
+  const svg = texToSvg('x')
+  expect(() => outlinesOf(svg)).not.toThrow()
+  const paths: LiteNode[] = []
+  const find = (node: LiteNode) => {
+    if (adaptor.kind(node) === 'path') paths.push(node)
+    for (const child of adaptor.childNodes(node)) find(child)
+  }
+  find(svg)
+  expect(paths.length).toBeGreaterThan(0)
+  // the root group sets stroke="currentColor" stroke-width="0"; a positive width on the way down draws the stroke
+  adaptor.setAttribute(paths[0]!, 'stroke-width', '40')
+  expect(() => outlinesOf(svg)).toThrow('a stroked path')
 })
 
 test('only a fence that is one display wrapper is unwrapped; two keep the fence', () => {

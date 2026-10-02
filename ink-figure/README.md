@@ -112,8 +112,10 @@ a sum with stacked limits; a flat expression stays in the text.
   the math font lacks (Hangul, for one; Latin `\text{if }` draws), or a line
   break `\\` or `\newline` that MathJax draws as a space (anywhere but a table
   row: `equation` included) keeps the fence, as does a formula wider than the
-  terminal, one drawn with a colour, a background or hidden parts, any `\pmb`
-  (each nesting doubles the work), or an `alignat` of more than 32 columns.
+  terminal, one drawn with a colour, a background, hidden parts or a stroked
+  outline, any `\pmb` (each nesting doubles the work), any
+  `\DeclareMathOperator` (a chain of operators built from earlier ones grows the
+  same way; `\operatorname` draws), or an `alignat` of more than 32 columns.
   Each fence is read on its own: an operator one fence declares does not
   reach the next. A single `$$…$$` or `\[…\]` wrapper around the whole fence is
   ignored; a fence holding two display formulas keeps its fence.

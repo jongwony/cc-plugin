@@ -181,7 +181,12 @@ test('a path with numbers after Z, or an arc, is refused rather than read wrongl
 })
 
 test('a line break MathJax draws as a space keeps the fence; a table row break draws', () => {
-  for (const tex of ['x = 1 \\\\ y = 2', 'x = 1 \\newline y = 2', '\\begin{equation} a = b \\\\ c = d \\end{equation}'])
+  for (const tex of [
+    'x = 1 \\\\ y = 2',
+    'x = 1 \\newline y = 2',
+    '\\begin{equation} a = b \\\\ c = d \\end{equation}',
+    '\\mmlToken{mo}[linebreak="newline"]{=}x',
+  ])
     expect('error' in mathOf(tex, 134, INK.dark)).toBe(true)
   for (const tex of [
     MATRIX,
@@ -306,4 +311,9 @@ test('only a fence that is one display wrapper is unwrapped; two keep the fence'
 test('a number in exponent form is a coordinate, not a path command', () => {
   expect(ringsOf('M0 0L1 1 2e-3 5Z')).toEqual([[[0, 0], [1, 1], [0.002, 5]]])
   expect(ringsOf('M0 0L1E1 1Z')[0]!.length).toBe(2)
+})
+
+test('a formula with no ink keeps its fence instead of drawing a blank box', () => {
+  for (const tex of ['\\phantom{x}', '\\hspace{1em}']) expect('error' in mathOf(tex, 134, INK.dark)).toBe(true)
+  expect('rgba' in mathOf('\\frac{a}{b}', 134, INK.dark)).toBe(true)
 })

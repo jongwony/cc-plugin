@@ -445,6 +445,11 @@ const extentOf = (shapes: readonly Shape[]): [number, number, number, number] | 
   return r > l && b > t ? [l, t, r, b] : null
 }
 
+const inked = (rgba: Uint8Array): boolean => {
+  for (let i = 3; i < rgba.length; i += 4) if (rgba[i]! > 0) return true
+  return false
+}
+
 // The formula as pixels on a box of whole cells, the box no wider than `columns`:
 // the bitmap is padded to columns × rows cells of CELL_PX so the terminal scales it
 // without distortion, the formula at the left and centred top to bottom. The box
@@ -462,12 +467,11 @@ export const mathOf = (source: string, columns: number, ink: Ink): MathRendered 
     if (view.length !== 4 || view.some(n => !Number.isFinite(n)) || view[2]! <= 0 || view[3]! <= 0) return { error: 'no picture' }
     const outlines = outlinesOf(svg)
     const extent = extentOf(outlines)
+    if (!extent) return { error: 'nothing to draw' }
     let [vx, vy, vw, vh] = view as [number, number, number, number]
-    if (extent) {
-      const right = Math.max(vx + vw, extent[2]), bottom = Math.max(vy + vh, extent[3])
-      vx = Math.min(vx, extent[0]); vy = Math.min(vy, extent[1])
-      vw = right - vx; vh = bottom - vy
-    }
+    const right = Math.max(vx + vw, extent[2]), bottom = Math.max(vy + vh, extent[3])
+    vx = Math.min(vx, extent[0]); vy = Math.min(vy, extent[1])
+    vw = right - vx; vh = bottom - vy
     const scale = EM_PX / 1000
     const inkWidth = vw * scale, inkHeight = vh * scale
     const cols = Math.ceil(inkWidth / CELL_PX.width)
@@ -483,7 +487,9 @@ export const mathOf = (source: string, columns: number, ink: Ink): MathRendered 
       const [l, t] = px([clip[0], clip[1]]), [r, b] = px([clip[2], clip[3]])
       return { rings: rings.map(ring => ring.map(px)), clip: [l, t, r, b] }
     })
-    return { rgba: filled(shapes, width, height, ink), width, height, columns: cols, rows }
+    const rgba = filled(shapes, width, height, ink)
+    if (!inked(rgba)) return { error: 'nothing to draw' }
+    return { rgba, width, height, columns: cols, rows }
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) }
   }

@@ -11,9 +11,10 @@ import 'mathjax-full/js/input/tex/ams/AmsConfiguration.js'
 export const adaptor = liteAdaptor()
 RegisterHTMLHandler(adaptor)
 
-// an mspace a `\\` or `\newline` became where no table takes it as a row break
+// a node carrying a forced line break: the mspace a `\\` or `\newline` became where
+// no table takes it as a row break, or any token given linebreak="newline"
 const forcedBreakIn = node => {
-  if (node.isKind?.('mspace') && node.attributes.get('linebreak') === 'newline') return true
+  if (node.attributes?.get?.('linebreak') === 'newline') return true
   return (node.childNodes ?? []).some(child => child && forcedBreakIn(child))
 }
 

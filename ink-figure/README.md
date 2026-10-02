@@ -75,6 +75,9 @@ left-to-right flip and the role colouring are adapted from
   makes the whole reply fall back to Claude Code's own drawing.
 - A node ID must be ASCII (a Hangul label is fine, a Hangul ID is not
   parsed upstream); such a fence keeps its source.
+- A label holding a combining mark, a joined emoji sequence, a flag or a
+  skin-tone modifier keeps its fence: the terminal draws those in fewer cells
+  than the layout can count.
 
 ## Build and test
 

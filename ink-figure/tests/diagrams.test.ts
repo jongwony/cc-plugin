@@ -46,6 +46,27 @@ test('a Hangul sequence diagram keeps its lifelines in one column', () => {
   expect(new Set(lifelines.map(displayWidth)).size).toBe(1)
 })
 
+test('emoji, astral CJK and presentation emoji line up with the box borders', () => {
+  for (const label of ['😀 smile', '𠀀𠀁 rare', '✅ passed', '🚀 launch']) {
+    const lines = linesOf(`graph LR\n  A["${label}"] --> B[done]`)
+    expect(lines.some(l => l.includes(label))).toBe(true)
+    expect(new Set(lines.map(displayWidth)).size).toBe(1)
+  }
+})
+
+test('a decomposed Hangul label is composed before layout and lines up', () => {
+  const lines = linesOf(`graph LR\n  A[${'서울 요청'.normalize('NFD')}] --> B[cache]`)
+  expect(lines.some(l => l.includes('서울 요청'))).toBe(true)
+  expect(new Set(lines.map(displayWidth)).size).toBe(1)
+})
+
+test('a character the cells cannot hold keeps the fence', () => {
+  expect('error' in renderOf('graph LR\n  A["👨‍👩‍👧 family"] --> B[ok]')).toBe(true)
+  expect('error' in renderOf('graph LR\n  A["❤️ love"] --> B[ok]')).toBe(true)
+  expect('error' in renderOf('graph LR\n  A["beforeafter"] --> B[ok]')).toBe(true)
+  expect(piecesOf('```mermaid\ngraph LR\n  A["🇰🇷 flag"] --> B[ok]\n```', 94)).toBe(null)
+})
+
 test('spacing defaults to 3 · 1 · 1 and boxes stand five rows tall', () => {
   expect(SPACING).toEqual({ paddingX: 3, paddingY: 1, boxBorderPadding: 1 })
   expect(linesOf('graph LR\n  A --> B').length).toBe(5)

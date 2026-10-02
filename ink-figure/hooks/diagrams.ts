@@ -85,8 +85,10 @@ export const leftToRightOf = (source: string): string | null => {
   return null
 }
 
-// East Asian Wide and Fullwidth ranges (UAX #11), the ones labels meet in practice.
-// Ambiguous-width characters, box-drawing included, stay one cell.
+// East Asian Wide and Fullwidth ranges (UAX #11), the ones labels meet in practice,
+// and emoji drawn as pictures by default. Ambiguous-width characters, box-drawing
+// included, stay one cell.
+const EMOJI = /\p{Emoji_Presentation}/u
 export const isWide = (cp: number): boolean =>
   (cp >= 0x1100 && cp <= 0x115f) ||
   (cp >= 0x2e80 && cp <= 0xa4cf && cp !== 0x303f) ||
@@ -95,24 +97,33 @@ export const isWide = (cp: number): boolean =>
   (cp >= 0xfe30 && cp <= 0xfe4f) ||
   (cp >= 0xff00 && cp <= 0xff60) ||
   (cp >= 0xffe0 && cp <= 0xffe6) ||
-  (cp >= 0x1f300 && cp <= 0x1f64f) ||
-  (cp >= 0x1f900 && cp <= 0x1f9ff) ||
-  (cp >= 0x20000 && cp <= 0x3fffd)
+  (cp >= 0x20000 && cp <= 0x3fffd) ||
+  EMOJI.test(String.fromCodePoint(cp))
+
+export const cellsOf = (cp: number): number => (isWide(cp) ? 2 : 1)
 
 export const displayWidth = (s: string): number => {
   let n = 0
-  for (const c of s) n += isWide(c.codePointAt(0)!) ? 2 : 1
+  for (const c of s) n += cellsOf(c.codePointAt(0)!)
   return n
 }
 
-// The renderer lays out one string character per grid cell. Each wide character
-// goes in followed by a private-use placeholder, so every measure the layout takes
-// counts it as the two cells the terminal gives it; the placeholder comes out of
-// the art again, and the wide character fills both cells.
-const CELL = ''
+// The renderer lays out one UTF-16 unit per grid cell, so a code point takes as
+// many cells as it has units. A wide character in the Basic Multilingual Plane
+// goes in followed by a private-use placeholder, so the layout counts it as the
+// two cells the terminal gives it; the placeholder comes out of the art again.
+// An astral character already has two units. A code point the terminal draws in
+// fewer cells than its units — a combining mark, a joiner, a modifier or flag
+// half that merges with its neighbour — cannot be laid out, and neither can a
+// source that already holds the placeholder.
+const CELL = '\uE000'
+const UNPLACEABLE = /[\p{M}\p{Cf}\u1160-\u11ff\u{1f1e6}-\u{1f1ff}\u{1f3fb}-\u{1f3ff}\uE000]/u
 const widened = (source: string): string => {
   let out = ''
-  for (const c of source) out += isWide(c.codePointAt(0)!) ? c + CELL : c
+  for (const c of source) {
+    const cp = c.codePointAt(0)!
+    out += cp <= 0xffff && isWide(cp) ? c + CELL : c
+  }
   return out
 }
 
@@ -184,8 +195,11 @@ export const renderOf = (source: string, useAscii = false): Rendered => {
   const kind = kindOf(source)
   if (!DRAWN_KINDS.has(kind)) return { error: `${kind} diagrams are not drawn` }
   if (source.length > MAX_SOURCE_CHARS) return { error: `too big to draw (${source.length} characters)` }
+  const composed = source.normalize('NFC')
+  const unplaceable = UNPLACEABLE.exec(composed)
+  if (unplaceable) return { error: `U+${unplaceable[0].codePointAt(0)!.toString(16).toUpperCase()} cannot be laid out in cells` }
   try {
-    const art = renderMermaidAscii(widened(source), { useAscii, ...SPACING, colorMode: 'truecolor', theme: ROLE_THEME })
+    const art = renderMermaidAscii(widened(composed), { useAscii, ...SPACING, colorMode: 'truecolor', theme: ROLE_THEME })
     const lines = art.split('\n').map(line => trimEnd(segmentsOf(line)))
     while (lines.length > 0 && lines[lines.length - 1]!.length === 0) lines.pop()
     while (lines.length > 0 && lines[0]!.length === 0) lines.shift()
@@ -226,7 +240,7 @@ export const fitLines = (lines: readonly (readonly Segment[])[], columns: number
     for (const segment of line) {
       let text = ''
       for (const c of segment.text) {
-        const w = isWide(c.codePointAt(0)!) ? 2 : 1
+        const w = cellsOf(c.codePointAt(0)!)
         if (w > left) break
         text += c
         left -= w

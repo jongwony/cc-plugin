@@ -33,7 +33,6 @@ const KINDS: [RegExp, string][] = [
   [/^classDiagram/i, 'class'],
   [/^stateDiagram/i, 'state'],
   [/^erDiagram/i, 'er'],
-  [/^xychart/i, 'chart'],
 ]
 
 export const DRAWN_KINDS: ReadonlySet<string> = new Set(KINDS.map(([, kind]) => kind))

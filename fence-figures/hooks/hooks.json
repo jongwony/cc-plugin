@@ -1,5 +1,5 @@
 {
-  "description": "fence-figures: draws ```heatmap, ```bars and ```mermaid fences in the terminal transcript. Builds without function hooks ignore the modules key.",
+  "description": "fence-figures: draws ```heatmap and ```mermaid fences in the terminal transcript. Builds without function hooks ignore the modules key.",
   "modules": [
     "./register.ts"
   ]

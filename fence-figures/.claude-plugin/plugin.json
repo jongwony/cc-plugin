@@ -1,7 +1,7 @@
 {
   "name": "fence-figures",
-  "description": "Mod that draws figure fences in Claude's replies in the terminal transcript: ```heatmap and ```bars as Raster cells with the scale of one cell stated, ```mermaid as box art whose East Asian labels line up",
-  "version": "0.1.0",
+  "description": "Mod that draws figure fences in Claude's replies in the terminal transcript: ```heatmap as Raster cells with the scale of one shade stated, ```mermaid as box art whose East Asian labels line up — only what transcript text cannot show",
+  "version": "0.2.0",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

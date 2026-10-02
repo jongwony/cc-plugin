@@ -4,16 +4,18 @@ A Claude Code mod that draws figure fences in Claude's replies right where the
 fence was, in the terminal transcript:
 
 - ` ```heatmap ` — a matrix of measured values, one colour shade per value band (`Raster` cells)
-- ` ```bars ` — measured horizontal bars, one cell per stated step (`Raster` cells)
-- ` ```mermaid ` — flowchart, sequence, class, state, ER and xychart diagrams as box art
+- ` ```mermaid ` — flowchart, sequence, class, state and ER diagrams as box art
+
+A fence is drawn only when what it shows cannot be written as transcript text —
+colour, computed layout; bars and tables are written as text.
 
 One `ui.render` hook on `AssistantMessage` reads every fence of every kind in one
 pass, so a reply that mixes kinds draws whole.
 
 Labels are measured in screen cells, so Hangul and other double-width labels line
-up — beside the `Raster` cells for charts, inside the boxes for diagrams. Every
-chart states what one cell (or one shade) stands for, and lengths round to whole
-cells — nothing finer than a cell is implied.
+up — beside the `Raster` cells for heatmaps, inside the boxes for diagrams. Every
+heatmap states what one shade stands for, and values fall into whole bands —
+nothing finer than a band is implied.
 
 Needs Claude Code v2.1.287 or later (mods on by default) and the interactive
 terminal. On any other surface, and for a fence that does not parse, is not a
@@ -31,41 +33,13 @@ Then `/reload-plugins` in a running session.
 
 ## Fence syntax
 
-The chart fences take an optional `unit:` line anywhere in the block (so a bar or
-row cannot itself be labelled `unit`).
-
-### bars
-
-One `label: value` line per bar. Values are non-negative numbers; the label is
-everything before the last `:`.
-
-````markdown
-```bars
-unit: GB
-인덱서: 3.2
-api: 0.8
-cache: 6
-```
-````
-
-Drawn as:
-
-```text
-인덱서 ████████████████████████████████                             3.2 GB
-api    ████████                                                     0.8 GB
-cache  ████████████████████████████████████████████████████████████ 6 GB
-1 cell ~ 0.1 GB · lengths rounded to whole cells
-```
-
-The step is the smallest 1, 2, 2.5 or 5 × 10ⁿ that fits the longest bar in at
-most 60 cells.
-
 ### heatmap
 
 A header row of column names, then one row per label ending in one value per
-column. Separate with spaces, or write a markdown table with `|` (a `|---|`
-rule line is skipped). The header may carry a corner cell above the labels or
-not. `-` marks a missing value, drawn blank.
+column, with an optional `unit:` line anywhere in the block. Separate with
+spaces, or write a markdown table with `|` (a `|---|` rule line is skipped). The
+header may carry a corner cell above the labels or not. `-` marks a missing
+value, drawn blank.
 
 ````markdown
 ```heatmap
@@ -91,8 +65,8 @@ columns: 1 00h · 2 06h · 3 12h
 ### mermaid
 
 Standard mermaid source. Drawn kinds: `flowchart`/`graph`, `sequenceDiagram`,
-`classDiagram`, `stateDiagram`, `erDiagram`, `xychart`; any other kind keeps its
-fence. A top-down flowchart or state diagram is laid out left to right when no
+`classDiagram`, `stateDiagram`, `erDiagram`; any other kind, `xychart` among
+them, keeps its fence. A top-down flowchart or state diagram is laid out left to right when no
 label is lost and it fits. Spacing is compact: two columns and one row between
 boxes, one cell inside them.
 

@@ -117,7 +117,7 @@
     {
       "name": "fence-figures",
       "source": "./fence-figures",
-      "description": "Mod that draws figure fences in the terminal transcript — ```heatmap and ```bars as Raster cells with the scale of one cell stated, ```mermaid as box art whose East Asian labels line up"
+      "description": "Mod that draws figure fences in the terminal transcript — ```heatmap as Raster cells with the scale of one shade stated, ```mermaid as box art whose East Asian labels line up — only what transcript text cannot show"
     }
   ]
 }

@@ -20,7 +20,7 @@ const EIGHT = [
   '  F[fence in reply] --> T{surface}',
   '  T -->|terminal| M[mod redraws]',
   '  T -->|desktop| D[host renders]',
-  '  M --> R[Raster: bars heatmap]',
+  '  M --> R[Raster: heatmap]',
   '  M --> I[Image: LaTeX png]',
   '  M --> X[text: mermaid box]',
   '  D --> K[math: native]',
@@ -89,5 +89,6 @@ test('off the terminal the message goes to Claude Code untouched', async ($, on)
 test('a kind the renderer does not draw, or a broken source, keeps its fence', () => {
   expect('error' in renderOf('pie title Pets\n  "Dogs" : 386')).toBe(true)
   expect(piecesOf('```mermaid\npie title Pets\n  "Dogs" : 386\n```', 94)).toBe(null)
+  expect(piecesOf('```mermaid\nxychart-beta\n  x-axis [a, b]\n  bar [1, 2]\n```', 94)).toBe(null)
   expect(piecesOf('```mermaid\ngraph TD\n  가[시작] --> 나[끝]\n```', 94)).toBe(null)
 })

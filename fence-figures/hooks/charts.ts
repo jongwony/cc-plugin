@@ -1,31 +1,19 @@
-// Pure chart part of fence-figures: find ```heatmap / ```bars fences in a reply,
+// Pure chart part of fence-figures: find ```heatmap fences in a reply,
 // parse their small DSL, and lay each out as Raster cells plus the text that
 // sits beside them. No mods API here, so the tests can call it directly.
 //
 // Two rules from the output style this serves shape every drawing:
-// a drawn length answers to a measured quantity, and every drawing states the
-// quantity one cell stands for — so lengths round to whole cells and nothing
-// finer than a cell is implied.
+// a drawn shade answers to a measured quantity, and every drawing states the
+// quantity one shade stands for — so values fall into whole bands and nothing
+// finer than a band is implied.
 
-export type FenceKind = 'heatmap' | 'bars'
+export type FenceKind = 'heatmap'
 
 export type Fence = {
   kind: FenceKind
   start: number
   end: number
   body: string
-}
-
-export type BarsChart = {
-  kind: 'bars'
-  labels: string[]
-  labelWidth: number
-  values: string[]
-  valueWidth: number
-  columns: number
-  rows: number
-  cells: string
-  scale: string
 }
 
 export type HeatmapChart = {
@@ -43,7 +31,7 @@ export type HeatmapChart = {
   scale: string
 }
 
-export type Chart = BarsChart | HeatmapChart
+export type Chart = HeatmapChart
 
 // Raster limits from the element's contract
 export const MAX_RASTER_COLUMNS = 512
@@ -52,17 +40,14 @@ export const MAX_RASTER_ROWS = 256
 export const MAX_MARKDOWN_CHARS = 10_000
 // Labels wider than this are truncated by their Text, not by the cells
 export const MAX_LABEL_WIDTH = 24
-// Longest bar drawn, so a short series is not stretched across a wide terminal
-export const MAX_BAR_CELLS = 60
 
 const DEFAULT_COLOR = 0x01000000
 const FULL_BLOCK = 0x2588
 const SPACE = 0x20
-const BAR_COLOR = 0x4c78a8
 // viridis, eight stops: ordered in lightness and readable with colour-vision deficiency
 export const SHADES = [0x440154, 0x46327e, 0x365c8d, 0x277f8e, 0x1fa187, 0x4ac16d, 0xa0da39, 0xfde725]
 
-const FENCE = /^([ \t]*)(`{3,}|~{3,})[ \t]*(heatmap|bars)[ \t]*\n([\s\S]*?)\n[ \t]*\2[ \t]*$/gim
+const FENCE = /^([ \t]*)(`{3,}|~{3,})[ \t]*(heatmap)[ \t]*\n([\s\S]*?)\n[ \t]*\2[ \t]*$/gim
 const NUMBER = /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i
 const UNIT = /^unit[ \t]*:[ \t]*(.*)$/i
 
@@ -149,54 +134,6 @@ const base64 = (bytes: Uint8Array): string => {
 const parseNumber = (tok: string): number | null => (NUMBER.test(tok) ? Number(tok) : null)
 
 const contentLines = (body: string) => body.split('\n').map(l => l.trim()).filter(l => l !== '')
-
-// ```bars
-// unit: GB
-// label: value
-export const barsOf = (body: string, columns: number): BarsChart | null => {
-  let unit = ''
-  const labels: string[] = []
-  const nums: number[] = []
-  for (const line of contentLines(body)) {
-    const u = UNIT.exec(line)
-    if (u) {
-      unit = u[1].trim()
-      continue
-    }
-    const at = line.lastIndexOf(':')
-    if (at <= 0) return null
-    const label = line.slice(0, at).trim()
-    const v = parseNumber(line.slice(at + 1).trim())
-    if (!label || v === null || v < 0) return null
-    labels.push(label)
-    nums.push(v)
-  }
-  if (labels.length === 0 || labels.length > MAX_RASTER_ROWS) return null
-  const labelWidth = Math.min(MAX_LABEL_WIDTH, Math.max(...labels.map(displayWidth)))
-  const values = nums.map(v => withUnit(fmt(v), unit))
-  const valueWidth = Math.max(...values.map(displayWidth))
-  const room = Math.min(MAX_BAR_CELLS, MAX_RASTER_COLUMNS, columns - labelWidth - valueWidth - 2)
-  if (room < 4) return null
-  const max = Math.max(...nums)
-  const step = niceStep(max / room)
-  const lengths = nums.map(v => Math.round(v / step))
-  const width = Math.max(1, ...lengths)
-  const triplets: number[] = []
-  for (const len of lengths)
-    for (let x = 0; x < width; x++)
-      x < len ? triplets.push(FULL_BLOCK, BAR_COLOR, DEFAULT_COLOR) : triplets.push(SPACE, DEFAULT_COLOR, DEFAULT_COLOR)
-  return {
-    kind: 'bars',
-    labels,
-    labelWidth,
-    values,
-    valueWidth,
-    columns: width,
-    rows: labels.length,
-    cells: packCells(triplets),
-    scale: `1 cell ~ ${withUnit(fmt(step), unit)} · lengths rounded to whole cells`,
-  }
-}
 
 const splitRow = (line: string): string[] => {
   if (!line.includes('|')) return line.split(/\s+/)
@@ -296,5 +233,4 @@ export const heatmapOf = (body: string, columns: number): HeatmapChart | null =>
   }
 }
 
-export const chartOf = (fence: Fence, columns: number): Chart | null =>
-  fence.kind === 'bars' ? barsOf(fence.body, columns) : heatmapOf(fence.body, columns)
+export const chartOf = (fence: Fence, columns: number): Chart | null => heatmapOf(fence.body, columns)

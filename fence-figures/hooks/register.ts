@@ -4,7 +4,7 @@ import type { Role, Segment } from './diagrams.ts'
 import { piecesOf, type Piece } from './figures.ts'
 import type { Fitted } from './diagrams.ts'
 
-// Every ```heatmap, ```bars and ```mermaid fence Claude writes is drawn where the
+// Every ```heatmap and ```mermaid fence Claude writes is drawn where the
 // fence was, on the terminal: charts as Raster cells, mermaid as box art built from
 // Text elements. AssistantMessage is the finest site a mod gets, so a reply holding
 // a figure is redrawn as a column of its own: Markdown for the prose around each
@@ -15,7 +15,7 @@ import type { Fitted } from './diagrams.ts'
 // the transcript's gutter and margins the drawing must clear
 const INLINE_MARGIN = 6
 const CACHE_LIMIT = 200
-const HINT = /(`{3,}|~{3,})[ \t]*(heatmap|bars|mermaid)\b/i
+const HINT = /(`{3,}|~{3,})[ \t]*(heatmap|mermaid)\b/i
 
 // colour by role through element styles: the engine refuses escape sequences in text
 const STYLE: Record<Role, { color?: string; dimColor?: boolean }> = {
@@ -57,28 +57,8 @@ export const register: Register = on => {
         children: chart.labels.map(label => Text({ wrap: 'truncate', children: [label] })),
       })
 
-    const drawn = (chart: Chart, i: number) => {
-      if (chart.kind === 'bars')
-        return Box({
-          flexDirection: 'column',
-          children: [
-            Box({
-              flexDirection: 'row',
-              columnGap: 1,
-              children: [
-                labelColumn(chart),
-                Raster({ key: `chart-${i}`, columns: chart.columns, rows: chart.rows, cells: chart.cells }),
-                Box({
-                  flexDirection: 'column',
-                  flexShrink: 0,
-                  children: chart.values.map(v => Text({ dimColor: true, wrap: 'truncate', children: [v] })),
-                }),
-              ],
-            }),
-            Text({ dimColor: true, children: [chart.scale] }),
-          ],
-        })
-      return Box({
+    const drawn = (chart: Chart, i: number) =>
+      Box({
         flexDirection: 'column',
         children: [
           Box({
@@ -105,7 +85,6 @@ export const register: Register = on => {
           Text({ dimColor: true, children: [chart.key] }),
         ],
       })
-    }
 
     const spanOf = ({ text, role }: Segment) => Text({ ...STYLE[role ?? 'text'], children: [text] })
     const diagram = (fit: Fitted) =>

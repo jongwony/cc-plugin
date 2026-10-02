@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { barsOf, displayWidth, heatmapOf, niceStep, packCells } from '../hooks/charts.ts'
+import { displayWidth, heatmapOf, niceStep, packCells } from '../hooks/charts.ts'
 import { piecesOf } from '../hooks/figures.ts'
 
 const ENGINE = { type: 'Text', props: {}, children: ['drawn by Claude Code'] }
@@ -26,8 +26,6 @@ const HEATMAP = [
   'Seoul peaks at noon.',
 ].join('\n')
 
-const BARS = ['Memory per worker:', '```bars', 'unit: GB', '인덱서: 3.2', 'api: 0.8', 'cache: 6', '```'].join('\n')
-
 test('heatmap draws a Raster with a label column, a scale line and a column key', async ($, on) => {
   on('ui.render', () => ENGINE)
   const ui = await $.ui.mount(message(HEATMAP))
@@ -40,17 +38,6 @@ test('heatmap draws a Raster with a label column, a scale line and a column key'
   expect(await ui.find({ type: 'Text', text: 'columns: 1 00h · 2 06h · 3 12h' })).toBeDefined()
   expect(await ui.find({ type: 'Markdown', text: 'Seoul peaks at noon.' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: 'drawn by Claude Code' })).toBeUndefined()
-})
-
-test('bars draw whole cells with the scale of one cell stated', async ($, on) => {
-  on('ui.render', () => ENGINE)
-  const ui = await $.ui.mount(message(BARS))
-  const bars = await ui.find({ key: 'chart-0' })
-  expect(bars?.type).toBe('Raster')
-  expect(bars?.props).toMatchObject({ rows: 3 })
-  expect(await ui.find({ type: 'Text', text: '인덱서' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: '3.2 GB' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^1 cell ~ [\d.]+ GB/ })).toBeDefined()
 })
 
 test('off the terminal the message goes to Claude Code untouched', async ($, on) => {
@@ -66,7 +53,7 @@ test('off the terminal the message goes to Claude Code untouched', async ($, on)
 })
 
 test('a malformed fence goes to Claude Code untouched', async ($, on) => {
-  const bad = ['```bars', 'unit: GB', 'api: lots', '```'].join('\n')
+  const bad = ['```heatmap', 'unit: ms', '     00h 12h', 'api  3 lots', '```'].join('\n')
   let seen = ''
   on('ui.render', ($, e) => {
     seen = e.props.text
@@ -89,12 +76,13 @@ test('cells pack as little-endian u32 triplets in padded base64', () => {
   expect(packCells([0x2588, 0xff8800, 0x01000000])).toBe('iCUAAACI/wAAAAAB')
 })
 
-test('bar lengths round to whole cells of a nice step', () => {
-  const chart = barsOf('unit: GB\na: 3.2\nb: 0.8\nc: 6', 94)!
-  expect(chart.scale.startsWith('1 cell ~ 0.1 GB')).toBe(true)
-  expect(chart.columns).toBe(60)
+test('a step is the smallest nice 1, 2, 2.5 or 5 × 10ⁿ at or above the raw step', () => {
   expect(niceStep(0.13)).toBe(0.2)
   expect(niceStep(2.1)).toBe(2.5)
+})
+
+test('a bars fence is not drawn: bars are written as text', () => {
+  expect(piecesOf('```bars\nunit: GB\napi: 0.8\n```', 94)).toBe(null)
 })
 
 test('heatmap shades stay within the palette and accept piped tables', () => {

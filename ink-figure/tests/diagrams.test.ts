@@ -67,6 +67,13 @@ test('a character the cells cannot hold keeps the fence', () => {
   expect(piecesOf('```mermaid\ngraph LR\n  A["🇰🇷 flag"] --> B[ok]\n```', 94)).toBe(null)
 })
 
+test('a state diagram keeps its start and end transitions, their labels and the states only they name', () => {
+  const labelled = linesOf('stateDiagram-v2\n  [*] --> A: boot\n  A --> B: proceed\n  B --> [*]: exit').join('\n')
+  for (const word of ['boot', 'proceed', 'exit']) expect(labelled.includes(word)).toBe(true)
+  const ending = linesOf('stateDiagram-v2\n  [*] --> Idle\n  Idle --> Run\n  Error --> [*]\n  Run --> Done').join('\n')
+  for (const state of ['Idle', 'Run', 'Error', 'Done']) expect(ending.includes(state)).toBe(true)
+})
+
 test('spacing defaults to 3 · 1 · 1 and boxes stand five rows tall', () => {
   expect(SPACING).toEqual({ paddingX: 3, paddingY: 1, boxBorderPadding: 1 })
   expect(linesOf('graph LR\n  A --> B').length).toBe(5)

@@ -3,7 +3,7 @@ import { renderMermaidAscii } from './vendor/mermaid-ascii.js'
 // Pure functions over mermaid blocks: finding them in a reply's markdown, drawing
 // them as role-tagged box art with East Asian labels measured in screen cells, and
 // fitting the art to a width. No `$`, so the tests drive these directly.
-// Fence detection, kind table, LR flip, pseudo-state trim and the sentinel-colour
+// Fence detection, kind table, LR flip and the sentinel-colour
 // role recovery are adapted from claude-mermaid (Gal Elmalah, MIT).
 
 export type MermaidBlock = { start: number; end: number; source: string }
@@ -64,12 +64,6 @@ const headerOf = (source: string): string => {
 export const kindOf = (source: string): string => KINDS.find(([pattern]) => pattern.test(headerOf(source)))?.[1] ?? 'diagram'
 
 export const MAX_SOURCE_CHARS = 12_000
-
-export const withoutPseudoStates = (source: string): string => {
-  if (kindOf(source) !== 'state') return source
-  const kept = source.split('\n').filter(line => !line.includes('[*]'))
-  return kept.some(line => line.includes('-->')) ? kept.join('\n') : source
-}
 
 export const leftToRightOf = (source: string): string | null => {
   const kind = kindOf(source)
@@ -255,8 +249,7 @@ export const fitLines = (lines: readonly (readonly Segment[])[], columns: number
 }
 
 export const drawn = (source: string, columns: number): Rendered => {
-  const prepared = withoutPseudoStates(source)
-  const base = renderOf(prepared)
-  const sideways = leftToRightOf(prepared)
+  const base = renderOf(source)
+  const sideways = leftToRightOf(source)
   return sideways ? pickLayout(base, renderOf(sideways), columns) : base
 }

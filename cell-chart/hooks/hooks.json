@@ -1,0 +1,6 @@
+{
+  "description": "cell-chart: draws ```heatmap and ```bars fences as Raster cells in the terminal transcript. Needs function hooks; builds without them ignore the modules key.",
+  "modules": [
+    "./register.ts"
+  ]
+}

@@ -113,6 +113,22 @@
       "name": "telegram-report",
       "source": "./telegram-report",
       "description": "Send-only Telegram report for scheduled routines — posts one message into a fixed forum topic by thread id, with credentials from TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID; never creates topics or reads updates"
+    },
+    {
+      "name": "mermaid-box",
+      "source": {
+        "source": "git-subdir",
+        "url": "galElmalah/claude-mods",
+        "path": "claude-mermaid",
+        "ref": "main",
+        "sha": "b19a0f0d09bf214c010b15cc2849c0c1a11d7b0d"
+      },
+      "description": "Upstream mod by Gal Elmalah (claude-mermaid, MIT) — draws ```mermaid blocks as box art inline in the terminal transcript; Hangul labels misalign (observed)"
+    },
+    {
+      "name": "cell-chart",
+      "source": "./cell-chart",
+      "description": "Mod that draws ```heatmap and ```bars fences as terminal Raster cells with a label column and a stated per-cell scale; untouched off-terminal"
     }
   ]
 }

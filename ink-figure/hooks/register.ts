@@ -41,8 +41,9 @@ const readTheme = async ($: EngineInterface): Promise<Ink> => {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    await readTheme($)
-    return next(e)
+    const result = await next(e)
+    void readTheme($)
+    return result
   })
 
   // a new ink redraws the formulas already in the transcript; a render is otherwise

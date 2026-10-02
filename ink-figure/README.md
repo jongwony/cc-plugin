@@ -35,7 +35,8 @@ Then `/reload-plugins` in a running session.
 
 Standard mermaid source. A top-down flowchart or state diagram (a flowchart
 header with no direction is top-down, as in mermaid) is laid out left
-to right when no label is lost and it fits; a flowchart written `BT` or `LR`
+to right when no word of the drawing is lost and it fits the terminal or is no
+wider than the top-down layout; a flowchart written `BT` or `LR`
 keeps its direction. Spacing is compact: three columns and one row between
 boxes, one cell inside them.
 

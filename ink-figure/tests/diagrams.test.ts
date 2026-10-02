@@ -266,6 +266,12 @@ test('only a top-down flowchart is turned sideways; BT and RL keep the direction
   for (const header of ['graph BT', 'graph rl', 'graph RL', 'graph LR', 'flowchart bt']) expect(leftToRightOf(`${header}\n  A --> B`)).toBe(null)
 })
 
+test('the sideways layout rewrites the header line itself, not a comment above it', () => {
+  expect(leftToRightOf('%% graph TD\ngraph TD\nA-->B')).toBe('%% graph TD\ngraph LR\nA-->B')
+  expect(leftToRightOf('%% stateDiagram note\nstateDiagram-v2\n  A --> B')).toBe('%% stateDiagram note\nstateDiagram-v2\n  direction LR\n  A --> B')
+  expect(leftToRightOf('graph TD\n  A["$& $1"] --> B')).toBe('graph LR\n  A["$& $1"] --> B')
+})
+
 test('a block left open at the end of the source keeps the fence', () => {
   for (const source of [
     'graph LR\n  subgraph S\n  A --> B',

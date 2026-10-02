@@ -127,3 +127,9 @@ test('a chart with more values than its size cap keeps the fence at once; an ord
   expect(performance.now() - started).toBeLessThan(100)
   expect('lines' in renderOf(`xychart-beta\n  x-axis [${categories(12)}]\n  line [${values(12)}]`)).toBe(true)
 })
+
+test('a chart whose layout draws over a wide character keeps its fence; a short Hangul chart draws', () => {
+  const long = ['일월', '이월', '삼월', '사월', '오월', '육월', '칠월', '팔월', '구월', '시월', '십일월'].map(m => `${m}매우긴범주`)
+  expect('error' in renderOf(`xychart-beta\n  x-axis [${long.join(', ')}]\n  line [${long.map((_, i) => i + 1).join(', ')}]`)).toBe(true)
+  expect('lines' in renderOf('xychart-beta\n  title "응답 시간"\n  x-axis [월, 화, 수]\n  line [3, 9, 5]')).toBe(true)
+})

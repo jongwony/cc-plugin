@@ -30,11 +30,24 @@ const KINDS: [RegExp, string][] = [
 
 export const DRAWN_KINDS: ReadonlySet<string> = new Set(KINDS.map(([, kind]) => kind))
 
-const headerOf = (source: string): string =>
-  source
-    .split('\n')
-    .map(line => line.trim())
-    .find(line => line !== '' && !line.startsWith('%%')) ?? ''
+// the header: the first line that is neither blank nor a `%%` comment, as offsets
+const headerAt = (source: string): { start: number; end: number } | null => {
+  let at = 0
+  for (const line of source.split('\n')) {
+    const trimmed = line.trim()
+    if (trimmed !== '' && !trimmed.startsWith('%%')) return { start: at, end: at + line.length }
+    at += line.length + 1
+  }
+  return null
+}
+
+const headerOf = (source: string): string => {
+  const header = headerAt(source)
+  return header ? source.slice(header.start, header.end).trim() : ''
+}
+
+const withHeader = (source: string, header: { start: number; end: number }, line: string): string =>
+  source.slice(0, header.start) + line + source.slice(header.end)
 
 export const kindOf = (source: string): string => KINDS.find(([pattern]) => pattern.test(headerOf(source)))?.[1] ?? 'diagram'
 
@@ -43,11 +56,11 @@ export const MAX_SOURCE_CHARS = 12_000
 // a flowchart header with no direction takes mermaid's default, top to bottom, which
 // the renderer needs spelled out
 const directed = (source: string): string => {
-  const lines = source.split('\n')
-  const i = lines.findIndex(line => line.trim() !== '' && !line.trim().startsWith('%%'))
-  if (i < 0 || !/^\s*(flowchart|graph)\s*;?\s*$/i.test(lines[i]!)) return source
-  lines[i] = `${lines[i]!.replace(/\s*;?\s*$/, '')} TD`
-  return lines.join('\n')
+  const header = headerAt(source)
+  if (!header) return source
+  const line = source.slice(header.start, header.end)
+  if (!/^\s*(flowchart|graph)\s*;?\s*$/i.test(line)) return source
+  return withHeader(source, header, `${line.replace(/\s*;?\s*$/, '')} TD`)
 }
 
 // an xychart is drawn only when it holds a line: bars are written as text
@@ -55,14 +68,17 @@ const LINE_SERIES = /^[ \t]*line\b/m
 
 export const leftToRightOf = (source: string): string | null => {
   const kind = kindOf(source)
+  const header = headerAt(source)
+  if (!header) return null
+  const line = source.slice(header.start, header.end)
   if (kind === 'flowchart') {
-    const header = /^(\s*(?:flowchart|graph))(?:\s+(TD|TB|BT|LR|RL))?\b([^\n]*)$/im.exec(source)
-    if (!header || (header[2] && !/^(TD|TB)$/i.test(header[2]))) return null
-    return source.replace(header[0], `${header[1]} LR${header[3]}`)
+    const parts = /^(\s*(?:flowchart|graph))(?:\s+(TD|TB|BT|LR|RL))?\b(.*)$/i.exec(line)
+    if (!parts || (parts[2] && !/^(TD|TB)$/i.test(parts[2]))) return null
+    return withHeader(source, header, `${parts[1]} LR${parts[3]}`)
   }
   if (kind === 'state') {
     if (/^\s*direction\s+/im.test(source)) return null
-    return source.replace(/^([^\n]*stateDiagram[^\n]*)$/im, '$1\n  direction LR')
+    return withHeader(source, header, `${line}\n  direction LR`)
   }
   return null
 }
@@ -148,6 +164,27 @@ const SGR = /\x1b\[([0-9;]*)m/g
 const SENTINEL_SGR = /^38;2;0;0;(\d)$/
 const TRUECOLOR_SGR = /^38;2;\d+;\d+;\d+$/
 
+// every wide character in the art still has its placeholder right after it, and every
+// placeholder its wide character right before it; a cell the renderer overwrote
+// breaks the pair, and stripping the placeholders would shift the rest of the row
+const pairedOf = (art: string): boolean => {
+  for (const line of art.replace(SGR, '').split('\n')) {
+    let wide = false
+    for (const c of line) {
+      if (c === CELL) {
+        if (!wide) return false
+        wide = false
+        continue
+      }
+      if (wide) return false
+      const cp = c.codePointAt(0)!
+      wide = cp <= 0xffff && isWide(cp)
+    }
+    if (wide) return false
+  }
+  return true
+}
+
 const sameStyle = (a: Segment, role: Role | null, series: number | undefined) => a.role === role && a.series === series
 
 // `palette` numbers each non-sentinel colour of one drawing in order of first appearance
@@ -218,6 +255,7 @@ export const renderOf = (source: string, useAscii = false): Rendered => {
   if (unplaceable) return { error: `U+${unplaceable.codePointAt(0)!.toString(16).toUpperCase()} cannot be laid out in cells` }
   try {
     const art = renderMermaidAscii(widened(composed), { useAscii, ...SPACING, colorMode: 'truecolor', theme: ROLE_THEME })
+    if (!pairedOf(art)) return { error: 'the layout drew over a wide character' }
     const palette = new Map<string, number>()
     const lines = art.split('\n').map(line => trimEnd(segmentsOf(line, palette)))
     if (palette.size > SERIES_COLOURS.length) return { error: `${palette.size + 1} series, more than the colours that read on every theme` }

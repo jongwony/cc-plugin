@@ -11,9 +11,24 @@ import 'mathjax-full/js/input/tex/ams/AmsConfiguration.js'
 export const adaptor = liteAdaptor()
 RegisterHTMLHandler(adaptor)
 
-// each conversion runs in a document of its own, so no macro, operator, label or
-// equation number one fence defines (a failed one included) reaches the next
+// an mspace a `\\` or `\newline` became where no table takes it as a row break
+const forcedBreakIn = node => {
+  if (node.isKind?.('mspace') && node.attributes.get('linebreak') === 'newline') return true
+  return (node.childNodes ?? []).some(child => child && forcedBreakIn(child))
+}
+
+// Each conversion runs in a document of its own, so no macro, operator, label or
+// equation number one fence defines (a failed one included) reaches the next.
+// Throws where the TeX holds a forced line break: MathJax 3 lays it out as an
+// empty space, so the rows would run together on one line.
 export const texToSvg = tex => {
-  const doc = mathjax.document('', { InputJax: new TeX({ packages: ['base', 'ams'] }), OutputJax: new SVG({ fontCache: 'none' }) })
-  return adaptor.firstChild(doc.convert(tex, { display: true }))
+  const input = new TeX({ packages: ['base', 'ams'] })
+  let forced = false
+  input.postFilters.add(({ data }) => {
+    forced = forcedBreakIn(data.root)
+  })
+  const doc = mathjax.document('', { InputJax: input, OutputJax: new SVG({ fontCache: 'none' }) })
+  const svg = adaptor.firstChild(doc.convert(tex, { display: true }))
+  if (forced) throw new Error('a line break MathJax draws as a space')
+  return svg
 }

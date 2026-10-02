@@ -158,10 +158,15 @@ const TABLE_RULE = 70
 // The fill paints every outline in one ink, fully opaque. A presentation it cannot
 // honour — a style (the root's vertical-align aside), hiding, transparency, a colour
 // or a background — is named so the fence stays. MathJax writes \rule as a black
-// background rect, which is the ink.
+// background rect on an mspace, which is the ink; a background on any other node
+// is a background.
 const OPAQUE = new Set(['opacity', 'fill-opacity', 'stroke-opacity'])
-const unhonouredOf = (node: LiteNode, kind: string, root: boolean): string | null => {
-  const rule = kind === 'rect' && adaptor.getAttribute(node, 'fill') === 'black'
+const unhonouredOf = (node: LiteNode, kind: string, root: boolean, parent: LiteNode | null): string | null => {
+  const rule =
+    kind === 'rect' &&
+    adaptor.getAttribute(node, 'fill') === 'black' &&
+    parent !== null &&
+    adaptor.getAttribute(parent, 'data-mml-node') === 'mspace'
   for (const { name, value } of adaptor.allAttributes(node)) {
     const v = String(value).trim()
     if (name === 'style' && v !== '' && !(root && /^vertical-align:[^;]*;?$/.test(v))) return `style="${v}"`
@@ -204,7 +209,7 @@ export const outlinesOf = (svg: LiteNode): Shape[] => {
     if (kind === '#text' || kind === '#comment') return
     if (!DRAWN.has(kind)) throw new Error(`cannot fill <${kind}>`)
     if (attr(node, 'data-mml-node') === 'merror') throw new Error('TeX error')
-    const unhonoured = unhonouredOf(node, kind, node === svg)
+    const unhonoured = unhonouredOf(node, kind, node === svg, parent)
     if (unhonoured) throw new Error(`cannot honour ${unhonoured}`)
     if (/\bmjx-(dashed|dotted)\b/.test(attr(node, 'class') ?? '') || attr(node, 'stroke-dasharray') != null) throw new Error('a dashed rule')
     let m = times(outer, transformOf(attr(node, 'transform')))
@@ -365,24 +370,16 @@ const unwrapped = (tex: string): string => {
   return (wrapped ? wrapped[1]! : t).trim()
 }
 
-// \pmb sets its argument twice, so each nesting doubles the outlines MathJax builds
-const MAX_PMB = 8
-
-// A line break outside any environment that lays out rows: MathJax 3 draws it as
-// an empty space, so the rows would run together on one line.
-const LATEX_TOKEN = /\\begin\s*\{[^}]*\}|\\end\s*\{[^}]*\}|\\substack\s*\{|\\\\|\\newline(?![a-zA-Z])|\\[a-zA-Z]+|\\.|[{}]|[^\\{}]+/g
-export const bareBreakOf = (tex: string): boolean => {
-  let environments = 0
-  const braces: boolean[] = []
-  for (const [token] of tex.matchAll(LATEX_TOKEN)) {
-    if (token.startsWith('\\begin')) environments++
-    else if (token.startsWith('\\end')) environments = Math.max(0, environments - 1)
-    else if (token.startsWith('\\substack')) braces.push(true)
-    else if (token === '{') braces.push(false)
-    else if (token === '}') braces.pop()
-    else if ((token === '\\\\' || token === '\\newline') && environments === 0 && !braces.includes(true)) return true
-  }
-  return false
+// What MathJax would build before any bound here can stop it: \pmb sets its
+// argument twice, so its outlines double per nesting, and an alignat column count
+// is allocated as given.
+const PMB = /\\pmb(?![a-zA-Z])/
+const ALIGNAT = /\\begin\s*\{\s*(?:x{0,2}alignat\*?|alignedat)\s*\}\s*\{\s*(\d+)\s*\}/g
+const MAX_ALIGNAT = 32
+const unboundedOf = (tex: string): string | null => {
+  if (PMB.test(tex)) return '\\pmb'
+  for (const [, n] of tex.matchAll(ALIGNAT)) if (Number(n) > MAX_ALIGNAT) return `alignat with ${n} columns`
+  return null
 }
 
 // the extent of the outlines, each within its clip, as [left, top, right, bottom]
@@ -413,8 +410,8 @@ export const mathOf = (source: string, columns: number, ink: Ink): MathRendered 
   if (tex === '') return { error: 'nothing to draw' }
   if (tex.length > MAX_TEX_CHARS) return { error: `too big to draw (${tex.length} characters)` }
   if (tex.includes('$$')) return { error: 'more than one display formula' }
-  if ((tex.match(/\\pmb(?![a-zA-Z])/g) ?? []).length > MAX_PMB) return { error: 'too many \\pmb to draw' }
-  if (bareBreakOf(tex)) return { error: 'a line break outside an environment' }
+  const unbounded = unboundedOf(tex)
+  if (unbounded) return { error: `${unbounded} cannot be drawn within bounds` }
   try {
     const svg = texToSvg(tex)
     const view = (adaptor.getAttribute(svg, 'viewBox') ?? '').split(/\s+/).map(Number)

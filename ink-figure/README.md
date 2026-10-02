@@ -109,10 +109,11 @@ a sum with stacked limits; a flat expression stays in the text.
 - Frames (`\boxed`) and array rules (`|`, `\hline`) are drawn as lines.
   Malformed TeX, an unknown macro, a dashed rule, `\text` holding a character
   the math font lacks (Hangul, for one; Latin `\text{if }` draws), or a line
-  break `\\` outside an environment (MathJax draws it as a space) keeps the
-  fence, as does a formula wider than the terminal, one drawn with a colour, a
-  background or hidden parts, or more than eight `\pmb` (each one doubles the
-  work). Each fence is read on its own: an operator one fence declares does not
+  break `\\` or `\newline` that MathJax draws as a space (anywhere but a table
+  row: `equation` included) keeps the fence, as does a formula wider than the
+  terminal, one drawn with a colour, a background or hidden parts, any `\pmb`
+  (each nesting doubles the work), or an `alignat` of more than 32 columns.
+  Each fence is read on its own: an operator one fence declares does not
   reach the next. A single `$$…$$` or `\[…\]` wrapper around the whole fence is
   ignored; a fence holding two display formulas keeps its fence.
 
@@ -137,7 +138,8 @@ a sum with stacked limits; a flat expression stays in the text.
   text.
 - A mermaid fence holding a statement the renderer does not read keeps its
   source whole rather than drawing the rest: a Hangul node ID (a Hangul label is
-  fine), two statements on one line, a note, `autonumber`, a sequence `title`,
+  fine), two statements on one line, a state or class note (a sequence `Note`
+  draws), `autonumber`, a sequence `title`,
   a sequence activation (`activate`, `->>+`), a bare state or entity name, an
   unquoted chart title, a non-numeric value, anything after a chart statement,
   or a subgraph, block, composite state, class or entity left open at the end.

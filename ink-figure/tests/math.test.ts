@@ -179,11 +179,16 @@ test('a path with numbers after Z, or an arc, is refused rather than read wrongl
   expect(() => ringsOf('M0 0 A1 1 0 0 1 5 5')).toThrow()
 })
 
-test('a line break outside an environment keeps the fence; inside one it draws', () => {
-  expect('error' in mathOf('x = 1 \\\\ y = 2', 134, INK.dark)).toBe(true)
-  expect('error' in mathOf('x = 1 \\newline y = 2', 134, INK.dark)).toBe(true)
-  expect('error' in mathOf(MATRIX, 134, INK.dark)).toBe(false)
-  expect('error' in mathOf('\\sum_{\\substack{i<n \\\\ j<m}} a_{ij}', 134, INK.dark)).toBe(false)
+test('a line break MathJax draws as a space keeps the fence; a table row break draws', () => {
+  for (const tex of ['x = 1 \\\\ y = 2', 'x = 1 \\newline y = 2', '\\begin{equation} a = b \\\\ c = d \\end{equation}'])
+    expect('error' in mathOf(tex, 134, INK.dark)).toBe(true)
+  for (const tex of [
+    MATRIX,
+    '\\begin{aligned} a &= b \\\\ c &= d \\end{aligned}',
+    'f(x) = \\begin{cases} 1 & x > 0 \\\\ 0 & x \\le 0 \\end{cases}',
+    '\\sum_{\\substack{i<n \\\\ j<m}} a_{ij}',
+  ])
+    expect('error' in mathOf(tex, 134, INK.dark)).toBe(false)
 })
 
 test('no definition reaches the next fence, not even from one that failed', () => {
@@ -222,7 +227,9 @@ test('a formula drawn once is kept for any room it fits, and refused where it do
 
 test('a presentation the fill cannot honour keeps the fence; ordinary formulas still draw', () => {
   expect('error' in mathOf('\\frac{\\mmlToken{mi}[style="display:none"]{x}}{y}', 134, INK.dark)).toBe(true)
+  expect('error' in mathOf('\\frac{\\mmlToken{mi}[mathbackground="black"]{x}}{y}', 134, INK.dark)).toBe(true)
   for (const tex of [
+    '\\rule{1em}{1em}',
     FRACTION,
     MATRIX,
     '\\boxed{x+1}',
@@ -233,12 +240,17 @@ test('a presentation the fill cannot honour keeps the fence; ordinary formulas s
     expect(inked(art(tex))).toBeGreaterThan(0)
 })
 
-test('nested \\pmb past its bound keeps the fence at once; a little still draws', () => {
-  const deep = '\\pmb{'.repeat(14) + 'x' + '}'.repeat(14)
+test('TeX whose expansion has no bound keeps the fence at once; a bounded alignment draws', () => {
   const started = performance.now()
-  expect('error' in mathOf(deep, 134, INK.dark)).toBe(true)
+  for (const tex of [
+    '\\pmb{x}',
+    '\\pmb{'.repeat(8) + 'x'.repeat(200) + '}'.repeat(8),
+    '\\begin{alignat}{100000000} x&=y\\end{alignat}',
+    '\\begin{alignedat}{33} x&=y\\end{alignedat}',
+  ])
+    expect('error' in mathOf(tex, 134, INK.dark)).toBe(true)
   expect(performance.now() - started).toBeLessThan(100)
-  expect(inked(art('\\pmb{\\pmb{x}}'))).toBeGreaterThan(0)
+  expect(inked(art('\\begin{alignedat}{2} a&=b & c&=d\\end{alignedat}'))).toBeGreaterThan(0)
 })
 
 test('only a fence that is one display wrapper is unwrapped; two keep the fence', () => {

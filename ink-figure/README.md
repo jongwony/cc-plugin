@@ -127,8 +127,9 @@ a sum with stacked limits; a flat expression stays in the text.
 - A diagram or chart wider than the terminal is cut with a `… N columns cut`
   line.
 - A diagram past its size caps keeps its fence rather than holding the
-  transcript while it is laid out: 60 nodes or 100 edges for a flowchart or
-  state diagram; 20 participants, 150 messages, 40 blocks or 60 notes for a
+  transcript while it is laid out: 60 nodes, 100 edges, 20 subgraphs or
+  composite states, or 6 levels of nesting for a flowchart or state diagram;
+  20 participants, 150 messages, 40 blocks or 60 notes for a
   sequence diagram; 40 classes or entities, 80 relationships or 400 members or
   attributes for a class or ER diagram; 8 series or 120 values for a chart. So
   does one with an edge the router gives up on, rather than drawing it as a

@@ -222,6 +222,25 @@ test('a diagram too big to lay out quickly keeps its fence at once', () => {
   expect('lines' in drawn(EIGHT, 134)).toBe(true)
 })
 
+test('deeply nested or numerous subgraphs and composite states keep their fence at once; a few draw', () => {
+  const nested = (n: number, open: (i: number) => string, close: string, body: string, header: string) =>
+    [header, ...Array.from({ length: n }, (_, i) => open(i)), body, ...Array.from({ length: n }, () => close)].join('\n')
+  const started = performance.now()
+  expect('error' in drawn(nested(240, i => `subgraph S${i}`, 'end', 'A-->B', 'graph LR'), 134)).toBe(true)
+  expect('error' in drawn(nested(7, i => `subgraph S${i}`, 'end', 'A-->B', 'graph LR'), 134)).toBe(true)
+  expect('error' in drawn(nested(240, i => `state C${i} {`, '}', 'A --> B', 'stateDiagram-v2'), 134)).toBe(true)
+  expect('error' in drawn(['graph LR', ...Array.from({ length: 21 }, (_, i) => `subgraph S${i}\nN${i}\nend`)].join('\n'), 134)).toBe(true)
+  expect(performance.now() - started).toBeLessThan(500)
+  expect('lines' in drawn(nested(3, i => `subgraph S${i}`, 'end', 'A-->B', 'graph LR'), 134)).toBe(true)
+  expect('lines' in drawn(nested(3, i => `state C${i} {`, '}', 'A --> B', 'stateDiagram-v2'), 134)).toBe(true)
+})
+
+test('the cut count is the original columns a cut line does not show', () => {
+  const fit = fitLines([[{ text: 'abcdefghij', role: 'text' }]], 5)
+  expect(plainOf(fit.lines[0]!)).toBe('abcd…')
+  expect(fit.overflow).toBe(6)
+})
+
 test('every kind past its size caps keeps its fence before allocating a canvas; ordinary ones draw', () => {
   const many = (n: number, line: (i: number) => string) => Array.from({ length: n }, (_, i) => line(i)).join('\n')
   const started = performance.now()

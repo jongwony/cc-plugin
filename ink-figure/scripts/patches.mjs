@@ -74,9 +74,21 @@ export const PATCHES = [
     find: '      const parsed = parseMermaid(text)\n',
     replace:
       '      const parsed = parseMermaid(text)\n' +
-      '      const MAX_NODES = 60, MAX_EDGES = 100\n' +
+      '      const MAX_NODES = 60, MAX_EDGES = 100, MAX_GROUPS = 20, MAX_DEPTH = 6\n' +
       '      if (parsed.nodes.size > MAX_NODES || parsed.edges.length > MAX_EDGES)\n' +
-      '        throw new Error(`too big to lay out (${parsed.nodes.size} nodes, ${parsed.edges.length} edges)`)\n',
+      '        throw new Error(`too big to lay out (${parsed.nodes.size} nodes, ${parsed.edges.length} edges)`)\n' +
+      '      let groups = 0, depth = 0\n' +
+      '      const visit = (list: typeof parsed.subgraphs, level: number): void => {\n' +
+      '        for (const sg of list) {\n' +
+      '          groups++\n' +
+      '          depth = Math.max(depth, level)\n' +
+      '          if (groups > MAX_GROUPS || depth > MAX_DEPTH) return\n' +
+      '          visit(sg.children, level + 1)\n' +
+      '        }\n' +
+      '      }\n' +
+      '      visit(parsed.subgraphs, 1)\n' +
+      '      if (groups > MAX_GROUPS || depth > MAX_DEPTH)\n' +
+      '        throw new Error(`too big to lay out (more than ${MAX_GROUPS} groups or ${MAX_DEPTH} levels of nesting)`)\n',
   },
   ...[
     [

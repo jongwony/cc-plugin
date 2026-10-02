@@ -27,16 +27,21 @@ const STYLE: Record<Role, { color?: string; dimColor?: boolean }> = {
 
 // the math ink for the current theme: read when the session starts, kept in step by
 // a theme change through /config, and read on demand only while still unknown; a
-// read that fails settles on the ink that reads on either theme
+// read that fails settles on the ink that reads on either theme. A read answers only
+// while no theme change landed after it began: `themeSet` counts those changes.
 let themeInk: Ink | null = null
+let themeSet = 0
 
 const readTheme = async ($: EngineInterface): Promise<Ink> => {
+  const began = themeSet
+  let ink: Ink
   try {
-    themeInk = inkOf((await $.config.list()).find(row => row.key === 'theme')?.value)
+    ink = inkOf((await $.config.list()).find(row => row.key === 'theme')?.value)
   } catch {
-    themeInk = INK.either
+    ink = INK.either
   }
-  return themeInk
+  if (themeSet === began) themeInk = ink
+  return themeInk ?? ink
 }
 
 export const register: Register = on => {
@@ -52,6 +57,7 @@ export const register: Register = on => {
     const result = await next(e)
     if (result.deny === undefined) {
       const ink = inkOf(result.value)
+      themeSet++
       if (ink !== themeInk) {
         themeInk = ink
         $.ui.invalidate('ui.render')

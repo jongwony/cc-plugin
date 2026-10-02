@@ -291,8 +291,12 @@ export const fitLines = (lines: readonly (readonly Segment[])[], columns: number
   const width = widthOf(lines)
   const room = Math.max(1, columns)
   if (width <= room) return { lines: lines.map(line => [...line]), width, overflow: 0 }
+  // overflow: the most original columns any cut line does not show (its ellipsis
+  // takes one of the room's columns)
+  let overflow = 0
   const fitted = lines.map(line => {
-    if (displayWidth(plainOf(line)) <= room) return [...line]
+    const lineWidth = displayWidth(plainOf(line))
+    if (lineWidth <= room) return [...line]
     const out: Segment[] = []
     let left = room - 1
     for (const segment of line) {
@@ -306,10 +310,11 @@ export const fitLines = (lines: readonly (readonly Segment[])[], columns: number
       if (text !== '') out.push({ ...segment, text })
       if (text.length < segment.text.length) break
     }
+    overflow = Math.max(overflow, lineWidth - (room - 1 - left))
     out.push({ text: '…', role: null })
     return out
   })
-  return { lines: fitted, width, overflow: width - room }
+  return { lines: fitted, width, overflow }
 }
 
 // Both layouts a source can take, neither depending on the room; the sideways one

@@ -5600,9 +5600,21 @@ function renderMermaidASCII(text, options = {}) {
     case "flowchart":
     default: {
       const parsed = parseMermaid(text);
-      const MAX_NODES = 60, MAX_EDGES = 100;
+      const MAX_NODES = 60, MAX_EDGES = 100, MAX_GROUPS = 20, MAX_DEPTH = 6;
       if (parsed.nodes.size > MAX_NODES || parsed.edges.length > MAX_EDGES)
         throw new Error(`too big to lay out (${parsed.nodes.size} nodes, ${parsed.edges.length} edges)`);
+      let groups = 0, depth = 0;
+      const visit = (list, level) => {
+        for (const sg of list) {
+          groups++;
+          depth = Math.max(depth, level);
+          if (groups > MAX_GROUPS || depth > MAX_DEPTH) return;
+          visit(sg.children, level + 1);
+        }
+      };
+      visit(parsed.subgraphs, 1);
+      if (groups > MAX_GROUPS || depth > MAX_DEPTH)
+        throw new Error(`too big to lay out (more than ${MAX_GROUPS} groups or ${MAX_DEPTH} levels of nesting)`);
       if (parsed.direction === "LR" || parsed.direction === "RL") {
         config.graphDirection = "LR";
       } else {

@@ -11,15 +11,16 @@ replies cannot write as text — right where the fence was:
 
 Everything text can write stays text: bar charts, tables and shaded matrices
 (block characters, a stated scale, the harness's table columns), and flat
-expressions such as `a + b = c` or `O(n log n)`. A bar-only xychart, and every
-other mermaid kind, keeps its fence.
+expressions such as `a + b = c` or `O(n log n)`. Every other mermaid kind keeps
+its fence.
 
 One `ui.render` hook on `AssistantMessage` reads every fence in one pass, so a
 reply holding several figures draws whole.
 
 Needs Claude Code v2.1.287 or later (mods on by default) and the interactive
-terminal. On any other surface, and for a fence that does not parse or is not a
-drawn kind, the fence is left as written. The Desktop app draws ` ```math `
+terminal. On any other surface, and for a fence that does not parse, is not a
+drawn kind, holds a statement outside the drawn grammar or is wider than the
+terminal, the fence is left as written. The Desktop app draws ` ```math `
 itself and shows other fences as code.
 
 ## Install
@@ -33,12 +34,42 @@ Then `/reload-plugins` in a running session.
 
 ## Diagrams
 
-Standard mermaid source. A top-down flowchart or state diagram (a flowchart
-header with no direction is top-down, as in mermaid) is laid out left
-to right when no word of the drawing is lost and it fits the terminal or is no
-wider than the top-down layout; a flowchart written `BT` or `LR`
-keeps its direction. Spacing is compact: three columns and one row between
-boxes, one cell inside them.
+Standard mermaid source, within the grammar below. A top-down flowchart or state
+diagram (a flowchart header with no direction is top-down, as in mermaid) is laid
+out left to right when no word of the drawing is lost and it fits the terminal or
+is no wider than the top-down layout; a flowchart written `BT` or `LR` keeps its
+direction. Spacing is compact: three columns and one row between boxes, one cell
+inside them.
+
+### Drawn grammar
+
+The renderer reads more of mermaid than it draws faithfully, so a fence is drawn
+only when every statement is one of these forms; any other statement leaves the
+whole fence as written. Each form has a test showing its drawing keeps its
+labels, arrows and direction, and the drawing must still show every label whole.
+
+| Kind | Drawn forms |
+|---|---|
+| flowchart | header `LR`, `TD`, `TB`, `BT` or none; nodes `A`, `A[text]`, `A(text)`, `A{text}` (text quoted or not); one `A --> B` per line, optionally `-->\|word\|`; one edge per pair of nodes; `style`, `classDef`, `class`, `click`, `linkStyle`, `accTitle:`, `accDescr:` |
+| state | `direction LR` or `TB`; `A --> B` between states or `[*]`, optionally `: text`; `state "text" as A`; `A : text`; one transition per pair of states |
+| sequence | `participant A`, `participant A as text`; `A->>B: text`, `A-->>B: text`, a self-message included |
+| class | `class A`, `class A { … }`, `A : member`: `Type name`, `name`, `name()`, `name() Type`, each with an optional `+ - # ~`, a name once per class; `<\|--`, `*--`, `o--`, `-->`, `..>`, `..\|>`, optionally `: text`, as chains (no class above two others or below two, no cycle) |
+| ER | `A ‹card›--‹card› B : label` (`--` or `..`); `A { type name … }`; each entity in at most one relationship |
+| xychart | upright `xychart`/`xychart-beta`; `title "text"`; `x-axis [a, b, …]`; `y-axis min --> max` in integers; one `line [ … ]` of integers |
+
+A diagram that would stay top to bottom (a `BT` flowchart, a top-down one the
+sideways layout does not take, a state diagram with `direction TB`) is drawn only
+as one unlabelled chain: at one row between boxes a label or a branch draws over
+the box borders.
+
+Outside the grammar, among others: subgraphs, composite states and every edge to
+them; `graph RL`; other edge shapes, chained edges and `&`; an edge label with a
+space; notes; sequence blocks (`alt`, `opt`, `loop`, …), activations, `actor`,
+`autonumber`, `<br/>` and arrows other than `->>`/`-->>`; class methods with
+parameters, overloads, undirected relations, multiplicities, generics,
+annotations, namespaces and fan-outs; ER aliases, attribute keys and comments; a
+chart's axis titles, fractional values, bars, second series and `horizontal`; and
+a drawing whose title or category names would be cut or run together.
 
 ````markdown
 ```mermaid
@@ -66,20 +97,17 @@ styles.
 
 ## Line charts
 
-A mermaid `xychart` (or `xychart-beta`) that holds at least one `line` series is
-drawn on a y-axis with ticks and grid dots, its categories under the x-axis. Bars
-in the same chart are drawn beside the line. The first series takes magenta, and
-later series green, blue and red, in the legend's order — colours that read on a
-light theme and a dark one alike. A chart with more series than that, a value
-off its y-axis, or a series with more or fewer values than the categories keeps
-its fence.
+A mermaid `xychart` (or `xychart-beta`) that holds one `line` series of integers
+is drawn on a y-axis with ticks and grid dots, its categories under the x-axis,
+the line in magenta. A value off its y-axis, or a series with more or fewer values
+than the categories, keeps its fence.
 
 ````markdown
 ```mermaid
 xychart-beta
   title "Latency"
   x-axis [mon, tue, wed, thu, fri]
-  y-axis "ms" 0 --> 120
+  y-axis 0 --> 120
   line [20, 35, 80, 60, 110]
 ```
 ````
@@ -124,14 +152,13 @@ a sum with stacked limits; a flat expression stays in the text.
 
 ## Limits
 
-- A diagram or chart wider than the terminal is cut with a `… N columns cut`
-  line.
+- A diagram or chart wider than the terminal keeps its fence, as a formula
+  does; it is drawn again when the terminal is widened enough to hold it.
 - A diagram past its size caps keeps its fence rather than holding the
-  transcript while it is laid out: 60 nodes, 100 edges, 20 subgraphs or
-  composite states, or 6 levels of nesting for a flowchart or state diagram;
-  20 participants, 150 messages, 40 blocks or 60 notes for a
-  sequence diagram; 40 classes or entities, 80 relationships or 400 members or
-  attributes for a class or ER diagram; 8 series or 120 values for a chart. So
+  transcript while it is laid out: 60 nodes or 100 edges for a flowchart or
+  state diagram; 20 participants or 150 messages for a sequence diagram; 40
+  classes or entities, 80 relationships or 400 members or attributes for a class
+  or ER diagram; 120 values for a chart. So
   does one whose drawing would need a canvas over 250,000 cells (a label
   thousands of characters long between many boxes), and one with an edge the
   router gives up on, rather than drawing it as a straight line through the
@@ -148,13 +175,9 @@ a sum with stacked limits; a flat expression stays in the text.
   as its own paragraph. A fence opened on a list item's or a block quote's own
   marker line (`- ~~~`, `` > ``` ``) is not drawn, and every fence inside it is its
   text.
-- A mermaid fence holding a statement the renderer does not read keeps its
-  source whole rather than drawing the rest: a Hangul node ID (a Hangul label is
-  fine), two statements on one line, a state or class note (a sequence `Note`
-  draws), `autonumber`, a sequence `title`,
-  a sequence activation (`activate`, `->>+`), a bare state or entity name, an
-  unquoted chart title, a non-numeric value, anything after a chart statement,
-  or a subgraph, block, composite state, class or entity left open at the end.
+- A mermaid fence the renderer does not read whole keeps its source rather than
+  drawing the rest: a Hangul flowchart or state ID (a Hangul label is fine), two
+  statements on one line, or a class or entity left open at the end.
 - A label holding a combining mark, a joined emoji sequence, a flag, a
   skin-tone modifier, a one-cell character outside the Basic Multilingual
   Plane (`𝐀`, `🌡`) or a control character such as a tab keeps its fence: the

@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { displayWidth, plainOf, renderOf, SERIES_COLOURS } from '../hooks/diagrams.ts'
+import { displayWidth, plainOf, renderOf } from '../hooks/diagrams.ts'
 import { piecesOf } from '../hooks/figures.ts'
 
 const ENGINE = { type: 'Text', props: {}, children: ['drawn by Claude Code'] }
@@ -8,11 +8,12 @@ const LATENCY = [
   'xychart-beta',
   '  title "Latency"',
   '  x-axis [mon, tue, wed, thu, fri]',
-  '  y-axis "ms" 0 --> 120',
+  '  y-axis 0 --> 120',
   '  line [20, 35, 80, 60, 110]',
 ].join('\n')
 
 const TWO = 'xychart-beta\n  x-axis [a, b, c, d]\n  line [1, 5, 3, 4]\n  line [4, 2, 2, 1]'
+const ONE = 'xychart-beta\n  x-axis [a, b, c, d]\n  line [1, 5, 3, 4]'
 
 const linesOf = (source: string) => {
   const art = renderOf(source)
@@ -34,16 +35,41 @@ test('a bar chart, or a chart with a statement the parser cannot read, keeps its
   expect('error' in renderOf('xychart-beta\n  title Latency\n  line [1, 2]')).toBe(true)
 })
 
-test('a chart holding a line draws its bars beside it', () => {
-  const lines = linesOf('xychart-beta\n  x-axis [q1, q2, q3]\n  bar [5, 7, 3]\n  line [4, 6, 5]').map(plainOf)
-  expect(lines.some(l => l.includes('█'))).toBe(true)
+test('the allowed chart draws every value at its tick, in order across the categories', () => {
+  const lines = linesOf('xychart-beta\n  x-axis [p, q, r]\n  y-axis 0 --> 4\n  line [1, 3, 2]').map(plainOf)
+  const row = (tick: string) => lines.find(l => new RegExp(`^ *${tick}┤`).test(l))!
+  const columnOf = (category: string) => lines[lines.length - 1]!.indexOf(category)
+  // the line runs flat along each value's row through its category's column
+  expect(/─/.test(row('1')[columnOf('p')]!)).toBe(true)
+  expect(/[─╭╮]/.test(row('3')[columnOf('q')]!)).toBe(true)
+  expect(/[─╭╮╰╯]/.test(row('2')[columnOf('r')]!)).toBe(true)
 })
 
-test('two line series are told apart: the second carries a series number the first does not', () => {
-  const segments = linesOf(TWO).flat()
-  const lineCells = segments.filter(s => s.role === 'accent' && /[─╭╮╰╯│]/.test(s.text))
-  expect(lineCells.some(s => s.series === undefined)).toBe(true)
-  expect(lineCells.some(s => s.series === 1)).toBe(true)
+test('bars beside a line, a second series, or a horizontal chart keep the fence', () => {
+  expect('error' in renderOf('xychart-beta\n  x-axis [q1, q2, q3]\n  bar [5, 7, 3]\n  line [4, 6, 5]')).toBe(true)
+  expect('error' in renderOf(TWO)).toBe(true)
+  expect('error' in renderOf('xychart-beta horizontal\n  x-axis [a, b]\n  line [1, 2]')).toBe(true)
+  expect('lines' in renderOf(ONE)).toBe(true)
+})
+
+test('an axis title, whose units the drawing drops, keeps the fence', () => {
+  expect('error' in renderOf('xychart-beta\n  x-axis [a, b]\n  y-axis "Latency (ms)" 0 --> 10\n  line [1, 2]')).toBe(true)
+  expect('error' in renderOf('xychart-beta\n  x-axis "day" [a, b]\n  line [1, 2]')).toBe(true)
+  expect('lines' in renderOf('xychart-beta\n  x-axis [a, b]\n  y-axis 0 --> 10\n  line [1, 2]')).toBe(true)
+})
+
+test('a fractional or very small value, whose ticks are drawn wrong, keeps the fence', () => {
+  expect('error' in renderOf('xychart-beta\n  x-axis [a, b, c]\n  line [0.000001, 0.000002, 0.000003]')).toBe(true)
+  expect('error' in renderOf('xychart-beta\n  x-axis [a, b]\n  line [1.5, 2]')).toBe(true)
+  expect('error' in renderOf('xychart-beta\n  x-axis [a, b]\n  y-axis 0 --> 2.5\n  line [1, 2]')).toBe(true)
+  const lines = linesOf('xychart-beta\n  x-axis [a, b, c]\n  line [-5, 0, 1234567]').map(plainOf)
+  expect(lines.some(l => /^ *1200000┤/.test(l))).toBe(true)
+})
+
+test('category names that run into each other, or a title cut at its ends, keep the fence', () => {
+  expect('error' in renderOf('xychart-beta\n  x-axis [alphabetical, betamaxformat, gammaradiation, deltafunction, epsilonzero, zetaone]\n  line [1, 2, 3, 4, 5, 6]')).toBe(true)
+  expect('error' in renderOf(`xychart-beta\n  title "${'a long title '.repeat(8).trim()}"\n  x-axis [a, b]\n  line [1, 2]`)).toBe(true)
+  expect('lines' in renderOf('xychart-beta\n  x-axis [alpha, beta, gamma]\n  line [1, 2, 3]')).toBe(true)
 })
 
 test('Hangul categories and title keep every axis row within the chart width', () => {
@@ -54,7 +80,7 @@ test('Hangul categories and title keep every axis row within the chart width', (
   expect(displayWidth(labels)).toBeLessThanOrEqual(displayWidth(axis))
 })
 
-test('a line chart fence is drawn in the reply, its second series in its own colour', async ($, on) => {
+test('a line chart fence is drawn in the reply, its line in the accent colour', async ($, on) => {
   on('ui.render', () => ENGINE)
   const ui = await $.ui.mount({
     plugin: 'ink-figure',
@@ -62,12 +88,11 @@ test('a line chart fence is drawn in the reply, its second series in its own col
     requestId: 'msg-1',
     surface: 'terminal',
     viewport: { columns: 140, rows: 40 },
-    props: { text: `Trend:\n\n\`\`\`mermaid\n${TWO}\n\`\`\``, isFirstOfReply: true },
+    props: { text: `Trend:\n\n\`\`\`mermaid\n${ONE}\n\`\`\``, isFirstOfReply: true },
   })
   expect(await ui.find({ type: 'Markdown', text: 'Trend:' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: 'drawn by Claude Code' })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', props: { color: 'green' } })).toBeDefined()
-  expect(piecesOf(`\`\`\`mermaid\n${TWO}\n\`\`\``, 94)).not.toBe(null)
+  expect(await ui.find({ type: 'Text', props: { color: 'magenta' } })).toBeDefined()
 })
 
 test('a value off the y-axis, or an axis that cannot be drawn, keeps the fence at once', () => {
@@ -82,20 +107,10 @@ test('a value off the y-axis, or an axis that cannot be drawn, keeps the fence a
   }
 })
 
-test('series take colours that read on every theme; a chart with more series than colours keeps its fence', () => {
-  const chart = (n: number) =>
-    'xychart-beta\n  x-axis [a, b, c]\n  y-axis 0 --> 10\n' + Array.from({ length: n }, (_, i) => `  line [${i + 1}, ${i + 2}, ${i + 1}]`).join('\n')
-  expect(SERIES_COLOURS).not.toContain('white')
-  expect(SERIES_COLOURS).not.toContain('yellow')
-  expect('lines' in renderOf(chart(SERIES_COLOURS.length + 1))).toBe(true)
-  expect('error' in renderOf(chart(SERIES_COLOURS.length + 2))).toBe(true)
-})
-
 test('a chart statement with anything after it keeps the fence', () => {
   for (const extra of ['  line [1, 2] invalid', '  bar [1, 2] x', '  title "T" more', '  y-axis 0 --> 10 ms', '  x-axis [a, b] c'])
     expect('error' in renderOf(`xychart-beta\n  x-axis [a, b]\n${extra}\n  line [1, 2]`)).toBe(true)
   expect('error' in renderOf('xychart-beta sideways\n  x-axis [a, b]\n  line [1, 2]')).toBe(true)
-  expect('lines' in renderOf('xychart-beta horizontal\n  x-axis [a, b]\n  line [1, 2]')).toBe(true)
 })
 
 test('bars on an axis that lies wholly below zero grow from its top, at once', () => {
@@ -116,7 +131,7 @@ test('a series with more or fewer values than categories keeps the fence', () =>
     'xychart-beta\n  line [1, 2, 3]\n  line [1, 2]',
   ])
     expect('error' in renderOf(source)).toBe(true)
-  expect('lines' in renderOf('xychart-beta\n  line [1, 2, 3]\n  line [3, 2, 1]')).toBe(true)
+  expect('lines' in renderOf('xychart-beta\n  line [1, 2, 3]')).toBe(true)
 })
 
 test('a chart with more values than its size cap keeps the fence at once; an ordinary one draws', () => {

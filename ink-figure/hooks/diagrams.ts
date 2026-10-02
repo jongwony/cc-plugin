@@ -1,8 +1,9 @@
+import { faithfulTo, grammarOf } from './grammar.ts'
 import { renderMermaidAscii } from './vendor/mermaid-ascii.js'
 
 // Pure functions over mermaid sources: drawing them as role-tagged box art with East
-// Asian labels measured in screen cells, and fitting the art to a width. No `$`, so
-// the tests drive these directly.
+// Asian labels measured in screen cells, and choosing the layout for a width. No `$`,
+// so the tests drive these directly.
 // The kind table, LR flip and the sentinel-colour role recovery are adapted from
 // claude-mermaid (Gal Elmalah, MIT; notice in vendor/LICENSE-claude-mermaid).
 
@@ -10,8 +11,9 @@ export type Role = 'text' | 'border' | 'line' | 'arrow' | 'corner' | 'junction' 
 // `series`: a chart series after the first, numbered from 1 in the order its colour
 // first appears in the art (the legend, left to right)
 export type Segment = { text: string; role: Role | null; series?: number }
-export type Rendered = { lines: Segment[][] } | { error: string }
-export type Fitted = { lines: Segment[][]; width: number; overflow: number }
+// `vertical`: the source drew nothing only because it would be laid out top to bottom
+// with a label or a branch, which the compact vertical spacing draws over
+export type Rendered = { lines: Segment[][] } | { error: string; vertical?: true }
 
 export const SPACING = { paddingX: 3, paddingY: 1, boxBorderPadding: 1 } as const
 
@@ -65,6 +67,14 @@ const directed = (source: string): string => {
 
 // an xychart is drawn only when it holds a line: bars are written as text
 const LINE_SERIES = /^[ \t]*line\b/m
+
+// a flowchart written top-down or bottom-up, or a state diagram with no `direction
+// LR`, as the renderer would lay it out before any sideways turn
+const verticalOf = (source: string, kind: string): boolean => {
+  if (kind === 'flowchart') return /^\s*(?:flowchart|graph)\s+(?:TD|TB|BT)\b/i.test(headerOf(source))
+  if (kind === 'state') return !/^\s*direction\s+LR\s*$/im.test(source)
+  return false
+}
 
 export const leftToRightOf = (source: string): string | null => {
   const kind = kindOf(source)
@@ -253,6 +263,9 @@ export const renderOf = (source: string, useAscii = false): Rendered => {
   const composed = directed(source).normalize('NFC')
   const unplaceable = unplaceableOf(composed)
   if (unplaceable) return { error: `U+${unplaceable.codePointAt(0)!.toString(16).toUpperCase()} cannot be laid out in cells` }
+  const grammar = grammarOf(composed, kind)
+  if ('error' in grammar) return grammar
+  if (!grammar.chain && verticalOf(composed, kind)) return { error: 'a top-down drawing with a label or a branch', vertical: true }
   try {
     const art = renderMermaidAscii(widened(composed), { useAscii, ...SPACING, colorMode: 'truecolor', theme: ROLE_THEME })
     if (!pairedOf(art)) return { error: 'the layout drew over a wide character' }
@@ -261,7 +274,9 @@ export const renderOf = (source: string, useAscii = false): Rendered => {
     if (palette.size > SERIES_COLOURS.length) return { error: `${palette.size + 1} series, more than the colours that read on every theme` }
     while (lines.length > 0 && lines[lines.length - 1]!.length === 0) lines.pop()
     while (lines.length > 0 && lines[0]!.length === 0) lines.shift()
-    return lines.length === 0 || lines.every(l => plainOf(l).trim() === '') ? { error: 'nothing to draw' } : { lines }
+    if (lines.length === 0 || lines.every(l => plainOf(l).trim() === '')) return { error: 'nothing to draw' }
+    const unfaithful = faithfulTo(grammar, lines.map(plainOf))
+    return unfaithful ? { error: unfaithful } : { lines }
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) }
   }
@@ -286,50 +301,27 @@ export const pickLayout = (base: Rendered, sideways: Rendered, columns: number):
   return width <= columns || width <= widthOf(base.lines) ? sideways : base
 }
 
-// lines wider than `columns` are cut at a cell boundary with an ellipsis
-export const fitLines = (lines: readonly (readonly Segment[])[], columns: number): Fitted => {
-  const width = widthOf(lines)
-  const room = Math.max(1, columns)
-  if (width <= room) return { lines: lines.map(line => [...line]), width, overflow: 0 }
-  // overflow: the most original columns any cut line does not show (its ellipsis
-  // takes one of the room's columns)
-  let overflow = 0
-  const fitted = lines.map(line => {
-    const lineWidth = displayWidth(plainOf(line))
-    if (lineWidth <= room) return [...line]
-    const out: Segment[] = []
-    let left = room - 1
-    for (const segment of line) {
-      let text = ''
-      for (const c of segment.text) {
-        const w = cellsOf(c.codePointAt(0)!)
-        if (w > left) break
-        text += c
-        left -= w
-      }
-      if (text !== '') out.push({ ...segment, text })
-      if (text.length < segment.text.length) break
-    }
-    overflow = Math.max(overflow, lineWidth - (room - 1 - left))
-    out.push({ text: '…', role: null })
-    return out
-  })
-  return { lines: fitted, width, overflow }
-}
-
 // Both layouts a source can take, neither depending on the room; the sideways one
-// is tried only when the source's own layout drew. `layouts.runs` counts calls.
+// is tried only when the source's own layout drew, or would have drawn but for its
+// vertical spacing. `layouts.runs` counts calls.
 export type Layouts = { base: Rendered; sideways: Rendered | null }
 export const layouts = { runs: 0 }
 export const layoutsOf = (source: string): Layouts => {
   layouts.runs++
   const base = renderOf(source)
-  if ('error' in base) return { base, sideways: null }
+  if ('error' in base && !base.vertical) return { base, sideways: null }
   const sideways = leftToRightOf(source)
   return { base, sideways: sideways ? renderOf(sideways) : null }
 }
 
-export const chosenOf = ({ base, sideways }: Layouts, columns: number): Rendered =>
-  sideways ? pickLayout(base, sideways, columns) : base
+export const chosenOf = ({ base, sideways }: Layouts, columns: number): Rendered => {
+  if (!sideways) return base
+  if ('error' in base) return 'lines' in sideways ? sideways : base
+  return pickLayout(base, sideways, columns)
+}
+
+// a drawing wider than the room keeps its fence: a cut drawing would leave out boxes
+export const fitsIn = (art: Rendered, columns: number): art is { lines: Segment[][] } =>
+  'lines' in art && widthOf(art.lines) <= columns
 
 export const drawn = (source: string, columns: number): Rendered => chosenOf(layoutsOf(source), columns)

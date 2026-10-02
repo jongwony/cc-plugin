@@ -1,11 +1,11 @@
-import { chosenOf, fitLines, layoutsOf, type Fitted, type Layouts } from './diagrams.ts'
+import { chosenOf, fitsIn, layoutsOf, type Layouts, type Segment } from './diagrams.ts'
 import { INK, MAX_CELLS, mathOf, type Ink } from './math.ts'
 
 // One pass over a reply: every ```mermaid and ```math fence, in order, with the
 // prose between them kept as Markdown.
 
 export type MathPicture = { rgba: string; width: number; height: number; columns: number; rows: number; tex: string }
-export type Piece = { markdown: string } | { diagram: Fitted } | { math: MathPicture }
+export type Piece = { markdown: string } | { diagram: { lines: Segment[][] } } | { math: MathPicture }
 export type FenceBlock = { lang: 'mermaid' | 'math'; start: number; end: number; source: string }
 
 // Markdown element limit per chunk
@@ -69,13 +69,13 @@ const figures = new Map<string, { drawing: Drawing; bytes: number }>()
 let cachedBytes = 0
 
 // Neither drawing depends on the room: a diagram's layouts are kept by source and
-// chosen and fitted for the room after the lookup, and a formula is drawn once at
-// the widest an Image takes and compared with the room.
+// chosen for the room after the lookup, and a formula is drawn once at the widest
+// an Image takes; either one wider than the room keeps its fence.
 const figureOf = (block: FenceBlock, columns: number, ink: Ink): Piece | null => {
   const drawing = cachedDrawingOf(block, ink)
   if ('layouts' in drawing) {
     const art = chosenOf(drawing.layouts, columns)
-    return 'lines' in art ? { diagram: fitLines(art.lines, columns) } : null
+    return fitsIn(art, columns) ? { diagram: { lines: art.lines } } : null
   }
   return drawing.math && drawing.math.columns <= columns ? { math: drawing.math } : null
 }

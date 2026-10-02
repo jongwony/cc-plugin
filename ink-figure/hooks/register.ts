@@ -1,5 +1,5 @@
 import type { EngineInterface, Register, Timer } from 'claude-code'
-import { SERIES_COLOURS, type Fitted, type Role, type Segment } from './diagrams.ts'
+import { SERIES_COLOURS, type Role, type Segment } from './diagrams.ts'
 import { fencesOf, piecesOf, type MathPicture } from './figures.ts'
 import { INK, inkOf, type Ink } from './math.ts'
 
@@ -91,13 +91,10 @@ export const register: Register = on => {
 
     const spanOf = ({ text, role, series }: Segment) =>
       Text({ ...STYLE[role ?? 'text'], ...(series ? { color: SERIES_COLOURS[series - 1] } : {}), children: [text] })
-    const diagram = (fit: Fitted) =>
+    const diagram = ({ lines }: { lines: Segment[][] }) =>
       Box({
         flexDirection: 'column',
-        children: [
-          ...fit.lines.map(line => (line.length === 0 ? Text({ children: [' '] }) : Box({ flexDirection: 'row', children: line.map(spanOf) }))),
-          ...(fit.overflow > 0 ? [Text({ dimColor: true, children: [`… ${fit.overflow} columns cut · widen the terminal`] })] : []),
-        ],
+        children: lines.map(line => (line.length === 0 ? Text({ children: [' '] }) : Box({ flexDirection: 'row', children: line.map(spanOf) }))),
       })
     const formula = ({ rgba, width, height, columns, rows, tex }: MathPicture) =>
       Image({ source: { rgba, width, height }, columns, rows, alt: tex })

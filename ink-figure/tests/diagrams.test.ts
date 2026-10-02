@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { displayWidth, drawn, fitLines, layouts, leftToRightOf, plainOf, renderOf, SPACING } from '../hooks/diagrams.ts'
+import { displayWidth, drawn, fitsIn, layouts, leftToRightOf, plainOf, renderOf, SPACING } from '../hooks/diagrams.ts'
 import { fencesOf, piecesOf } from '../hooks/figures.ts'
 
 const ENGINE = { type: 'Text', props: {}, children: ['drawn by Claude Code'] }
@@ -83,7 +83,7 @@ test('a statement the parser cannot consume keeps the fence instead of drawing p
 })
 
 test('statements that draw nothing, a trailing semicolon and unspaced arrows still draw', () => {
-  const lines = linesOf('graph TD;\n  %% note\n  accTitle: flow\n  A-->B;\n  B---C\n  click A "https://example.com"\n  style A fill:#f00').join('\n')
+  const lines = linesOf('graph TD;\n  %% note\n  accTitle: flow\n  A-->B;\n  B-->C\n  click A "https://example.com"\n  style A fill:#f00').join('\n')
   for (const id of ['A', 'B', 'C']) expect(new RegExp(`│ ${id} [│├]`).test(lines)).toBe(true)
   expect(lines.includes('click')).toBe(false)
 })
@@ -222,7 +222,7 @@ test('a diagram too big to lay out quickly keeps its fence at once', () => {
   expect('lines' in drawn(EIGHT, 134)).toBe(true)
 })
 
-test('deeply nested or numerous subgraphs and composite states keep their fence at once; a few draw', () => {
+test('subgraphs and composite states, however few or many, keep their fence at once', () => {
   const nested = (n: number, open: (i: number) => string, close: string, body: string, header: string) =>
     [header, ...Array.from({ length: n }, (_, i) => open(i)), body, ...Array.from({ length: n }, () => close)].join('\n')
   const started = performance.now()
@@ -231,8 +231,8 @@ test('deeply nested or numerous subgraphs and composite states keep their fence 
   expect('error' in drawn(nested(240, i => `state C${i} {`, '}', 'A --> B', 'stateDiagram-v2'), 134)).toBe(true)
   expect('error' in drawn(['graph LR', ...Array.from({ length: 21 }, (_, i) => `subgraph S${i}\nN${i}\nend`)].join('\n'), 134)).toBe(true)
   expect(performance.now() - started).toBeLessThan(500)
-  expect('lines' in drawn(nested(3, i => `subgraph S${i}`, 'end', 'A-->B', 'graph LR'), 134)).toBe(true)
-  expect('lines' in drawn(nested(3, i => `state C${i} {`, '}', 'A --> B', 'stateDiagram-v2'), 134)).toBe(true)
+  expect('error' in drawn(nested(1, i => `subgraph S${i}`, 'end', 'A-->B', 'graph LR'), 134)).toBe(true)
+  expect('error' in drawn(nested(1, i => `state C${i} {`, '}', 'A --> B', 'stateDiagram-v2'), 134)).toBe(true)
 })
 
 test('a drawing that would need an oversized canvas keeps its fence at once; the largest ordinary ones draw', () => {
@@ -245,10 +245,15 @@ test('a drawing that would need an oversized canvas keeps its fence at once; the
   expect('lines' in renderOf('erDiagram\n  A ||--o{ B : ' + 'y'.repeat(300))).toBe(true)
 })
 
-test('the cut count is the original columns a cut line does not show', () => {
-  const fit = fitLines([[{ text: 'abcdefghij', role: 'text' }]], 5)
-  expect(plainOf(fit.lines[0]!)).toBe('abcd…')
-  expect(fit.overflow).toBe(6)
+test('a drawing wider than the room keeps its fence instead of being cut', () => {
+  const source = 'graph LR\n  A[abcdefghijklmnopqrstuv] --> B[important decision]'
+  const fence = '```mermaid\n' + source + '\n```'
+  expect(fitsIn(drawn(source, 20), 20)).toBe(false)
+  expect(piecesOf(`Before.\n\n${fence}`, 20)).toBe(null)
+  const wide = piecesOf(`Before.\n\n${fence}`, 120)
+  const art = wide?.find(p => 'diagram' in p)
+  expect(art && 'diagram' in art && art.diagram.lines.map(plainOf).some(l => l.includes('important decision'))).toBe(true)
+  expect(JSON.stringify(wide).includes('columns cut')).toBe(false)
 })
 
 test('every kind past its size caps keeps its fence before allocating a canvas; ordinary ones draw', () => {
@@ -265,7 +270,7 @@ test('every kind past its size caps keeps its fence before allocating a canvas; 
   for (const source of [
     `sequenceDiagram\n${many(40, i => `  A${i % 6}->>A${(i + 1) % 6}: m${i}`)}`,
     `classDiagram\n${many(12, i => `  C${i} <|-- C${i + 1}`)}`,
-    `erDiagram\n${many(8, i => `  E${i} ||--o{ E${i + 1} : r`)}`,
+    `erDiagram\n${many(8, i => `  E${2 * i} ||--o{ E${2 * i + 1} : r`)}`,
   ])
     expect('lines' in renderOf(source)).toBe(true)
 })
@@ -312,8 +317,6 @@ test('a block left open at the end of the source keeps the fence', () => {
   ])
     expect('error' in renderOf(source)).toBe(true)
   for (const source of [
-    'graph LR\n  subgraph S\n  A --> B\n  end',
-    'sequenceDiagram\n  loop forever\n  A->>B: hi\n  end',
     'classDiagram\n  class A {\n    +int x\n  }',
     'erDiagram\n  A {\n    int x\n  }',
   ])
@@ -336,7 +339,7 @@ test('a definition whose destination is on the next line also sends the reply ba
   expect(piecesOf('See [docs][r].\n\n```mermaid\ngraph LR\nA-->B\n```\n\n[r]:\n  https://example.com', 94)).toBe(null)
 })
 
-test('a diagram is laid out once per source: another width only chooses and fits again', () => {
+test('a diagram is laid out once per source: another width only chooses again, and a wider room draws what a narrow one kept fenced', () => {
   const source = 'graph TD\n  Q1[resize probe] --> Q2[second box]\n  Q1 --> Q3[third box]'
   const fence = '```mermaid\n' + source + '\n```'
   const before = layouts.runs
@@ -345,12 +348,9 @@ test('a diagram is laid out once per source: another width only chooses and fits
   const narrow = piecesOf(fence, 30)
   const again = piecesOf(fence, 120)
   expect(layouts.runs).toBe(before + 1)
-  const fresh = (columns: number) => {
-    const art = drawn(source, columns)
-    if (!('lines' in art)) throw new Error(art.error)
-    return fitLines(art.lines, columns)
-  }
-  expect(narrow).toEqual([{ diagram: fresh(30) }])
-  expect(wide).toEqual([{ diagram: fresh(120) }])
+  const art = drawn(source, 120)
+  if (!('lines' in art)) throw new Error(art.error)
+  expect(narrow).toBe(null)
+  expect(wide).toEqual([{ diagram: { lines: art.lines } }])
   expect(again).toEqual(wide)
 })

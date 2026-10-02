@@ -60,9 +60,17 @@ styles.
 
 The renderer is [beautiful-mermaid](https://github.com/lukilabs/beautiful-mermaid)
 (MIT, `hooks/vendor/LICENSE`), bundled into `hooks/vendor/mermaid-ascii.js` with
-the patches in `scripts/patches.mjs`: a bounded edge search, and an edge's start
-junction placed on its box border — at tight spacing it landed inside the box,
-and a diamond's edge started a few cells away from it. Fence detection, the
+the patches in `scripts/patches.mjs`:
+
+- a bounded edge search;
+- an edge's start junction placed on its box border — at tight spacing it landed
+  inside the box, and a diamond's edge started a few cells away from it;
+- every statement read or the parse refused, so a fence is never drawn in part;
+- a node's or state's later text kept, as mermaid keeps it;
+- an ER relationship gap as wide as its label;
+- a routing row at least one cell tall, so a self-loop keeps its return.
+
+The build fails when a patch's anchor or target file has moved upstream. Fence detection, the
 left-to-right flip and the role colouring are adapted from
 [claude-mermaid](https://github.com/galElmalah/claude-mods) (Gal Elmalah, MIT).
 

@@ -45,9 +45,17 @@ export const register: Register = on => {
     return next(e)
   })
 
+  // a new ink redraws the formulas already in the transcript; a render is otherwise
+  // reused until its props or viewport change
   on('config.set', { key: 'theme' }, async ($, e, next) => {
     const result = await next(e)
-    if (result.deny === undefined) themeInk = inkOf(result.value)
+    if (result.deny === undefined) {
+      const ink = inkOf(result.value)
+      if (ink !== themeInk) {
+        themeInk = ink
+        $.ui.invalidate('ui.render')
+      }
+    }
     return result
   })
 

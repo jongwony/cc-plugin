@@ -4,7 +4,7 @@ import { renderMermaidAscii } from './vendor/mermaid-ascii.js'
 // Asian labels measured in screen cells, and fitting the art to a width. No `$`, so
 // the tests drive these directly.
 // The kind table, LR flip and the sentinel-colour role recovery are adapted from
-// claude-mermaid (Gal Elmalah, MIT).
+// claude-mermaid (Gal Elmalah, MIT; notice in vendor/LICENSE-claude-mermaid).
 
 export type Role = 'text' | 'border' | 'line' | 'arrow' | 'corner' | 'junction' | 'accent'
 // `series`: a chart series after the first, numbered from 1 in the order its colour

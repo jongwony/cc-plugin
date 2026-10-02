@@ -28,9 +28,10 @@ const opens = (fence: RegExpExecArray | null): fence is RegExpExecArray => fence
 
 // Fenced code blocks as CommonMark reads them: a fence line is indented at most
 // three spaces, and closes on the same character, at least as long, with nothing
-// after it. Only a mermaid or math fence that opens while no other fence is open,
-// outside any list item or block quote marker, is a figure; one inside another
-// block, a fence opened after a container's marker among them, is that block's text.
+// after it. A mermaid or math fence on a line of its own, at 0–3 spaces (a list
+// item's indented content included), that opens while no other fence is open is a
+// figure. A fence opened on a list item's or block quote's marker line is tracked
+// so that a fence inside it stays its text, and is never drawn itself.
 export const fencesOf = (text: string): FenceBlock[] => {
   const blocks: FenceBlock[] = []
   let open: { mark: string; start: number; body: number; lang: FenceBlock['lang'] | null; container: boolean } | null = null

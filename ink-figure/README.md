@@ -35,8 +35,8 @@ Then `/reload-plugins` in a running session.
 
 Standard mermaid source. A top-down flowchart or state diagram (a flowchart
 header with no direction is top-down, as in mermaid) is laid out left
-to right when no label is lost and it fits; a flowchart written `BT`, `RL` or
-`LR` keeps its direction. Spacing is compact: three columns and one row between
+to right when no label is lost and it fits; a flowchart written `BT` or `LR`
+keeps its direction. Spacing is compact: three columns and one row between
 boxes, one cell inside them.
 
 ````markdown
@@ -173,7 +173,8 @@ a sum with stacked limits; a flat expression stays in the text.
     axis.
 
   The kind table, the left-to-right flip and the role colouring are adapted from
-  [claude-mermaid](https://github.com/galElmalah/claude-mods) (Gal Elmalah, MIT).
+  [claude-mermaid](https://github.com/galElmalah/claude-mods) (Gal Elmalah, MIT,
+  `hooks/vendor/LICENSE-claude-mermaid`).
 - Math: [MathJax](https://www.mathjax.org/) 3.2.2 (Apache-2.0,
   `hooks/vendor/LICENSE-mathjax`) turns TeX into SVG outlines, bundled into
   `hooks/vendor/math/`; `hooks/math.ts` fills the outlines into pixels. The mod

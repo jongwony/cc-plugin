@@ -12,7 +12,7 @@ export type Segment = { text: string; role: Role | null }
 export type Rendered = { lines: Segment[][] } | { error: string }
 export type Fitted = { lines: Segment[][]; width: number; overflow: number }
 
-export const SPACING = { paddingX: 2, paddingY: 1, boxBorderPadding: 1 } as const
+export const SPACING = { paddingX: 3, paddingY: 1, boxBorderPadding: 1 } as const
 
 const FENCE = /^([ \t]*)(`{3,}|~{3,})[ \t]*mermaid(?![\w-])[^\n]*\n([\s\S]*?)\n[ \t]*\2[ \t]*$/gim
 

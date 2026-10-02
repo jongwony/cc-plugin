@@ -5,7 +5,7 @@ import { piecesOf } from '../hooks/figures.ts'
 const ENGINE = { type: 'Text', props: {}, children: ['drawn by Claude Code'] }
 
 const message = (text: string, surface: 'terminal' | 'desktop' = 'terminal') => ({
-  plugin: 'fence-figures',
+  plugin: 'ink-figure',
   component: 'AssistantMessage',
   requestId: 'msg-1',
   surface,
@@ -46,8 +46,8 @@ test('a Hangul sequence diagram keeps its lifelines in one column', () => {
   expect(new Set(lifelines.map(displayWidth)).size).toBe(1)
 })
 
-test('spacing defaults to 2 · 1 · 1 and boxes stand five rows tall', () => {
-  expect(SPACING).toEqual({ paddingX: 2, paddingY: 1, boxBorderPadding: 1 })
+test('spacing defaults to 3 · 1 · 1 and boxes stand five rows tall', () => {
+  expect(SPACING).toEqual({ paddingX: 3, paddingY: 1, boxBorderPadding: 1 })
   expect(linesOf('graph LR\n  A --> B').length).toBe(5)
 })
 
@@ -55,6 +55,13 @@ test('an edge leaves its box from the border, not from inside the box', () => {
   const lines = linesOf(EIGHT)
   expect(lines.some(l => /surface ├─+terminal/.test(l))).toBe(true)
   expect(lines.some(l => /│ +┬ +│/.test(l))).toBe(false)
+})
+
+test('a fan-out edge ends its arrowhead on the target box border, not on the shared line', () => {
+  const lines = linesOf(EIGHT)
+  expect(lines.some(l => /[├└]►│ +Image: LaTeX png/.test(l))).toBe(true)
+  expect(lines.some(l => /└►│ +text: mermaid box/.test(l))).toBe(true)
+  expect(lines.every(l => [...l.matchAll(/►/g)].every(m => l[m.index! + 1] === '│'))).toBe(true)
 })
 
 test('the art carries no control character', () => {

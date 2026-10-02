@@ -5,7 +5,7 @@ import { piecesOf } from '../hooks/figures.ts'
 const ENGINE = { type: 'Text', props: {}, children: ['drawn by Claude Code'] }
 
 const message = (text: string, surface: 'terminal' | 'desktop' = 'terminal') => ({
-  plugin: 'fence-figures',
+  plugin: 'ink-figure',
   component: 'AssistantMessage',
   requestId: 'msg-1',
   surface,

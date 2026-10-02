@@ -1,4 +1,4 @@
-// Pure chart part of fence-figures: find ```heatmap fences in a reply,
+// Pure chart part of ink-figure: find ```heatmap fences in a reply,
 // parse their small DSL, and lay each out as Raster cells plus the text that
 // sits beside them. No mods API here, so the tests can call it directly.
 //

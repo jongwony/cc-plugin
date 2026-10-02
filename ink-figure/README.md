@@ -1,4 +1,4 @@
-# fence-figures
+# ink-figure
 
 A Claude Code mod that draws figure fences in Claude's replies right where the
 fence was, in the terminal transcript:
@@ -26,7 +26,7 @@ The Desktop app draws ` ```math ` itself and shows other fences as code.
 
 ```bash
 claude plugin marketplace add jongwony/cc-plugin
-claude plugin install fence-figures@cc-plugin
+claude plugin install ink-figure@cc-plugin
 ```
 
 Then `/reload-plugins` in a running session.
@@ -67,7 +67,7 @@ columns: 1 00h · 2 06h · 3 12h
 Standard mermaid source. Drawn kinds: `flowchart`/`graph`, `sequenceDiagram`,
 `classDiagram`, `stateDiagram`, `erDiagram`; any other kind, `xychart` among
 them, keeps its fence. A top-down flowchart or state diagram is laid out left to right when no
-label is lost and it fits. Spacing is compact: two columns and one row between
+label is lost and it fits. Spacing is compact: three columns and one row between
 boxes, one cell inside them.
 
 ````markdown
@@ -79,11 +79,11 @@ graph LR
 ````
 
 ```text
-┌─────────┐  ┌───────┐  ┌──────┐
-│         │  │       │  │      │
-│ request ├─►│ cache ├─►│ resp │
-│         │  │       │  │      │
-└─────────┘  └───────┘  └──────┘
+┌─────────┐   ┌───────┐   ┌──────┐
+│         │   │       │   │      │
+│ request ├──►│ cache ├──►│ resp │
+│         │   │       │   │      │
+└─────────┘   └───────┘   └──────┘
 ```
 
 The drawings here use ASCII labels because a web page's monospace font does not
@@ -112,9 +112,6 @@ left-to-right flip and the role colouring are adapted from
 
 - mermaid: a node ID must be ASCII (a Hangul label is fine, a Hangul ID is not
   parsed upstream); such a fence keeps its source.
-- mermaid: where one node fans out to several targets stacked below it, the
-  two-column gap leaves no room for both a tee on the shared line and the
-  arrowhead, so the arrowhead sits on the line. A three-column gap draws both.
 
 ## Build and test
 
@@ -122,6 +119,6 @@ left-to-right flip and the role colouring are adapted from
 `scripts/patches.mjs` or the pinned renderer version (Node 22+):
 
 ```bash
-cd fence-figures && npm install && npm run build:vendor
+cd ink-figure && npm install && npm run build:vendor
 claude plugin test
 ```

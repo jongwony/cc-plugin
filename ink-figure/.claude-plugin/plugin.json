@@ -1,0 +1,10 @@
+{
+  "name": "ink-figure",
+  "description": "Renders Epistemic Ink figure fences as terminal charts and diagrams: ```heatmap as Raster cells with the scale of one shade stated, ```mermaid as box art whose East Asian labels line up — only what transcript text cannot show",
+  "version": "0.2.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  },
+  "license": "MIT"
+}

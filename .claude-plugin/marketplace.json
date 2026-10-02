@@ -115,9 +115,9 @@
       "description": "Send-only Telegram report for scheduled routines — posts one message into a fixed forum topic by thread id, with credentials from TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID; never creates topics or reads updates"
     },
     {
-      "name": "fence-figures",
-      "source": "./fence-figures",
-      "description": "Mod that draws figure fences in the terminal transcript — ```heatmap as Raster cells with the scale of one shade stated, ```mermaid as box art whose East Asian labels line up — only what transcript text cannot show"
+      "name": "ink-figure",
+      "source": "./ink-figure",
+      "description": "Renders Epistemic Ink figure fences as terminal charts and diagrams."
     }
   ]
 }

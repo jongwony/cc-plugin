@@ -20,7 +20,7 @@ const EIGHT = [
   '  F[fence in reply] --> T{surface}',
   '  T -->|terminal| M[mod redraws]',
   '  T -->|desktop| D[host renders]',
-  '  M --> R[Raster: heatmap]',
+  '  M --> R[Raster: cells]',
   '  M --> I[Image: LaTeX png]',
   '  M --> X[text: mermaid box]',
   '  D --> K[math: native]',
@@ -79,12 +79,13 @@ test('a mermaid fence is drawn as Text in the fence place, the label kept whole'
   expect(await ui.find({ type: 'Text', text: 'drawn by Claude Code' })).toBeUndefined()
 })
 
-test('a reply mixing a heatmap and a mermaid fence draws both', async ($, on) => {
+test('a reply with two mermaid fences and prose between them draws both', async ($, on) => {
   on('ui.render', () => ENGINE)
-  const text = ['Latency:', '', '```heatmap', 'unit: ms', '     00h 12h', '서울  12  95', '```', '', 'Flow:', '', HANGUL].join('\n')
+  const text = ['Flow:', '', HANGUL, '', 'And the second:', '', '```mermaid\ngraph LR\n  P[plan] --> Q[ship]\n```'].join('\n')
   const ui = await $.ui.mount(message(text))
-  expect((await ui.find({ key: 'chart-0' }))?.type).toBe('Raster')
   expect(await ui.find({ type: 'Text', text: '서울 요청' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'ship' })).toBeDefined()
+  expect(await ui.find({ type: 'Markdown', text: 'And the second:' })).toBeDefined()
 })
 
 test('off the terminal the message goes to Claude Code untouched', async ($, on) => {

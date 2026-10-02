@@ -1,25 +1,21 @@
 # ink-figure
 
-A Claude Code mod that draws figure fences in Claude's replies right where the
-fence was, in the terminal transcript:
+A Claude Code mod that draws ` ```mermaid ` fences in Claude's replies — flowchart,
+sequence, class, state and ER diagrams — as box art right where the fence was, in
+the terminal transcript.
 
-- ` ```heatmap ` — a matrix of measured values, one colour shade per value band (`Raster` cells)
-- ` ```mermaid ` — flowchart, sequence, class, state and ER diagrams as box art
+It draws only what cannot be written as transcript text: a computed diagram
+layout. Bars and tables are written as text, and so are shaded matrices.
 
-A fence is drawn only when what it shows cannot be written as transcript text —
-colour, computed layout; bars and tables are written as text.
-
-One `ui.render` hook on `AssistantMessage` reads every fence of every kind in one
-pass, so a reply that mixes kinds draws whole.
+One `ui.render` hook on `AssistantMessage` reads every mermaid fence in one pass,
+so a reply holding several draws whole.
 
 Labels are measured in screen cells, so Hangul and other double-width labels line
-up — beside the `Raster` cells for heatmaps, inside the boxes for diagrams. Every
-heatmap states what one shade stands for, and values fall into whole bands —
-nothing finer than a band is implied.
+up inside the boxes.
 
 Needs Claude Code v2.1.287 or later (mods on by default) and the interactive
-terminal. On any other surface, and for a fence that does not parse, is not a
-drawn kind, or does not fit the terminal width, the fence is left as written.
+terminal. On any other surface, and for a fence that does not parse or is not a
+drawn kind, the fence is left as written.
 The Desktop app draws ` ```math ` itself and shows other fences as code.
 
 ## Install
@@ -32,37 +28,6 @@ claude plugin install ink-figure@cc-plugin
 Then `/reload-plugins` in a running session.
 
 ## Fence syntax
-
-### heatmap
-
-A header row of column names, then one row per label ending in one value per
-column, with an optional `unit:` line anywhere in the block. Separate with
-spaces, or write a markdown table with `|` (a `|---|` rule line is skipped). The
-header may carry a corner cell above the labels or not. `-` marks a missing
-value, drawn blank.
-
-````markdown
-```heatmap
-unit: ms
-        00h 06h 12h
-Seoul    12  40  95
-Tokyo    10  33  -
-```
-````
-
-Each value is two cells wide (three past nine columns), coloured on an
-eight-step viridis scale. Columns are numbered above the cells and named in a
-key line below, since names would not fit a two-cell column:
-
-```text
-       1 2 3
-Seoul  ██████
-Tokyo  ████
-██████████ 1 shade ~ 20 ms · 10 to 95 ms, 5 shades · blank = no value
-columns: 1 00h · 2 06h · 3 12h
-```
-
-### mermaid
 
 Standard mermaid source. Drawn kinds: `flowchart`/`graph`, `sequenceDiagram`,
 `classDiagram`, `stateDiagram`, `erDiagram`; any other kind, `xychart` among
@@ -103,14 +68,12 @@ left-to-right flip and the role colouring are adapted from
 
 ## Limits
 
-- A `Raster` is at most 512 columns by 256 rows; a fence past that, or wider
-  than the terminal, is not drawn.
+- A diagram wider than the terminal is cut with a `… N columns cut` line.
 - `AssistantMessage` is the finest site a mod can draw in, so a reply holding a
-  figure is redrawn as Markdown pieces around it. A piece over 10,000
+  diagram is redrawn as Markdown pieces around it. A piece over 10,000
   characters, or one carrying escape codes another mod wrote into the reply,
   makes the whole reply fall back to Claude Code's own drawing.
-
-- mermaid: a node ID must be ASCII (a Hangul label is fine, a Hangul ID is not
+- A node ID must be ASCII (a Hangul label is fine, a Hangul ID is not
   parsed upstream); such a fence keeps its source.
 
 ## Build and test

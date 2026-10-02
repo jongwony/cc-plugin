@@ -1,10 +1,12 @@
-import { chartOf, fencesOf, MAX_MARKDOWN_CHARS, type Chart } from './charts.ts'
 import { drawn, fitLines, mermaidBlocksOf, type Fitted } from './diagrams.ts'
 
-// One pass over a reply: every figure fence of every kind, in order, so a reply
-// that mixes kinds draws whole under a single hook.
+// One pass over a reply: every mermaid fence, in order, with the prose between
+// them kept as Markdown.
 
-export type Piece = { markdown: string } | { chart: Chart } | { diagram: Fitted }
+export type Piece = { markdown: string } | { diagram: Fitted }
+
+// Markdown element limit per chunk
+export const MAX_MARKDOWN_CHARS = 10_000
 
 type Found = { start: number; end: number; piece: () => Piece | null }
 
@@ -21,7 +23,6 @@ const pushMarkdown = (pieces: Piece[], text: string) => {
 // leaves the message to Claude Code untouched.
 export const piecesOf = (text: string, columns: number): Piece[] | null => {
   const found: Found[] = [
-    ...fencesOf(text).map(f => ({ start: f.start, end: f.end, piece: () => { const chart = chartOf(f, columns); return chart && { chart } } })),
     ...mermaidBlocksOf(text).map(b => ({
       start: b.start,
       end: b.end,

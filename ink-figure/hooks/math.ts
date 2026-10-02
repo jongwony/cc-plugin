@@ -158,7 +158,7 @@ const TABLE_RULE = 70
 // An axis-aligned clip, [left, top, right, bottom], in the coordinates of the
 // outlines it clips; null draws everywhere.
 type Clip = readonly [number, number, number, number] | null
-// outlines filled together, under one clip
+// one element's outlines, filled together under its clip
 export type Shape = { rings: Point[][]; clip: Clip }
 
 const box = (x0: number, y0: number, x1: number, y1: number, reverse = false): Point[] =>
@@ -167,19 +167,14 @@ const box = (x0: number, y0: number, x1: number, y1: number, reverse = false): P
 const meet = (a: Clip, b: Clip): Clip =>
   a === null ? b : b === null ? a : [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.min(a[3], b[3])]
 
-// Every outline under the root svg, in its coordinates, grouped by clip: glyph
-// paths and filled rules as they are, a stroked rect as its frame and a line as a
-// quad of its stroke width. A nested svg maps its viewBox onto its viewport and
-// clips to it, unless the stylesheet leaves it visible (a table cell's). Throws on
-// an error node, an element or attribute the fill cannot draw (a dashed rule, a
+// Every outline under the root svg, in its coordinates, one shape per element:
+// glyph paths and filled rules as they are, a stroked rect as its frame and a line
+// as a quad of its stroke width. A nested svg maps its viewBox onto its viewport
+// and clips to it, unless the stylesheet leaves it visible (a table cell's). Throws
+// on an error node, an element or attribute the fill cannot draw (a dashed rule, a
 // rounded frame, a stroked path), so the fence stays.
 export const outlinesOf = (svg: LiteNode): Shape[] => {
-  const shapes = new Map<Clip, Shape>()
-  const add = (clip: Clip, ring: Point[]) => {
-    let shape = shapes.get(clip)
-    if (!shape) shapes.set(clip, (shape = { rings: [], clip }))
-    shape.rings.push(ring)
-  }
+  const shapes: Shape[] = []
   const attr = (node: LiteNode, name: string) => adaptor.getAttribute(node, name)
   const number = (node: LiteNode, name: string, fallback = 0): number => {
     const value = attr(node, name)
@@ -194,7 +189,11 @@ export const outlinesOf = (svg: LiteNode): Shape[] => {
     if (attr(node, 'data-mml-node') === 'merror') throw new Error('TeX error')
     if (/\bmjx-(dashed|dotted)\b/.test(attr(node, 'class') ?? '') || attr(node, 'stroke-dasharray') != null) throw new Error('a dashed rule')
     let m = times(outer, transformOf(attr(node, 'transform')))
-    const put = (ring: Point[]) => add(clip, ring.map(([px, py]) => at(m, px, py)))
+    let shape: Shape | null = null
+    const put = (ring: Point[]) => {
+      if (!shape) shapes.push((shape = { rings: [], clip }))
+      shape.rings.push(ring.map(([px, py]) => at(m, px, py)))
+    }
     if (kind === 'svg' && node !== svg) {
       const x = number(node, 'x'), y = number(node, 'y'), w = number(node, 'width'), h = number(node, 'height')
       const view = attr(node, 'viewBox')
@@ -244,7 +243,7 @@ export const outlinesOf = (svg: LiteNode): Shape[] => {
     for (const child of adaptor.childNodes(node)) walk(child, m, clip, node, parent)
   }
   walk(svg, IDENTITY, null, null, null)
-  return [...shapes.values()]
+  return shapes
 }
 
 const SUBSAMPLES = 4
@@ -254,16 +253,32 @@ const MAX_WORK = 20_000_000
 type Edge = { x0: number; y0: number; x1: number; y1: number; dir: number }
 
 // Nonzero-winding scanline fill with SUBSAMPLES rows per pixel and exact horizontal
-// coverage, each shape within its clip; shapes combine by the larger coverage. The
-// rings and clips are already in pixels. Throws past MAX_WORK crossings.
+// coverage. Each shape (one element) is filled on its own, within its clip and its
+// bounding box, and coverages add up to full: independent elements never cancel,
+// and pieces that abut leave no seam. The rings and clips are already in pixels.
+// Throws past MAX_WORK crossings.
 const filled = (shapes: readonly Shape[], width: number, height: number, ink: Ink): Uint8Array => {
   const cover = new Float32Array(width * height)
-  const own = new Float32Array(width * height)
+  let own = new Float32Array(0)
   let work = 0
   for (const { rings, clip } of shapes) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const ring of rings)
+      for (const [x, y] of ring) {
+        if (x < minX) minX = x
+        if (x > maxX) maxX = x
+        if (y < minY) minY = y
+        if (y > maxY) maxY = y
+      }
     const [cl, ct, cr, cb] = clip ?? [0, 0, width, height]
-    const left0 = Math.max(0, cl), right0 = Math.min(width, cr)
-    if (right0 <= left0 || cb <= ct) continue
+    const left0 = Math.max(0, cl, minX), right0 = Math.min(width, cr, maxX)
+    const top0 = Math.max(0, ct, minY), bottom0 = Math.min(height, cb, maxY)
+    if (right0 <= left0 || bottom0 <= top0) continue
+    const bx = Math.floor(left0), bw = Math.ceil(right0) - bx
+    const firstRow = Math.floor(top0), lastRow = Math.ceil(bottom0)
+    const size = bw * (lastRow - firstRow)
+    if (own.length < size) own = new Float32Array(size)
+    else own.fill(0, 0, size)
     const edges: Edge[] = []
     for (const ring of rings)
       for (let k = 0; k < ring.length; k++) {
@@ -272,15 +287,13 @@ const filled = (shapes: readonly Shape[], width: number, height: number, ink: In
         edges.push(a[1] < b[1] ? { x0: a[0], y0: a[1], x1: b[0], y1: b[1], dir: 1 } : { x0: b[0], y0: b[1], x1: a[0], y1: a[1], dir: -1 })
       }
     edges.sort((p, q) => p.y0 - q.y0)
-    own.fill(0)
     const active: Edge[] = []
     const crossings: [number, number][] = []
     let next = 0
-    const firstRow = Math.max(0, Math.floor(ct)), lastRow = Math.min(height, Math.ceil(cb))
     for (let row = firstRow; row < lastRow; row++)
       for (let s = 0; s < SUBSAMPLES; s++) {
         const sy = row + (s + 0.5) / SUBSAMPLES
-        if (sy < ct || sy >= cb) continue
+        if (sy < top0 || sy >= bottom0) continue
         while (next < edges.length && edges[next]!.y0 <= sy) active.push(edges[next++]!)
         let kept = 0
         for (const e of active) if (e.y1 > sy) active[kept++] = e
@@ -292,7 +305,7 @@ const filled = (shapes: readonly Shape[], width: number, height: number, ink: In
         for (const e of active) crossings.push([e.x0 + ((sy - e.y0) * (e.x1 - e.x0)) / (e.y1 - e.y0), e.dir])
         crossings.sort((p, q) => p[0] - q[0])
         let winding = 0
-        const base = row * width
+        const base = (row - firstRow) * bw - bx
         for (let k = 0; k < crossings.length - 1; k++) {
           winding += crossings[k]![1]
           if (winding === 0) continue
@@ -305,10 +318,16 @@ const filled = (shapes: readonly Shape[], width: number, height: number, ink: In
           }
           own[base + li]! += (li + 1 - left) / SUBSAMPLES
           for (let c = li + 1; c < ri; c++) own[base + c]! += 1 / SUBSAMPLES
-          if (ri < width) own[base + ri]! += (right - ri) / SUBSAMPLES
+          if (ri < bx + bw) own[base + ri]! += (right - ri) / SUBSAMPLES
         }
       }
-    for (let p = 0; p < own.length; p++) if (own[p]! > cover[p]!) cover[p] = Math.min(1, own[p]!)
+    for (let row = firstRow; row < lastRow; row++) {
+      const from = (row - firstRow) * bw, to = row * width + bx
+      for (let c = 0; c < bw; c++) {
+        const v = own[from + c]!
+        if (v > 0) cover[to + c] = Math.min(1, cover[to + c]! + v)
+      }
+    }
   }
   const rgba = new Uint8Array(width * height * 4)
   for (let p = 0; p < width * height; p++) {
@@ -327,18 +346,63 @@ const unwrapped = (tex: string): string => {
   return (wrapped ? wrapped[1]! : t).trim()
 }
 
+// A line break outside any environment that lays out rows: MathJax 3 draws it as
+// an empty space, so the rows would run together on one line.
+const LATEX_TOKEN = /\\begin\s*\{[^}]*\}|\\end\s*\{[^}]*\}|\\substack\s*\{|\\\\|\\newline(?![a-zA-Z])|\\[a-zA-Z]+|\\.|[{}]|[^\\{}]+/g
+export const bareBreakOf = (tex: string): boolean => {
+  let environments = 0
+  const braces: boolean[] = []
+  for (const [token] of tex.matchAll(LATEX_TOKEN)) {
+    if (token.startsWith('\\begin')) environments++
+    else if (token.startsWith('\\end')) environments = Math.max(0, environments - 1)
+    else if (token.startsWith('\\substack')) braces.push(true)
+    else if (token === '{') braces.push(false)
+    else if (token === '}') braces.pop()
+    else if ((token === '\\\\' || token === '\\newline') && environments === 0 && !braces.includes(true)) return true
+  }
+  return false
+}
+
+// the extent of the outlines, each within its clip, as [left, top, right, bottom]
+const extentOf = (shapes: readonly Shape[]): [number, number, number, number] | null => {
+  let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity
+  for (const { rings, clip } of shapes) {
+    let sl = Infinity, st = Infinity, sr = -Infinity, sb = -Infinity
+    for (const ring of rings)
+      for (const [x, y] of ring) {
+        if (x < sl) sl = x
+        if (x > sr) sr = x
+        if (y < st) st = y
+        if (y > sb) sb = y
+      }
+    if (clip) [sl, st, sr, sb] = [Math.max(sl, clip[0]), Math.max(st, clip[1]), Math.min(sr, clip[2]), Math.min(sb, clip[3])]
+    if (sr <= sl || sb <= st) continue
+    l = Math.min(l, sl); t = Math.min(t, st); r = Math.max(r, sr); b = Math.max(b, sb)
+  }
+  return r > l && b > t ? [l, t, r, b] : null
+}
+
 // The formula as pixels on a box of whole cells, the box no wider than `columns`:
 // the bitmap is padded to columns × rows cells of CELL_PX so the terminal scales it
-// without distortion, the formula at the left and centred top to bottom.
+// without distortion, the formula at the left and centred top to bottom. The box
+// covers the viewBox and any outline drawn past it (a \smash, an \rlap).
 export const mathOf = (source: string, columns: number, ink: Ink): MathRendered => {
   const tex = unwrapped(source)
   if (tex === '') return { error: 'nothing to draw' }
   if (tex.length > MAX_TEX_CHARS) return { error: `too big to draw (${tex.length} characters)` }
+  if (bareBreakOf(tex)) return { error: 'a line break outside an environment' }
   try {
     const svg = texToSvg(tex)
-    const box = (adaptor.getAttribute(svg, 'viewBox') ?? '').split(/\s+/).map(Number)
-    if (box.length !== 4 || box.some(n => !Number.isFinite(n)) || box[2]! <= 0 || box[3]! <= 0) return { error: 'no picture' }
-    const [vx, vy, vw, vh] = box as [number, number, number, number]
+    const view = (adaptor.getAttribute(svg, 'viewBox') ?? '').split(/\s+/).map(Number)
+    if (view.length !== 4 || view.some(n => !Number.isFinite(n)) || view[2]! <= 0 || view[3]! <= 0) return { error: 'no picture' }
+    const outlines = outlinesOf(svg)
+    const extent = extentOf(outlines)
+    let [vx, vy, vw, vh] = view as [number, number, number, number]
+    if (extent) {
+      const right = Math.max(vx + vw, extent[2]), bottom = Math.max(vy + vh, extent[3])
+      vx = Math.min(vx, extent[0]); vy = Math.min(vy, extent[1])
+      vw = right - vx; vh = bottom - vy
+    }
     const scale = EM_PX / 1000
     const inkWidth = vw * scale, inkHeight = vh * scale
     const cols = Math.ceil(inkWidth / CELL_PX.width)
@@ -349,7 +413,7 @@ export const mathOf = (source: string, columns: number, ink: Ink): MathRendered 
     if (width > MAX_SIDE_PX || height > MAX_SIDE_PX || width * height * 4 > MAX_BYTES) return { error: `${width}×${height} pixels` }
     const top = (height - inkHeight) / 2
     const px = ([x, y]: Point): Point => [(x - vx) * scale, (y - vy) * scale + top]
-    const shapes = outlinesOf(svg).map(({ rings, clip }): Shape => {
+    const shapes = outlines.map(({ rings, clip }): Shape => {
       if (clip === null) return { rings: rings.map(ring => ring.map(px)), clip }
       const [l, t] = px([clip[0], clip[1]]), [r, b] = px([clip[2], clip[3]])
       return { rings: rings.map(ring => ring.map(px)), clip: [l, t, r, b] }

@@ -178,3 +178,36 @@ test('a path with numbers after Z, or an arc, is refused rather than read wrongl
   expect(() => ringsOf('M0 0 L1 1 Z 5 5')).toThrow()
   expect(() => ringsOf('M0 0 A1 1 0 0 1 5 5')).toThrow()
 })
+
+test('a line break outside an environment keeps the fence; inside one it draws', () => {
+  expect('error' in mathOf('x = 1 \\\\ y = 2', 134, INK.dark)).toBe(true)
+  expect('error' in mathOf('x = 1 \\newline y = 2', 134, INK.dark)).toBe(true)
+  expect('error' in mathOf(MATRIX, 134, INK.dark)).toBe(false)
+  expect('error' in mathOf('\\sum_{\\substack{i<n \\\\ j<m}} a_{ij}', 134, INK.dark)).toBe(false)
+})
+
+test('no definition reaches the next fence, not even from one that failed', () => {
+  const before = art('\\sin x')
+  expect('error' in mathOf('\\DeclareMathOperator{\\sin}{bad}\\nope', 134, INK.dark)).toBe(true)
+  expect('error' in mathOf('\\DeclareMathOperator{\\foo}{foo}\\foo x', 134, INK.dark)).toBe(false)
+  const after = art('\\sin x')
+  expect(after.width).toBe(before.width)
+  expect([...after.rgba]).toEqual([...before.rgba])
+  expect('error' in mathOf('\\foo x', 134, INK.dark)).toBe(true)
+})
+
+test('an outline drawn past the formula box is drawn, not cut away', () => {
+  const smashed = art('\\frac{\\smash{\\dfrac{1}{2}}}{3}')
+  const phantom = art('\\frac{\\phantom{1}}{3}')
+  expect(inked(smashed)).toBeGreaterThan(inked(phantom))
+})
+
+test('overlapping elements add up: a glyph over a rule leaves no hole', () => {
+  const a = art('\\frac{\\rlap{\\rule{1em}{1em}}X}{y}')
+  const rule = art('\\frac{\\rlap{\\rule{1em}{1em}}\\phantom{X}}{y}')
+  // every pixel the rule alone fills fully stays filled once X is drawn over it
+  expect(a.width).toBe(rule.width)
+  let holes = 0
+  for (let p = 3; p < rule.rgba.length; p += 4) if (rule.rgba[p] === 255 && a.rgba[p]! < 255) holes++
+  expect(holes).toBe(0)
+})

@@ -4632,7 +4632,7 @@ function renderErAscii(text, config, colorMode, theme) {
   const diagram = parseErDiagram(lines);
   if (diagram.entities.length === 0) return "";
   const useAscii = config.useAscii;
-  const hGap = 6;
+  const hGap = Math.max(6, ...diagram.relationships.flatMap((rel) => splitLines(rel.label)).map((line) => line.length + 3));
   const vGap = 4;
   const componentGap = 6;
   const entitySections = /* @__PURE__ */ new Map();

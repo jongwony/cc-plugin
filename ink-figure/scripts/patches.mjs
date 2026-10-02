@@ -125,4 +125,12 @@ export const PATCHES = [
     find: 'const BARE_NODE_REGEX = /^([\\w-]+)/\n',
     replace: 'const BARE_NODE_REGEX = /^(\\w+(?:-\\w+)*)/\n',
   },
+  // The gap between two entities is as wide as the widest relationship label, so the
+  // label drawn in it is never cut to the gap.
+  {
+    file: /beautiful-mermaid\/src\/ascii\/er-diagram\.ts$/,
+    find: '  const hGap = 6  // horizontal gap between entity boxes\n',
+    replace:
+      '  const hGap = Math.max(6, ...diagram.relationships.flatMap(rel => splitLines(rel.label)).map(line => line.length + 3))\n',
+  },
 ]

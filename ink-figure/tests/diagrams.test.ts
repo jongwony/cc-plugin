@@ -95,6 +95,13 @@ test('a later definition of a node or state gives it its text', () => {
   expect(both.includes('Long name') && both.includes('described')).toBe(true)
 })
 
+test('an ER relationship label is drawn whole, however long', () => {
+  for (const label of ['places many orders', '주문을 여러 번 한다']) {
+    const lines = linesOf(`erDiagram\n  CUSTOMER ||--o{ ORDER : "${label}"`)
+    expect(lines.some(l => l.includes(label))).toBe(true)
+  }
+})
+
 test('spacing defaults to 3 · 1 · 1 and boxes stand five rows tall', () => {
   expect(SPACING).toEqual({ paddingX: 3, paddingY: 1, boxBorderPadding: 1 })
   expect(linesOf('graph LR\n  A --> B').length).toBe(5)

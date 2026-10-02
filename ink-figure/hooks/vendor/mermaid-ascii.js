@@ -826,6 +826,7 @@ function colorizeText(text, hex, mode) {
 
 // node_modules/beautiful-mermaid/src/ascii/canvas.ts
 function mkCanvas(x, y) {
+  if ((x + 1) * (y + 1) > 25e4) throw new Error(`too big to lay out (${(x + 1) * (y + 1)} canvas cells)`);
   const canvas = [];
   for (let i = 0; i <= x; i++) {
     const col = [];
@@ -841,6 +842,7 @@ function copyCanvas(source) {
   return mkCanvas(maxX, maxY);
 }
 function mkRoleCanvas(x, y) {
+  if ((x + 1) * (y + 1) > 25e4) throw new Error(`too big to lay out (${(x + 1) * (y + 1)} canvas cells)`);
   const roleCanvas = [];
   for (let i = 0; i <= x; i++) {
     const col = [];
@@ -5433,6 +5435,7 @@ function drawLegend(canvas, roles, hexCanvas, chart, row, totalW, ch, seriesColo
   }
 }
 function createCanvas(width, height) {
+  if (width * height > 25e4) throw new Error(`too big to lay out (${width * height} canvas cells)`);
   return Array.from({ length: width }, () => Array.from({ length: height }, () => " "));
 }
 function createRoleCanvas(width, height) {

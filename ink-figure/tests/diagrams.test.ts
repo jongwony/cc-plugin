@@ -235,6 +235,16 @@ test('deeply nested or numerous subgraphs and composite states keep their fence 
   expect('lines' in drawn(nested(3, i => `state C${i} {`, '}', 'A --> B', 'stateDiagram-v2'), 134)).toBe(true)
 })
 
+test('a drawing that would need an oversized canvas keeps its fence at once; the largest ordinary ones draw', () => {
+  const n = (k: number) => Array.from({ length: k }, (_, i) => i)
+  const chain = n(39).map(i => `E${i} ||--o{ E${i + 1} : ${i === 0 ? 'x'.repeat(6000) : 'r'}`).join('\n')
+  const started = performance.now()
+  expect('error' in renderOf(`erDiagram\n${chain}\nE0 {\n${n(200).map(i => `  string a${i}`).join('\n')}\n}`)).toBe(true)
+  expect(performance.now() - started).toBeLessThan(500)
+  expect('lines' in renderOf(`sequenceDiagram\n${n(150).map(i => `  P${i % 20}->>P${(i + 1) % 20}: message ${i}`).join('\n')}`)).toBe(true)
+  expect('lines' in renderOf('erDiagram\n  A ||--o{ B : ' + 'y'.repeat(300))).toBe(true)
+})
+
 test('the cut count is the original columns a cut line does not show', () => {
   const fit = fitLines([[{ text: 'abcdefghij', role: 'text' }]], 5)
   expect(plainOf(fit.lines[0]!)).toBe('abcd…')

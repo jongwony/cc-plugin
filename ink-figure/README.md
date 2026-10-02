@@ -132,8 +132,10 @@ a sum with stacked limits; a flat expression stays in the text.
   20 participants, 150 messages, 40 blocks or 60 notes for a
   sequence diagram; 40 classes or entities, 80 relationships or 400 members or
   attributes for a class or ER diagram; 8 series or 120 values for a chart. So
-  does one with an edge the router gives up on, rather than drawing it as a
-  straight line through the boxes between.
+  does one whose drawing would need a canvas over 250,000 cells (a label
+  thousands of characters long between many boxes), and one with an edge the
+  router gives up on, rather than drawing it as a straight line through the
+  boxes between.
 - `AssistantMessage` is the finest site a mod can draw in, so a reply holding a
   figure is redrawn as Markdown pieces around it. A piece over 10,000
   characters, or one carrying escape codes another mod wrote into the reply,

@@ -357,4 +357,16 @@ export const PATCHES = [
     find: '    const baseCol = valueToCol(Math.max(0, yRange.min))\n',
     replace: '    const baseCol = valueToCol(Math.min(yRange.max, Math.max(0, yRange.min)))\n',
   },
+  // Every canvas the drawing allocates, or grows to, stays within 250,000 cells.
+  ...[
+    [/beautiful-mermaid\/src\/ascii\/canvas\.ts$/, 'export function mkCanvas(x: number, y: number): Canvas {\n', '(x + 1) * (y + 1)'],
+    [/beautiful-mermaid\/src\/ascii\/canvas\.ts$/, 'export function mkRoleCanvas(x: number, y: number): RoleCanvas {\n', '(x + 1) * (y + 1)'],
+    [/beautiful-mermaid\/src\/ascii\/xychart\.ts$/, 'function createCanvas(width: number, height: number): Canvas {\n', 'width * height'],
+  ].map(([file, find, cells]) => ({
+    file,
+    find,
+    replace:
+      find +
+      `  if (${cells} > 250_000) throw new Error(\`too big to lay out (\${${cells}} canvas cells)\`)\n`,
+  })),
 ]

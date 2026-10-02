@@ -102,6 +102,11 @@ test('an ER relationship label is drawn whole, however long', () => {
   }
 })
 
+test('a self-loop keeps its return segment and arrowhead at the compact spacing', () => {
+  const lines = linesOf('graph LR\n  A --> A')
+  expect(lines.some(l => l.includes('▲'))).toBe(true)
+})
+
 test('spacing defaults to 3 · 1 · 1 and boxes stand five rows tall', () => {
   expect(SPACING).toEqual({ paddingX: 3, paddingY: 1, boxBorderPadding: 1 })
   expect(linesOf('graph LR\n  A --> B').length).toBe(5)

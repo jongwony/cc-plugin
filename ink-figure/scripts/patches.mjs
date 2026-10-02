@@ -133,4 +133,11 @@ export const PATCHES = [
     replace:
       '  const hGap = Math.max(6, ...diagram.relationships.flatMap(rel => splitLines(rel.label)).map(line => line.length + 3))\n',
   },
+  // A grid row an edge routes through is at least one cell tall; at paddingY 1 the
+  // half-padding default left it zero rows and dropped the edge's return segment.
+  {
+    file: /beautiful-mermaid\/src\/ascii\/grid\.ts$/,
+    find: '      graph.rowHeight.set(c.y, Math.floor(graph.config.paddingY / 2))\n',
+    replace: '      graph.rowHeight.set(c.y, Math.max(1, Math.floor(graph.config.paddingY / 2)))\n',
+  },
 ]

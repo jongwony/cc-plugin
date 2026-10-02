@@ -3064,7 +3064,7 @@ function increaseGridSizeForPath(graph, path) {
       graph.columnWidth.set(c.x, Math.floor(graph.config.paddingX / 2));
     }
     if (!graph.rowHeight.has(c.y)) {
-      graph.rowHeight.set(c.y, Math.floor(graph.config.paddingY / 2));
+      graph.rowHeight.set(c.y, Math.max(1, Math.floor(graph.config.paddingY / 2)));
     }
   }
 }

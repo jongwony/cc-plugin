@@ -4881,6 +4881,8 @@ function parseXYChart(lines) {
     if (/^(accTitle|accDescr)\b/.test(line)) continue;
     throw new Error(`unparsed statement: ${line}`);
   }
+  const count = xAxis.categories?.length ?? series[0]?.data.length;
+  for (const s of series) if (s.data.length !== count) throw new Error(`a ${s.type} series of ${s.data.length} values for ${count} categories`);
   if (!yAxis.range && series.length > 0) {
     const allValues = series.flatMap((s) => s.data);
     let min = Math.min(...allValues);

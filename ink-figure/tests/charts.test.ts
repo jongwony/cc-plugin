@@ -106,3 +106,15 @@ test('bars on an axis that lies wholly below zero grow from its top, at once', (
   expect('lines' in horizontal || 'error' in horizontal).toBe(true)
   expect('lines' in art || 'error' in art).toBe(true)
 })
+
+test('a series with more or fewer values than categories keeps the fence', () => {
+  for (const source of [
+    'xychart-beta\n  x-axis [a, b]\n  y-axis 0 --> 10\n  line [2, 8, 5]',
+    'xychart-beta\n  x-axis [a, b, c]\n  line [2, 8]',
+    'xychart-beta\n  x-axis [a, b]\n  bar [1, 2, 3]\n  line [1, 2]',
+    'xychart-beta horizontal\n  x-axis [a, b]\n  line [1, 2, 3]',
+    'xychart-beta\n  line [1, 2, 3]\n  line [1, 2]',
+  ])
+    expect('error' in renderOf(source)).toBe(true)
+  expect('lines' in renderOf('xychart-beta\n  line [1, 2, 3]\n  line [3, 2, 1]')).toBe(true)
+})

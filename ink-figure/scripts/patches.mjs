@@ -180,6 +180,16 @@ export const PATCHES = [
       '  }\n\n' +
       '  // Fallback y-axis range\n',
   },
+  // Every series holds one value per category (or, with no categories, as many as the
+  // first series): the renderer plots that many and drops the rest.
+  {
+    file: /beautiful-mermaid\/src\/xychart\/parser\.ts$/,
+    find: '  // Auto-derive y-axis range from data if not specified\n',
+    replace:
+      '  const count = xAxis.categories?.length ?? series[0]?.data.length\n' +
+      '  for (const s of series) if (s.data.length !== count) throw new Error(`a ${s.type} series of ${s.data.length} values for ${count} categories`)\n\n' +
+      '  // Auto-derive y-axis range from data if not specified\n',
+  },
   // Tick values come from a bounded walk: a range too narrow for its magnitude adds
   // nothing per step.
   {

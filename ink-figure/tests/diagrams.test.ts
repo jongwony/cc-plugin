@@ -256,6 +256,10 @@ test('a mermaid fence inside an outer fence opened in a list item or block quote
   expect(after[0]!.source).toBe('graph LR\n  A --> B')
 })
 
+test('a source opening with front matter keeps its fence', () => {
+  expect('error' in drawn('---\nconfig:\n  flowchart:\n    curve: basis\n---\nflowchart TD\n  A --> B', 200)).toBe(true)
+})
+
 test('a definition whose destination is on the next line also sends the reply back whole', () => {
   expect(piecesOf('See [docs][r].\n\n```mermaid\ngraph LR\nA-->B\n```\n\n[r]:\n  https://example.com', 94)).toBe(null)
 })

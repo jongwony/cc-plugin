@@ -1,4 +1,4 @@
-import type { Register } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
 import { SERIES_COLOURS, type Fitted, type Role, type Segment } from './diagrams.ts'
 import { fencesOf, piecesOf, type MathPicture } from './figures.ts'
 import { INK, inkOf, type Ink } from './math.ts'
@@ -26,14 +26,22 @@ const STYLE: Record<Role, { color?: string; dimColor?: boolean }> = {
 }
 
 // the math ink for the current theme: read when the session starts, kept in step by
-// a theme change through /config, and read on demand only while still unknown
+// a theme change through /config, and read on demand only while still unknown; a
+// read that fails settles on the ink that reads on either theme
 let themeInk: Ink | null = null
+
+const readTheme = async ($: EngineInterface): Promise<Ink> => {
+  try {
+    themeInk = inkOf((await $.config.list()).find(row => row.key === 'theme')?.value)
+  } catch {
+    themeInk = INK.either
+  }
+  return themeInk
+}
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    try {
-      themeInk = inkOf((await $.config.list()).find(row => row.key === 'theme')?.value)
-    } catch {}
+    await readTheme($)
     return next(e)
   })
 
@@ -49,12 +57,8 @@ export const register: Register = on => {
     const text = e.props.text.replace(/\r\n?/g, '\n')
     const fences = fencesOf(text)
     if (fences.length === 0) return next(e)
-    if (themeInk === null && fences.some(f => f.lang === 'math')) {
-      try {
-        themeInk = inkOf((await $.config.list()).find(row => row.key === 'theme')?.value)
-      } catch {}
-    }
-    const pieces = piecesOf(text, (e.viewport?.columns ?? 80) - INLINE_MARGIN, themeInk ?? INK.either, fences)
+    const ink = themeInk ?? (fences.some(f => f.lang === 'math') ? await readTheme($) : INK.either)
+    const pieces = piecesOf(text, (e.viewport?.columns ?? 80) - INLINE_MARGIN, ink, fences)
     if (!pieces) return next(e)
     const { Box, Text, Markdown, Image } = $.ui.resolve(e)
 

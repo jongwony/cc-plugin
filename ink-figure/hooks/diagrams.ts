@@ -30,15 +30,11 @@ const KINDS: [RegExp, string][] = [
 
 export const DRAWN_KINDS: ReadonlySet<string> = new Set(KINDS.map(([, kind]) => kind))
 
-const headerOf = (source: string): string => {
-  const lines = source.split('\n').map(line => line.trim())
-  let i = 0
-  if (lines[0] === '---') {
-    i = lines.indexOf('---', 1) + 1
-    if (i === 0) i = lines.length
-  }
-  return lines.slice(i).find(line => line !== '' && !line.startsWith('%%')) ?? ''
-}
+const headerOf = (source: string): string =>
+  source
+    .split('\n')
+    .map(line => line.trim())
+    .find(line => line !== '' && !line.startsWith('%%')) ?? ''
 
 export const kindOf = (source: string): string => KINDS.find(([pattern]) => pattern.test(headerOf(source)))?.[1] ?? 'diagram'
 

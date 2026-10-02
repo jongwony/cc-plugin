@@ -68,8 +68,9 @@ A mermaid `xychart` (or `xychart-beta`) that holds at least one `line` series is
 drawn on a y-axis with ticks and grid dots, its categories under the x-axis. Bars
 in the same chart are drawn beside the line. The first series takes magenta, and
 later series green, blue and red, in the legend's order — colours that read on a
-light theme and a dark one alike. A chart with more series than that, or a value
-off its y-axis, keeps its fence.
+light theme and a dark one alike. A chart with more series than that, a value
+off its y-axis, or a series with more or fewer values than the categories keeps
+its fence.
 
 ````markdown
 ```mermaid

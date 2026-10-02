@@ -1,10 +1,11 @@
 import { expect, test } from 'claude-code/testing'
-import { barsOf, displayWidth, heatmapOf, niceStep, packCells, piecesOf } from '../hooks/charts.ts'
+import { barsOf, displayWidth, heatmapOf, niceStep, packCells } from '../hooks/charts.ts'
+import { piecesOf } from '../hooks/figures.ts'
 
 const ENGINE = { type: 'Text', props: {}, children: ['drawn by Claude Code'] }
 
 const message = (text: string, surface: 'terminal' | 'desktop' = 'terminal') => ({
-  plugin: 'cell-chart',
+  plugin: 'fence-figures',
   component: 'AssistantMessage',
   requestId: 'msg-1',
   surface,
@@ -108,6 +109,6 @@ test('Hangul labels count two columns each', () => {
   expect(displayWidth('api')).toBe(3)
 })
 
-test('prose without a chart fence yields nothing to draw', () => {
-  expect(piecesOf('```mermaid\ngraph LR\nA-->B\n```', 94)).toBe(null)
+test('prose without a figure fence yields nothing to draw', () => {
+  expect(piecesOf('Run this:\n\n```python\nprint(1)\n```', 94)).toBe(null)
 })

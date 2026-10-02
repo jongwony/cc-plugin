@@ -1,0 +1,12 @@
+{
+  "name": "fence-figures",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:vendor": "node scripts/build-vendor.mjs"
+  },
+  "devDependencies": {
+    "beautiful-mermaid": "1.1.3",
+    "esbuild": "^0.25.0"
+  }
+}

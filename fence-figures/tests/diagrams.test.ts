@@ -1,0 +1,93 @@
+import { expect, test } from 'claude-code/testing'
+import { displayWidth, drawn, plainOf, renderOf, SPACING } from '../hooks/diagrams.ts'
+import { piecesOf } from '../hooks/figures.ts'
+
+const ENGINE = { type: 'Text', props: {}, children: ['drawn by Claude Code'] }
+
+const message = (text: string, surface: 'terminal' | 'desktop' = 'terminal') => ({
+  plugin: 'fence-figures',
+  component: 'AssistantMessage',
+  requestId: 'msg-1',
+  surface,
+  viewport: { columns: 140, rows: 40 },
+  props: { text, isFirstOfReply: true },
+})
+
+const HANGUL = '```mermaid\ngraph LR\n  A[서울 요청] --> B[cache]\n  B --> C[응답]\n```'
+
+const EIGHT = [
+  'graph LR',
+  '  F[fence in reply] --> T{surface}',
+  '  T -->|terminal| M[mod redraws]',
+  '  T -->|desktop| D[host renders]',
+  '  M --> R[Raster: bars heatmap]',
+  '  M --> I[Image: LaTeX png]',
+  '  M --> X[text: mermaid box]',
+  '  D --> K[math: native]',
+  '  D --> S[mermaid: gap]',
+].join('\n')
+
+const linesOf = (source: string): string[] => {
+  const art = drawn(source, 200)
+  if (!('lines' in art)) throw new Error(art.error)
+  return art.lines.map(plainOf)
+}
+
+test('Hangul labels line up: every row of the boxes ends in the same screen column', () => {
+  const lines = linesOf('graph LR\n  A[서울 요청] --> B[cache]\n  B --> C[응답]')
+  expect(lines.some(l => l.includes('서울 요청'))).toBe(true)
+  expect(new Set(lines.map(displayWidth)).size).toBe(1)
+})
+
+test('a Hangul sequence diagram keeps its lifelines in one column', () => {
+  const lines = linesOf('sequenceDiagram\n  사용자->>서버: 요청 보내기\n  서버-->>사용자: 응답')
+  const lifelines = lines.filter(l => /^ +[│◀].*[│▶]$/.test(l))
+  expect(lifelines.length).toBeGreaterThan(3)
+  expect(new Set(lifelines.map(displayWidth)).size).toBe(1)
+})
+
+test('spacing defaults to 2 · 1 · 1 and boxes stand five rows tall', () => {
+  expect(SPACING).toEqual({ paddingX: 2, paddingY: 1, boxBorderPadding: 1 })
+  expect(linesOf('graph LR\n  A --> B').length).toBe(5)
+})
+
+test('an edge leaves its box from the border, not from inside the box', () => {
+  const lines = linesOf(EIGHT)
+  expect(lines.some(l => /surface ├─+terminal/.test(l))).toBe(true)
+  expect(lines.some(l => /│ +┬ +│/.test(l))).toBe(false)
+})
+
+test('the art carries no control character', () => {
+  for (const source of ['graph LR\n  A[서울 요청] --> B[cache]', EIGHT, 'sequenceDiagram\n  A->>B: hi']) {
+    for (const line of linesOf(source)) expect(/[\x00-\x1f\x7f]/.test(line)).toBe(false)
+  }
+})
+
+test('a mermaid fence is drawn as Text in the fence place, the label kept whole', async ($, on) => {
+  on('ui.render', () => ENGINE)
+  const ui = await $.ui.mount(message(`Before.\n\n${HANGUL}\n\nAfter.`))
+  expect(await ui.find({ type: 'Text', text: '서울 요청' })).toBeDefined()
+  expect(await ui.find({ type: 'Markdown', text: 'Before.' })).toBeDefined()
+  expect(await ui.find({ type: 'Markdown', text: 'After.' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'drawn by Claude Code' })).toBeUndefined()
+})
+
+test('a reply mixing a heatmap and a mermaid fence draws both', async ($, on) => {
+  on('ui.render', () => ENGINE)
+  const text = ['Latency:', '', '```heatmap', 'unit: ms', '     00h 12h', '서울  12  95', '```', '', 'Flow:', '', HANGUL].join('\n')
+  const ui = await $.ui.mount(message(text))
+  expect((await ui.find({ key: 'chart-0' }))?.type).toBe('Raster')
+  expect(await ui.find({ type: 'Text', text: '서울 요청' })).toBeDefined()
+})
+
+test('off the terminal the message goes to Claude Code untouched', async ($, on) => {
+  on('ui.render', () => ENGINE)
+  const ui = await $.ui.mount(message(HANGUL, 'desktop'))
+  expect(await ui.find({ type: 'Text', text: 'drawn by Claude Code' })).toBeDefined()
+})
+
+test('a kind the renderer does not draw, or a broken source, keeps its fence', () => {
+  expect('error' in renderOf('pie title Pets\n  "Dogs" : 386')).toBe(true)
+  expect(piecesOf('```mermaid\npie title Pets\n  "Dogs" : 386\n```', 94)).toBe(null)
+  expect(piecesOf('```mermaid\ngraph TD\n  가[시작] --> 나[끝]\n```', 94)).toBe(null)
+})

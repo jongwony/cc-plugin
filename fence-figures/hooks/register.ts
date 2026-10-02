@@ -1,17 +1,32 @@
 import type { Register } from 'claude-code'
-import { piecesOf, type Chart, type Piece } from './charts.ts'
+import type { Chart } from './charts.ts'
+import type { Role, Segment } from './diagrams.ts'
+import { piecesOf, type Piece } from './figures.ts'
+import type { Fitted } from './diagrams.ts'
 
-// Every ```heatmap and ```bars fence Claude writes is drawn as Raster cells
-// where the fence was, on the terminal. AssistantMessage is the finest site a
-// mod gets, so a reply holding a chart is redrawn as a column of its own:
-// Markdown for the prose around each fence, and the chart in the fence's place.
-// Anything that will not draw — another surface, a malformed fence, a chart
-// wider than the terminal — goes to Claude Code untouched.
+// Every ```heatmap, ```bars and ```mermaid fence Claude writes is drawn where the
+// fence was, on the terminal: charts as Raster cells, mermaid as box art built from
+// Text elements. AssistantMessage is the finest site a mod gets, so a reply holding
+// a figure is redrawn as a column of its own: Markdown for the prose around each
+// fence, the figure in the fence's place. A fence that will not draw stays as
+// written; a reply with nothing to draw, or another surface, goes to Claude Code
+// untouched.
 
 // the transcript's gutter and margins the drawing must clear
 const INLINE_MARGIN = 6
 const CACHE_LIMIT = 200
-const HINT = /(`{3,}|~{3,})[ \t]*(heatmap|bars)\b/i
+const HINT = /(`{3,}|~{3,})[ \t]*(heatmap|bars|mermaid)\b/i
+
+// colour by role through element styles: the engine refuses escape sequences in text
+const STYLE: Record<Role, { color?: string; dimColor?: boolean }> = {
+  text: {},
+  border: { color: 'cyan' },
+  junction: { color: 'cyan' },
+  line: { dimColor: true },
+  corner: { dimColor: true },
+  arrow: { color: 'yellow' },
+  accent: { color: 'magenta' },
+}
 
 const cache = new Map<string, Piece[] | null>()
 
@@ -26,7 +41,7 @@ const planned = (text: string, columns: number): Piece[] | null => {
 
 export const register: Register = on => {
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
-    // Raster is a terminal element; elsewhere the fence stays as Claude wrote it
+    // Raster and the box art are terminal drawings; elsewhere the fence stays as Claude wrote it
     if (e.surface !== 'terminal') return next(e)
     const text = e.props.text
     if (!HINT.test(text)) return next(e)
@@ -92,11 +107,21 @@ export const register: Register = on => {
       })
     }
 
+    const spanOf = ({ text, role }: Segment) => Text({ ...STYLE[role ?? 'text'], children: [text] })
+    const diagram = (fit: Fitted) =>
+      Box({
+        flexDirection: 'column',
+        children: [
+          ...fit.lines.map(line => (line.length === 0 ? Text({ children: [' '] }) : Box({ flexDirection: 'row', children: line.map(spanOf) }))),
+          ...(fit.overflow > 0 ? [Text({ dimColor: true, children: [`… ${fit.overflow} columns cut · widen the terminal`] })] : []),
+        ],
+      })
+
     let charts = 0
     return Box({
       flexDirection: 'column',
       rowGap: 1,
-      children: pieces.map(p => ('chart' in p ? drawn(p.chart, charts++) : Markdown({ text: p.markdown }))),
+      children: pieces.map(p => ('chart' in p ? drawn(p.chart, charts++) : 'diagram' in p ? diagram(p.diagram) : Markdown({ text: p.markdown }))),
     })
   })
 }

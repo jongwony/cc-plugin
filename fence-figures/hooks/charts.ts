@@ -1,4 +1,4 @@
-// Pure part of cell-chart: find ```heatmap / ```bars fences in a reply,
+// Pure chart part of fence-figures: find ```heatmap / ```bars fences in a reply,
 // parse their small DSL, and lay each out as Raster cells plus the text that
 // sits beside them. No mods API here, so the tests can call it directly.
 //
@@ -44,7 +44,6 @@ export type HeatmapChart = {
 }
 
 export type Chart = BarsChart | HeatmapChart
-export type Piece = { markdown: string } | { chart: Chart }
 
 // Raster limits from the element's contract
 export const MAX_RASTER_COLUMNS = 512
@@ -299,36 +298,3 @@ export const heatmapOf = (body: string, columns: number): HeatmapChart | null =>
 
 export const chartOf = (fence: Fence, columns: number): Chart | null =>
   fence.kind === 'bars' ? barsOf(fence.body, columns) : heatmapOf(fence.body, columns)
-
-// Markdown takes tab and newline as its only control characters
-const DRAWABLE = /^[^\x00-\x08\x0b-\x1f\x7f]*$/
-
-const pushMarkdown = (pieces: Piece[], text: string) => {
-  if (text.trim() !== '') pieces.push({ markdown: text.replace(/^\n+/, '').replace(/\n+$/, '') })
-}
-
-// The reply as pieces: markdown between the fences, a chart for each fence
-// that draws. Null when nothing draws or a piece cannot be handed to Markdown,
-// in which case the caller leaves the message to Claude Code untouched.
-export const piecesOf = (text: string, columns: number): Piece[] | null => {
-  const pieces: Piece[] = []
-  let pending = ''
-  let cursor = 0
-  let drawn = 0
-  for (const fence of fencesOf(text)) {
-    const chart = chartOf(fence, columns)
-    if (!chart) continue
-    pending += text.slice(cursor, fence.start)
-    pushMarkdown(pieces, pending)
-    pieces.push({ chart })
-    pending = ''
-    cursor = fence.end
-    drawn++
-  }
-  pending += text.slice(cursor)
-  pushMarkdown(pieces, pending)
-  if (drawn === 0) return null
-  for (const p of pieces)
-    if ('markdown' in p && (p.markdown.length > MAX_MARKDOWN_CHARS || !DRAWABLE.test(p.markdown))) return null
-  return pieces
-}

@@ -1,9 +1,0 @@
-{
-  "name": "cell-chart",
-  "description": "Mod that draws ```heatmap and ```bars fences in Claude's replies as terminal Raster cells, with labels in a column beside the cells and the scale of one cell stated under the drawing",
-  "version": "0.1.0",
-  "author": {
-    "name": "Jongwon Choi",
-    "url": "https://github.com/jongwony"
-  }
-}

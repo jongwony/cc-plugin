@@ -242,19 +242,33 @@ test('a presentation the fill cannot honour keeps the fence; ordinary formulas s
     expect(inked(art(tex))).toBeGreaterThan(0)
 })
 
-test('TeX whose expansion has no bound keeps the fence at once; a bounded alignment draws', () => {
+test('TeX whose expansion has no bound keeps the fence at once, any alignat included; aligned draws', () => {
   const started = performance.now()
   for (const tex of [
     '\\pmb{x}',
     '\\pmb{'.repeat(8) + 'x'.repeat(200) + '}'.repeat(8),
     '\\begin{alignat}{100000000} x&=y\\end{alignat}',
-    '\\begin{alignedat}{33} x&=y\\end{alignedat}',
     '\\begin{alignedat}[t]{100000000}x&=y\\end{alignedat}',
+    '\\begin{alignedat}[{]}]{' + '9'.repeat(309) + '}x&=y\\end{alignedat}',
+    '\\begin {xxalignat}{2} a&=b\\end{xxalignat}',
+    '\\begin{alignedat}{2} a&=b & c&=d\\end{alignedat}',
   ])
     expect('error' in mathOf(tex, 134, INK.dark)).toBe(true)
   expect(performance.now() - started).toBeLessThan(100)
-  expect(inked(art('\\begin{alignedat}{2} a&=b & c&=d\\end{alignedat}'))).toBeGreaterThan(0)
-  expect(inked(art('\\begin{alignedat}[t]{2} a&=b & c&=d\\end{alignedat}'))).toBeGreaterThan(0)
+  expect(inked(art('\\begin{aligned} a&=b \\\\ c&=d\\end{aligned}'))).toBeGreaterThan(0)
+})
+
+test('a fraction bar thinner than a subsample row still leaves its ink', () => {
+  const alpha = (a: MathArt): number => {
+    let n = 0
+    for (let p = 3; p < a.rgba.length; p += 4) n += a.rgba[p]!
+    return n
+  }
+  const none = alpha(art('{1\\atop 2}'))
+  const thin = alpha(art('{1\\above 0.1pt 2}'))
+  const thicker = alpha(art('{1\\above 0.2pt 2}'))
+  expect(thin).toBeGreaterThan(none)
+  expect(thicker).toBeGreaterThan(thin)
 })
 
 test('a declared operator keeps the fence before MathJax runs, a chain of them at once; \\operatorname draws', () => {

@@ -287,16 +287,47 @@ const MAX_WORK = 20_000_000
 
 type Edge = { x0: number; y0: number; x1: number; y1: number; dir: number }
 
+// a shape that is one axis-aligned rectangle, as [left, top, right, bottom]
+const boxOf = (rings: readonly Point[][]): [number, number, number, number] | null => {
+  if (rings.length !== 1 || rings[0]!.length !== 4) return null
+  const ring = rings[0]!
+  for (let k = 0; k < 4; k++) {
+    const a = ring[k]!, b = ring[(k + 1) % 4]!
+    if (a[0] !== b[0] && a[1] !== b[1]) return null
+  }
+  const xs = ring.map(p => p[0]), ys = ring.map(p => p[1])
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]
+}
+
 // Nonzero-winding scanline fill with SUBSAMPLES rows per pixel and exact horizontal
-// coverage. Each shape (one element) is filled on its own, within its clip and its
-// bounding box, and coverages add up to full: independent elements never cancel,
-// and pieces that abut leave no seam. The rings and clips are already in pixels.
-// Throws past MAX_WORK crossings.
+// coverage; an axis-aligned rectangle (a rule, a fraction bar) is covered exactly in
+// both directions, so one thinner than a subsample row still leaves its ink. Each
+// shape (one element) is filled on its own, within its clip and its bounding box,
+// and coverages add up to full: independent elements never cancel, and pieces that
+// abut leave no seam. The rings and clips are already in pixels. Throws past
+// MAX_WORK crossings.
 const filled = (shapes: readonly Shape[], width: number, height: number, ink: Ink): Uint8Array => {
   const cover = new Float32Array(width * height)
   let own = new Float32Array(0)
   let work = 0
   for (const { rings, clip } of shapes) {
+    const rect = boxOf(rings)
+    if (rect) {
+      const [cl, ct, cr, cb] = clip ?? [0, 0, width, height]
+      const l = Math.max(0, cl, rect[0]), r = Math.min(width, cr, rect[2])
+      const t = Math.max(0, ct, rect[1]), b = Math.min(height, cb, rect[3])
+      if (r <= l || b <= t) continue
+      for (let row = Math.floor(t); row < Math.ceil(b); row++) {
+        const v = Math.min(b, row + 1) - Math.max(t, row)
+        for (let c = Math.floor(l); c < Math.ceil(r); c++) {
+          const h = Math.min(r, c + 1) - Math.max(l, c)
+          cover[row * width + c] = Math.min(1, cover[row * width + c]! + v * h)
+        }
+        work += Math.ceil(r) - Math.floor(l)
+        if (work > MAX_WORK) throw new Error('too complex to draw')
+      }
+      continue
+    }
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
     for (const ring of rings)
       for (const [x, y] of ring) {
@@ -384,15 +415,14 @@ const unwrapped = (tex: string): string => {
 // What MathJax would build before any bound here can stop it: \pmb sets its
 // argument twice, so its outlines double per nesting; an operator \DeclareMathOperator
 // defines may use earlier ones any number of times, so a chain grows the same way;
-// and an alignat column count is allocated as given.
+// and an alignat environment allocates the column count its argument gives.
 const PMB = /\\pmb(?![a-zA-Z])/
 const DECLARE = /\\DeclareMathOperator(?![a-zA-Z])/
-const ALIGNAT = /\\begin\s*\{\s*(?:x{0,2}alignat\*?|alignedat)\s*\}\s*(?:\[[^\]]*\]\s*)?\{\s*(\d+)\s*\}/g
-const MAX_ALIGNAT = 32
+const ALIGNAT = /\\begin\s*\{\s*(?:x{0,2}alignat\*?|alignedat)\s*\}/
 const unboundedOf = (tex: string): string | null => {
   if (PMB.test(tex)) return '\\pmb'
   if (DECLARE.test(tex)) return '\\DeclareMathOperator'
-  for (const [, n] of tex.matchAll(ALIGNAT)) if (Number(n) > MAX_ALIGNAT) return `alignat with ${n} columns`
+  if (ALIGNAT.test(tex)) return 'an alignat environment'
   return null
 }
 

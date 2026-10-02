@@ -115,7 +115,8 @@ a sum with stacked limits; a flat expression stays in the text.
   terminal, one drawn with a colour, a background, hidden parts or a stroked
   outline, any `\pmb` (each nesting doubles the work), any
   `\DeclareMathOperator` (a chain of operators built from earlier ones grows the
-  same way; `\operatorname` draws), or an `alignat` of more than 32 columns.
+  same way; `\operatorname` draws), or any `alignat` or `alignedat` (its
+  column count is allocated as written; `aligned` draws).
   Each fence is read on its own: an operator one fence declares does not
   reach the next. A single `$$…$$` or `\[…\]` wrapper around the whole fence is
   ignored; a fence holding two display formulas keeps its fence.

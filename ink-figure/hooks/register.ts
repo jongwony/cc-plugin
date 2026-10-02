@@ -1,4 +1,4 @@
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, Timer } from 'claude-code'
 import { SERIES_COLOURS, type Fitted, type Role, type Segment } from './diagrams.ts'
 import { fencesOf, piecesOf, type MathPicture } from './figures.ts'
 import { INK, inkOf, type Ink } from './math.ts'
@@ -26,11 +26,15 @@ const STYLE: Record<Role, { color?: string; dimColor?: boolean }> = {
 }
 
 // the math ink for the current theme: read when the session starts, kept in step by
-// a theme change through /config, and read on demand only while still unknown; a
-// read that fails settles on the ink that reads on either theme. A read answers only
-// while no theme change landed after it began: `themeSet` counts those changes.
+// a theme change through /config, read on demand only while still unknown, and read
+// again every THEME_POLL_MS once a formula has been drawn, since /theme changes the
+// theme without a config.set; a read that fails settles on the ink that reads on
+// either theme. A read answers only while no theme change landed after it began:
+// `themeSet` counts those changes.
+const THEME_POLL_MS = 5000
 let themeInk: Ink | null = null
 let themeSet = 0
+let themePoll: Timer | null = null
 
 const readTheme = async ($: EngineInterface): Promise<Ink> => {
   const began = themeSet
@@ -44,6 +48,14 @@ const readTheme = async ($: EngineInterface): Promise<Ink> => {
   return themeInk ?? ink
 }
 
+// a new ink redraws the formulas already in the transcript; a render is otherwise
+// reused until its props or viewport change
+const rereadTheme = async ($: EngineInterface): Promise<void> => {
+  const before = themeInk
+  await readTheme($)
+  if (themeInk !== before) $.ui.invalidate('ui.render')
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const result = await next(e)
@@ -51,8 +63,6 @@ export const register: Register = on => {
     return result
   })
 
-  // a new ink redraws the formulas already in the transcript; a render is otherwise
-  // reused until its props or viewport change
   on('config.set', { key: 'theme' }, async ($, e, next) => {
     const result = await next(e)
     if (result.deny === undefined) {
@@ -72,7 +82,9 @@ export const register: Register = on => {
     const text = e.props.text.replace(/\r\n?/g, '\n')
     const fences = fencesOf(text)
     if (fences.length === 0) return next(e)
-    const ink = themeInk ?? (fences.some(f => f.lang === 'math') ? await readTheme($) : INK.either)
+    const math = fences.some(f => f.lang === 'math')
+    if (math && themePoll === null) themePoll = $.clock.every(THEME_POLL_MS, () => void rereadTheme($))
+    const ink = themeInk ?? (math ? await readTheme($) : INK.either)
     const pieces = piecesOf(text, (e.viewport?.columns ?? 80) - INLINE_MARGIN, ink, fences)
     if (!pieces) return next(e)
     const { Box, Text, Markdown, Image } = $.ui.resolve(e)

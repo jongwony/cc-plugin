@@ -35,12 +35,23 @@ const times = (p: Matrix, q: Matrix): Matrix => [
 
 const at = (m: Matrix, x: number, y: number): Point => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]]
 
-// MathJax writes only translate and scale
+// translate, scale and rotate, the operations MathJax writes; any other throws
 const transformOf = (value: string | null | undefined): Matrix => {
   let m = IDENTITY
-  for (const [, op, args] of (value ?? '').matchAll(/(translate|scale)\(([^)]*)\)/g)) {
+  const text = value ?? ''
+  if (text.replace(/(translate|scale|rotate)\([^)]*\)/g, '').trim() !== '') throw new Error(`transform ${text}`)
+  for (const [, op, args] of text.matchAll(/(translate|scale|rotate)\(([^)]*)\)/g)) {
     const n = args!.split(/[\s,]+/).filter(Boolean).map(Number)
-    m = times(m, op === 'translate' ? [1, 0, 0, 1, n[0] ?? 0, n[1] ?? 0] : [n[0] ?? 1, 0, 0, n[1] ?? n[0] ?? 1, 0, 0])
+    if (n.some(v => !Number.isFinite(v))) throw new Error(`transform ${text}`)
+    if (op === 'translate') m = times(m, [1, 0, 0, 1, n[0] ?? 0, n[1] ?? 0])
+    else if (op === 'scale') m = times(m, [n[0] ?? 1, 0, 0, n[1] ?? n[0] ?? 1, 0, 0])
+    else {
+      const a = ((n[0] ?? 0) * Math.PI) / 180, cx = n[1] ?? 0, cy = n[2] ?? 0
+      const cos = Math.cos(a), sin = Math.sin(a)
+      m = times(m, [1, 0, 0, 1, cx, cy])
+      m = times(m, [cos, sin, -sin, cos, 0, 0])
+      m = times(m, [1, 0, 0, 1, -cx, -cy])
+    }
   }
   return m
 }
@@ -50,7 +61,7 @@ const CUBIC_STEPS = 10
 
 // an SVG path's outline as closed rings of points, curves flattened to segments
 export const ringsOf = (d: string): Point[][] => {
-  const tokens = d.match(/[MLHVQTCSZmlhvqtcsz]|-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g) ?? []
+  const tokens = d.match(/[MLHVQTCSZAmlhvqtcsza]|-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g) ?? []
   const rings: Point[][] = []
   let ring: Point[] = []
   let i = 0
@@ -122,6 +133,7 @@ export const ringsOf = (d: string): Point[][] => {
         if (ring.length > 0) rings.push(ring)
         ring = []
         x = startX; y = startY; previous = 'Z'
+        command = ''
         break
       default:
         throw new Error(`path command ${command || tokens[i]}`)
@@ -138,75 +150,172 @@ export const INK = { light: [0x26, 0x26, 0x26], dark: [0xe4, 0xe4, 0xe4], either
 export const inkOf = (theme: unknown): Ink =>
   typeof theme === 'string' && theme.startsWith('light') ? INK.light : typeof theme === 'string' && theme.startsWith('dark') ? INK.dark : INK.either
 
-const UNDRAWN = new Set(['text', 'use', 'image', 'foreignObject'])
+// the elements the fill draws; any other throws, so the fence stays
+const DRAWN = new Set(['svg', 'g', 'path', 'rect', 'line'])
+// the width MathJax's stylesheet gives a table's rules and frame
+const TABLE_RULE = 70
 
-// every filled outline under the root svg, in its coordinates; throws on an error
-// node or an element the fill cannot draw, so the fence stays
-const outlinesOf = (svg: LiteNode): Point[][] => {
-  const rings: Point[][] = []
-  const number = (node: LiteNode, name: string): number => Number(adaptor.getAttribute(node, name) ?? 0)
-  const walk = (node: LiteNode, outer: Matrix) => {
+// An axis-aligned clip, [left, top, right, bottom], in the coordinates of the
+// outlines it clips; null draws everywhere.
+type Clip = readonly [number, number, number, number] | null
+// outlines filled together, under one clip
+export type Shape = { rings: Point[][]; clip: Clip }
+
+const box = (x0: number, y0: number, x1: number, y1: number, reverse = false): Point[] =>
+  reverse ? [[x0, y0], [x0, y1], [x1, y1], [x1, y0]] : [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+
+const meet = (a: Clip, b: Clip): Clip =>
+  a === null ? b : b === null ? a : [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.min(a[3], b[3])]
+
+// Every outline under the root svg, in its coordinates, grouped by clip: glyph
+// paths and filled rules as they are, a stroked rect as its frame and a line as a
+// quad of its stroke width. A nested svg maps its viewBox onto its viewport and
+// clips to it, unless the stylesheet leaves it visible (a table cell's). Throws on
+// an error node, an element or attribute the fill cannot draw (a dashed rule, a
+// rounded frame, a stroked path), so the fence stays.
+export const outlinesOf = (svg: LiteNode): Shape[] => {
+  const shapes = new Map<Clip, Shape>()
+  const add = (clip: Clip, ring: Point[]) => {
+    let shape = shapes.get(clip)
+    if (!shape) shapes.set(clip, (shape = { rings: [], clip }))
+    shape.rings.push(ring)
+  }
+  const attr = (node: LiteNode, name: string) => adaptor.getAttribute(node, name)
+  const number = (node: LiteNode, name: string, fallback = 0): number => {
+    const value = attr(node, name)
+    const n = value == null ? fallback : Number(String(value).replace(/px$/, ''))
+    if (!Number.isFinite(n)) throw new Error(`${name}="${value}"`)
+    return n
+  }
+  const walk = (node: LiteNode, outer: Matrix, clip: Clip, parent: LiteNode | null, grandparent: LiteNode | null) => {
     const kind = adaptor.kind(node)
     if (kind === '#text' || kind === '#comment') return
-    if (UNDRAWN.has(kind)) throw new Error(`cannot fill <${kind}>`)
-    if (adaptor.getAttribute(node, 'data-mml-node') === 'merror') throw new Error('TeX error')
-    let m = times(outer, transformOf(adaptor.getAttribute(node, 'transform')))
-    if (kind === 'svg' && node !== svg) m = times(m, [1, 0, 0, 1, number(node, 'x'), number(node, 'y')])
-    if (kind === 'path') for (const ring of ringsOf(adaptor.getAttribute(node, 'd') ?? '')) rings.push(ring.map(([px, py]) => at(m, px, py)))
-    else if (kind === 'rect') {
+    if (!DRAWN.has(kind)) throw new Error(`cannot fill <${kind}>`)
+    if (attr(node, 'data-mml-node') === 'merror') throw new Error('TeX error')
+    if (/\bmjx-(dashed|dotted)\b/.test(attr(node, 'class') ?? '') || attr(node, 'stroke-dasharray') != null) throw new Error('a dashed rule')
+    let m = times(outer, transformOf(attr(node, 'transform')))
+    const put = (ring: Point[]) => add(clip, ring.map(([px, py]) => at(m, px, py)))
+    if (kind === 'svg' && node !== svg) {
       const x = number(node, 'x'), y = number(node, 'y'), w = number(node, 'width'), h = number(node, 'height')
-      rings.push(([[x, y], [x + w, y], [x + w, y + h], [x, y + h]] as const).map(([px, py]) => at(m, px, py)))
+      const view = attr(node, 'viewBox')
+      let inner: Matrix = [1, 0, 0, 1, x, y]
+      if (view != null) {
+        const [vx, vy, vw, vh] = view.trim().split(/[\s,]+/).map(Number) as [number, number, number, number]
+        if (![vx, vy, vw, vh].every(Number.isFinite) || vw <= 0 || vh <= 0) throw new Error(`viewBox="${view}"`)
+        const aspect = (attr(node, 'preserveAspectRatio') ?? 'xMidYMid meet').trim()
+        let sx = w / vw, sy = h / vh, tx = x, ty = y
+        if (aspect !== 'none') {
+          if (!/^xMidYMid( meet)?$/.test(aspect)) throw new Error(`preserveAspectRatio="${aspect}"`)
+          sx = sy = Math.min(sx, sy)
+          tx += (w - vw * sx) / 2
+          ty += (h - vh * sy) / 2
+        }
+        inner = [sx, 0, 0, sy, tx - vx * sx, ty - vy * sy]
+      }
+      const visible = attr(node, 'overflow') === 'visible' || (grandparent !== null && attr(grandparent, 'data-mml-node') === 'mtable')
+      if (!visible) {
+        if (m[1] !== 0 || m[2] !== 0) throw new Error('a turned viewport')
+        const [ax, ay] = at(m, x, y), [bx, by] = at(m, x + w, y + h)
+        clip = meet(clip, [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)])
+      }
+      m = times(m, inner)
+    } else if (kind === 'path') {
+      if (attr(node, 'fill') === 'none') throw new Error('a stroked path')
+      for (const ring of ringsOf(attr(node, 'd') ?? '')) put(ring)
+    } else if (kind === 'rect') {
+      if (number(node, 'rx') !== 0 || number(node, 'ry') !== 0) throw new Error('a rounded frame')
+      const x = number(node, 'x'), y = number(node, 'y'), w = number(node, 'width'), h = number(node, 'height')
+      const framed = attr(node, 'data-frame') === 'true'
+      if (attr(node, 'fill') !== 'none' && !framed) put(box(x, y, x + w, y + h))
+      else {
+        const t = number(node, 'stroke-width', framed ? TABLE_RULE : NaN) / 2
+        put(box(x - t, y - t, x + w + t, y + h + t))
+        if (w > 2 * t && h > 2 * t) put(box(x + t, y + t, x + w - t, y + h - t, true))
+      }
+    } else if (kind === 'line') {
+      const x1 = number(node, 'x1'), y1 = number(node, 'y1'), x2 = number(node, 'x2'), y2 = number(node, 'y2')
+      const t = number(node, 'stroke-width', attr(node, 'data-line') != null ? TABLE_RULE : NaN) / 2
+      const length = Math.hypot(x2 - x1, y2 - y1)
+      if (length > 0) {
+        const nx = (-(y2 - y1) / length) * t, ny = ((x2 - x1) / length) * t
+        put([[x1 + nx, y1 + ny], [x2 + nx, y2 + ny], [x2 - nx, y2 - ny], [x1 - nx, y1 - ny]])
+      }
     }
-    for (const child of adaptor.childNodes(node)) walk(child, m)
+    for (const child of adaptor.childNodes(node)) walk(child, m, clip, node, parent)
   }
-  walk(svg, IDENTITY)
-  return rings
+  walk(svg, IDENTITY, null, null, null)
+  return [...shapes.values()]
 }
 
 const SUBSAMPLES = 4
+// edge crossings one fill may compute before the formula counts as too complex
+const MAX_WORK = 20_000_000
 
-// nonzero-winding scanline fill with SUBSAMPLES rows per pixel and exact horizontal
-// coverage; the rings are already in pixels
-const filled = (rings: readonly (readonly Point[])[], width: number, height: number, ink: Ink): Uint8Array => {
+type Edge = { x0: number; y0: number; x1: number; y1: number; dir: number }
+
+// Nonzero-winding scanline fill with SUBSAMPLES rows per pixel and exact horizontal
+// coverage, each shape within its clip; shapes combine by the larger coverage. The
+// rings and clips are already in pixels. Throws past MAX_WORK crossings.
+const filled = (shapes: readonly Shape[], width: number, height: number, ink: Ink): Uint8Array => {
   const cover = new Float32Array(width * height)
-  const edges: [number, number, number, number, number][] = []
-  for (const ring of rings)
-    for (let k = 0; k < ring.length; k++) {
-      const a = ring[k]!, b = ring[(k + 1) % ring.length]!
-      if (a[1] === b[1]) continue
-      edges.push(a[1] < b[1] ? [a[0], a[1], b[0], b[1], 1] : [b[0], b[1], a[0], a[1], -1])
-    }
-  const crossings: [number, number][] = []
-  for (let row = 0; row < height; row++)
-    for (let s = 0; s < SUBSAMPLES; s++) {
-      const sy = row + (s + 0.5) / SUBSAMPLES
-      crossings.length = 0
-      for (const [x0, y0, x1, y1, dir] of edges) if (sy >= y0 && sy < y1) crossings.push([x0 + ((sy - y0) * (x1 - x0)) / (y1 - y0), dir])
-      if (crossings.length === 0) continue
-      crossings.sort((p, q) => p[0] - q[0])
-      let winding = 0
-      for (let k = 0; k < crossings.length - 1; k++) {
-        winding += crossings[k]![1]
-        if (winding === 0) continue
-        const left = Math.max(0, crossings[k]![0]), right = Math.min(width, crossings[k + 1]![0])
-        if (right <= left) continue
-        const li = Math.floor(left), ri = Math.floor(right)
-        const base = row * width
-        if (li === ri) {
-          cover[base + li]! += (right - left) / SUBSAMPLES
-          continue
-        }
-        cover[base + li]! += (li + 1 - left) / SUBSAMPLES
-        for (let c = li + 1; c < ri; c++) cover[base + c]! += 1 / SUBSAMPLES
-        if (ri < width) cover[base + ri]! += (right - ri) / SUBSAMPLES
+  const own = new Float32Array(width * height)
+  let work = 0
+  for (const { rings, clip } of shapes) {
+    const [cl, ct, cr, cb] = clip ?? [0, 0, width, height]
+    const left0 = Math.max(0, cl), right0 = Math.min(width, cr)
+    if (right0 <= left0 || cb <= ct) continue
+    const edges: Edge[] = []
+    for (const ring of rings)
+      for (let k = 0; k < ring.length; k++) {
+        const a = ring[k]!, b = ring[(k + 1) % ring.length]!
+        if (a[1] === b[1]) continue
+        edges.push(a[1] < b[1] ? { x0: a[0], y0: a[1], x1: b[0], y1: b[1], dir: 1 } : { x0: b[0], y0: b[1], x1: a[0], y1: a[1], dir: -1 })
       }
-    }
+    edges.sort((p, q) => p.y0 - q.y0)
+    own.fill(0)
+    const active: Edge[] = []
+    const crossings: [number, number][] = []
+    let next = 0
+    const firstRow = Math.max(0, Math.floor(ct)), lastRow = Math.min(height, Math.ceil(cb))
+    for (let row = firstRow; row < lastRow; row++)
+      for (let s = 0; s < SUBSAMPLES; s++) {
+        const sy = row + (s + 0.5) / SUBSAMPLES
+        if (sy < ct || sy >= cb) continue
+        while (next < edges.length && edges[next]!.y0 <= sy) active.push(edges[next++]!)
+        let kept = 0
+        for (const e of active) if (e.y1 > sy) active[kept++] = e
+        active.length = kept
+        if (kept === 0) continue
+        work += kept
+        if (work > MAX_WORK) throw new Error('too complex to draw')
+        crossings.length = 0
+        for (const e of active) crossings.push([e.x0 + ((sy - e.y0) * (e.x1 - e.x0)) / (e.y1 - e.y0), e.dir])
+        crossings.sort((p, q) => p[0] - q[0])
+        let winding = 0
+        const base = row * width
+        for (let k = 0; k < crossings.length - 1; k++) {
+          winding += crossings[k]![1]
+          if (winding === 0) continue
+          const left = Math.max(left0, crossings[k]![0]), right = Math.min(right0, crossings[k + 1]![0])
+          if (right <= left) continue
+          const li = Math.floor(left), ri = Math.floor(right)
+          if (li === ri) {
+            own[base + li]! += (right - left) / SUBSAMPLES
+            continue
+          }
+          own[base + li]! += (li + 1 - left) / SUBSAMPLES
+          for (let c = li + 1; c < ri; c++) own[base + c]! += 1 / SUBSAMPLES
+          if (ri < width) own[base + ri]! += (right - ri) / SUBSAMPLES
+        }
+      }
+    for (let p = 0; p < own.length; p++) if (own[p]! > cover[p]!) cover[p] = Math.min(1, own[p]!)
+  }
   const rgba = new Uint8Array(width * height * 4)
   for (let p = 0; p < width * height; p++) {
     rgba[p * 4] = ink[0]
     rgba[p * 4 + 1] = ink[1]
     rgba[p * 4 + 2] = ink[2]
-    rgba[p * 4 + 3] = Math.round(Math.min(1, cover[p]!) * 255)
+    rgba[p * 4 + 3] = Math.round(cover[p]! * 255)
   }
   return rgba
 }
@@ -239,8 +348,13 @@ export const mathOf = (source: string, columns: number, ink: Ink): MathRendered 
     const width = cols * CELL_PX.width, height = rows * CELL_PX.height
     if (width > MAX_SIDE_PX || height > MAX_SIDE_PX || width * height * 4 > MAX_BYTES) return { error: `${width}×${height} pixels` }
     const top = (height - inkHeight) / 2
-    const rings = outlinesOf(svg).map(ring => ring.map(([x, y]): Point => [(x - vx) * scale, (y - vy) * scale + top]))
-    return { rgba: filled(rings, width, height, ink), width, height, columns: cols, rows }
+    const px = ([x, y]: Point): Point => [(x - vx) * scale, (y - vy) * scale + top]
+    const shapes = outlinesOf(svg).map(({ rings, clip }): Shape => {
+      if (clip === null) return { rings: rings.map(ring => ring.map(px)), clip }
+      const [l, t] = px([clip[0], clip[1]]), [r, b] = px([clip[2], clip[3]])
+      return { rings: rings.map(ring => ring.map(px)), clip: [l, t, r, b] }
+    })
+    return { rgba: filled(shapes, width, height, ink), width, height, columns: cols, rows }
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) }
   }

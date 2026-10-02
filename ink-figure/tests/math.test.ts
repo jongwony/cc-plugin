@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { CELL_PX, INK, inkOf, mathOf, type MathArt } from '../hooks/math.ts'
+import { CELL_PX, INK, inkOf, mathOf, ringsOf, type MathArt } from '../hooks/math.ts'
 import { piecesOf } from '../hooks/figures.ts'
 
 const ENGINE = { type: 'Text', props: {}, children: ['drawn by Claude Code'] }
@@ -90,4 +90,91 @@ test('off the terminal, or with malformed TeX, the reply goes to Claude Code unt
   const broken = await $.ui.mount(message('```math\n\\frac{1}{\\nope}\n```'))
   expect(await broken.find({ type: 'Text', text: 'drawn by Claude Code' })).toBeDefined()
   expect(piecesOf('```math\n\\frac{1}{\\nope}\n```', 134)).toBe(null)
+})
+
+// pixels with ink, as [x, y], and the box around them
+const inkAt = (a: MathArt, x: number, y: number): boolean => a.rgba[(y * a.width + x) * 4 + 3]! > 64
+const inkBox = (a: MathArt) => {
+  let x0 = a.width, y0 = a.height, x1 = -1, y1 = -1
+  for (let y = 0; y < a.height; y++)
+    for (let x = 0; x < a.width; x++)
+      if (inkAt(a, x, y)) {
+        x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y)
+      }
+  return { x0, y0, x1, y1 }
+}
+
+test('a boxed formula draws its frame as a line around the content, not a filled block', () => {
+  for (const tex of ['\\boxed{x+1}', '\\fbox{$x$}']) {
+    const a = art(tex)
+    const { x0, y0, x1, y1 } = inkBox(a)
+    let blank = 0, inked = 0
+    for (let y = y0 + 3; y <= y1 - 3; y++) for (let x = x0 + 3; x <= x1 - 3; x++) inkAt(a, x, y) ? inked++ : blank++
+    expect(inked).toBeGreaterThan(10)
+    expect(blank).toBeGreaterThan(inked)
+  }
+})
+
+test('an array draws its rules: a separator row across it and a separator column down it', () => {
+  const a = art('\\begin{array}{c|c}1&2\\\\\\hline 3&4\\end{array}')
+  const { x0, y0, x1, y1 } = inkBox(a)
+  const run = (n: number, at: (k: number) => boolean) => {
+    let k = 0
+    while (k < n && at(k)) k++
+    return k
+  }
+  let row = false, column = false
+  for (let y = y0; y <= y1; y++) if (run(x1 - x0 + 1, k => inkAt(a, x0 + k, y)) >= 0.9 * (x1 - x0 + 1)) row = true
+  for (let x = x0; x <= x1; x++) {
+    let longest = 0, current = 0
+    for (let y = y0; y <= y1; y++) longest = Math.max(longest, (current = inkAt(a, x, y) ? current + 1 : 0))
+    if (longest >= 0.9 * (y1 - y0 + 1)) column = true
+  }
+  expect(row).toBe(true)
+  expect(column).toBe(true)
+})
+
+test('a stretched arrow is one connected piece, its shaft meeting its head', () => {
+  const a = art('\\overrightarrow{ABC}')
+  const seen = new Uint8Array(a.width * a.height)
+  const { x0, y0, x1 } = inkBox(a)
+  let start = -1
+  for (let x = x0; x <= x1 && start < 0; x++) if (inkAt(a, x, y0)) start = y0 * a.width + x
+  const stack = [start]
+  let left = a.width, right = -1
+  seen[start] = 1
+  while (stack.length > 0) {
+    const p = stack.pop()!
+    const x = p % a.width, y = Math.floor(p / a.width)
+    left = Math.min(left, x); right = Math.max(right, x)
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy
+        if (nx < 0 || ny < 0 || nx >= a.width || ny >= a.height) continue
+        const q = ny * a.width + nx
+        if (!seen[q] && inkAt(a, nx, ny)) {
+          seen[q] = 1
+          stack.push(q)
+        }
+      }
+  }
+  expect(right - left).toBeGreaterThan(0.8 * (x1 - x0))
+})
+
+test('a large matrix fills within a bounded time, or keeps its fence at once', () => {
+  const big = '\\begin{matrix}' + Array.from({ length: 24 }, () => Array(24).fill('x').join('&')).join('\\\\') + '\\end{matrix}'
+  const started = performance.now()
+  mathOf(big, 255, INK.dark)
+  expect(performance.now() - started).toBeLessThan(1000)
+})
+
+test('a label is drawn again at another width: each conversion starts afresh', () => {
+  const tex = '\\frac{a}{b}\\label{eq:r}'
+  expect('error' in mathOf(tex, 134, INK.dark)).toBe(false)
+  expect('error' in mathOf(tex, 120, INK.dark)).toBe(false)
+})
+
+test('a path with numbers after Z, or an arc, is refused rather than read wrongly', () => {
+  expect(() => ringsOf('M0 0 L1 1 Z 5 5')).toThrow()
+  expect(() => ringsOf('M0 0 A1 1 0 0 1 5 5')).toThrow()
 })

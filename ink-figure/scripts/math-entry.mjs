@@ -11,9 +11,13 @@ import 'mathjax-full/js/input/tex/ams/AmsConfiguration.js'
 export const adaptor = liteAdaptor()
 RegisterHTMLHandler(adaptor)
 
+let input = null
 let doc = null
 
+// each conversion starts from fresh equation numbers and labels, as if alone
 export const texToSvg = tex => {
-  doc ??= mathjax.document('', { InputJax: new TeX({ packages: ['base', 'ams'] }), OutputJax: new SVG({ fontCache: 'none' }) })
+  input ??= new TeX({ packages: ['base', 'ams'] })
+  doc ??= mathjax.document('', { InputJax: input, OutputJax: new SVG({ fontCache: 'none' }) })
+  input.reset()
   return adaptor.firstChild(doc.convert(tex, { display: true }))
 }

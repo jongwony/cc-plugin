@@ -204,7 +204,8 @@ export const outlinesOf = (svg: LiteNode): Shape[] => {
     if (!Number.isFinite(n)) throw new Error(`${name}="${value}"`)
     return n
   }
-  const walk = (node: LiteNode, outer: Matrix, clip: Clip, parent: LiteNode | null, grandparent: LiteNode | null) => {
+  // `fill` and `stroke` arrive inherited from the ancestors, as SVG paints them
+  const walk = (node: LiteNode, outer: Matrix, clip: Clip, parent: LiteNode | null, grandparent: LiteNode | null, inherited: { fill: string; stroke: string }) => {
     const kind = adaptor.kind(node)
     if (kind === '#text' || kind === '#comment') return
     if (!DRAWN.has(kind)) throw new Error(`cannot fill <${kind}>`)
@@ -212,6 +213,7 @@ export const outlinesOf = (svg: LiteNode): Shape[] => {
     const unhonoured = unhonouredOf(node, kind, node === svg, parent)
     if (unhonoured) throw new Error(`cannot honour ${unhonoured}`)
     if (/\bmjx-(dashed|dotted)\b/.test(attr(node, 'class') ?? '') || attr(node, 'stroke-dasharray') != null) throw new Error('a dashed rule')
+    const paint = { fill: String(attr(node, 'fill') ?? inherited.fill).trim(), stroke: String(attr(node, 'stroke') ?? inherited.stroke).trim() }
     let m = times(outer, transformOf(attr(node, 'transform')))
     let shape: Shape | null = null
     const put = (ring: Point[]) => {
@@ -243,19 +245,21 @@ export const outlinesOf = (svg: LiteNode): Shape[] => {
       }
       m = times(m, inner)
     } else if (kind === 'path') {
-      if (attr(node, 'fill') === 'none') throw new Error('a stroked path')
+      if (paint.fill === 'none') throw new Error('an unfilled path')
       for (const ring of ringsOf(attr(node, 'd') ?? '')) put(ring)
     } else if (kind === 'rect') {
       if (number(node, 'rx') !== 0 || number(node, 'ry') !== 0) throw new Error('a rounded frame')
       const x = number(node, 'x'), y = number(node, 'y'), w = number(node, 'width'), h = number(node, 'height')
       const framed = attr(node, 'data-frame') === 'true'
-      if (attr(node, 'fill') !== 'none' && !framed) put(box(x, y, x + w, y + h))
+      if (paint.fill !== 'none' && !framed) put(box(x, y, x + w, y + h))
       else {
+        if (paint.stroke === 'none') throw new Error('an unstroked frame')
         const t = number(node, 'stroke-width', framed ? TABLE_RULE : NaN) / 2
         put(box(x - t, y - t, x + w + t, y + h + t))
         if (w > 2 * t && h > 2 * t) put(box(x + t, y + t, x + w - t, y + h - t, true))
       }
     } else if (kind === 'line') {
+      if (paint.stroke === 'none') throw new Error('an unstroked rule')
       const x1 = number(node, 'x1'), y1 = number(node, 'y1'), x2 = number(node, 'x2'), y2 = number(node, 'y2')
       const t = number(node, 'stroke-width', attr(node, 'data-line') != null ? TABLE_RULE : NaN) / 2
       const length = Math.hypot(x2 - x1, y2 - y1)
@@ -264,9 +268,9 @@ export const outlinesOf = (svg: LiteNode): Shape[] => {
         put([[x1 + nx, y1 + ny], [x2 + nx, y2 + ny], [x2 - nx, y2 - ny], [x1 - nx, y1 - ny]])
       }
     }
-    for (const child of adaptor.childNodes(node)) walk(child, m, clip, node, parent)
+    for (const child of adaptor.childNodes(node)) walk(child, m, clip, node, parent, paint)
   }
-  walk(svg, IDENTITY, null, null, null)
+  walk(svg, IDENTITY, null, null, null, { fill: 'currentColor', stroke: 'none' })
   return shapes
 }
 
@@ -374,7 +378,7 @@ const unwrapped = (tex: string): string => {
 // argument twice, so its outlines double per nesting, and an alignat column count
 // is allocated as given.
 const PMB = /\\pmb(?![a-zA-Z])/
-const ALIGNAT = /\\begin\s*\{\s*(?:x{0,2}alignat\*?|alignedat)\s*\}\s*\{\s*(\d+)\s*\}/g
+const ALIGNAT = /\\begin\s*\{\s*(?:x{0,2}alignat\*?|alignedat)\s*\}\s*(?:\[[^\]]*\]\s*)?\{\s*(\d+)\s*\}/g
 const MAX_ALIGNAT = 32
 const unboundedOf = (tex: string): string | null => {
   if (PMB.test(tex)) return '\\pmb'

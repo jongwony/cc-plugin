@@ -228,6 +228,7 @@ test('a formula drawn once is kept for any room it fits, and refused where it do
 test('a presentation the fill cannot honour keeps the fence; ordinary formulas still draw', () => {
   expect('error' in mathOf('\\frac{\\mmlToken{mi}[style="display:none"]{x}}{y}', 134, INK.dark)).toBe(true)
   expect('error' in mathOf('\\frac{\\mmlToken{mi}[mathbackground="black"]{x}}{y}', 134, INK.dark)).toBe(true)
+  expect('error' in mathOf('\\frac{\\mmlToken{mi}[mathcolor="none"]{x}}{y}', 134, INK.dark)).toBe(true)
   for (const tex of [
     '\\rule{1em}{1em}',
     FRACTION,
@@ -247,10 +248,12 @@ test('TeX whose expansion has no bound keeps the fence at once; a bounded alignm
     '\\pmb{'.repeat(8) + 'x'.repeat(200) + '}'.repeat(8),
     '\\begin{alignat}{100000000} x&=y\\end{alignat}',
     '\\begin{alignedat}{33} x&=y\\end{alignedat}',
+    '\\begin{alignedat}[t]{100000000}x&=y\\end{alignedat}',
   ])
     expect('error' in mathOf(tex, 134, INK.dark)).toBe(true)
   expect(performance.now() - started).toBeLessThan(100)
   expect(inked(art('\\begin{alignedat}{2} a&=b & c&=d\\end{alignedat}'))).toBeGreaterThan(0)
+  expect(inked(art('\\begin{alignedat}[t]{2} a&=b & c&=d\\end{alignedat}'))).toBeGreaterThan(0)
 })
 
 test('only a fence that is one display wrapper is unwrapped; two keep the fence', () => {

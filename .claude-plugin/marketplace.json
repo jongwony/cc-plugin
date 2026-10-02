@@ -117,7 +117,7 @@
     {
       "name": "ink-figure",
       "source": "./ink-figure",
-      "description": "Renders Epistemic Ink mermaid fences as terminal diagrams."
+      "description": "Renders Epistemic Ink mermaid diagrams, line charts and 2-D math as terminal figures."
     }
   ]
 }

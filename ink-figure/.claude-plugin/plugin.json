@@ -1,7 +1,7 @@
 {
   "name": "ink-figure",
   "description": "Renders Epistemic Ink mermaid fences as terminal diagrams: box art whose East Asian labels line up — the one figure transcript text cannot draw",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

@@ -1,12 +1,11 @@
 import { renderMermaidAscii } from './vendor/mermaid-ascii.js'
 
-// Pure functions over mermaid blocks: finding them in a reply's markdown, drawing
-// them as role-tagged box art with East Asian labels measured in screen cells, and
-// fitting the art to a width. No `$`, so the tests drive these directly.
-// Fence detection, kind table, LR flip and the sentinel-colour
-// role recovery are adapted from claude-mermaid (Gal Elmalah, MIT).
+// Pure functions over mermaid sources: drawing them as role-tagged box art with East
+// Asian labels measured in screen cells, and fitting the art to a width. No `$`, so
+// the tests drive these directly.
+// The kind table, LR flip and the sentinel-colour role recovery are adapted from
+// claude-mermaid (Gal Elmalah, MIT).
 
-export type MermaidBlock = { start: number; end: number; source: string }
 export type Role = 'text' | 'border' | 'line' | 'arrow' | 'corner' | 'junction' | 'accent'
 // `series`: a chart series after the first, numbered from 1 in the order its colour
 // first appears in the art (the legend, left to right)
@@ -15,33 +14,6 @@ export type Rendered = { lines: Segment[][] } | { error: string }
 export type Fitted = { lines: Segment[][]; width: number; overflow: number }
 
 export const SPACING = { paddingX: 3, paddingY: 1, boxBorderPadding: 1 } as const
-
-const FENCE_LINE = /^[ \t]*(`{3,}|~{3,})(.*)$/
-const MERMAID_INFO = /^[ \t]*mermaid(?![\w-])/i
-
-// Fenced code blocks as CommonMark closes them: a fence closes on the same
-// character, at least as long, with nothing after it. Only a mermaid fence that
-// opens while no other fence is open is a figure; one inside another block is
-// that block's text.
-export const mermaidBlocksOf = (text: string): MermaidBlock[] => {
-  const blocks: MermaidBlock[] = []
-  let open: { mark: string; start: number; body: number; mermaid: boolean } | null = null
-  let at = 0
-  for (const line of text.split('\n')) {
-    const next = at + line.length + 1
-    const fence = FENCE_LINE.exec(line)
-    if (open === null) {
-      if (fence && !(fence[1]!.startsWith('`') && fence[2]!.includes('`')))
-        open = { mark: fence[1]!, start: at, body: next, mermaid: MERMAID_INFO.test(fence[2]!) }
-    } else if (fence && fence[1]![0] === open.mark[0] && fence[1]!.length >= open.mark.length && fence[2]!.trim() === '') {
-      const source = text.slice(open.body, Math.max(open.body, at - 1)).replace(/\r\n?/g, '\n').trim()
-      if (open.mermaid && source !== '') blocks.push({ start: open.start, end: at + line.length, source })
-      open = null
-    }
-    at = next
-  }
-  return blocks
-}
 
 const KINDS: [RegExp, string][] = [
   [/^(flowchart|graph)\b/i, 'flowchart'],

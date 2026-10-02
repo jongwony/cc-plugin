@@ -26,6 +26,9 @@ const STYLE: Record<Role, { color?: string; dimColor?: boolean }> = {
   accent: { color: 'magenta' },
 }
 
+// a chart's later series, in turn; the first takes the accent colour
+const SERIES = ['green', 'blue', 'red', 'yellow', 'white']
+
 const cache = new Map<string, Piece[] | null>()
 
 const planned = (text: string, columns: number): Piece[] | null => {
@@ -47,7 +50,8 @@ export const register: Register = on => {
     if (!pieces) return next(e)
     const { Box, Text, Markdown } = $.ui.resolve(e)
 
-    const spanOf = ({ text, role }: Segment) => Text({ ...STYLE[role ?? 'text'], children: [text] })
+    const spanOf = ({ text, role, series }: Segment) =>
+      Text({ ...STYLE[role ?? 'text'], ...(series ? { color: SERIES[(series - 1) % SERIES.length] } : {}), children: [text] })
     const diagram = (fit: Fitted) =>
       Box({
         flexDirection: 'column',

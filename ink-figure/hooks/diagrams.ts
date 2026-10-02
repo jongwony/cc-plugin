@@ -8,7 +8,9 @@ import { renderMermaidAscii } from './vendor/mermaid-ascii.js'
 
 export type MermaidBlock = { start: number; end: number; source: string }
 export type Role = 'text' | 'border' | 'line' | 'arrow' | 'corner' | 'junction' | 'accent'
-export type Segment = { text: string; role: Role | null }
+// `series`: a chart series after the first, numbered from 1 in the order its colour
+// first appears in the art (the legend, left to right)
+export type Segment = { text: string; role: Role | null; series?: number }
 export type Rendered = { lines: Segment[][] } | { error: string }
 export type Fitted = { lines: Segment[][]; width: number; overflow: number }
 
@@ -47,6 +49,7 @@ const KINDS: [RegExp, string][] = [
   [/^classDiagram/i, 'class'],
   [/^stateDiagram/i, 'state'],
   [/^erDiagram/i, 'er'],
+  [/^xychart(-beta)?\b/i, 'xychart'],
 ]
 
 export const DRAWN_KINDS: ReadonlySet<string> = new Set(KINDS.map(([, kind]) => kind))
@@ -64,6 +67,9 @@ const headerOf = (source: string): string => {
 export const kindOf = (source: string): string => KINDS.find(([pattern]) => pattern.test(headerOf(source)))?.[1] ?? 'diagram'
 
 export const MAX_SOURCE_CHARS = 12_000
+
+// an xychart is drawn only when it holds a line: bars are written as text
+const LINE_SERIES = /^[ \t]*line\b/m
 
 export const leftToRightOf = (source: string): string | null => {
   const kind = kindOf(source)
@@ -138,27 +144,42 @@ const ROLE_THEME = {
 // each escape back into the role it stood for, and no escape leaves this module
 const SGR = /\x1b\[([0-9;]*)m/g
 const SENTINEL_SGR = /^38;2;0;0;(\d)$/
+const TRUECOLOR_SGR = /^38;2;\d+;\d+;\d+$/
 
-const segmentsOf = (line: string): Segment[] => {
+const sameStyle = (a: Segment, role: Role | null, series: number | undefined) => a.role === role && a.series === series
+
+// `palette` numbers each non-sentinel colour of one drawing in order of first appearance
+const segmentsOf = (line: string, palette: Map<string, number>): Segment[] => {
   const out: Segment[] = []
-  const push = (text: string, role: Role | null) => {
+  const push = (text: string, role: Role | null, series: number | undefined) => {
     text = text.replaceAll(CELL, '')
     if (text === '') return
     const last = out[out.length - 1]
-    if (last && last.role === role) last.text += text
-    else out.push({ text, role })
+    if (last && sameStyle(last, role, series)) last.text += text
+    else out.push(series === undefined ? { text, role } : { text, role, series })
   }
   let role: Role | null = null
+  let series: number | undefined
   let cursor = 0
   for (const match of line.matchAll(SGR)) {
     const at = match.index ?? 0
-    push(line.slice(cursor, at), role)
+    push(line.slice(cursor, at), role, series)
     const params = match[1] ?? ''
     const found = SENTINEL_SGR.exec(params)
-    role = found ? (ROLES[Number(found[1]) - 1] ?? null) : params === '0' || params === '' ? null : role
+    if (found) {
+      role = ROLES[Number(found[1]) - 1] ?? null
+      series = undefined
+    } else if (TRUECOLOR_SGR.test(params)) {
+      if (!palette.has(params)) palette.set(params, palette.size + 1)
+      role = 'accent'
+      series = palette.get(params)
+    } else if (params === '0' || params === '') {
+      role = null
+      series = undefined
+    }
     cursor = at + match[0].length
   }
-  push(line.slice(cursor), role)
+  push(line.slice(cursor), role, series)
   // spaces between the words of one label keep the label one span
   const joined: Segment[] = []
   for (const seg of out) {
@@ -188,13 +209,15 @@ const trimEnd = (line: Segment[]): Segment[] => {
 export const renderOf = (source: string, useAscii = false): Rendered => {
   const kind = kindOf(source)
   if (!DRAWN_KINDS.has(kind)) return { error: `${kind} diagrams are not drawn` }
+  if (kind === 'xychart' && !LINE_SERIES.test(source)) return { error: 'a chart with no line series is written as text' }
   if (source.length > MAX_SOURCE_CHARS) return { error: `too big to draw (${source.length} characters)` }
   const composed = source.normalize('NFC')
   const unplaceable = UNPLACEABLE.exec(composed)
   if (unplaceable) return { error: `U+${unplaceable[0].codePointAt(0)!.toString(16).toUpperCase()} cannot be laid out in cells` }
   try {
     const art = renderMermaidAscii(widened(composed), { useAscii, ...SPACING, colorMode: 'truecolor', theme: ROLE_THEME })
-    const lines = art.split('\n').map(line => trimEnd(segmentsOf(line)))
+    const palette = new Map<string, number>()
+    const lines = art.split('\n').map(line => trimEnd(segmentsOf(line, palette)))
     while (lines.length > 0 && lines[lines.length - 1]!.length === 0) lines.pop()
     while (lines.length > 0 && lines[0]!.length === 0) lines.shift()
     return lines.length === 0 || lines.every(l => plainOf(l).trim() === '') ? { error: 'nothing to draw' } : { lines }
@@ -239,7 +262,7 @@ export const fitLines = (lines: readonly (readonly Segment[])[], columns: number
         text += c
         left -= w
       }
-      if (text !== '') out.push({ text, role: segment.role })
+      if (text !== '') out.push({ ...segment, text })
       if (text.length < segment.text.length) break
     }
     out.push({ text: '…', role: null })

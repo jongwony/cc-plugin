@@ -4872,6 +4872,8 @@ function parseXYChart(lines) {
       series.push({ type: "line", data: parseNumericArray(lineMatch[1]) });
       continue;
     }
+    if (/^(accTitle|accDescr)\b/.test(line)) continue;
+    throw new Error(`unparsed statement: ${line}`);
   }
   if (!yAxis.range && series.length > 0) {
     const allValues = series.flatMap((s) => s.data);
@@ -4889,7 +4891,11 @@ function parseXYChart(lines) {
   return { title, horizontal, xAxis, yAxis, series };
 }
 function parseNumericArray(str) {
-  return str.split(",").map((s) => parseFloat(s.trim()));
+  return str.split(",").map((s) => {
+    const value = Number(s.trim());
+    if (s.trim() === "" || !Number.isFinite(value)) throw new Error(`not a number: ${s.trim()}`);
+    return value;
+  });
 }
 
 // node_modules/beautiful-mermaid/src/xychart/colors.ts

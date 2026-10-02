@@ -103,6 +103,23 @@ export const PATCHES = [
       '    if (/^(accTitle|accDescr)\\b/.test(line)) continue\n' +
       '    throw new Error(`unparsed statement: ${line}`)\n  }\n\n  diagram.entities = [...entityMap.values()]\n',
   },
+  {
+    file: /beautiful-mermaid\/src\/xychart\/parser\.ts$/,
+    find: "      series.push({ type: 'line', data: parseNumericArray(lineMatch[1]!) })\n      continue\n    }\n  }\n",
+    replace:
+      "      series.push({ type: 'line', data: parseNumericArray(lineMatch[1]!) })\n      continue\n    }\n\n" +
+      '    if (/^(accTitle|accDescr)\\b/.test(line)) continue\n' +
+      '    throw new Error(`unparsed statement: ${line}`)\n  }\n',
+  },
+  {
+    file: /beautiful-mermaid\/src\/xychart\/parser\.ts$/,
+    find: "  return str.split(',').map(s => parseFloat(s.trim()))\n",
+    replace:
+      "  return str.split(',').map(s => {\n" +
+      '    const value = Number(s.trim())\n' +
+      '    if (s.trim() === \'\' || !Number.isFinite(value)) throw new Error(`not a number: ${s.trim()}`)\n' +
+      '    return value\n  })\n',
+  },
   // A later definition of a node replaces its text and shape (the last wins); a state's
   // later description replaces its default name or adds a line under a given one.
   {

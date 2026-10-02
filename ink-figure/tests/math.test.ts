@@ -219,3 +219,35 @@ test('a formula drawn once is kept for any room it fits, and refused where it do
   expect(piecesOf(fence, 4, INK.dark)).toBe(null)
   expect(piecesOf(fence, 120, INK.dark)?.some(p => 'math' in p)).toBe(true)
 })
+
+test('a presentation the fill cannot honour keeps the fence; ordinary formulas still draw', () => {
+  expect('error' in mathOf('\\frac{\\mmlToken{mi}[style="display:none"]{x}}{y}', 134, INK.dark)).toBe(true)
+  for (const tex of [
+    FRACTION,
+    MATRIX,
+    '\\boxed{x+1}',
+    '\\begin{array}{|c|c|}\\hline a & b\\\\ \\hline\\end{array}',
+    '\\overrightarrow{ABC}',
+    '\\frac{\\rlap{\\rule{1em}{1em}}X}{y}',
+  ])
+    expect(inked(art(tex))).toBeGreaterThan(0)
+})
+
+test('nested \\pmb past its bound keeps the fence at once; a little still draws', () => {
+  const deep = '\\pmb{'.repeat(14) + 'x' + '}'.repeat(14)
+  const started = performance.now()
+  expect('error' in mathOf(deep, 134, INK.dark)).toBe(true)
+  expect(performance.now() - started).toBeLessThan(100)
+  expect(inked(art('\\pmb{\\pmb{x}}'))).toBeGreaterThan(0)
+})
+
+test('only a fence that is one display wrapper is unwrapped; two keep the fence', () => {
+  for (const tex of ['$$a$$\n$$b$$', '$$x=1$$ and $$y=2$$']) expect('error' in mathOf(tex, 134, INK.dark)).toBe(true)
+  expect(inked(art('$$\\frac{a}{b}$$'))).toBeGreaterThan(0)
+  expect(inked(art('\\[ \\begin{aligned} a &= b \\\\[2pt] c &= d \\end{aligned} \\]'))).toBeGreaterThan(0)
+})
+
+test('a number in exponent form is a coordinate, not a path command', () => {
+  expect(ringsOf('M0 0L1 1 2e-3 5Z')).toEqual([[[0, 0], [1, 1], [0.002, 5]]])
+  expect(ringsOf('M0 0L1E1 1Z')[0]!.length).toBe(2)
+})

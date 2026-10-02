@@ -89,7 +89,7 @@ export const ringsOf = (d: string): Point[][] => {
     }
   }
   while (i < tokens.length) {
-    if (/[A-Za-z]/.test(tokens[i]!)) command = tokens[i++]!
+    if (/^[A-Za-z]$/.test(tokens[i]!)) command = tokens[i++]!
     const relative = command !== command.toUpperCase()
     const ox = relative ? x : 0, oy = relative ? y : 0
     switch (command.toUpperCase()) {
@@ -155,6 +155,23 @@ const DRAWN = new Set(['svg', 'g', 'path', 'rect', 'line'])
 // the width MathJax's stylesheet gives a table's rules and frame
 const TABLE_RULE = 70
 
+// The fill paints every outline in one ink, fully opaque. A presentation it cannot
+// honour — a style (the root's vertical-align aside), hiding, transparency, a colour
+// or a background — is named so the fence stays. MathJax writes \rule as a black
+// background rect, which is the ink.
+const OPAQUE = new Set(['opacity', 'fill-opacity', 'stroke-opacity'])
+const unhonouredOf = (node: LiteNode, kind: string, root: boolean): string | null => {
+  const rule = kind === 'rect' && adaptor.getAttribute(node, 'fill') === 'black'
+  for (const { name, value } of adaptor.allAttributes(node)) {
+    const v = String(value).trim()
+    if (name === 'style' && v !== '' && !(root && /^vertical-align:[^;]*;?$/.test(v))) return `style="${v}"`
+    if (name === 'display' || name === 'visibility' || name === 'data-background' || (name === 'data-bgcolor' && !rule)) return `${name}="${v}"`
+    if (OPAQUE.has(name) && Number(v) !== 1) return `${name}="${v}"`
+    if ((name === 'fill' || name === 'stroke') && v !== 'currentColor' && v !== 'none' && !(rule && name === 'fill')) return `${name}="${v}"`
+  }
+  return null
+}
+
 // An axis-aligned clip, [left, top, right, bottom], in the coordinates of the
 // outlines it clips; null draws everywhere.
 type Clip = readonly [number, number, number, number] | null
@@ -187,6 +204,8 @@ export const outlinesOf = (svg: LiteNode): Shape[] => {
     if (kind === '#text' || kind === '#comment') return
     if (!DRAWN.has(kind)) throw new Error(`cannot fill <${kind}>`)
     if (attr(node, 'data-mml-node') === 'merror') throw new Error('TeX error')
+    const unhonoured = unhonouredOf(node, kind, node === svg)
+    if (unhonoured) throw new Error(`cannot honour ${unhonoured}`)
     if (/\bmjx-(dashed|dotted)\b/.test(attr(node, 'class') ?? '') || attr(node, 'stroke-dasharray') != null) throw new Error('a dashed rule')
     let m = times(outer, transformOf(attr(node, 'transform')))
     let shape: Shape | null = null
@@ -339,12 +358,15 @@ const filled = (shapes: readonly Shape[], width: number, height: number, ink: In
   return rgba
 }
 
-// a fence holding a display wrapper as well keeps only the TeX inside it
+// a fence that is exactly one display wrapper keeps only the TeX inside it
 const unwrapped = (tex: string): string => {
   const t = tex.trim()
-  const wrapped = /^\$\$([\s\S]*)\$\$$/.exec(t) ?? /^\\\[([\s\S]*)\\\]$/.exec(t)
+  const wrapped = /^\$\$((?:(?!\$\$)[\s\S])*)\$\$$/.exec(t) ?? /^\\\[((?:(?!(?<!\\)\\[[\]])[\s\S])*)\\\]$/.exec(t)
   return (wrapped ? wrapped[1]! : t).trim()
 }
+
+// \pmb sets its argument twice, so each nesting doubles the outlines MathJax builds
+const MAX_PMB = 8
 
 // A line break outside any environment that lays out rows: MathJax 3 draws it as
 // an empty space, so the rows would run together on one line.
@@ -390,6 +412,8 @@ export const mathOf = (source: string, columns: number, ink: Ink): MathRendered 
   const tex = unwrapped(source)
   if (tex === '') return { error: 'nothing to draw' }
   if (tex.length > MAX_TEX_CHARS) return { error: `too big to draw (${tex.length} characters)` }
+  if (tex.includes('$$')) return { error: 'more than one display formula' }
+  if ((tex.match(/\\pmb(?![a-zA-Z])/g) ?? []).length > MAX_PMB) return { error: 'too many \\pmb to draw' }
   if (bareBreakOf(tex)) return { error: 'a line break outside an environment' }
   try {
     const svg = texToSvg(tex)

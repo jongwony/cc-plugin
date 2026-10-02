@@ -109,9 +109,11 @@ a sum with stacked limits; a flat expression stays in the text.
   Malformed TeX, an unknown macro, a dashed rule, `\text` holding a character
   the math font lacks (Hangul, for one; Latin `\text{if }` draws), or a line
   break `\\` outside an environment (MathJax draws it as a space) keeps the
-  fence, as does a formula wider than the terminal. Each fence is read on its
-  own: an operator one fence declares does not reach the next. A `$$…$$` or
-  `\[…\]` wrapper inside the fence is ignored.
+  fence, as does a formula wider than the terminal, one drawn with a colour, a
+  background or hidden parts, or more than eight `\pmb` (each one doubles the
+  work). Each fence is read on its own: an operator one fence declares does not
+  reach the next. A single `$$…$$` or `\[…\]` wrapper around the whole fence is
+  ignored; a fence holding two display formulas keeps its fence.
 
 ## Limits
 

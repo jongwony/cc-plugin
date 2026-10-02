@@ -73,8 +73,10 @@ left-to-right flip and the role colouring are adapted from
   diagram is redrawn as Markdown pieces around it. A piece over 10,000
   characters, or one carrying escape codes another mod wrote into the reply,
   makes the whole reply fall back to Claude Code's own drawing.
-- A node ID must be ASCII (a Hangul label is fine, a Hangul ID is not
-  parsed upstream); such a fence keeps its source.
+- A fence holding a statement the renderer does not read keeps its source
+  whole rather than drawing the rest: a Hangul node ID (a Hangul label is
+  fine), two statements on one line, a note, `autonumber`, a sequence `title`,
+  a bare state or entity name.
 - A label holding a combining mark, a joined emoji sequence, a flag or a
   skin-tone modifier keeps its fence: the terminal draws those in fewer cells
   than the layout can count.

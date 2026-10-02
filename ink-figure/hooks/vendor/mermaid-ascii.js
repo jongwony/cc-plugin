@@ -8,7 +8,7 @@ function normalizeBrTags(label) {
 
 // node_modules/beautiful-mermaid/src/parser.ts
 function parseMermaid(text) {
-  const lines = text.split("\n").map((l) => l.trim()).filter((l) => l.length > 0 && !l.startsWith("%%"));
+  const lines = text.split("\n").map((l) => l.trim().replace(/;$/, "").trim()).filter((l) => l.length > 0 && !l.startsWith("%%"));
   if (lines.length === 0) {
     throw new Error("Empty mermaid diagram");
   }
@@ -112,6 +112,7 @@ function parseFlowchart(lines) {
       }
       continue;
     }
+    if (/^(click|accTitle|accDescr)\b/.test(line)) continue;
     parseEdgeLine(line, graph, subgraphStack);
   }
   return graph;
@@ -223,14 +224,16 @@ function parseStateDiagram(lines) {
       registerStateNode(graph, compositeStack, { id, label, shape: "rounded" });
       continue;
     }
+    if (/^(classDef|class|style|click|accTitle|accDescr)\b/.test(line)) continue;
+    throw new Error(`unparsed statement: ${line}`);
   }
   return graph;
 }
 function registerStateNode(graph, compositeStack, node) {
-  const isNew = !graph.nodes.has(node.id);
-  if (isNew) {
-    graph.nodes.set(node.id, node);
-  }
+  const existing = graph.nodes.get(node.id);
+  if (!existing || existing.label === existing.id) graph.nodes.set(node.id, node);
+  else if (existing.label !== node.label) existing.label = `${existing.label}
+${node.label}`;
   if (compositeStack.length > 0) {
     const current = compositeStack[compositeStack.length - 1];
     if (!current.nodeIds.includes(node.id)) {
@@ -299,12 +302,12 @@ var NODE_PATTERNS = [
   { regex: /^([\w-]+)\{(.+?)\}/, shape: "diamond" }
   // A{text}
 ];
-var BARE_NODE_REGEX = /^([\w-]+)/;
+var BARE_NODE_REGEX = /^(\w+(?:-\w+)*)/;
 var CLASS_SHORTHAND_REGEX = /^:::([\w][\w-]*)/;
 function parseEdgeLine(line, graph, subgraphStack) {
   let remaining = line.trim();
   const firstGroup = consumeNodeGroup(remaining, graph, subgraphStack);
-  if (!firstGroup || firstGroup.ids.length === 0) return;
+  if (!firstGroup || firstGroup.ids.length === 0) throw new Error(`unparsed statement: ${line}`);
   remaining = firstGroup.remaining.trim();
   let prevGroupIds = firstGroup.ids;
   while (remaining.length > 0) {
@@ -323,7 +326,7 @@ function parseEdgeLine(line, graph, subgraphStack) {
       hasArrowEnd = arrowOp.endsWith(">");
     } else {
       const textMatch = remaining.match(TEXT_ARROW_REGEX);
-      if (!textMatch) break;
+      if (!textMatch) throw new Error(`unparsed statement: ${line}`);
       hasArrowStart = Boolean(textMatch[1]);
       const rawLabel = textMatch[3].trim();
       edgeLabel = rawLabel ? normalizeBrTags(rawLabel) : void 0;
@@ -334,7 +337,7 @@ function parseEdgeLine(line, graph, subgraphStack) {
       hasArrowEnd = closeOp.endsWith(">");
     }
     const nextGroup = consumeNodeGroup(remaining, graph, subgraphStack);
-    if (!nextGroup || nextGroup.ids.length === 0) break;
+    if (!nextGroup || nextGroup.ids.length === 0) throw new Error(`unparsed statement: ${line}`);
     remaining = nextGroup.remaining.trim();
     for (const sourceId of prevGroupIds) {
       for (const targetId of nextGroup.ids) {
@@ -397,10 +400,7 @@ function consumeNode(text, graph, subgraphStack) {
   return { id, remaining };
 }
 function registerNode(graph, subgraphStack, node) {
-  const isNew = !graph.nodes.has(node.id);
-  if (isNew) {
-    graph.nodes.set(node.id, node);
-  }
+  graph.nodes.set(node.id, node);
   trackInSubgraph(subgraphStack, node.id);
 }
 function trackInSubgraph(subgraphStack, nodeId) {
@@ -3457,6 +3457,8 @@ function parseSequenceDiagram(lines) {
       diagram.messages.push(msg);
       continue;
     }
+    if (/^(activate|deactivate)\s+\S+$/.test(line) || /^(accTitle|accDescr)\b/.test(line)) continue;
+    throw new Error(`unparsed statement: ${line}`);
   }
   return diagram;
 }
@@ -3877,6 +3879,8 @@ function parseClassDiagram(lines) {
       diagram.relationships.push(rel);
       continue;
     }
+    if (/^(click|link|callback|style|classDef|cssClass|direction|accTitle|accDescr)\b/.test(line)) continue;
+    throw new Error(`unparsed statement: ${line}`);
   }
   diagram.classes = [...classMap.values()];
   return diagram;
@@ -4466,9 +4470,8 @@ function parseErDiagram(lines) {
         continue;
       }
       const attr = parseAttribute(line);
-      if (attr) {
-        currentEntity.attributes.push(attr);
-      }
+      if (!attr) throw new Error(`unparsed attribute: ${line}`);
+      currentEntity.attributes.push(attr);
       continue;
     }
     const entityBlockMatch = line.match(/^(\S+)\s*\{$/);
@@ -4485,6 +4488,8 @@ function parseErDiagram(lines) {
       diagram.relationships.push(rel);
       continue;
     }
+    if (/^(accTitle|accDescr)\b/.test(line)) continue;
+    throw new Error(`unparsed statement: ${line}`);
   }
   diagram.entities = [...entityMap.values()];
   return diagram;

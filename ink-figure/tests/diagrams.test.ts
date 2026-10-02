@@ -74,6 +74,27 @@ test('a state diagram keeps its start and end transitions, their labels and the 
   for (const state of ['Idle', 'Run', 'Error', 'Done']) expect(ending.includes(state)).toBe(true)
 })
 
+test('a statement the parser cannot consume keeps the fence instead of drawing part of it', () => {
+  expect('error' in renderOf('graph LR\n  A --> B; B --> C')).toBe(true)
+  expect('error' in renderOf('graph LR\n  A --> B\n  가[시작] --> 나[끝]')).toBe(true)
+  expect('error' in renderOf('sequenceDiagram\n  autonumber\n  A->>B: one')).toBe(true)
+  expect('error' in renderOf('erDiagram\n  A {\n    name\n  }')).toBe(true)
+  expect('error' in renderOf('classDiagram\n  class A\n  note for A "a note"')).toBe(true)
+})
+
+test('statements that draw nothing, a trailing semicolon and unspaced arrows still draw', () => {
+  const lines = linesOf('graph TD;\n  %% note\n  accTitle: flow\n  A-->B;\n  B---C\n  click A "https://example.com"\n  style A fill:#f00').join('\n')
+  for (const id of ['A', 'B', 'C']) expect(new RegExp(`│ ${id} [│├]`).test(lines)).toBe(true)
+  expect(lines.includes('click')).toBe(false)
+})
+
+test('a later definition of a node or state gives it its text', () => {
+  expect(linesOf('graph LR\n  A --> B\n  A[Customer]').some(l => l.includes('Customer'))).toBe(true)
+  expect(linesOf('stateDiagram-v2\n  A --> B\n  A : Customer').some(l => l.includes('Customer'))).toBe(true)
+  const both = linesOf('stateDiagram-v2\n  state "Long name" as L\n  A --> L\n  L : described').join('\n')
+  expect(both.includes('Long name') && both.includes('described')).toBe(true)
+})
+
 test('spacing defaults to 3 · 1 · 1 and boxes stand five rows tall', () => {
   expect(SPACING).toEqual({ paddingX: 3, paddingY: 1, boxBorderPadding: 1 })
   expect(linesOf('graph LR\n  A --> B').length).toBe(5)

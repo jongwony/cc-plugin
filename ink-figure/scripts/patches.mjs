@@ -36,4 +36,93 @@ export const PATCHES = [
       "  else if (dirEquals(dir, Left)) put(1, 0, '┤', '│', '─')\n" +
       "  else if (dirEquals(dir, Right)) put(-1, 0, '├', '│', '─')\n",
   },
+  // Every statement is consumed or the parse throws, so a fence the renderer would
+  // draw incompletely keeps its source. A trailing `;` ends a flowchart statement.
+  {
+    file: /beautiful-mermaid\/src\/parser\.ts$/,
+    find: "  const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 0 && !l.startsWith('%%'))\n",
+    replace: "  const lines = text.split('\\n').map(l => l.trim().replace(/;$/, '').trim()).filter(l => l.length > 0 && !l.startsWith('%%'))\n",
+  },
+  {
+    file: /beautiful-mermaid\/src\/parser\.ts$/,
+    find: '    parseEdgeLine(line, graph, subgraphStack)\n',
+    replace: '    if (/^(click|accTitle|accDescr)\\b/.test(line)) continue\n    parseEdgeLine(line, graph, subgraphStack)\n',
+  },
+  {
+    file: /beautiful-mermaid\/src\/parser\.ts$/,
+    find: '  if (!firstGroup || firstGroup.ids.length === 0) return\n',
+    replace: '  if (!firstGroup || firstGroup.ids.length === 0) throw new Error(`unparsed statement: ${line}`)\n',
+  },
+  {
+    file: /beautiful-mermaid\/src\/parser\.ts$/,
+    find: '      if (!textMatch) break\n',
+    replace: '      if (!textMatch) throw new Error(`unparsed statement: ${line}`)\n',
+  },
+  {
+    file: /beautiful-mermaid\/src\/parser\.ts$/,
+    find: '    if (!nextGroup || nextGroup.ids.length === 0) break\n',
+    replace: '    if (!nextGroup || nextGroup.ids.length === 0) throw new Error(`unparsed statement: ${line}`)\n',
+  },
+  {
+    file: /beautiful-mermaid\/src\/parser\.ts$/,
+    find:
+      "      registerStateNode(graph, compositeStack, { id, label, shape: 'rounded' })\n      continue\n    }\n  }\n\n  return graph\n",
+    replace:
+      "      registerStateNode(graph, compositeStack, { id, label, shape: 'rounded' })\n      continue\n    }\n\n" +
+      "    if (/^(classDef|class|style|click|accTitle|accDescr)\\b/.test(line)) continue\n" +
+      '    throw new Error(`unparsed statement: ${line}`)\n  }\n\n  return graph\n',
+  },
+  {
+    file: /beautiful-mermaid\/src\/sequence\/parser\.ts$/,
+    find: '    // For now, we skip explicit activate/deactivate lines (they affect rendering only)\n  }\n',
+    replace:
+      '    // For now, we skip explicit activate/deactivate lines (they affect rendering only)\n' +
+      '    if (/^(activate|deactivate)\\s+\\S+$/.test(line) || /^(accTitle|accDescr)\\b/.test(line)) continue\n' +
+      '    throw new Error(`unparsed statement: ${line}`)\n  }\n',
+  },
+  {
+    file: /beautiful-mermaid\/src\/class\/parser\.ts$/,
+    find: '      diagram.relationships.push(rel)\n      continue\n    }\n  }\n\n  diagram.classes = [...classMap.values()]\n',
+    replace:
+      '      diagram.relationships.push(rel)\n      continue\n    }\n\n' +
+      '    if (/^(click|link|callback|style|classDef|cssClass|direction|accTitle|accDescr)\\b/.test(line)) continue\n' +
+      '    throw new Error(`unparsed statement: ${line}`)\n  }\n\n  diagram.classes = [...classMap.values()]\n',
+  },
+  {
+    file: /beautiful-mermaid\/src\/er\/parser\.ts$/,
+    find: '      const attr = parseAttribute(line)\n      if (attr) {\n        currentEntity.attributes.push(attr)\n      }\n      continue\n',
+    replace:
+      '      const attr = parseAttribute(line)\n      if (!attr) throw new Error(`unparsed attribute: ${line}`)\n' +
+      '      currentEntity.attributes.push(attr)\n      continue\n',
+  },
+  {
+    file: /beautiful-mermaid\/src\/er\/parser\.ts$/,
+    find: '      diagram.relationships.push(rel)\n      continue\n    }\n  }\n\n  diagram.entities = [...entityMap.values()]\n',
+    replace:
+      '      diagram.relationships.push(rel)\n      continue\n    }\n\n' +
+      '    if (/^(accTitle|accDescr)\\b/.test(line)) continue\n' +
+      '    throw new Error(`unparsed statement: ${line}`)\n  }\n\n  diagram.entities = [...entityMap.values()]\n',
+  },
+  // A later definition of a node replaces its text and shape (the last wins); a state's
+  // later description replaces its default name or adds a line under a given one.
+  {
+    file: /beautiful-mermaid\/src\/parser\.ts$/,
+    find: '  const isNew = !graph.nodes.has(node.id)\n  if (isNew) {\n    graph.nodes.set(node.id, node)\n  }\n  trackInSubgraph(subgraphStack, node.id)\n',
+    replace: '  graph.nodes.set(node.id, node)\n  trackInSubgraph(subgraphStack, node.id)\n',
+  },
+  {
+    file: /beautiful-mermaid\/src\/parser\.ts$/,
+    find: '  const isNew = !graph.nodes.has(node.id)\n  if (isNew) {\n    graph.nodes.set(node.id, node)\n  }\n  if (compositeStack.length > 0) {\n',
+    replace:
+      '  const existing = graph.nodes.get(node.id)\n' +
+      '  if (!existing || existing.label === existing.id) graph.nodes.set(node.id, node)\n' +
+      '  else if (existing.label !== node.label) existing.label = `${existing.label}\\n${node.label}`\n' +
+      '  if (compositeStack.length > 0) {\n',
+  },
+  // A bare node ID takes inner dashes only, so `A-->B` reads as A, an arrow and B.
+  {
+    file: /beautiful-mermaid\/src\/parser\.ts$/,
+    find: 'const BARE_NODE_REGEX = /^([\\w-]+)/\n',
+    replace: 'const BARE_NODE_REGEX = /^(\\w+(?:-\\w+)*)/\n',
+  },
 ]

@@ -115,6 +115,7 @@ function parseFlowchart(lines) {
     if (/^(click|accTitle|accDescr)\b/.test(line)) continue;
     parseEdgeLine(line, graph, subgraphStack);
   }
+  if (subgraphStack.length > 0) throw new Error("a subgraph left open");
   return graph;
 }
 function parseStateDiagram(lines) {
@@ -227,6 +228,7 @@ function parseStateDiagram(lines) {
     if (/^(classDef|class|style|click|accTitle|accDescr)\b/.test(line)) continue;
     throw new Error(`unparsed statement: ${line}`);
   }
+  if (compositeStack.length > 0) throw new Error("a composite state left open");
   return graph;
 }
 function registerStateNode(graph, compositeStack, node) {
@@ -447,6 +449,140 @@ function gridKey(c) {
   return `${c.x},${c.y}`;
 }
 var EMPTY_STYLE = { name: "", styles: {} };
+
+// node_modules/beautiful-mermaid/src/ascii/pathfinder.ts
+var MinHeap = class {
+  items = [];
+  get length() {
+    return this.items.length;
+  }
+  push(item) {
+    this.items.push(item);
+    this.bubbleUp(this.items.length - 1);
+  }
+  pop() {
+    if (this.items.length === 0) return void 0;
+    const top = this.items[0];
+    const last = this.items.pop();
+    if (this.items.length > 0) {
+      this.items[0] = last;
+      this.sinkDown(0);
+    }
+    return top;
+  }
+  bubbleUp(i) {
+    while (i > 0) {
+      const parent = i - 1 >> 1;
+      if (this.items[i].priority < this.items[parent].priority) {
+        ;
+        [this.items[i], this.items[parent]] = [this.items[parent], this.items[i]];
+        i = parent;
+      } else {
+        break;
+      }
+    }
+  }
+  sinkDown(i) {
+    const n = this.items.length;
+    while (true) {
+      let smallest = i;
+      const left = 2 * i + 1;
+      const right = 2 * i + 2;
+      if (left < n && this.items[left].priority < this.items[smallest].priority) {
+        smallest = left;
+      }
+      if (right < n && this.items[right].priority < this.items[smallest].priority) {
+        smallest = right;
+      }
+      if (smallest !== i) {
+        ;
+        [this.items[i], this.items[smallest]] = [this.items[smallest], this.items[i]];
+        i = smallest;
+      } else {
+        break;
+      }
+    }
+  }
+};
+function heuristic(a, b) {
+  const absX = Math.abs(a.x - b.x);
+  const absY = Math.abs(a.y - b.y);
+  if (absX === 0 || absY === 0) {
+    return absX + absY;
+  }
+  return absX + absY + 1;
+}
+var MOVE_DIRS = [
+  { x: 1, y: 0 },
+  { x: -1, y: 0 },
+  { x: 0, y: 1 },
+  { x: 0, y: -1 }
+];
+function isFreeInGrid(grid, c) {
+  if (c.x < 0 || c.y < 0) return false;
+  return !grid.has(gridKey(c));
+}
+var pathWork = { spent: 0, limit: 4e5 };
+function getPath(grid, from, to) {
+  const pq = new MinHeap();
+  pq.push({ coord: from, priority: 0 });
+  const costSoFar = /* @__PURE__ */ new Map();
+  costSoFar.set(gridKey(from), 0);
+  const cameFrom = /* @__PURE__ */ new Map();
+  cameFrom.set(gridKey(from), null);
+  const MAX_EXPANSIONS = 4e4;
+  let expansions = 0;
+  while (pq.length > 0) {
+    if (++expansions > MAX_EXPANSIONS) return null;
+    if (++pathWork.spent > pathWork.limit) throw new Error("too complex to lay out");
+    const current = pq.pop().coord;
+    if (gridCoordEquals(current, to)) {
+      const path = [];
+      let c = current;
+      while (c !== null) {
+        path.unshift(c);
+        c = cameFrom.get(gridKey(c)) ?? null;
+      }
+      return path;
+    }
+    const currentCost = costSoFar.get(gridKey(current));
+    for (const dir of MOVE_DIRS) {
+      const next = { x: current.x + dir.x, y: current.y + dir.y };
+      if (!isFreeInGrid(grid, next) && !gridCoordEquals(next, to)) {
+        continue;
+      }
+      const newCost = currentCost + 1;
+      const nextKey = gridKey(next);
+      const existingCost = costSoFar.get(nextKey);
+      if (existingCost === void 0 || newCost < existingCost) {
+        costSoFar.set(nextKey, newCost);
+        const priority = newCost + heuristic(next, to);
+        pq.push({ coord: next, priority });
+        cameFrom.set(nextKey, current);
+      }
+    }
+  }
+  return null;
+}
+function mergePath(path) {
+  if (path.length <= 2) return path;
+  const toRemove = /* @__PURE__ */ new Set();
+  let step0 = path[0];
+  let step1 = path[1];
+  for (let idx = 2; idx < path.length; idx++) {
+    const step2 = path[idx];
+    const prevDx = step1.x - step0.x;
+    const prevDy = step1.y - step0.y;
+    const dx = step2.x - step1.x;
+    const dy = step2.y - step1.y;
+    if (prevDx === dx && prevDy === dy) {
+      toRemove.add(idx - 1);
+    }
+    step0 = step1;
+    step1 = step2;
+  }
+  return path.filter((_, i) => !toRemove.has(i));
+}
 
 // node_modules/beautiful-mermaid/src/ascii/ansi.ts
 var DEFAULT_ASCII_THEME = {
@@ -1076,138 +1212,6 @@ function buildSgMap(mSgs, aSgs, result) {
   for (let i = 0; i < flatMermaid.length && i < aSgs.length; i++) {
     result.set(flatMermaid[i], aSgs[i]);
   }
-}
-
-// node_modules/beautiful-mermaid/src/ascii/pathfinder.ts
-var MinHeap = class {
-  items = [];
-  get length() {
-    return this.items.length;
-  }
-  push(item) {
-    this.items.push(item);
-    this.bubbleUp(this.items.length - 1);
-  }
-  pop() {
-    if (this.items.length === 0) return void 0;
-    const top = this.items[0];
-    const last = this.items.pop();
-    if (this.items.length > 0) {
-      this.items[0] = last;
-      this.sinkDown(0);
-    }
-    return top;
-  }
-  bubbleUp(i) {
-    while (i > 0) {
-      const parent = i - 1 >> 1;
-      if (this.items[i].priority < this.items[parent].priority) {
-        ;
-        [this.items[i], this.items[parent]] = [this.items[parent], this.items[i]];
-        i = parent;
-      } else {
-        break;
-      }
-    }
-  }
-  sinkDown(i) {
-    const n = this.items.length;
-    while (true) {
-      let smallest = i;
-      const left = 2 * i + 1;
-      const right = 2 * i + 2;
-      if (left < n && this.items[left].priority < this.items[smallest].priority) {
-        smallest = left;
-      }
-      if (right < n && this.items[right].priority < this.items[smallest].priority) {
-        smallest = right;
-      }
-      if (smallest !== i) {
-        ;
-        [this.items[i], this.items[smallest]] = [this.items[smallest], this.items[i]];
-        i = smallest;
-      } else {
-        break;
-      }
-    }
-  }
-};
-function heuristic(a, b) {
-  const absX = Math.abs(a.x - b.x);
-  const absY = Math.abs(a.y - b.y);
-  if (absX === 0 || absY === 0) {
-    return absX + absY;
-  }
-  return absX + absY + 1;
-}
-var MOVE_DIRS = [
-  { x: 1, y: 0 },
-  { x: -1, y: 0 },
-  { x: 0, y: 1 },
-  { x: 0, y: -1 }
-];
-function isFreeInGrid(grid, c) {
-  if (c.x < 0 || c.y < 0) return false;
-  return !grid.has(gridKey(c));
-}
-function getPath(grid, from, to) {
-  const pq = new MinHeap();
-  pq.push({ coord: from, priority: 0 });
-  const costSoFar = /* @__PURE__ */ new Map();
-  costSoFar.set(gridKey(from), 0);
-  const cameFrom = /* @__PURE__ */ new Map();
-  cameFrom.set(gridKey(from), null);
-  const MAX_EXPANSIONS = 4e4;
-  let expansions = 0;
-  while (pq.length > 0) {
-    if (++expansions > MAX_EXPANSIONS) return null;
-    const current = pq.pop().coord;
-    if (gridCoordEquals(current, to)) {
-      const path = [];
-      let c = current;
-      while (c !== null) {
-        path.unshift(c);
-        c = cameFrom.get(gridKey(c)) ?? null;
-      }
-      return path;
-    }
-    const currentCost = costSoFar.get(gridKey(current));
-    for (const dir of MOVE_DIRS) {
-      const next = { x: current.x + dir.x, y: current.y + dir.y };
-      if (!isFreeInGrid(grid, next) && !gridCoordEquals(next, to)) {
-        continue;
-      }
-      const newCost = currentCost + 1;
-      const nextKey = gridKey(next);
-      const existingCost = costSoFar.get(nextKey);
-      if (existingCost === void 0 || newCost < existingCost) {
-        costSoFar.set(nextKey, newCost);
-        const priority = newCost + heuristic(next, to);
-        pq.push({ coord: next, priority });
-        cameFrom.set(nextKey, current);
-      }
-    }
-  }
-  return null;
-}
-function mergePath(path) {
-  if (path.length <= 2) return path;
-  const toRemove = /* @__PURE__ */ new Set();
-  let step0 = path[0];
-  let step1 = path[1];
-  for (let idx = 2; idx < path.length; idx++) {
-    const step2 = path[idx];
-    const prevDx = step1.x - step0.x;
-    const prevDy = step1.y - step0.y;
-    const dx = step2.x - step1.x;
-    const dy = step2.y - step1.y;
-    if (prevDx === dx && prevDy === dy) {
-      toRemove.add(idx - 1);
-    }
-    step0 = step1;
-    step1 = step2;
-  }
-  return path.filter((_, i) => !toRemove.has(i));
 }
 
 // node_modules/beautiful-mermaid/src/ascii/edge-routing.ts
@@ -3458,6 +3462,7 @@ function parseSequenceDiagram(lines) {
     if (/^(accTitle|accDescr)\b/.test(line)) continue;
     throw new Error(`unparsed statement: ${line}`);
   }
+  if (blockStack.length > 0) throw new Error("a block left open");
   return diagram;
 }
 function ensureActor(diagram, actorIds, id) {
@@ -3880,6 +3885,7 @@ function parseClassDiagram(lines) {
     if (/^(click|link|callback|style|classDef|cssClass|direction|accTitle|accDescr)\b/.test(line)) continue;
     throw new Error(`unparsed statement: ${line}`);
   }
+  if (currentClass || currentNamespace) throw new Error("a class or namespace left open");
   diagram.classes = [...classMap.values()];
   return diagram;
 }
@@ -4489,6 +4495,7 @@ function parseErDiagram(lines) {
     if (/^(accTitle|accDescr)\b/.test(line)) continue;
     throw new Error(`unparsed statement: ${line}`);
   }
+  if (currentEntity) throw new Error("an entity left open");
   diagram.entities = [...entityMap.values()];
   return diagram;
 }
@@ -4829,27 +4836,28 @@ function parseXYChart(lines) {
   let horizontal = false;
   for (const line of lines) {
     if (/^xychart(-beta)?\b/i.test(line)) {
+      if (!/^xychart(-beta)?(\s+horizontal)?\s*$/i.test(line)) throw new Error(`unparsed statement: ${line}`);
       if (/\bhorizontal\b/i.test(line)) horizontal = true;
       continue;
     }
-    const titleMatch = line.match(/^title\s+"([^"]+)"/);
+    const titleMatch = line.match(/^title\s+"([^"]+)"\s*$/);
     if (titleMatch) {
       title = titleMatch[1];
       continue;
     }
-    const xCatMatch = line.match(/^x-axis\s+(?:"([^"]*)"\s*)?\[([^\]]+)\]/);
+    const xCatMatch = line.match(/^x-axis\s+(?:"([^"]*)"\s*)?\[([^\]]+)\]\s*$/);
     if (xCatMatch) {
       if (xCatMatch[1]) xAxis.title = xCatMatch[1];
       xAxis.categories = xCatMatch[2].split(",").map((s) => s.trim());
       continue;
     }
-    const xRangeMatch = line.match(/^x-axis\s+(?:"([^"]*)"\s+)?(-?\d+(?:\.\d+)?)\s*-->\s*(-?\d+(?:\.\d+)?)/);
+    const xRangeMatch = line.match(/^x-axis\s+(?:"([^"]*)"\s+)?(-?\d+(?:\.\d+)?)\s*-->\s*(-?\d+(?:\.\d+)?)\s*$/);
     if (xRangeMatch) {
       if (xRangeMatch[1]) xAxis.title = xRangeMatch[1];
       xAxis.range = { min: parseFloat(xRangeMatch[2]), max: parseFloat(xRangeMatch[3]) };
       continue;
     }
-    const yRangeMatch = line.match(/^y-axis\s+(?:"([^"]*)"\s+)?(-?\d+(?:\.\d+)?)\s*-->\s*(-?\d+(?:\.\d+)?)/);
+    const yRangeMatch = line.match(/^y-axis\s+(?:"([^"]*)"\s+)?(-?\d+(?:\.\d+)?)\s*-->\s*(-?\d+(?:\.\d+)?)\s*$/);
     if (yRangeMatch) {
       if (yRangeMatch[1]) yAxis.title = yRangeMatch[1];
       yAxis.range = { min: parseFloat(yRangeMatch[2]), max: parseFloat(yRangeMatch[3]) };
@@ -4860,12 +4868,12 @@ function parseXYChart(lines) {
       yAxis.title = yTitleOnly[1];
       continue;
     }
-    const barMatch = line.match(/^bar\s+\[([^\]]+)\]/);
+    const barMatch = line.match(/^bar\s+\[([^\]]+)\]\s*$/);
     if (barMatch) {
       series.push({ type: "bar", data: parseNumericArray(barMatch[1]) });
       continue;
     }
-    const lineMatch = line.match(/^line\s+\[([^\]]+)\]/);
+    const lineMatch = line.match(/^line\s+\[([^\]]+)\]\s*$/);
     if (lineMatch) {
       series.push({ type: "line", data: parseNumericArray(lineMatch[1]) });
       continue;
@@ -5126,7 +5134,7 @@ function renderVertical(chart, ch, colorMode, theme) {
     const usable = Math.max(1, bandW - 2);
     const singleBarW = Math.max(1, Math.min(Math.floor(usable / barCount), 8));
     const groupW = singleBarW * barCount + (barCount - 1);
-    const baseRow = valueToRow(Math.max(0, yRange.min));
+    const baseRow = valueToRow(Math.min(yRange.max, Math.max(0, yRange.min)));
     for (let bIdx = 0; bIdx < barEntries.length; bIdx++) {
       const entry = barEntries[bIdx];
       const hexColor = seriesColors[entry.globalIdx];
@@ -5232,7 +5240,7 @@ function renderHorizontal(chart, ch, colorMode, theme) {
     const barCount = barEntries.length;
     const singleBarH = 1;
     const groupH = singleBarH * barCount + (barCount - 1);
-    const baseCol = valueToCol(Math.max(0, yRange.min));
+    const baseCol = valueToCol(Math.min(yRange.max, Math.max(0, yRange.min)));
     for (let bIdx = 0; bIdx < barEntries.length; bIdx++) {
       const entry = barEntries[bIdx];
       const hexColor = seriesColors[entry.globalIdx];
@@ -5557,6 +5565,7 @@ function renderMermaidASCII(text, options = {}) {
   };
   const colorMode = options.colorMode === "auto" || options.colorMode === void 0 ? detectColorMode() : options.colorMode;
   const theme = { ...DEFAULT_ASCII_THEME, ...options.theme };
+  pathWork.spent = 0;
   const diagramType = detectDiagramType(text);
   switch (diagramType) {
     case "xychart":
@@ -5570,6 +5579,9 @@ function renderMermaidASCII(text, options = {}) {
     case "flowchart":
     default: {
       const parsed = parseMermaid(text);
+      const MAX_NODES = 60, MAX_EDGES = 100;
+      if (parsed.nodes.size > MAX_NODES || parsed.edges.length > MAX_EDGES)
+        throw new Error(`too big to lay out (${parsed.nodes.size} nodes, ${parsed.edges.length} edges)`);
       if (parsed.direction === "LR" || parsed.direction === "RL") {
         config.graphDirection = "LR";
       } else {

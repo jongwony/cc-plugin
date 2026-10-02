@@ -1,12 +1,42 @@
 // Source patches applied to beautiful-mermaid (MIT) at bundle time. Each anchor must
 // match upstream exactly once; a mismatch fails the build rather than shipping unpatched.
 export const PATCHES = [
+  // An edge search gives up after MAX_EXPANSIONS; a whole drawing throws past
+  // pathWork.limit expansions across all its searches, and a flowchart or state
+  // diagram past MAX_NODES nodes or MAX_EDGES edges throws before layout, so no
+  // render holds the transcript for long.
   {
     file: /beautiful-mermaid\/src\/ascii\/pathfinder\.ts$/,
     find: '  while (pq.length > 0) {\n    const current = pq.pop()!.coord\n',
     replace:
       '  const MAX_EXPANSIONS = 40_000\n  let expansions = 0\n' +
-      '  while (pq.length > 0) {\n    if (++expansions > MAX_EXPANSIONS) return null\n    const current = pq.pop()!.coord\n',
+      '  while (pq.length > 0) {\n    if (++expansions > MAX_EXPANSIONS) return null\n' +
+      "    if (++pathWork.spent > pathWork.limit) throw new Error('too complex to lay out')\n" +
+      '    const current = pq.pop()!.coord\n',
+  },
+  {
+    file: /beautiful-mermaid\/src\/ascii\/pathfinder\.ts$/,
+    find: 'export function getPath(\n',
+    replace: 'export const pathWork = { spent: 0, limit: 400_000 }\n\nexport function getPath(\n',
+  },
+  {
+    file: /beautiful-mermaid\/src\/ascii\/index\.ts$/,
+    find: "import { parseMermaid } from '../parser.ts'\n",
+    replace: "import { parseMermaid } from '../parser.ts'\nimport { pathWork } from './pathfinder.ts'\n",
+  },
+  {
+    file: /beautiful-mermaid\/src\/ascii\/index\.ts$/,
+    find: '  const diagramType = detectDiagramType(text)\n',
+    replace: '  pathWork.spent = 0\n  const diagramType = detectDiagramType(text)\n',
+  },
+  {
+    file: /beautiful-mermaid\/src\/ascii\/index\.ts$/,
+    find: '      const parsed = parseMermaid(text)\n',
+    replace:
+      '      const parsed = parseMermaid(text)\n' +
+      '      const MAX_NODES = 60, MAX_EDGES = 100\n' +
+      '      if (parsed.nodes.size > MAX_NODES || parsed.edges.length > MAX_EDGES)\n' +
+      '        throw new Error(`too big to lay out (${parsed.nodes.size} nodes, ${parsed.edges.length} edges)`)\n',
   },
   {
     file: /beautiful-mermaid\/src\/ascii\/draw\.ts$/,
@@ -70,15 +100,17 @@ export const PATCHES = [
     replace:
       "      registerStateNode(graph, compositeStack, { id, label, shape: 'rounded' })\n      continue\n    }\n\n" +
       "    if (/^(classDef|class|style|click|accTitle|accDescr)\\b/.test(line)) continue\n" +
-      '    throw new Error(`unparsed statement: ${line}`)\n  }\n\n  return graph\n',
+      '    throw new Error(`unparsed statement: ${line}`)\n  }\n\n' +
+      "  if (compositeStack.length > 0) throw new Error('a composite state left open')\n  return graph\n",
   },
   {
     file: /beautiful-mermaid\/src\/sequence\/parser\.ts$/,
-    find: '    // For now, we skip explicit activate/deactivate lines (they affect rendering only)\n  }\n',
+    find: '    // For now, we skip explicit activate/deactivate lines (they affect rendering only)\n  }\n\n  return diagram\n',
     replace:
       '    // For now, we skip explicit activate/deactivate lines (they affect rendering only)\n' +
       '    if (/^(accTitle|accDescr)\\b/.test(line)) continue\n' +
-      '    throw new Error(`unparsed statement: ${line}`)\n  }\n',
+      '    throw new Error(`unparsed statement: ${line}`)\n  }\n\n' +
+      "  if (blockStack.length > 0) throw new Error('a block left open')\n  return diagram\n",
   },
   {
     file: /beautiful-mermaid\/src\/class\/parser\.ts$/,
@@ -86,7 +118,9 @@ export const PATCHES = [
     replace:
       '      diagram.relationships.push(rel)\n      continue\n    }\n\n' +
       '    if (/^(click|link|callback|style|classDef|cssClass|direction|accTitle|accDescr)\\b/.test(line)) continue\n' +
-      '    throw new Error(`unparsed statement: ${line}`)\n  }\n\n  diagram.classes = [...classMap.values()]\n',
+      '    throw new Error(`unparsed statement: ${line}`)\n  }\n\n' +
+      "  if (currentClass || currentNamespace) throw new Error('a class or namespace left open')\n" +
+      '  diagram.classes = [...classMap.values()]\n',
   },
   {
     file: /beautiful-mermaid\/src\/er\/parser\.ts$/,
@@ -101,7 +135,9 @@ export const PATCHES = [
     replace:
       '      diagram.relationships.push(rel)\n      continue\n    }\n\n' +
       '    if (/^(accTitle|accDescr)\\b/.test(line)) continue\n' +
-      '    throw new Error(`unparsed statement: ${line}`)\n  }\n\n  diagram.entities = [...entityMap.values()]\n',
+      '    throw new Error(`unparsed statement: ${line}`)\n  }\n\n' +
+      "  if (currentEntity) throw new Error('an entity left open')\n" +
+      '  diagram.entities = [...entityMap.values()]\n',
   },
   {
     file: /beautiful-mermaid\/src\/xychart\/parser\.ts$/,
@@ -190,5 +226,42 @@ export const PATCHES = [
     file: /beautiful-mermaid\/src\/ascii\/grid\.ts$/,
     find: '      graph.rowHeight.set(c.y, Math.floor(graph.config.paddingY / 2))\n',
     replace: '      graph.rowHeight.set(c.y, Math.max(1, Math.floor(graph.config.paddingY / 2)))\n',
+  },
+  // A subgraph left open at the end of the source throws, as an open block does in
+  // the other kinds.
+  {
+    file: /beautiful-mermaid\/src\/parser\.ts$/,
+    find: '    parseEdgeLine(line, graph, subgraphStack)\n  }\n\n  return graph\n',
+    replace:
+      '    parseEdgeLine(line, graph, subgraphStack)\n  }\n\n' +
+      "  if (subgraphStack.length > 0) throw new Error('a subgraph left open')\n  return graph\n",
+  },
+  // A chart statement is read to its end: anything after it throws.
+  ...[
+    [String.raw`/^title\s+"([^"]+)"/`, String.raw`/^title\s+"([^"]+)"\s*$/`],
+    [String.raw`/^x-axis\s+(?:"([^"]*)"\s*)?\[([^\]]+)\]/`, String.raw`/^x-axis\s+(?:"([^"]*)"\s*)?\[([^\]]+)\]\s*$/`],
+    [String.raw`/^x-axis\s+(?:"([^"]*)"\s+)?(-?\d+(?:\.\d+)?)\s*-->\s*(-?\d+(?:\.\d+)?)/`, String.raw`/^x-axis\s+(?:"([^"]*)"\s+)?(-?\d+(?:\.\d+)?)\s*-->\s*(-?\d+(?:\.\d+)?)\s*$/`],
+    [String.raw`/^y-axis\s+(?:"([^"]*)"\s+)?(-?\d+(?:\.\d+)?)\s*-->\s*(-?\d+(?:\.\d+)?)/`, String.raw`/^y-axis\s+(?:"([^"]*)"\s+)?(-?\d+(?:\.\d+)?)\s*-->\s*(-?\d+(?:\.\d+)?)\s*$/`],
+    [String.raw`/^bar\s+\[([^\]]+)\]/`, String.raw`/^bar\s+\[([^\]]+)\]\s*$/`],
+    [String.raw`/^line\s+\[([^\]]+)\]/`, String.raw`/^line\s+\[([^\]]+)\]\s*$/`],
+  ].map(([from, to]) => ({ file: /beautiful-mermaid\/src\/xychart\/parser\.ts$/, find: `line.match(${from})`, replace: `line.match(${to})` })),
+  {
+    file: /beautiful-mermaid\/src\/xychart\/parser\.ts$/,
+    find: "      if (/\\bhorizontal\\b/i.test(line)) horizontal = true\n",
+    replace:
+      "      if (!/^xychart(-beta)?(\\s+horizontal)?\\s*$/i.test(line)) throw new Error(`unparsed statement: ${line}`)\n" +
+      "      if (/\\bhorizontal\\b/i.test(line)) horizontal = true\n",
+  },
+  // A bar grows from zero, or from the axis end nearest zero when zero lies off the
+  // axis: a baseline off the canvas made the fill walk every row between.
+  {
+    file: /beautiful-mermaid\/src\/ascii\/xychart\.ts$/,
+    find: '    const baseRow = valueToRow(Math.max(0, yRange.min))\n',
+    replace: '    const baseRow = valueToRow(Math.min(yRange.max, Math.max(0, yRange.min)))\n',
+  },
+  {
+    file: /beautiful-mermaid\/src\/ascii\/xychart\.ts$/,
+    find: '    const baseCol = valueToCol(Math.max(0, yRange.min))\n',
+    replace: '    const baseCol = valueToCol(Math.min(yRange.max, Math.max(0, yRange.min)))\n',
   },
 ]

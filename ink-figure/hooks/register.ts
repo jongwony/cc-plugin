@@ -1,7 +1,7 @@
 import type { Register } from 'claude-code'
 import { SERIES_COLOURS, type Fitted, type Role, type Segment } from './diagrams.ts'
 import { fencesOf, piecesOf, type MathPicture } from './figures.ts'
-import { INK, inkOf } from './math.ts'
+import { INK, inkOf, type Ink } from './math.ts'
 
 // Every ```mermaid and ```math fence Claude writes is drawn where the fence was, on
 // the terminal: a diagram or chart as box art built from Text elements, a formula as
@@ -25,20 +25,36 @@ const STYLE: Record<Role, { color?: string; dimColor?: boolean }> = {
   accent: { color: 'magenta' },
 }
 
+// the math ink for the current theme: read when the session starts, kept in step by
+// a theme change through /config, and read on demand only while still unknown
+let themeInk: Ink | null = null
+
 export const register: Register = on => {
+  on('session.start', async ($, e, next) => {
+    try {
+      themeInk = inkOf((await $.config.list()).find(row => row.key === 'theme')?.value)
+    } catch {}
+    return next(e)
+  })
+
+  on('config.set', { key: 'theme' }, async ($, e, next) => {
+    const result = await next(e)
+    if (result.deny === undefined) themeInk = inkOf(result.value)
+    return result
+  })
+
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
     // the figures are terminal drawings; elsewhere the fence stays as Claude wrote it
     if (e.surface !== 'terminal') return next(e)
-    const text = e.props.text
-    const fences = fencesOf(text.replace(/\r\n?/g, '\n'))
+    const text = e.props.text.replace(/\r\n?/g, '\n')
+    const fences = fencesOf(text)
     if (fences.length === 0) return next(e)
-    let ink = INK.either
-    if (fences.some(f => f.lang === 'math')) {
+    if (themeInk === null && fences.some(f => f.lang === 'math')) {
       try {
-        ink = inkOf((await $.config.list()).find(row => row.key === 'theme')?.value)
+        themeInk = inkOf((await $.config.list()).find(row => row.key === 'theme')?.value)
       } catch {}
     }
-    const pieces = piecesOf(text, (e.viewport?.columns ?? 80) - INLINE_MARGIN, ink)
+    const pieces = piecesOf(text, (e.viewport?.columns ?? 80) - INLINE_MARGIN, themeInk ?? INK.either, fences)
     if (!pieces) return next(e)
     const { Box, Text, Markdown, Image } = $.ui.resolve(e)
 

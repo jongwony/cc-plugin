@@ -211,3 +211,11 @@ test('overlapping elements add up: a glyph over a rule leaves no hole', () => {
   for (let p = 3; p < rule.rgba.length; p += 4) if (rule.rgba[p] === 255 && a.rgba[p]! < 255) holes++
   expect(holes).toBe(0)
 })
+
+test('a formula drawn once is kept for any room it fits, and refused where it does not', () => {
+  const fence = `\`\`\`math\n${FRACTION}\n\`\`\``
+  const wide = piecesOf(fence, 134, INK.dark)
+  expect(wide?.some(p => 'math' in p)).toBe(true)
+  expect(piecesOf(fence, 4, INK.dark)).toBe(null)
+  expect(piecesOf(fence, 120, INK.dark)?.some(p => 'math' in p)).toBe(true)
+})

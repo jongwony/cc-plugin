@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
-import { displayWidth, drawn, plainOf, renderOf, SPACING } from '../hooks/diagrams.ts'
-import { piecesOf } from '../hooks/figures.ts'
+import { displayWidth, drawn, leftToRightOf, plainOf, renderOf, SPACING } from '../hooks/diagrams.ts'
+import { fencesOf, piecesOf } from '../hooks/figures.ts'
 
 const ENGINE = { type: 'Text', props: {}, children: ['drawn by Claude Code'] }
 
@@ -200,4 +200,62 @@ test('a reply holding a link or footnote definition goes to Claude Code whole', 
   expect(piecesOf(`see [x][1]\n\n${fence}\n\n[1]: https://example.com`, 94)).toBe(null)
   expect(piecesOf(`a note[^1]\n\n${fence}\n\n[^1]: the note`, 94)).toBe(null)
   expect(piecesOf(`see [x](https://example.com)\n\n${fence}`, 94)).not.toBe(null)
+})
+
+test('a control character inside a statement keeps the fence; leading indentation does not', () => {
+  for (const label of ['a\tb', 'a\x1b[31mb', 'a\x07b']) expect('error' in renderOf(`graph LR\n  A["${label}"] --> B`)).toBe(true)
+  expect('lines' in renderOf('graph LR\n\tA --> B')).toBe(true)
+})
+
+const bigGraph = (nodes: number, edges: number): string => {
+  const lines = ['graph TD']
+  let seed = 7
+  const rand = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648
+  for (let i = 0; i < edges; i++) lines.push(`  N${Math.floor(rand() * nodes)} --> N${Math.floor(rand() * nodes)}`)
+  return lines.join('\n')
+}
+
+test('a diagram too big to lay out quickly keeps its fence at once', () => {
+  const started = performance.now()
+  expect('error' in drawn(bigGraph(300, 750), 134)).toBe(true)
+  expect(performance.now() - started).toBeLessThan(500)
+  expect('lines' in drawn(EIGHT, 134)).toBe(true)
+})
+
+test('only a top-down flowchart is turned sideways; BT and RL keep the direction written', () => {
+  expect(leftToRightOf('graph TD\n  A --> B')).not.toBe(null)
+  expect(leftToRightOf('graph td\n  A --> B')).not.toBe(null)
+  expect(leftToRightOf('graph\n  A --> B')).not.toBe(null)
+  for (const header of ['graph BT', 'graph rl', 'graph RL', 'graph LR', 'flowchart bt']) expect(leftToRightOf(`${header}\n  A --> B`)).toBe(null)
+})
+
+test('a block left open at the end of the source keeps the fence', () => {
+  for (const source of [
+    'graph LR\n  subgraph S\n  A --> B',
+    'sequenceDiagram\n  loop forever\n  A->>B: hi',
+    'sequenceDiagram\n  alt ok\n  A->>B: hi\n  else no\n  B->>A: bye',
+    'stateDiagram-v2\n  state Busy {\n    Load --> Work',
+    'classDiagram\n  class A {\n    +int x',
+    'erDiagram\n  A {\n    int x',
+  ])
+    expect('error' in renderOf(source)).toBe(true)
+  for (const source of [
+    'graph LR\n  subgraph S\n  A --> B\n  end',
+    'sequenceDiagram\n  loop forever\n  A->>B: hi\n  end',
+    'classDiagram\n  class A {\n    +int x\n  }',
+    'erDiagram\n  A {\n    int x\n  }',
+  ])
+    expect('lines' in renderOf(source)).toBe(true)
+})
+
+test('a mermaid fence inside an outer fence opened in a list item or block quote stays text', () => {
+  expect(fencesOf('- ~~~~markdown\n  ```mermaid\n  graph LR\n  A-->B\n  ```\n  ~~~~')).toEqual([])
+  expect(fencesOf('> ````\n> ```mermaid\n> graph LR\n> A-->B\n> ```\n> ````')).toEqual([])
+  const after = fencesOf('1. ````text\n   ```mermaid\n   graph LR\n   ```\n   ````\n\n```mermaid\ngraph LR\n  A --> B\n```')
+  expect(after.length).toBe(1)
+  expect(after[0]!.source).toBe('graph LR\n  A --> B')
+})
+
+test('a definition whose destination is on the next line also sends the reply back whole', () => {
+  expect(piecesOf('See [docs][r].\n\n```mermaid\ngraph LR\nA-->B\n```\n\n[r]:\n  https://example.com', 94)).toBe(null)
 })

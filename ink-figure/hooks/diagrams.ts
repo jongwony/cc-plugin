@@ -51,7 +51,7 @@ export const leftToRightOf = (source: string): string | null => {
   const kind = kindOf(source)
   if (kind === 'flowchart') {
     const header = /^(\s*(?:flowchart|graph))(?:\s+(TD|TB|BT|LR|RL))?\b([^\n]*)$/im.exec(source)
-    if (!header || header[2] === 'LR' || header[2] === 'RL') return null
+    if (!header || (header[2] && !/^(TD|TB)$/i.test(header[2]))) return null
     return source.replace(header[0], `${header[1]} LR${header[3]}`)
   }
   if (kind === 'state') {
@@ -91,12 +91,19 @@ export const displayWidth = (s: string): number => {
 // An astral character already has two units. A code point the terminal draws in
 // fewer cells than its units — a combining mark, a joiner, a modifier or flag
 // half that merges with its neighbour, an astral character one cell wide — cannot
-// be laid out, and neither can a source that already holds the placeholder.
+// be laid out, and neither can a source that already holds the placeholder, nor a
+// control character (a tab, an escape) inside a statement, which the terminal
+// draws in some other number of cells or not at all.
 const CELL = '\uE000'
 const UNPLACEABLE = /[\p{M}\p{Cf}\u1160-\u11ff\u{1f1e6}-\u{1f1ff}\u{1f3fb}-\u{1f3ff}\uE000]/u
+const CONTROL = /\p{Cc}/u
 const unplaceableOf = (source: string): string | undefined => {
   const mark = UNPLACEABLE.exec(source)?.[0]
   if (mark) return mark
+  for (const line of source.split('\n')) {
+    const control = CONTROL.exec(line.trim())?.[0]
+    if (control) return control
+  }
   for (const c of source) if (c.codePointAt(0)! > 0xffff && !isWide(c.codePointAt(0)!)) return c
   return undefined
 }
@@ -254,8 +261,10 @@ export const fitLines = (lines: readonly (readonly Segment[])[], columns: number
   return { lines: fitted, width, overflow: width - room }
 }
 
+// the sideways layout is tried only when the source's own layout drew
 export const drawn = (source: string, columns: number): Rendered => {
   const base = renderOf(source)
+  if ('error' in base) return base
   const sideways = leftToRightOf(source)
   return sideways ? pickLayout(base, renderOf(sideways), columns) : base
 }

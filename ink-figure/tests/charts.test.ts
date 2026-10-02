@@ -90,3 +90,19 @@ test('series take colours that read on every theme; a chart with more series tha
   expect('lines' in renderOf(chart(SERIES_COLOURS.length + 1))).toBe(true)
   expect('error' in renderOf(chart(SERIES_COLOURS.length + 2))).toBe(true)
 })
+
+test('a chart statement with anything after it keeps the fence', () => {
+  for (const extra of ['  line [1, 2] invalid', '  bar [1, 2] x', '  title "T" more', '  y-axis 0 --> 10 ms', '  x-axis [a, b] c'])
+    expect('error' in renderOf(`xychart-beta\n  x-axis [a, b]\n${extra}\n  line [1, 2]`)).toBe(true)
+  expect('error' in renderOf('xychart-beta sideways\n  x-axis [a, b]\n  line [1, 2]')).toBe(true)
+  expect('lines' in renderOf('xychart-beta horizontal\n  x-axis [a, b]\n  line [1, 2]')).toBe(true)
+})
+
+test('bars on an axis that lies wholly below zero grow from its top, at once', () => {
+  const started = performance.now()
+  const art = renderOf('xychart-beta\n  x-axis [a]\n  y-axis -1000000001 --> -1000000000\n  bar [-1000000000]\n  line [-1000000000]')
+  expect(performance.now() - started).toBeLessThan(200)
+  const horizontal = renderOf('xychart-beta horizontal\n  x-axis [a]\n  y-axis -20 --> -10\n  bar [-15]\n  line [-12]')
+  expect('lines' in horizontal || 'error' in horizontal).toBe(true)
+  expect('lines' in art || 'error' in art).toBe(true)
+})

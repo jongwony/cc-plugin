@@ -34,8 +34,9 @@ Then `/reload-plugins` in a running session.
 ## Diagrams
 
 Standard mermaid source. A top-down flowchart or state diagram is laid out left
-to right when no label is lost and it fits. Spacing is compact: three columns
-and one row between boxes, one cell inside them.
+to right when no label is lost and it fits; a flowchart written `BT`, `RL` or
+`LR` keeps its direction. Spacing is compact: three columns and one row between
+boxes, one cell inside them.
 
 ````markdown
 ```mermaid
@@ -105,45 +106,58 @@ a sum with stacked limits; a flat expression stays in the text.
 - Claude Code draws the pixels where the terminal can (kitty, Ghostty); elsewhere
   the TeX source shows, dim, in its place.
 - Frames (`\boxed`) and array rules (`|`, `\hline`) are drawn as lines.
-  Malformed TeX, an unknown macro, `\text`, or a dashed rule keeps the fence, as
-  does a formula wider than the terminal. A `$$…$$` or `\[…\]` wrapper inside the
-  fence is ignored.
+  Malformed TeX, an unknown macro, a dashed rule, `\text` holding a character
+  the math font lacks (Hangul, for one; Latin `\text{if }` draws), or a line
+  break `\\` outside an environment (MathJax draws it as a space) keeps the
+  fence, as does a formula wider than the terminal. Each fence is read on its
+  own: an operator one fence declares does not reach the next. A `$$…$$` or
+  `\[…\]` wrapper inside the fence is ignored.
 
 ## Limits
 
 - A diagram or chart wider than the terminal is cut with a `… N columns cut`
   line.
+- A flowchart or state diagram with more than 60 nodes or 100 edges, or one
+  whose edges take too long to route, keeps its fence rather than holding the
+  transcript while it is laid out.
 - `AssistantMessage` is the finest site a mod can draw in, so a reply holding a
   figure is redrawn as Markdown pieces around it. A piece over 10,000
   characters, or one carrying escape codes another mod wrote into the reply,
   makes the whole reply fall back to Claude Code's own drawing, and so does a
-  link reference or footnote definition (`[1]: …`), which the pieces would lose.
+  link reference or footnote definition (`[1]: …`, its destination on the same
+  line or the next), which the pieces would lose.
 - A fence counts as a figure when it is indented at most three spaces, as in
   CommonMark; one indented four is an indented code block and stays text. A
   fence inside a list item is drawn, and the text after it in that item follows
-  as its own paragraph.
+  as its own paragraph. A fence opened on a list item's or a block quote's own
+  marker line (`- ~~~`, `` > ``` ``) is not drawn, and every fence inside it is its
+  text.
 - A mermaid fence holding a statement the renderer does not read keeps its
   source whole rather than drawing the rest: a Hangul node ID (a Hangul label is
   fine), two statements on one line, a note, `autonumber`, a sequence `title`,
   a sequence activation (`activate`, `->>+`), a bare state or entity name, an
-  unquoted chart title or a non-numeric value.
+  unquoted chart title, a non-numeric value, anything after a chart statement,
+  or a subgraph, block, composite state, class or entity left open at the end.
 - A label holding a combining mark, a joined emoji sequence, a flag, a
-  skin-tone modifier or a one-cell character outside the Basic Multilingual
-  Plane (`𝐀`, `🌡`) keeps its fence: the terminal draws those in fewer cells than
-  the layout can count.
+  skin-tone modifier, a one-cell character outside the Basic Multilingual
+  Plane (`𝐀`, `🌡`) or a control character such as a tab keeps its fence: the
+  terminal draws those in another number of cells than the layout can count.
 
 ## Renderers
 
 - Diagrams and charts: [beautiful-mermaid](https://github.com/lukilabs/beautiful-mermaid)
   1.1.3 (MIT, `hooks/vendor/LICENSE`), bundled into `hooks/vendor/mermaid-ascii.js`
   with the patches in `scripts/patches.mjs`:
-  - a bounded edge search;
+  - a bounded edge search, a work budget across a drawing's searches, and a
+    node and edge count past which a flowchart is not laid out;
   - an edge's start junction placed on its box border — at tight spacing it
     landed inside the box, and a diamond's edge started a few cells away from it;
   - every statement read or the parse refused, so a fence is never drawn in part;
   - a node's or state's later text kept, as mermaid keeps it;
   - an ER relationship gap as wide as its label;
-  - a routing row at least one cell tall, so a self-loop keeps its return.
+  - a routing row at least one cell tall, so a self-loop keeps its return;
+  - a chart's bars grown from the axis end nearest zero when zero lies off the
+    axis.
 
   The kind table, the left-to-right flip and the role colouring are adapted from
   [claude-mermaid](https://github.com/galElmalah/claude-mods) (Gal Elmalah, MIT).

@@ -17,7 +17,7 @@ export const MAX_TEX_CHARS = 2_000
 // the Image element's bounds: 2048 pixels a side, 2 MiB of decoded pixels, 255 cells
 const MAX_SIDE_PX = 2048
 const MAX_BYTES = 2 * 1024 * 1024
-const MAX_CELLS = 255
+export const MAX_CELLS = 255
 
 type Matrix = readonly [number, number, number, number, number, number]
 type Point = readonly [number, number]

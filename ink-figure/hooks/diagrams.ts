@@ -15,6 +15,10 @@ export type Fitted = { lines: Segment[][]; width: number; overflow: number }
 
 export const SPACING = { paddingX: 3, paddingY: 1, boxBorderPadding: 1 } as const
 
+// a chart's later series, in turn, in colours that read on light and dark themes
+// alike; the first series takes the accent colour, and a chart with more keeps its fence
+export const SERIES_COLOURS = ['green', 'blue', 'red'] as const
+
 const KINDS: [RegExp, string][] = [
   [/^(flowchart|graph)\b/i, 'flowchart'],
   [/^sequenceDiagram/i, 'sequence'],
@@ -86,10 +90,16 @@ export const displayWidth = (s: string): number => {
 // two cells the terminal gives it; the placeholder comes out of the art again.
 // An astral character already has two units. A code point the terminal draws in
 // fewer cells than its units — a combining mark, a joiner, a modifier or flag
-// half that merges with its neighbour — cannot be laid out, and neither can a
-// source that already holds the placeholder.
+// half that merges with its neighbour, an astral character one cell wide — cannot
+// be laid out, and neither can a source that already holds the placeholder.
 const CELL = '\uE000'
 const UNPLACEABLE = /[\p{M}\p{Cf}\u1160-\u11ff\u{1f1e6}-\u{1f1ff}\u{1f3fb}-\u{1f3ff}\uE000]/u
+const unplaceableOf = (source: string): string | undefined => {
+  const mark = UNPLACEABLE.exec(source)?.[0]
+  if (mark) return mark
+  for (const c of source) if (c.codePointAt(0)! > 0xffff && !isWide(c.codePointAt(0)!)) return c
+  return undefined
+}
 const widened = (source: string): string => {
   let out = ''
   for (const c of source) {
@@ -184,12 +194,13 @@ export const renderOf = (source: string, useAscii = false): Rendered => {
   if (kind === 'xychart' && !LINE_SERIES.test(source)) return { error: 'a chart with no line series is written as text' }
   if (source.length > MAX_SOURCE_CHARS) return { error: `too big to draw (${source.length} characters)` }
   const composed = source.normalize('NFC')
-  const unplaceable = UNPLACEABLE.exec(composed)
-  if (unplaceable) return { error: `U+${unplaceable[0].codePointAt(0)!.toString(16).toUpperCase()} cannot be laid out in cells` }
+  const unplaceable = unplaceableOf(composed)
+  if (unplaceable) return { error: `U+${unplaceable.codePointAt(0)!.toString(16).toUpperCase()} cannot be laid out in cells` }
   try {
     const art = renderMermaidAscii(widened(composed), { useAscii, ...SPACING, colorMode: 'truecolor', theme: ROLE_THEME })
     const palette = new Map<string, number>()
     const lines = art.split('\n').map(line => trimEnd(segmentsOf(line, palette)))
+    if (palette.size > SERIES_COLOURS.length) return { error: `${palette.size + 1} series, more than the colours that read on every theme` }
     while (lines.length > 0 && lines[lines.length - 1]!.length === 0) lines.pop()
     while (lines.length > 0 && lines[0]!.length === 0) lines.shift()
     return lines.length === 0 || lines.every(l => plainOf(l).trim() === '') ? { error: 'nothing to draw' } : { lines }

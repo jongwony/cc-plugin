@@ -3433,8 +3433,7 @@ function parseSequenceDiagram(lines) {
         lineStyle,
         arrowHead
       };
-      if (activationMark === "+") msg.activate = true;
-      if (activationMark === "-") msg.deactivate = true;
+      if (activationMark) throw new Error(`activation not drawn: ${line}`);
       diagram.messages.push(msg);
       continue;
     }
@@ -3451,13 +3450,12 @@ function parseSequenceDiagram(lines) {
       ensureActor(diagram, actorIds, to);
       const lineStyle = arrow.startsWith("--") ? "dashed" : "solid";
       const arrowHead = arrow.includes(">>") || arrow.includes("x") ? "filled" : "open";
+      if (activationMark) throw new Error(`activation not drawn: ${line}`);
       const msg = { from, to, label, lineStyle, arrowHead };
-      if (activationMark === "+") msg.activate = true;
-      if (activationMark === "-") msg.deactivate = true;
       diagram.messages.push(msg);
       continue;
     }
-    if (/^(activate|deactivate)\s+\S+$/.test(line) || /^(accTitle|accDescr)\b/.test(line)) continue;
+    if (/^(accTitle|accDescr)\b/.test(line)) continue;
     throw new Error(`unparsed statement: ${line}`);
   }
   return diagram;
@@ -4885,6 +4883,11 @@ function parseXYChart(lines) {
     if (min > 0 && min < span * 0.5) min = 0;
     yAxis.range = { min, max };
   }
+  if (yAxis.range) {
+    const { min, max } = yAxis.range;
+    if (!Number.isFinite(min) || !Number.isFinite(max) || !(max > min)) throw new Error("y-axis range cannot be drawn");
+    for (const s of series) for (const v of s.data) if (v < min || v > max) throw new Error(`value ${v} lies off the y-axis`);
+  }
   if (!yAxis.range) {
     yAxis.range = { min: 0, max: 100 };
   }
@@ -5524,6 +5527,7 @@ function niceTickValues(min, max) {
   const start = Math.ceil(min / niceInterval) * niceInterval;
   const ticks = [];
   for (let v = start; v <= max + niceInterval * 1e-3; v += niceInterval) {
+    if (ticks.length >= 64 || !(v + niceInterval > v)) throw new Error("y-axis ticks cannot be laid out");
     ticks.push(Math.round(v * 1e10) / 1e10);
   }
   return ticks;

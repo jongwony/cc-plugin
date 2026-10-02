@@ -173,3 +173,31 @@ test('a kind the renderer does not draw, or a broken source, keeps its fence', (
   expect(piecesOf('```mermaid\nxychart-beta\n  x-axis [a, b]\n  bar [1, 2]\n```', 94)).toBe(null)
   expect(piecesOf('```mermaid\ngraph TD\n  가[시작] --> 나[끝]\n```', 94)).toBe(null)
 })
+
+test('an astral character one cell wide keeps the fence: the layout would give it two', () => {
+  for (const label of ['𝐀𝐁𝐂 bold', '𝒜 request', '🌡 temp']) expect('error' in renderOf(`graph LR\n  A["${label}"] --> B[done]`)).toBe(true)
+})
+
+test('a sequence activation keeps the fence: its bar is not drawn', () => {
+  expect('error' in renderOf('sequenceDiagram\n  A->>B: hi\n  activate B\n  B-->>A: ok\n  deactivate B')).toBe(true)
+  expect('error' in renderOf('sequenceDiagram\n  A->>+B: hi\n  B-->>-A: ok')).toBe(true)
+  expect('error' in renderOf('sequenceDiagram\n  A->>B: hi\n  B-->>A: ok')).toBe(false)
+})
+
+test('a fence indented four spaces is an indented code block, and three is still a fence', () => {
+  const example = '```mermaid\ngraph TD\nA-->B\n```'
+  const indented = (n: number) => example.split('\n').map(line => ' '.repeat(n) + line).join('\n')
+  expect(piecesOf(`Example:\n\n${indented(4)}\n`, 94)).toBe(null)
+  expect(piecesOf(`1. Step\n${indented(3)}\n`, 94)).not.toBe(null)
+})
+
+test('a reply with CRLF line ends draws like one with LF', () => {
+  expect(piecesOf('a\r\n\r\n```mermaid\r\ngraph TD\r\nA-->B\r\n```\r\n', 94)).not.toBe(null)
+})
+
+test('a reply holding a link or footnote definition goes to Claude Code whole', () => {
+  const fence = '```mermaid\ngraph TD\nA-->B\n```'
+  expect(piecesOf(`see [x][1]\n\n${fence}\n\n[1]: https://example.com`, 94)).toBe(null)
+  expect(piecesOf(`a note[^1]\n\n${fence}\n\n[^1]: the note`, 94)).toBe(null)
+  expect(piecesOf(`see [x](https://example.com)\n\n${fence}`, 94)).not.toBe(null)
+})

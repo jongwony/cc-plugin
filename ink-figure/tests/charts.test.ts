@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { displayWidth, plainOf, renderOf } from '../hooks/diagrams.ts'
+import { displayWidth, plainOf, renderOf, SERIES_COLOURS } from '../hooks/diagrams.ts'
 import { piecesOf } from '../hooks/figures.ts'
 
 const ENGINE = { type: 'Text', props: {}, children: ['drawn by Claude Code'] }
@@ -68,4 +68,25 @@ test('a line chart fence is drawn in the reply, its second series in its own col
   expect(await ui.find({ type: 'Text', text: 'drawn by Claude Code' })).toBeUndefined()
   expect(await ui.find({ type: 'Text', props: { color: 'green' } })).toBeDefined()
   expect(piecesOf(`\`\`\`mermaid\n${TWO}\n\`\`\``, 94)).not.toBe(null)
+})
+
+test('a value off the y-axis, or an axis that cannot be drawn, keeps the fence at once', () => {
+  for (const source of [
+    'xychart-beta\n  y-axis 0 --> 1\n  line [0, 1000000000]',
+    'xychart-beta\n  x-axis [a, b]\n  line [-1e308, 1e308]',
+    'xychart-beta\n  y-axis 100000000000000000 --> 100000000000000020\n  line [100000000000000000, 100000000000000016]',
+  ]) {
+    const started = performance.now()
+    expect('error' in renderOf(source)).toBe(true)
+    expect(performance.now() - started).toBeLessThan(500)
+  }
+})
+
+test('series take colours that read on every theme; a chart with more series than colours keeps its fence', () => {
+  const chart = (n: number) =>
+    'xychart-beta\n  x-axis [a, b, c]\n  y-axis 0 --> 10\n' + Array.from({ length: n }, (_, i) => `  line [${i + 1}, ${i + 2}, ${i + 1}]`).join('\n')
+  expect(SERIES_COLOURS).not.toContain('white')
+  expect(SERIES_COLOURS).not.toContain('yellow')
+  expect('lines' in renderOf(chart(SERIES_COLOURS.length + 1))).toBe(true)
+  expect('error' in renderOf(chart(SERIES_COLOURS.length + 2))).toBe(true)
 })

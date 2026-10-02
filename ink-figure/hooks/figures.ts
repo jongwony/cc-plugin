@@ -13,14 +13,16 @@ export const MAX_MARKDOWN_CHARS = 10_000
 
 // Markdown takes tab and newline as its only control characters
 const DRAWABLE = /^[^\x00-\x08\x0b-\x1f\x7f]*$/
+// a link reference or footnote definition, which applies across the whole reply
+const DEFINITION = /^ {0,3}\[[^\]\n]+\]:[ \t]*\S/m
 
-const FENCE_LINE = /^[ \t]*(`{3,}|~{3,})(.*)$/
+const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})(.*)$/
 const LANG = /^[ \t]*(mermaid|math)(?![\w-])/i
 
-// Fenced code blocks as CommonMark closes them: a fence closes on the same
-// character, at least as long, with nothing after it. Only a mermaid or math fence
-// that opens while no other fence is open is a figure; one inside another block is
-// that block's text.
+// Fenced code blocks as CommonMark reads them: a fence line is indented at most
+// three spaces, and closes on the same character, at least as long, with nothing
+// after it. Only a mermaid or math fence that opens while no other fence is open is
+// a figure; one inside another block is that block's text.
 export const fencesOf = (text: string): FenceBlock[] => {
   const blocks: FenceBlock[] = []
   let open: { mark: string; start: number; body: number; lang: FenceBlock['lang'] | null } | null = null
@@ -83,9 +85,11 @@ const pushMarkdown = (pieces: Piece[], text: string) => {
 
 // The reply as pieces: markdown between the fences, a figure for each fence that
 // draws; a fence that does not draw stays in the markdown as written. Null when
-// nothing draws or a piece cannot be handed to Markdown, in which case the caller
-// leaves the message to Claude Code untouched.
-export const piecesOf = (text: string, columns: number, ink: Ink = INK.either): Piece[] | null => {
+// nothing draws, a piece cannot be handed to Markdown, or the reply holds a
+// definition its pieces would lose, in which case the caller leaves the message to
+// Claude Code untouched.
+export const piecesOf = (reply: string, columns: number, ink: Ink = INK.either): Piece[] | null => {
+  const text = reply.replace(/\r\n?/g, '\n')
   const pieces: Piece[] = []
   let pending = ''
   let cursor = 0
@@ -102,7 +106,7 @@ export const piecesOf = (text: string, columns: number, ink: Ink = INK.either): 
   }
   pending += text.slice(cursor)
   pushMarkdown(pieces, pending)
-  if (drawnCount === 0) return null
+  if (drawnCount === 0 || DEFINITION.test(text)) return null
   for (const p of pieces)
     if ('markdown' in p && (p.markdown.length > MAX_MARKDOWN_CHARS || !DRAWABLE.test(p.markdown))) return null
   return pieces

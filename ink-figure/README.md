@@ -66,7 +66,9 @@ styles.
 A mermaid `xychart` (or `xychart-beta`) that holds at least one `line` series is
 drawn on a y-axis with ticks and grid dots, its categories under the x-axis. Bars
 in the same chart are drawn beside the line. The first series takes magenta, and
-later series green, blue, red, yellow and white, in the legend's order.
+later series green, blue and red, in the legend's order — colours that read on a
+light theme and a dark one alike. A chart with more series than that, or a value
+off its y-axis, keeps its fence.
 
 ````markdown
 ```mermaid
@@ -102,8 +104,10 @@ a sum with stacked limits; a flat expression stays in the text.
   grey that reads on either.
 - Claude Code draws the pixels where the terminal can (kitty, Ghostty); elsewhere
   the TeX source shows, dim, in its place.
-- Malformed TeX or an unknown macro keeps the fence, as does a formula wider than
-  the terminal. A `$$…$$` or `\[…\]` wrapper inside the fence is ignored.
+- Frames (`\boxed`) and array rules (`|`, `\hline`) are drawn as lines.
+  Malformed TeX, an unknown macro, `\text`, or a dashed rule keeps the fence, as
+  does a formula wider than the terminal. A `$$…$$` or `\[…\]` wrapper inside the
+  fence is ignored.
 
 ## Limits
 
@@ -112,14 +116,21 @@ a sum with stacked limits; a flat expression stays in the text.
 - `AssistantMessage` is the finest site a mod can draw in, so a reply holding a
   figure is redrawn as Markdown pieces around it. A piece over 10,000
   characters, or one carrying escape codes another mod wrote into the reply,
-  makes the whole reply fall back to Claude Code's own drawing.
+  makes the whole reply fall back to Claude Code's own drawing, and so does a
+  link reference or footnote definition (`[1]: …`), which the pieces would lose.
+- A fence counts as a figure when it is indented at most three spaces, as in
+  CommonMark; one indented four is an indented code block and stays text. A
+  fence inside a list item is drawn, and the text after it in that item follows
+  as its own paragraph.
 - A mermaid fence holding a statement the renderer does not read keeps its
   source whole rather than drawing the rest: a Hangul node ID (a Hangul label is
   fine), two statements on one line, a note, `autonumber`, a sequence `title`,
-  a bare state or entity name, an unquoted chart title or a non-numeric value.
-- A label holding a combining mark, a joined emoji sequence, a flag or a
-  skin-tone modifier keeps its fence: the terminal draws those in fewer cells
-  than the layout can count.
+  a sequence activation (`activate`, `->>+`), a bare state or entity name, an
+  unquoted chart title or a non-numeric value.
+- A label holding a combining mark, a joined emoji sequence, a flag, a
+  skin-tone modifier or a one-cell character outside the Basic Multilingual
+  Plane (`𝐀`, `🌡`) keeps its fence: the terminal draws those in fewer cells than
+  the layout can count.
 
 ## Renderers
 

@@ -77,7 +77,7 @@ export const PATCHES = [
     find: '    // For now, we skip explicit activate/deactivate lines (they affect rendering only)\n  }\n',
     replace:
       '    // For now, we skip explicit activate/deactivate lines (they affect rendering only)\n' +
-      '    if (/^(activate|deactivate)\\s+\\S+$/.test(line) || /^(accTitle|accDescr)\\b/.test(line)) continue\n' +
+      '    if (/^(accTitle|accDescr)\\b/.test(line)) continue\n' +
       '    throw new Error(`unparsed statement: ${line}`)\n  }\n',
   },
   {
@@ -119,6 +119,40 @@ export const PATCHES = [
       '    const value = Number(s.trim())\n' +
       '    if (s.trim() === \'\' || !Number.isFinite(value)) throw new Error(`not a number: ${s.trim()}`)\n' +
       '    return value\n  })\n',
+  },
+  // Activation bars are not drawn, so a message that opens or closes one throws.
+  {
+    file: /beautiful-mermaid\/src\/sequence\/parser\.ts$/,
+    find: "      // Activation/deactivation via +/- prefix on target\n      if (activationMark === '+') msg.activate = true\n      if (activationMark === '-') msg.deactivate = true\n",
+    replace: "      if (activationMark) throw new Error(`activation not drawn: ${line}`)\n",
+  },
+  {
+    file: /beautiful-mermaid\/src\/sequence\/parser\.ts$/,
+    find: "      const msg: Message = { from, to, label, lineStyle, arrowHead }\n      if (activationMark === '+') msg.activate = true\n      if (activationMark === '-') msg.deactivate = true\n",
+    replace: "      if (activationMark) throw new Error(`activation not drawn: ${line}`)\n      const msg: Message = { from, to, label, lineStyle, arrowHead }\n",
+  },
+  // A y-axis that cannot be drawn, or a value off it, throws: the scale maps such a
+  // value to rows far off the canvas, and a line walks every one of them.
+  {
+    file: /beautiful-mermaid\/src\/xychart\/parser\.ts$/,
+    find: '  // Fallback y-axis range\n',
+    replace:
+      '  if (yAxis.range) {\n' +
+      '    const { min, max } = yAxis.range\n' +
+      "    if (!Number.isFinite(min) || !Number.isFinite(max) || !(max > min)) throw new Error('y-axis range cannot be drawn')\n" +
+      '    for (const s of series) for (const v of s.data) if (v < min || v > max) throw new Error(`value ${v} lies off the y-axis`)\n' +
+      '  }\n\n' +
+      '  // Fallback y-axis range\n',
+  },
+  // Tick values come from a bounded walk: a range too narrow for its magnitude adds
+  // nothing per step.
+  {
+    file: /beautiful-mermaid\/src\/ascii\/xychart\.ts$/,
+    find: '  for (let v = start; v <= max + niceInterval * 0.001; v += niceInterval) {\n    ticks.push(Math.round(v * 1e10) / 1e10)\n  }\n',
+    replace:
+      '  for (let v = start; v <= max + niceInterval * 0.001; v += niceInterval) {\n' +
+      "    if (ticks.length >= 64 || !(v + niceInterval > v)) throw new Error('y-axis ticks cannot be laid out')\n" +
+      '    ticks.push(Math.round(v * 1e10) / 1e10)\n  }\n',
   },
   // A later definition of a node replaces its text and shape (the last wins); a state's
   // later description replaces its default name or adds a line under a given one.

@@ -42,12 +42,6 @@ nothing emits an event for the thing being watched. A recurrence is **one** rout
 schedule — not a series of single-moment routines standing in for an interval, which is how
 a hand-rolled poller accumulates.
 
-`/autofix-pr` is not one of the three wakes. A person types it, or a background Stint makes
-it the whole of its first prompt — it has no tool twin. It touches the event wake through
-one fact: it holds a pull request's single webhook recipient, so before adding an event
-watch on a pull request, check that nothing already watches it — whether a webhook routine
-coexists with that watch has not been tested.
-
 ## Every brief names an observable completion condition
 
 The condition is an event someone else can check: a pull request closing, a job exiting, a

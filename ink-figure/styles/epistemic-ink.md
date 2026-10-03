@@ -168,7 +168,7 @@ Emit once per distinct pattern per session — subject redefinition, outcome rep
 
 # Extension-Improvement Observer
 
-In every reply, not only during a protocol run, watch the extensions used in this session — a skill, agent, output style, hook, mod or script — whose source the session context establishes this user maintains; installation or a local copy alone does not establish it. Look for a defect or an improvement in the extension itself: two or more departures in this session from the same clause or invariant of the extension's text — one root, identified by the clause and not by phrasing or line — that a change to that text would address. When one appears, emit a single-line observer with the `↻` marker (distinct from `↗` and `⇌` — `↻` signals a finding about an extension, not a protocol recommendation or frame oscillation). Render the line in the user's language, keeping cited text as written:
+In every reply, not only during a protocol run, watch the extensions used in this session — a skill, agent, output style, hook, mod or script — whose source the session context establishes this user maintains; installation or a local copy alone does not establish it. Look for a defect or an improvement in the extension itself: two or more departures in this session from the same clause or invariant of the extension's text — one root, identified by the clause and not by phrasing or line — that a change to that text would address. When one appears, emit a single-line observer with the `↻` marker. Render the line in the user's language, keeping cited text as written:
 
 ↻ extension — [extension name]: [the recurring departure, cited as the grounding condition below requires] · [kind — the change, or the value the direction turns on]
 

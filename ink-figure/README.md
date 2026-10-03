@@ -59,11 +59,6 @@ session, or in `settings.json`:
 { "outputStyle": "ink-figure:Epistemic Ink" }
 ```
 
-The style used to ship in epistemic-protocols' `epistemic-cooperative` plugin
-(up to 6.20.0). A setting that still names `epistemic-cooperative:Epistemic Ink`
-names a style that plugin no longer ships from 6.21.0 on; point it at `ink-figure:Epistemic Ink`.
-Proactive Epistemic Ink was retired in the same move and has no successor.
-
 ## Diagrams
 
 Standard mermaid source, within the grammar below. A top-down flowchart or state

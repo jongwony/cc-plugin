@@ -83,7 +83,7 @@ test('Hangul categories and title keep every axis row within the chart width', (
 test('a line chart fence is drawn in the reply, its line in the accent colour', async ($, on) => {
   on('ui.render', () => ENGINE)
   const ui = await $.ui.mount({
-    plugin: 'epistemic-ink',
+    plugin: 'ink-figure',
     component: 'AssistantMessage',
     requestId: 'msg-1',
     surface: 'terminal',

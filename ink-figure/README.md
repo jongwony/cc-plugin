@@ -1,4 +1,4 @@
-# epistemic-ink
+# ink-figure
 
 Two Claude Code output styles and a mod that draws the figures they write.
 
@@ -44,7 +44,7 @@ art. The mod draws such fences under any output style, not only these two.
 
 ```bash
 claude plugin marketplace add jongwony/cc-plugin
-claude plugin install epistemic-ink@cc-plugin
+claude plugin install ink-figure@cc-plugin
 ```
 
 Then `/reload-plugins` in a running session.
@@ -233,6 +233,6 @@ pinned renderer version (Node 22+). The build fails when a patch's anchor or
 target file has moved upstream, or a file would exceed 1 MiB.
 
 ```bash
-cd epistemic-ink && npm install && npm run build:vendor
+cd ink-figure && npm install && npm run build:vendor
 claude plugin test
 ```

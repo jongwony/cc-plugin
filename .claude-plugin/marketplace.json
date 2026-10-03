@@ -115,8 +115,8 @@
       "description": "Send-only Telegram report for scheduled routines — posts one message into a fixed forum topic by thread id, with credentials from TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID; never creates topics or reads updates"
     },
     {
-      "name": "ink-figure",
-      "source": "./ink-figure",
+      "name": "epistemic-ink",
+      "source": "./epistemic-ink",
       "description": "Renders Epistemic Ink mermaid diagrams, line charts and 2-D math as terminal figures — only what transcript text cannot draw; East Asian labels line up"
     }
   ]

@@ -1,4 +1,4 @@
-# ink-figure
+# epistemic-ink
 
 A Claude Code mod that draws, in the terminal transcript, the figures Claude's
 replies cannot write as text — right where the fence was:
@@ -27,7 +27,7 @@ itself and shows other fences as code.
 
 ```bash
 claude plugin marketplace add jongwony/cc-plugin
-claude plugin install ink-figure@cc-plugin
+claude plugin install epistemic-ink@cc-plugin
 ```
 
 Then `/reload-plugins` in a running session.
@@ -216,6 +216,6 @@ pinned renderer version (Node 22+). The build fails when a patch's anchor or
 target file has moved upstream, or a file would exceed 1 MiB.
 
 ```bash
-cd ink-figure && npm install && npm run build:vendor
+cd epistemic-ink && npm install && npm run build:vendor
 claude plugin test
 ```

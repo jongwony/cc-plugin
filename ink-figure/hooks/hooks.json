@@ -1,0 +1,6 @@
+{
+  "description": "ink-figure: draws ```mermaid and ```math fences in the terminal transcript. Builds without function hooks ignore the modules key.",
+  "modules": [
+    "./register.ts"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "ink-figure",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:vendor": "node scripts/build-vendor.mjs"
+  },
+  "devDependencies": {
+    "beautiful-mermaid": "1.1.3",
+    "esbuild": "0.25.12",
+    "mathjax-full": "3.2.2"
+  }
+}

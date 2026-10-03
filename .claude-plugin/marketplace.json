@@ -45,11 +45,6 @@
       "description": "Safely identify, investigate, and remove macOS programs with risk-assessed execution"
     },
     {
-      "name": "text-diagram",
-      "source": "./text-diagram",
-      "description": "Draw directed graphs — DAGs, workflows, pipelines, dependency trees — as layered box-art you read directly in the terminal"
-    },
-    {
       "name": "voice-dictation",
       "source": "./voice-dictation",
       "description": "Push-to-talk voice dictation daemon (whisper.cpp) transcribing speech into the active window"
@@ -113,6 +108,11 @@
       "name": "telegram-report",
       "source": "./telegram-report",
       "description": "Send-only Telegram report for scheduled routines — posts one message into a fixed forum topic by thread id, with credentials from TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID; never creates topics or reads updates"
+    },
+    {
+      "name": "ink-figure",
+      "source": "./ink-figure",
+      "description": "Epistemic Ink output style with a figure mod that draws the ```mermaid and ```math fences it writes as terminal figures — only what transcript text cannot draw; East Asian labels line up"
     }
   ]
 }

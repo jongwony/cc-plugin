@@ -10,11 +10,15 @@ A Claude Code output style and a mod that draws the figures it writes.
 
 ## How the style and the mod work together
 
-When the style judges that the reader's task is taking in relations at once — a
-graph, a flow, states, a sequence, classes, entities — it writes a
-` ```mermaid ` fence; for a two-dimensional formula, a ` ```math ` fence. It
-keeps a picture small enough to hold (about 12 nodes, 24 at most) and never
-draws box art by hand. The mod then draws the fence:
+In every reply while the style is active, not only during a protocol run, it
+reaches for a fence wherever one fits. When the reader's task is taking in
+relations at once — a graph, a flow, states, a sequence, classes, entities — it
+writes a ` ```mermaid ` fence; for measured values over an ordered axis, an
+xychart line chart (one series in whole units, the unit in the title, its scale
+stated); for a two-dimensional formula, a ` ```math ` fence. It keeps a picture
+small enough to hold (about 12 nodes, 24 at most), never draws box art by hand,
+and names a focal node in the prose beside the fence, since node styling draws
+nothing. The mod then draws the fence:
 
 | Fence | Drawn as | What it is for |
 |---|---|---|

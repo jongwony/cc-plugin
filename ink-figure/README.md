@@ -51,7 +51,13 @@ claude plugin marketplace add jongwony/cc-plugin
 claude plugin install ink-figure@cc-plugin
 ```
 
-Then `/reload-plugins` in a running session.
+Then `/reload-plugins` in a running session. The mod draws as soon as the plugin
+is enabled; the style takes effect once it is picked — `/output-style` in a
+session, or in `settings.json`:
+
+```json
+{ "outputStyle": "ink-figure:Epistemic Ink" }
+```
 
 ## Diagrams
 

@@ -4,7 +4,8 @@ A Claude Code output style and a mod that draws the figures it writes.
 
 - **Style** — *Epistemic Ink*, picked as the session's output style. It formats
   replies with Ink's phase headers, gates and insights, and decides when a reply
-  needs a picture at all.
+  needs a picture at all. It also flags, with a `↻` line, a departure that recurs
+  against the same clause of an extension the user maintains.
 - **Figure mod** — draws, in the terminal transcript, the figures a reply cannot
   write as text, right where the fence was.
 

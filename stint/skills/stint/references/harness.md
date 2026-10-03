@@ -47,6 +47,9 @@ non-interactive support; `local-jsx` commands are excluded from it.
 | A routine's `events[].data.message.content` | The non-interactive set only; `local-jsx` arrives as text | *Read* (likely) |
 | A cloud session | The non-interactive set; the attach TUI posts some commands as text and refuses others with `/X isn't available in cloud sessions yet` | *Read* |
 | `SendMessage`, peer and Remote Control inbound | Nothing — every such enqueue forces `skipSlashCommands` | *Read* |
+| A `CronCreate` or `ScheduleWakeup` fire, a subagent hand-back, an auto-continuation | Nothing — each is enqueued with `skipSlashCommands`, so a prompt whose text is `/autofix-pr` arrives as prose | *Read*, 2.1.288 |
+| A hook | Nothing mid-session — PostToolUse, Stop and UserPromptSubmit outputs queue no prompt; SessionStart `initialUserMessage` becomes a user turn, once, at startup | *Read*, 2.1.288 |
+| The `Skill` tool | Prompt-type skills only — it refuses a `local-jsx` or `local` command as `not_prompt_type` | *Read*, 2.1.288 |
 
 ## Built-ins and their tool twins
 
@@ -60,8 +63,16 @@ non-interactive support; `local-jsx` commands are excluded from it.
 | `/goal` | `ProposeGoal` | Refused in background, cloud and agent contexts — so no twin where a Stint runs |
 | `/autofix-pr` | None | `create_webhook_trigger` binds events to a routine, not to a live session |
 
-*Read*, 2.1.280. `/autofix-pr` is also disabled where the session is remote, so it
-dispatches from a `--bg` Stint on this machine and not from a cloud one.
+*Read*, 2.1.288. `/autofix-pr` is a `local-jsx` command, enabled only in an
+interactive session — `claude -p "/autofix-pr"` does not dispatch it — and only
+where the `allow_remote_sessions` policy holds. It carries no `CLAUDE_CODE_REMOTE`
+gate; the 2.1.280 reading that it is disabled where the session is remote does not
+hold in 2.1.288. A `--bg` Stint on this machine is the exercised dispatch path; a
+cloud session dispatching it is unexercised.
+
+So a session that has just opened a PR cannot start its watch from its own turn:
+no row above reaches a `local-jsx` command, and the model has no tool into it. A
+person typing it, or a `--bg` Stint leading with it, are the two paths.
 
 ## `/autofix-pr`
 
@@ -75,14 +86,40 @@ refuses on the default branch, naming the checkout it inspected, and refuses whe
 no open PR matches the branch. Neither a PR number nor a branch name passed as an
 argument changes what it resolves.
 
+**So a Stint dispatching it is launched inside the PR branch's own checkout,
+without `--worktree`.** *Exercised*, 2.1.288. A `--bg` Stint started from an
+existing worktree already on the PR's branch resolved that PR (#212 in
+jongwony/cc-plugin), spawned the cloud session and printed no already-watching
+line. `--worktree <surface>` would have cut `worktree-<surface>` from the default
+branch, which matches no open PR.
+
 **It spawns a cloud session on the PR's branch and subscribes that session to the
 PR.** *Exercised.* It prints the session link. It is idempotent per PR: a second
 call while a session is already running for that PR returns the existing link
 rather than spawning again.
 
-**Delivery is webhook-driven, not polling.** *Read:* `subscribePR`,
-`getPRWebhookTargets` and `fetchInboxMessage` sit together in the remote-bridge.
-Nothing observed contradicts this, but the event path itself was not exercised.
+**It always watches from a new cloud session, never from the session that typed
+it.** *Read*, 2.1.288. The command's `current_session` branch is dead code — both
+arms of the choice assign `remote_session` — so its subscribe-this-session path
+and its 30-minute poll for the current session never run. What runs creates the
+cloud session and subscribes that session's id to the PR on the server.
+
+**Delivery is webhook-driven, not polling.** *Read*, 2.1.288. The subscription is
+made server-side for the cloud session. The remote-bridge `subscribePR` that the
+2.1.280 reading named still exists but has no live caller (its one call site is
+in the dead branch above), and `getPRWebhookTargets` has none at all. The event
+path itself was not exercised.
+
+**A session cannot subscribe itself to a PR from the interactive terminal.**
+*Read*, 2.1.288. The one self-subscription primitive is
+`subscribe_pr_activity` / `unsubscribe_pr_activity` on the `claude-code-remote`
+meta MCP server, which is mounted only in a headless SDK-hosted session attached
+with a work secret; an interactive session's `/remote-control` never mounts it.
+`ReadNotifications` is enabled in a Remote Control session and labels
+`github_webhook` items as activity on a subscribed PR, but nothing local adds this
+session to a PR's targets. After a successful `gh pr create`, the session records
+the created PR to the server behind a flag that defaults off; that records the
+PR and subscribes nothing.
 
 **The watch is exclusive per pull request, not per repository.** *Exercised, by
 contrast.* One repository's PR returned `Autofix is on, but webhook events won't

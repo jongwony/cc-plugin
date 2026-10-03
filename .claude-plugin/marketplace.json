@@ -45,11 +45,6 @@
       "description": "Safely identify, investigate, and remove macOS programs with risk-assessed execution"
     },
     {
-      "name": "text-diagram",
-      "source": "./text-diagram",
-      "description": "Draw directed graphs — DAGs, workflows, pipelines, dependency trees — as layered box-art you read directly in the terminal"
-    },
-    {
       "name": "voice-dictation",
       "source": "./voice-dictation",
       "description": "Push-to-talk voice dictation daemon (whisper.cpp) transcribing speech into the active window"

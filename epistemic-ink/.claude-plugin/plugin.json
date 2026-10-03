@@ -1,7 +1,7 @@
 {
   "name": "epistemic-ink",
   "description": "Epistemic Ink output styles with a figure mod that draws the ```mermaid and ```math fences they write as terminal figures — only what transcript text cannot draw; East Asian labels line up",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "outputStyles": "./styles/",
   "author": {
     "name": "Jongwon Choi",

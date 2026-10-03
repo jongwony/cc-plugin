@@ -51,7 +51,18 @@ claude plugin marketplace add jongwony/cc-plugin
 claude plugin install ink-figure@cc-plugin
 ```
 
-Then `/reload-plugins` in a running session.
+Then `/reload-plugins` in a running session. The mod draws as soon as the plugin
+is enabled; the style takes effect once it is picked — `/output-style` in a
+session, or in `settings.json`:
+
+```json
+{ "outputStyle": "ink-figure:Epistemic Ink" }
+```
+
+The style used to ship in epistemic-protocols' `epistemic-cooperative` plugin
+(up to 6.20.0). A setting that still names `epistemic-cooperative:Epistemic Ink`
+names a style that plugin no longer ships from 6.21.0 on; point it at `ink-figure:Epistemic Ink`.
+Proactive Epistemic Ink was retired in the same move and has no successor.
 
 ## Diagrams
 

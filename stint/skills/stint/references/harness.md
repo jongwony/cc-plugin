@@ -17,16 +17,16 @@ description and was never fired — treat those as leads that still need a run.
 
 **A built-in slash command is dispatched only as the first token of a message.**
 The same text anywhere else in the message is read as prose: nothing runs, and no
-error marks it. *Exercised, three ways.* `/autofix-pr` placed at step 2 of a
-spawn brief produced no effect at all — the spawned session performed the steps
-around it and went idle. The same session, resumed with `/autofix-pr` as the
-whole message, dispatched and spawned a cloud session. *Read:* the binary
+error marks it. *Exercised, three ways.* A `local-jsx` built-in placed at step 2
+of a spawn brief produced no effect at all — the spawned session performed the
+steps around it and went idle. The same session, resumed with that command as the
+whole message, dispatched it. *Read:* the binary
 registers these as commands parsed at the head of an utterance.
 
 **A command registered with no argument discards one silently.** *Exercised.*
-`/autofix-pr 198` and `/autofix-pr feat/claude-sessions` both behaved exactly as
-the bare call — same refusal, same target resolution. *Read:* that command's
-registration carries no argument hint.
+A built-in taking no argument, called once with a PR number and once with a
+branch name, behaved exactly as the bare call — same refusal, same target
+resolution. *Read:* that command's registration carries no argument hint.
 
 **So a message carrying a built-in carries nothing else.** A spawn whose first
 act is a built-in costs two messages: the command, then the brief with its
@@ -42,7 +42,7 @@ non-interactive support; `local-jsx` commands are excluded from it.
 
 | Path | What dispatches | Mark |
 |---|---|---|
-| `claude --bg … -- "<prompt>"` | Every built-in, `local-jsx` included — the worker is an interactive session under a pty host, and the positional prompt is parsed as typed input | *Exercised* for `/autofix-pr` as the whole message; *Read* otherwise |
+| `claude --bg … -- "<prompt>"` | Every built-in, `local-jsx` included — the worker is an interactive session under a pty host, and the positional prompt is parsed as typed input | *Exercised* for a `local-jsx` built-in as the whole message; *Read* otherwise |
 | `claude -p "<prompt>"` | The non-interactive set only | *Read* |
 | A routine's `events[].data.message.content` | The non-interactive set only; `local-jsx` arrives as text | *Read* (likely) |
 | A cloud session | The non-interactive set; the attach TUI posts some commands as text and refuses others with `/X isn't available in cloud sessions yet` | *Read* |
@@ -58,49 +58,6 @@ non-interactive support; `local-jsx` commands are excluded from it.
 | `/loop` | `CronCreate` / `CronList` / `CronDelete` | Local, not cloud |
 | `/fork` | `Agent` fork in the background, for the in-conversation variant | The variant that opens a new background session has none |
 | `/goal` | `ProposeGoal` | Refused in background, cloud and agent contexts — so no twin where a Stint runs |
-| `/autofix-pr` | None | `create_webhook_trigger` binds events to a routine, not to a live session |
-
-*Read*, 2.1.280. `/autofix-pr` is also disabled where the session is remote, so it
-dispatches from a `--bg` Stint on this machine and not from a cloud one.
-
-## `/autofix-pr`
-
-A person types this command, or a `--bg` Stint leads its initial prompt with it —
-it has no tool twin. It also bears on stint's event wake through its per-PR webhook
-exclusivity, which an event watch added on the same pull request may run into. The rest of this
-section is the observation record, and the evidence for the dispatch rule above.
-
-**It targets the current checkout's branch and nothing else.** *Exercised.* It
-refuses on the default branch, naming the checkout it inspected, and refuses when
-no open PR matches the branch. Neither a PR number nor a branch name passed as an
-argument changes what it resolves.
-
-**It spawns a cloud session on the PR's branch and subscribes that session to the
-PR.** *Exercised.* It prints the session link. It is idempotent per PR: a second
-call while a session is already running for that PR returns the existing link
-rather than spawning again.
-
-**Delivery is webhook-driven, not polling.** *Read:* `subscribePR`,
-`getPRWebhookTargets` and `fetchInboxMessage` sit together in the remote-bridge.
-Nothing observed contradicts this, but the event path itself was not exercised.
-
-**The watch is exclusive per pull request, not per repository.** *Exercised, by
-contrast.* One repository's PR returned `Autofix is on, but webhook events won't
-reach the cloud session: a Claude agent is already watching this PR`; a different
-repository's PR, from the same account and machine minutes later, returned no
-such line. A second watcher runs and receives nothing, so the spawned session is
-resident and useless. Read that line rather than treating a printed session link
-as proof the watch took.
-
-**An inline review comment reaches the watching session, the repository owner's
-own included.** *Exercised.* Review comments the owner left on a file of a watched
-PR were each followed, within minutes, by a commit on the branch and a threaded
-reply acting on that comment. The session's replies post under the owner's
-account too.
-
-**Unsettled.** Whether a plain PR conversation comment — one not attached to a
-file — reaches a watching session. Answer it on a PR whose `/autofix-pr` call
-printed no already-watching line.
 
 ## `RemoteTrigger`
 
@@ -172,8 +129,7 @@ Retirement is `update` with `enabled: false`; the routine stays listed with its
 
 **`create_webhook_trigger` is unverified.** *Read* — from the tool description
 only. It was never fired, so its body shape has not been checked against a real
-repository, and neither has whether it coexists with `/autofix-pr`'s
-per-PR subscription. Fire it once before depending on it.
+repository. Fire it once before depending on it.
 
 ## Sessions, jobs and worktrees
 

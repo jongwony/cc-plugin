@@ -42,10 +42,6 @@ Independent work needs something to start it. Route to exactly one.
   repository can emit neither CI failures nor review comments. Read that from the pull
   request's own checks and reviewers, never from the workflow triggers: a `push`-triggered
   workflow also posts its check runs against a PR's head commit.
-- **A pull request may already be watched by `/autofix-pr`.** It holds the PR's single webhook
-  recipient, whether a person typed it or a `--bg` Stint led with it; whether a
-  `create_webhook_trigger` routine coexists with it is unverified. Check for a running watch
-  before adding one — `references/harness.md` carries what was observed.
 
 ## Every brief names an observable completion condition
 
@@ -62,7 +58,7 @@ Independent work needs something to start it. Route to exactly one.
 - **A tool twin exists → call the tool, and wrap nothing in a session.**
 - **No twin → the command, with its own arguments, is the whole initial prompt of a `--bg`
   Stint.** The `--bg` worker is an interactive session, so it dispatches interactive-only
-  commands — `/autofix-pr`, a session-level `/fork` — and `/goal <condition>`, whose
+  commands — a session-level `/fork` — and `/goal <condition>`, whose
   `ProposeGoal` twin is refused in background, cloud and agent contexts. Nothing else rides in
   that message; the brief follows as the next one.
 - **A built-in dispatches only as the first token of a message**, and takes the whole message.

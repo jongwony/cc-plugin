@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { displayWidth, plainOf, renderOf } from '../hooks/diagrams.ts'
+import { compacted, displayWidth, plainOf, renderOf } from '../hooks/diagrams.ts'
 import { piecesOf } from '../hooks/figures.ts'
 
 const ENGINE = { type: 'Text', props: {}, children: ['drawn by Claude Code'] }
@@ -27,6 +27,12 @@ test('a line chart draws its title, axis ticks, categories and the line', () => 
   expect(lines.some(l => /^ *120┤/.test(l))).toBe(true)
   expect(lines.some(l => /mon +tue +wed +thu +fri/.test(l))).toBe(true)
   expect(lines.some(l => /[╭╮╰╯]/.test(l))).toBe(true)
+})
+
+test('a line chart keeps every row: its height is a drawn length on the y scale', () => {
+  const lines = linesOf(LATENCY)
+  expect(lines.some(l => /^ +│$/.test(plainOf(l)))).toBe(true)
+  expect(compacted(lines).length).toBeLessThan(lines.length)
 })
 
 test('a bar chart, or a chart with a statement the parser cannot read, keeps its fence', () => {

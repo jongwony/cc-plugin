@@ -59,8 +59,11 @@ Standard mermaid source, within the grammar below. A top-down flowchart or state
 diagram (a flowchart header with no direction is top-down, as in mermaid) is laid
 out left to right when no word of the drawing is lost and it fits the terminal or
 is no wider than the top-down layout; a flowchart written `BT` or `LR` keeps its
-direction. Spacing is compact: three columns and one row between boxes, one cell
-inside them.
+direction. Spacing is compact: three columns between boxes and one cell inside
+them, left and right. A row that holds nothing but spaces and vertical lines running
+straight through it is taken out, so a box stands three rows tall and a vertical line
+keeps only the rows where it turns or ends; a line chart keeps every row, since its
+height is the measured scale.
 
 ### Drawn grammar
 

@@ -255,6 +255,42 @@ const trimEnd = (line: Segment[]): Segment[] => {
   return out
 }
 
+// A row holding nothing but spaces and vertical strokes, each stroke continued in the
+// rows above and below it, carries no topology: the padding inside a box above and
+// below its label, and a straight run of a vertical line. Such rows come out, one at
+// a time, until none is left; a row with a label, an arrowhead, a corner, a junction
+// or a horizontal stroke stays. A chart keeps every row: its height is a drawn length.
+const STROKE = new Set(['│', '|'])
+const FROM_ABOVE = new Set(['│', '┌', '┐', '╭', '╮', '┬', '├', '┤', '┼', '|', '+'])
+const TO_BELOW = new Set(['│', '└', '┘', '╰', '╯', '┴', '├', '┤', '┼', '|', '+'])
+
+const cellRowOf = (line: readonly Segment[]): string[] => {
+  const cells: string[] = []
+  for (const c of plainOf(line)) {
+    cells.push(c)
+    if (cellsOf(c.codePointAt(0)!) === 2) cells.push('')
+  }
+  return cells
+}
+
+export const compacted = (lines: readonly Segment[][]): Segment[][] => {
+  const out = [...lines]
+  let i = 1
+  while (i < out.length - 1) {
+    const row = cellRowOf(out[i]!)
+    const above = cellRowOf(out[i - 1]!)
+    const below = cellRowOf(out[i + 1]!)
+    const empty =
+      row.some(c => STROKE.has(c)) &&
+      row.every((c, j) => c === ' ' || (STROKE.has(c) && FROM_ABOVE.has(above[j] ?? ' ') && TO_BELOW.has(below[j] ?? ' ')))
+    if (empty) {
+      out.splice(i, 1)
+      i = Math.max(1, i - 1)
+    } else i++
+  }
+  return out
+}
+
 export const renderOf = (source: string, useAscii = false): Rendered => {
   const kind = kindOf(source)
   if (!DRAWN_KINDS.has(kind)) return { error: `${kind} diagrams are not drawn` }
@@ -270,11 +306,12 @@ export const renderOf = (source: string, useAscii = false): Rendered => {
     const art = renderMermaidAscii(widened(composed), { useAscii, ...SPACING, colorMode: 'truecolor', theme: ROLE_THEME })
     if (!pairedOf(art)) return { error: 'the layout drew over a wide character' }
     const palette = new Map<string, number>()
-    const lines = art.split('\n').map(line => trimEnd(segmentsOf(line, palette)))
+    let lines = art.split('\n').map(line => trimEnd(segmentsOf(line, palette)))
     if (palette.size > SERIES_COLOURS.length) return { error: `${palette.size + 1} series, more than the colours that read on every theme` }
     while (lines.length > 0 && lines[lines.length - 1]!.length === 0) lines.pop()
     while (lines.length > 0 && lines[0]!.length === 0) lines.shift()
     if (lines.length === 0 || lines.every(l => plainOf(l).trim() === '')) return { error: 'nothing to draw' }
+    if (kind !== 'xychart') lines = compacted(lines)
     const unfaithful = faithfulTo(grammar, lines.map(plainOf))
     return unfaithful ? { error: unfaithful } : { lines }
   } catch (err) {

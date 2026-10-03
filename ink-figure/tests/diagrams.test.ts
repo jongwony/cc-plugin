@@ -107,9 +107,80 @@ test('a self-loop keeps its return segment and arrowhead at the compact spacing'
   expect(lines.some(l => l.includes('▲'))).toBe(true)
 })
 
-test('spacing defaults to 3 · 1 · 1 and boxes stand five rows tall', () => {
+test('spacing stays 3 · 1 · 1 and a box stands three rows tall once its blank rows come out', () => {
   expect(SPACING).toEqual({ paddingX: 3, paddingY: 1, boxBorderPadding: 1 })
-  expect(linesOf('graph LR\n  A --> B').length).toBe(5)
+  expect(linesOf('graph LR\n  A --> B')).toEqual(['┌───┐   ┌───┐', '│ A ├──►│ B │', '└───┘   └───┘'])
+})
+
+const BRANCH = 'graph LR\n  A[Seoul req] --> B[cache lookup]\n  B --> C[reply]\n  B --> D[origin server]'
+
+// every row left holds something other than spaces and vertical strokes, or a stroke
+// that does not continue straight through it
+const noBlankRow = (lines: string[]) =>
+  lines.every((row, i) => {
+    if (i === 0 || i === lines.length - 1 || /[^ │|]/.test(row) || !/[│|]/.test(row)) return true
+    return [...row].some((c, j) => c !== ' ' && !('│┌┐╭╮┬├┤┼|+'.includes(lines[i - 1]![j] ?? ' ') && '│└┘╰╯┴├┤┼|+'.includes(lines[i + 1]![j] ?? ' ')))
+  })
+
+test('rows of nothing but straight vertical strokes come out; labels, arrowheads and the branch stay joined', () => {
+  const lines = linesOf(BRANCH)
+  expect(lines).toEqual([
+    '┌───────────┐   ┌──────────────┐   ┌───────────────┐',
+    '│ Seoul req ├──►│ cache lookup ├──►│     reply     │',
+    '└───────────┘   └───────┬──────┘   └───────────────┘',
+    '                        │          ┌───────────────┐',
+    '                        └─────────►│ origin server │',
+    '                                   └───────────────┘',
+  ])
+  expect(noBlankRow(lines)).toBe(true)
+})
+
+test('Hangul labels keep their columns once the blank rows come out', () => {
+  const lines = linesOf('graph LR\n  A[서울 요청] --> B[캐시 조회]\n  B --> C[응답 반환]\n  B --> D[원본 서버]')
+  expect(lines.length).toBe(6)
+  expect(new Set(lines.filter(l => /[│┐┘]$/.test(l)).map(displayWidth)).size).toBe(1)
+  for (const label of ['서울 요청', '캐시 조회', '응답 반환', '원본 서버']) expect(lines.some(l => l.includes(label))).toBe(true)
+})
+
+test('a top-down chain keeps one stroke and its arrowhead between boxes', () => {
+  const art = renderOf('graph TD\n  A --> B\n  B --> C')
+  if (!('lines' in art)) throw new Error(art.error)
+  const lines = art.lines.map(plainOf)
+  expect(lines.filter(l => l.trim() === '▼').length).toBe(2)
+  expect(lines.filter(l => /│ [ABC] │/.test(l)).length).toBe(3)
+  expect(lines.length).toBe(11)
+})
+
+test('a top-down branch, drawn sideways, keeps the line from the shared box to its second target', () => {
+  const lines = linesOf('graph TD\n  A --> B\n  A --> C')
+  expect(lines).toEqual(['┌───┐   ┌───┐', '│ A ├──►│ B │', '└─┬─┘   └───┘', '  │     ┌───┐', '  └────►│ C │', '        └───┘'])
+})
+
+test('sequence, state, class and ER keep every message, state, member and relation', () => {
+  const seq = linesOf('sequenceDiagram\n  A->>B: hi\n  B->>A: ok\n  A->>B: bye')
+  for (const word of ['hi', 'ok', 'bye']) expect(seq.some(l => l.includes(word))).toBe(true)
+  expect(seq.filter(l => l.includes('▶')).length).toBe(2)
+  expect(seq.filter(l => l.includes('◀')).length).toBe(1)
+  expect(noBlankRow(seq)).toBe(true)
+  const drawnState = renderOf('stateDiagram-v2\n  [*] --> Idle\n  Idle --> Run\n  Run --> [*]')
+  if (!('lines' in drawnState)) throw new Error(drawnState.error)
+  const state = drawnState.lines.map(plainOf)
+  expect(state.filter(l => /│ (Idle|Run) +│/.test(l)).length).toBe(2)
+  expect(state.filter(l => l.trim() === '▼').length).toBe(3)
+  expect(state.length).toBe(15)
+  const cls = linesOf('classDiagram\n  Animal <|-- Dog\n  Animal : name')
+  for (const word of ['Animal', 'name', 'Dog', '△']) expect(cls.some(l => l.includes(word))).toBe(true)
+  const er = linesOf('erDiagram\n  CUSTOMER ||--o{ ORDER : places')
+  expect(er.length).toBe(3)
+})
+
+test('ASCII glyphs come out under the same rule', () => {
+  const art = renderOf(BRANCH, true)
+  if (!('lines' in art)) throw new Error(art.error)
+  const lines = art.lines.map(plainOf)
+  expect(lines.length).toBeLessThan(11)
+  expect(lines.some(l => l.includes('| Seoul req |-->'))).toBe(true)
+  expect(lines.some(l => l.includes('>| origin server |'))).toBe(true)
 })
 
 test('an edge leaves its box from the border, not from inside the box', () => {

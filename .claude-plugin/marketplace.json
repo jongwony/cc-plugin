@@ -117,7 +117,7 @@
     {
       "name": "epistemic-ink",
       "source": "./epistemic-ink",
-      "description": "Renders Epistemic Ink mermaid diagrams, line charts and 2-D math as terminal figures — only what transcript text cannot draw; East Asian labels line up"
+      "description": "Epistemic Ink output styles with a figure mod that draws the ```mermaid and ```math fences they write as terminal figures — only what transcript text cannot draw; East Asian labels line up"
     }
   ]
 }

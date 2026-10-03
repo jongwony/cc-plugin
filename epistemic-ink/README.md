@@ -1,7 +1,20 @@
 # epistemic-ink
 
-A Claude Code mod that draws, in the terminal transcript, the figures Claude's
-replies cannot write as text — right where the fence was:
+Two Claude Code output styles and a mod that draws the figures they write.
+
+- **Styles** — *Epistemic Ink* and *Proactive Epistemic Ink*, picked as the
+  session's output style. They format replies with Ink's phase headers, gates and
+  insights, and decide when a reply needs a picture at all.
+- **Figure mod** — draws, in the terminal transcript, the figures a reply cannot
+  write as text, right where the fence was.
+
+## How the two work together
+
+When the style judges that the reader's task is taking in relations at once — a
+graph, a flow, states, a sequence, classes, entities — it writes a
+` ```mermaid ` fence; for a two-dimensional formula, a ` ```math ` fence. It
+keeps a picture small enough to hold (about 12 nodes, 24 at most) and never
+draws box art by hand. The mod then draws the fence:
 
 | Fence | Drawn as | What it is for |
 |---|---|---|
@@ -17,11 +30,15 @@ its fence.
 One `ui.render` hook on `AssistantMessage` reads every fence in one pass, so a
 reply holding several figures draws whole.
 
-Needs Claude Code v2.1.287 or later (mods on by default) and the interactive
-terminal. On any other surface, and for a fence that does not parse, is not a
-drawn kind, holds a statement outside the drawn grammar or is wider than the
-terminal, the fence is left as written. The Desktop app draws ` ```math `
+The mod needs Claude Code v2.1.287 or later (mods on by default) and the
+interactive terminal. On any other surface, and for a fence that does not
+parse, is not a drawn kind, holds a statement outside the drawn grammar or is
+wider than the terminal, the fence is left as written. The Desktop app draws ` ```math `
 itself and shows other fences as code.
+
+Where the fence is not drawn, it shows as written — the mermaid or TeX source,
+readable as it is; the styles accept that rather than fall back to hand-drawn
+art. The mod draws such fences under any output style, not only these two.
 
 ## Install
 

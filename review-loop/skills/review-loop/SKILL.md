@@ -136,7 +136,8 @@ failure. A capable source omitting reach leaves the missing report visible as re
 
 ### Phase 2 — Verify and attribute
 
-Call `/inquire` on each finding against the current artifact before acting. Drop a
+Invoke `/inquire` — the skill call itself, for every finding however plain it looks —
+on each finding against the current artifact before acting. Drop a
 refuted finding with its cited basis and no defect provenance. For surviving findings,
 check the asserted issue against the captured base, following moves/renames:
 
@@ -277,7 +278,8 @@ so far, so the driving session records rather than re-derives it.
    limit remains residual.
    Record unavailable checks with their reason and consequence for confidence. These
    checks establish bounded conformance; full re-review independently judges the artifact.
-   Call `/contextualize` once on the whole applied bundle against the design-decision
+   Invoke `/contextualize` — the skill call itself, however small the bundle — once on
+   the whole applied bundle against the design-decision
    ledger and touched-surface conventions.
 5. An adaptation that `/contextualize` actually writes re-enters scan, site screening,
    sweep, and write verification once.

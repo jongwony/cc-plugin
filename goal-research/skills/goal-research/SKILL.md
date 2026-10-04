@@ -50,7 +50,7 @@ Research target:
 {research_question}
 
 Workflow:
-1. Run {inquire} (the Aitesis skill) on the research target, collecting external evidence through Tavily search and Tavily extract. Its reading of each uncertainty, its reach record, and what it leaves open are the report's substance; the lines below refine them for academic research and add no second reading.
+1. Invoke {inquire} — the Aitesis skill call itself — on the research target, collecting external evidence through Tavily search and Tavily extract. Its reading of each uncertainty, its reach record, and what it leaves open are the report's substance; the lines below refine them for academic research and add no second reading.
 2. Open the page of each primary source a filled claim rests on — the paper itself, or its publisher or repository page — with Tavily extract; a search-result snippet alone fills a claim only as "mostly".
 3. No person answers in this session. An uncertainty {inquire} reads as the person's to settle — a value, preference, or scope only they hold, or an unknown that is their own — is neither answered nor settled here: it returns open, with its reach and what would settle it. Fill no held value yourself; a candidate you see is shown as the runner's candidate, beside what decides it.
 4. Cite each external source by its URL.

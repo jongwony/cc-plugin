@@ -1,9 +1,6 @@
 ---
 name: review-loop
 description: "Convergence-paced review-resolve loop over a change and its governing surfaces. Verifies each finding against the codebase and the base it is measured from, then re-reviews until each is disposed of."
-skills:
-  - aitesis:inquire
-  - epharmoge:contextualize
 ---
 
 # Review Loop

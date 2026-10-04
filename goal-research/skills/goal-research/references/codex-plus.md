@@ -22,8 +22,7 @@ prints to stderr.
 
 ## Continue
 
-The goal turn and every continuation resume that session by id. A resumed turn inherits none of
-the session's settings but its sandbox, so pass the model, effort, and working directory again:
+The goal turn and every continuation resume that session by id:
 
 ```bash
 codex-run.sh -S "$thread_id" -m "$model" -r "$effort" -C "$work_dir" \

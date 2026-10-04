@@ -6,7 +6,7 @@ description: |
   "set up Xvfb for CDP", or "expose a CDP port in this sandbox".
   Launches Playwright-bundled Chromium under Xvfb with --remote-debugging-port
   so any CDP client can attach to a headed browser. Linux-only; user-invoked only.
-user_invocable: true
+disable-model-invocation: true
 argument-hint: "[--port N] [--display N] [--chrome PATH] [--ignore-cert-errors]"
 ---
 

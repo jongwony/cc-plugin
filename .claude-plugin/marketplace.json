@@ -113,6 +113,16 @@
       "name": "ink-figure",
       "source": "./ink-figure",
       "description": "Epistemic Ink output style, which also flags with a ↻ line a departure that recurs against a clause of an extension the user maintains, with a figure mod that draws the ```mermaid and ```math fences it writes as terminal figures — only what transcript text cannot draw; East Asian labels line up"
+    },
+    {
+      "name": "goal-research",
+      "source": "./goal-research",
+      "description": "Delegate academic-literature research to a background Claude or Codex run driving Aitesis (/inquire) with Tavily, and check its citations against its own Tavily record (/goal-research)"
+    },
+    {
+      "name": "review-loop",
+      "source": "./review-loop",
+      "description": "Convergence-paced review-resolve loop over a change and its governing surfaces — verifies each finding against the codebase and its base, then re-reviews until each is disposed of (/review-loop)"
     }
   ]
 }

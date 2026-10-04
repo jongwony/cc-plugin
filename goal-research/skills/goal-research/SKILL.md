@@ -11,8 +11,10 @@ Invoke directly with `/goal-research [runner] <research question>` when the user
 
 ## Dependency
 
-The run this skill launches drives **Aitesis** (`/inquire`, `$inquire` on Codex). The
-epistemic-protocols `aitesis` plugin must be installed where the run executes.
+- **Aitesis** (`/inquire`; `$inquire` on Codex) — the run drives it, so the
+  epistemic-protocols `aitesis` plugin must be installed where the run executes.
+- **codex-plus** (this marketplace) — the `codex` runner is launched, continued, and
+  read through it; install it to designate `codex`.
 
 ## Caller Signature
 
@@ -64,7 +66,7 @@ Report {inquire}'s whole record as it stands at completion — and again, whole 
 - Open: every item still open — the person's to settle, reconstructed, or short of ground — each with its reach, the person's marked as theirs.
 ```
 
-Run the brief in the background, in its own context rather than as a fork of this conversation: a Claude run by default — a Claude subagent where the host offers one, else the `claude` CLI — or a `codex exec` session when codex is designated ([invocation](references/codex-exec.md)). Whichever runs, the handoff needs a run this session can continue in the same session and whose own tool record it can read. Where the runner has a goal command, the first continuation is the goal turn, sent once: `/goal {goal condition}` alone, with what remains named in the next message (Phase 3) — a goal command reads everything after `/goal` as its objective, within a length limit the brief can exceed. Every continuation goes to the same session. A runner that cannot be launched is reported with what is missing, and the skill stops there.
+Run the brief in the background, in its own context rather than as a fork of this conversation: a Claude run by default — a Claude subagent where the host offers one, else the `claude` CLI — or a Codex session run through the codex-plus plugin when codex is designated ([invocation](references/codex-plus.md)). Whichever runs, the handoff needs a run this session can continue in the same session and whose own tool record it can read. Where the runner has a goal command, the first continuation is the goal turn, sent once: `/goal {goal condition}` alone, with what remains named in the next message (Phase 3) — a goal command reads everything after `/goal` as its objective, within a length limit the brief can exceed. Every continuation goes to the same session. A runner that cannot be launched is reported with what is missing, and the skill stops there.
 
 ## Phase 3: Reading and Continuation
 

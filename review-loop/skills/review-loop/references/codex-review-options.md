@@ -1,6 +1,6 @@
 # Codex Review Options
 
-Load only when selecting a curated reviewer or native review mode. Inspect the
+Load only when selecting a curated reviewer. Inspect the
 installed recipe and CLI before using it; availability is a local capability.
 Keep the `codex` source and pass the same captured scope and design intent.
 
@@ -15,7 +15,7 @@ OpenAI authorship. The separate [curated skills catalog](https://github.com/open
 is another discovery surface, not proof of installation.
 
 When requested and available, use the installed reviewer template as the fresh
-`codex exec` child's review brief. Fill its requirements and base/head with this
+codex child's review brief. Fill its requirements and base/head with this
 loop's harvested intent and captured pointer. For working-tree scope, supply the
 captured-base diff and untracked paths instead of a committed-head range. The child
 performs review and returns; the surrounding skill's scheduling and repair workflow
@@ -26,13 +26,3 @@ Normalize the template's findings by actual consequence and its explicit assessm
 (`Yes`, `No`, `With fixes`) into the source interface, retaining findings even beside
 an affirmative assessment. Request reach separately where possible; a template
 without reach fields supplies no reach evidence on its own.
-
-## Native Codex review
-
-Codex also exposes `codex review` / `codex exec review`, a CLI mode rather than an
-installable skill. Check the [CLI reference](https://developers.openai.com/codex/cli/reference/)
-and `codex exec review --help`. Where supported, replace the ordinary adapter's final
-`-` with `review -` and pass the pointer and intent entirely in the custom prompt.
-`--base`, `--commit`, and `--uncommitted` conflict with a custom prompt on the CLI
-contract linked here; use one target mechanism, not both. Native output still needs
-normalization and the same completion, scope, and reporting checks.

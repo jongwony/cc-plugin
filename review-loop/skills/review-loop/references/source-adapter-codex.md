@@ -1,8 +1,8 @@
 # Codex CLI Adapter
 
-Use from either host after `source=codex` is designated. Start a fresh child context
-in the reviewed checkout, passing the request through stdin. Resolve the executable and check
-`codex exec --help` for installed flag support.
+Use after `source=codex` is designated. Start a fresh codex session in the reviewed
+checkout through the codex-plus plugin's `codex` skill and its wrapper, `codex-run.sh`,
+following that skill's delegation rules; check `codex-run.sh -h` for the options it takes.
 Unless the user specifies otherwise, retain the review recipe's `gpt-6-astra` model
 and select effort by the diff: `high` for small mechanical work, `xhigh` for substantive
 work, `max` for the most demanding reviews. Record the actual setting. A child using
@@ -29,11 +29,9 @@ Run through the host's supervised/background execution facility and wait for its
 completion signal. This command is the ordinary prompt-based route:
 
 ```bash
-codex exec --ephemeral --json --color never --cd "$review_repo" \
-  -m "$review_model" -c "model_reasoning_effort=\"$review_effort\"" \
-  --sandbox read-only - \
-  < "$review_dir/prompt.txt" \
-  > "$review_dir/events.jsonl" 2> "$review_dir/stderr.txt"
+codex-run.sh -s read-only -C "$review_repo" -m "$review_model" -r "$review_effort" \
+  -o "$review_dir/review.txt" "$review_dir/prompt.txt" \
+  > "$review_dir/stdout.txt" 2> "$review_dir/stderr.txt"
 review_status=$?
 printf '%s\n' "$review_status" > "$review_dir/status.txt"
 ```
@@ -44,23 +42,17 @@ silently substituting. Keep the captured revisions locally available.
 A child unable to read a revision
 or the required files has not completed the requested review.
 
-Stdout is **not pure JSONL**: plain notice lines may accompany events. The filter
-below is load-bearing because one notice otherwise makes `jq -rs` reject the stream.
-Extract the last completed `agent_message`; earlier ones can be progress reports:
+The review is the session's final message, which the wrapper writes to `review.txt`;
+the wrapper propagates codex's exit status. Read the child exit code from `status.txt`:
+a nonzero exit or a missing or empty `review.txt` is not a successful review. Read the
+review verbatim as an LLM, checking that it actually contains a review verdict on the
+requested surface. Read **all** stderr on every outcome, including success; state when
+it was empty. Where the outcome is unclear, the session's rollout file — located by the
+`session id: <uuid>` line on stderr, as codex-plus's `codex-session` skill does — holds
+its full event record. Capture the results before removing the temporary directory;
+the rollout file stays in codex's own session store, which is the user's to remove. A
+terminal failure follows Phase 1's no-review path.
 
-```bash
-grep '^{' "$review_dir/events.jsonl" \
-  | jq -rs '[.[] | select(.type=="item.completed" and .item.type=="agent_message") | .item.text] | last // empty'
-```
-
-Read the child exit code from `status.txt` and inspect terminal events too: progress followed by `turn.failed`
-or nonzero exit is not a successful review. Read the extracted narrative verbatim
-as an LLM, checking that it actually contains a review verdict on the requested
-surface. An empty extraction has no verdict. If extraction fails, inspect raw events
-before deciding whether the source failed. Read **all** stderr on every outcome,
-including success; state when it was empty. Capture the results before removing the
-temporary directory. A terminal failure follows Phase 1's no-review path.
-
-When the user requests a curated review skill or Codex's native review mode, read
-[Codex review options](codex-review-options.md). These change the child review recipe,
+When the user requests a curated review skill, read
+[Codex review options](codex-review-options.md). It changes the child review recipe,
 not the host/source matrix or the loop's disposition authority.

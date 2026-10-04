@@ -13,6 +13,13 @@ and full re-review. Each finding ends in a verified repair, a cited drop, a succ
 handover, or declared residual. Measure the artifact against the project's own stated
 goal and governing conventions, in its declared authority order.
 
+## Dependency
+
+- **Aitesis** (`/inquire`) and **Epharmoge** (`/contextualize`) — called in Phase 2 and
+  Phase 4; the epistemic-protocols `aitesis` and `epharmoge` plugins must be installed.
+- **codex-plus** (this marketplace) — the `codex` source runs through it; install it to
+  designate `codex`.
+
 ## Caller Signature
 
 ```
@@ -29,7 +36,7 @@ Read only that host's reference before determining availability:
 
 | Host | `source=code-review` | `source=codex` | Reference |
 |---|---|---|---|
-| Claude Code | Fork the available Claude `/code-review` skill | Spawn `codex exec` | [Claude Code](references/host-claude-code.md) |
+| Claude Code | Fork the available Claude `/code-review` skill | Run a fresh codex session through codex-plus | [Claude Code](references/host-claude-code.md) |
 | Codex | Spawn `claude -p` with the available `/code-review` skill | Spawn a fresh `codex exec` | [Codex](references/host-codex.md) |
 
 Other hosts may supply the same capabilities. Record the actual host, reviewer, and

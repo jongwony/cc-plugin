@@ -10,8 +10,9 @@ not the model name or the presence of a plugin directory alone.
   otherwise use an available isolated reviewer subagent that calls the skill with
   only the review request. An inline `Skill(...)` call alone does not establish a
   fork. If neither route exists, report this source unavailable.
-- `codex`: resolve the `codex` executable and usable local configuration. This is an
-  external CLI review, regardless of which model drives Claude Code.
+- `codex`: resolve the codex-plus plugin's `codex` skill and the `codex` executable and
+  local configuration its wrapper runs. This is an external CLI review, regardless of
+  which model drives Claude Code.
 
 - Writer fork (Phase 4): the `Agent` tool with `subagent_type: "fork"` inherits the
   loop's context, runs in the background, and keeps its tool output out of the driving

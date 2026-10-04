@@ -1,0 +1,9 @@
+{
+  "name": "review-loop",
+  "description": "Convergence-paced review-resolve loop over a change and its governing surfaces — verifies each finding against the codebase and its base, then re-reviews until each is disposed of (/review-loop)",
+  "version": "1.2.3",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

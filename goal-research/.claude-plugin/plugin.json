@@ -1,0 +1,9 @@
+{
+  "name": "goal-research",
+  "description": "Delegate academic-literature research to a background Claude or Codex run driving Aitesis (/inquire) with Tavily, and check its citations against its own Tavily record (/goal-research)",
+  "version": "1.1.2",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

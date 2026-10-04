@@ -37,7 +37,6 @@ Read only that host's reference before determining availability:
 | Host | `source=code-review` | `source=codex` | Reference |
 |---|---|---|---|
 | Claude Code | Fork the available Claude `/code-review` skill | Run a fresh codex session through codex-plus | [Claude Code](references/host-claude-code.md) |
-| Codex | Spawn `claude -p` with the available `/code-review` skill | Spawn a fresh `codex exec` | [Codex](references/host-codex.md) |
 
 Other hosts may supply the same capabilities. Record the actual host, reviewer, and
 execution route; a new process provides a separate review context, not evidence of

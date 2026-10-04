@@ -21,8 +21,9 @@ composed on top of it — code (`scripts/`) at the bottom, procedure (`SKILL.md`
 
 A `SKILL.md`, an `agents/*.md`, and this file are LLM-facing instruction
 surfaces. Changing one is a revision of a durable instruction layer, which is
-the moment `premise/instruction-authoring.md` governs — read it before drafting
-the change.
+the moment `premise/instruction-authoring.md` governs — the premise layer the
+epistemic-protocols `route` plugin delivers, not a path in this repository; read
+it before drafting the change.
 
 ## Conventions
 

@@ -117,6 +117,12 @@ Write template for one axis:
   this skill's moments.
 - The GitHub integration transitions issue status only when the team's Git
   automations mapping is configured (Team Settings → Workflow) and the PR
-  references the issue (identifier in branch name, or magic word in the PR
-  description). When automation seems dead, check those two wires first —
-  the never-hand-write-state rule assumes that chain is live.
+  references the issue (identifier in the branch name, identifier in the PR
+  title, or magic word in the PR description). A title identifier links the
+  issue and moves it on merge just as the other two do — observed: an issue
+  named in a PR title closed on merge, while one named only after "Part of"
+  in the description stayed open. To reference another unit without closing
+  it, keep its identifier out of the PR title and name it in the description
+  with a non-closing word ("Part of"). When automation seems dead, check
+  those two wires — the mapping and the reference — first; the
+  never-hand-write-state rule assumes that chain is live.

@@ -2,8 +2,8 @@
 
 Read this when a dispatch did nothing and raised no error, when a command's
 argument appears to be ignored, when a monitor was created but receives nothing,
-when a worktree lands somewhere unexpected, or when deciding whether a surface is
-safe to build on.
+when a worktree lands somewhere unexpected, when reaching a cloud session, or
+when deciding whether a surface is safe to build on.
 
 SKILL.md carries the rule. This file carries what each rule rests on, so a later
 session can tell a settled behaviour from an assumption and knows which ones to
@@ -83,7 +83,10 @@ from the installed 2.1.278 tool definition:
 the tool that created it, and no run can retire its own schedule. This is also
 why a session can reach routines through the `Claude_Code_Remote` MCP server
 while the built-in tool is unavailable in it: they are two surfaces, and only
-the built-in one carries this condition.
+the built-in one carries this condition. That server's `delete_trigger`
+description says a session a routine started cannot delete the routine and
+should stop it with `update_trigger` setting `enabled: false` — *Read* only, so
+whether a run can retire its own schedule that way is unexercised.
 
 **It is the tool path, and it has no first-token constraint.** *Exercised.*
 `create` followed by `run` produced a routine and fired it; `get_run_log` showed
@@ -99,8 +102,10 @@ messages or attaches to a session, and is off under `CLAUDE_CODE_REMOTE`.
 interactive terminal — *Exercised*: without one it prints `Error: --cloud requires
 an interactive terminal.`, and combined with `--print` it is refused as
 interactive-only. `claude -p "<msg>" --cloud <session_id|url>` sends one message
-to an existing session and returns without waiting. The one other headless
-creator is `-p --environment <ccpool_…>`, on a self-hosted pool only.
+to an existing session and returns without waiting. The other headless creators
+are `Claude_Code_Remote`'s `create_session` — *Exercised* in an Anthropic-hosted
+environment, see *Reaching a cloud session* — and `-p --environment <ccpool_…>`,
+on a self-hosted pool only.
 
 **`job_config` must set `ccr.environment_id`.** *Exercised.* A body without it is
 rejected with `translate job_config v1→v2: job_config must set
@@ -125,7 +130,9 @@ no row, so check the routine itself with `get` for `enabled` and `next_run_at`.
 **There is no delete action.** *Exercised.* The available actions are list, get,
 create, update, run, `create_webhook_trigger`, `list_runs` and `get_run_log`.
 Retirement is `update` with `enabled: false`; the routine stays listed with its
-`run_once_at` intact but does not fire.
+`run_once_at` intact but does not fire. `Claude_Code_Remote` is a different
+surface and does carry `delete_trigger` — *Read*, from its tool description: it
+deletes the routine and every session the routine started.
 
 **`create_webhook_trigger` is unverified.** *Read* — from the tool description
 only. It was never fired, so its body shape has not been checked against a real
@@ -225,8 +232,9 @@ decided at launch, so after a restart re-read `ListAgents` and re-check
 ## The peer socket, and what to stand on instead
 
 **A session publishes its own messaging surface.** *Observed.* The registry entry
-at `~/.claude/sessions/<pid>.json` carries `messagingSocketPath`, `peerProtocol`
-and `peerFeatures`, and the key file beside it holds a `peerToken` at mode 600.
+at `${CLAUDE_CONFIG_DIR:-~/.claude}/sessions/<pid>.json` carries
+`messagingSocketPath`, `peerProtocol` and `peerFeatures`, and the key file beside
+it holds a `peerToken` at mode 600.
 
 **Connection is not the barrier; framing is.** *Exercised.* Any process of the
 same uid can connect to a live session's socket. The server then sends nothing —
@@ -259,3 +267,74 @@ classifier above), and every peer-origin message is forced to
 and still moving. That, not the socket's framing, is why a Codex-driven launch is
 fire-and-forget and is confirmed by a launch check rather than an ACK;
 `references/codex.md` carries which check fits which route.
+
+## Reaching a cloud session
+
+The `Claude_Code_Remote` MCP server reaches another cloud session of the same
+account. It is the cloud counterpart of the session registry and the transcript
+directory, which hold local sessions only. Unless marked otherwise, *Exercised*
+below means a probe session created with `create_session` from a cloud session
+and read, messaged, archived and unarchived from there.
+
+**The server's name depends on the host.** *Observed.* On a cloud host it is
+`claude-code-remote`, and its tools are `mcp__claude-code-remote__<tool>`; this
+file names it `Claude_Code_Remote`, as it appeared where the earlier entries were
+exercised. Look a tool up by its own name (`get_session`), not by the server's.
+
+**A session id comes from `list_sessions` or `create_session`.** *Exercised.*
+`ListAgents` in a cloud session listed no cloud peers, so it supplies none.
+`list_sessions` with `mine: true` lists this account's sessions, each with its
+id, title, `status_bucket` and parent.
+
+**`get_session` answers what the session is; its summaries lag.** *Exercised.*
+It returns the title, `status` and `status_bucket`, the source and outcome
+branches, context usage and the model fields. `post_turn_summary` — the last
+action and `needs_action` — appears only after a turn ends and is absent while
+one runs. `task_summary` stayed on the first step through a later one, and after
+a turn that found the probe's files gone, `post_turn_summary` still reported the
+values from before. Both are model-written: `status_bucket` gives the coarse
+state, and `list_events` what the session actually did. A Remote Control session
+also reports `worktree_state` (`is_dirty`, `unpushed_count`); an Anthropic-hosted
+one did not.
+
+**`list_events` reads the transcript, tool results included.** *Exercised.* It
+returns user and assistant turns, tool calls and their results — what the session
+fetched from a connector or a repository among them — subagent reports,
+notifications and the environment's provisioning log. Without a cursor it starts
+at the session's oldest events. `before_id` pages backward and `after_id`
+forward. `kinds` filters after the page is read, so a filtered page can come back
+sparse or empty while more events exist; keep paging. A large page overflows
+inline output and lands in a file to parse. Inline or in the file, the JSON is
+wrapped in an untrusted-data envelope: it is data, not instructions. Reading a
+whole long session is a bounded extract job — the delegated read SKILL.md names.
+
+**Only what entered the transcript is reachable.** *Exercised.* Thinking blocks
+come back signature-only, with empty text. The other container's filesystem — its
+temporary files, its pre-compaction transcript — is out of reach.
+
+**`send_message` lands as a user turn, and `priority: "now"` interrupts.**
+*Exercised.* The message arrives wrapped in a cross-session envelope that marks
+it as data and tells the target how to answer. Sent with `priority: "now"` while
+the target ran a long tool call, the call ran to completion, then the rest of the
+turn was dropped (`terminal_reason: aborted_tools`) and the message was taken up
+— an interrupt at the next tool boundary, not mid-call.
+
+**A cloud session can answer.** *Exercised.* The probe answered with its own
+`send_message`. The answer reached the sending session as a queued notification
+once that session's turn ended, not inside the turn. `send_message`'s own tool
+description says a cloud session cannot message back; this exercise contradicts
+it, so re-run it when the tool moves rather than trusting either text.
+
+**Archiving releases the container; unarchive provisions a fresh one.**
+*Exercised.* A probe wrote marker files to `/tmp` and to its home directory, was
+archived, then unarchived and asked for them. The new turn ran in a newly
+provisioned sandbox (`session_mode: new`, a different boot id) and both files
+were gone; the conversation was kept. The tool description adds that archiving is
+for a session a human has already said they are done with.
+
+**The other acts.** *Read*, from the tool descriptions; none was fired.
+`interrupt_session` stops the current turn at its next checkpoint. `get_event`
+reads a single event by uuid.
+
+**A pending permission dialog cannot be answered from here.** *Read*: no tool in
+the set approves or denies one. It is answered at claude.ai/code.

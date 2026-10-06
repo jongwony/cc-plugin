@@ -232,8 +232,9 @@ decided at launch, so after a restart re-read `ListAgents` and re-check
 ## The peer socket, and what to stand on instead
 
 **A session publishes its own messaging surface.** *Observed.* The registry entry
-at `~/.claude/sessions/<pid>.json` carries `messagingSocketPath`, `peerProtocol`
-and `peerFeatures`, and the key file beside it holds a `peerToken` at mode 600.
+at `${CLAUDE_CONFIG_DIR:-~/.claude}/sessions/<pid>.json` carries
+`messagingSocketPath`, `peerProtocol` and `peerFeatures`, and the key file beside
+it holds a `peerToken` at mode 600.
 
 **Connection is not the barrier; framing is.** *Exercised.* Any process of the
 same uid can connect to a live session's socket. The server then sends nothing —

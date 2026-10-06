@@ -21,7 +21,7 @@
 set -o pipefail
 
 RAW="https://raw.githubusercontent.com/jongwony"
-CLAUDE_DIR="$HOME/.claude"
+CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 HOOK="$CLAUDE_DIR/hooks/codex-auth-restore.sh"
 LINEAR_HEADERS="$CLAUDE_DIR/hooks/linear-mcp-headers.sh"
 

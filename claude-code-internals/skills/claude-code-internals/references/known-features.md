@@ -2,6 +2,8 @@
 
 Last updated: 2026-07 (v2.1.199)
 
+`<config>` in a path below is the Claude configuration directory: `$CLAUDE_CONFIG_DIR` when that variable is set, otherwise `~/.claude`.
+
 ## Table of Contents
 1. [Slash Commands](#slash-commands)
 2. [Settings](#settings)
@@ -148,8 +150,8 @@ Found in minified code:
 
 | Concept | Definition | Storage |
 |---------|------------|---------|
-| Session | Single `claude` process invocation | `~/.claude/debug/{UUID}.txt` |
-| Conversation | Message history (may span sessions) | `~/.claude/projects/{project}/{UUID}.jsonl` |
+| Session | Single `claude` process invocation | `<config>/debug/{UUID}.txt` |
+| Conversation | Message history (may span sessions) | `<config>/projects/{project}/{UUID}.jsonl` |
 
 - Each `claude` execution creates new session with `crypto.randomUUID()`
 - `--continue` loads previous conversation but starts **new session**
@@ -159,8 +161,8 @@ Found in minified code:
 
 | Path | Purpose |
 |------|---------|
-| `~/.claude/debug/{UUID}.txt` | Session debug log |
-| `~/.claude/debug/latest` | Symlink to most recent session |
+| `<config>/debug/{UUID}.txt` | Session debug log |
+| `<config>/debug/latest` | Symlink to most recent session |
 
 **Symlink update timing**: Process startup only (not during session)
 
@@ -283,7 +285,7 @@ Valid values: `["user", "project", "local"]`. Invalid values produce an error lo
 
 | Scope | Storage Path | Characteristics |
 |-------|-------------|-----------------|
-| `user` | `~/.claude/agent-memory/{agent-name}/` | Shared across all projects; general learnings |
+| `user` | `<config>/agent-memory/{agent-name}/` | Shared across all projects; general learnings |
 | `project` | `{project}/.claude/agent-memory/{agent-name}/` | Project-specific; checked into VCS (team shared) |
 | `local` | `{project}/.claude/agent-memory-local/{agent-name}/` | Project-specific; NOT in VCS (personal) |
 
@@ -606,7 +608,7 @@ Related flags: `tengu_cobalt_plinth_fern` (baseVersion), `tengu_frame_publish_co
 
 - `file_path → url` mapping lives in **in-memory app state** (`frameUrls[file_path] = {url, updatedAt, title, favicon, capabilities}` — `favicon` is the v2.1.199 field name, see the drift notice on its deprecation in the tool schema), not on disk → this is why "same file path redeploys to the same URL **within a session**."
 - Version-view map `artifactReadVersions[slug]` (for baseVersion checks) is likewise app state.
-- **No `~/.claude` cache of artifact URLs/IDs**; a fresh session mints a new URL and the `url` param is the only way to target an existing artifact. (`tengu_cobalt_plinth_reader_persist`, default off, hints at future disk persistence.)
+- **No `<config>` cache of artifact URLs/IDs**; a fresh session mints a new URL and the `url` param is the only way to target an existing artifact. (`tengu_cobalt_plinth_reader_persist`, default off, hints at future disk persistence.)
 
 ### Key Symbols (re-location)
 

@@ -55,7 +55,7 @@ strings "$BINARY_PATH" | grep -E "autoCompact|permission|model|theme"
 strings "$BINARY_PATH" | grep -E "default.*true|default.*false|default.*:"
 
 # Settings file locations
-# ~/.claude/settings.json (global)
+# ${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json (global)
 # .claude/settings.json (project)
 ```
 

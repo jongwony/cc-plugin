@@ -34,7 +34,7 @@
 set -o pipefail
 
 RAW="https://raw.githubusercontent.com/jongwony"
-CLAUDE_DIR="$HOME/.claude"
+CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 SETTINGS="$CLAUDE_DIR/settings.json"
 
 command -v python3 >/dev/null 2>&1 || { echo "Error: python3 not found." >&2; exit 1; }
@@ -79,7 +79,7 @@ rm -f "$claude_log"
 # survives, assuming nothing about which shell init the agent phase reads.
 if ! command -v claude >/dev/null 2>&1; then
   claude_bin=""
-  for c in "$HOME/.local/bin/claude" "$HOME/.claude/local/claude"; do
+  for c in "$HOME/.local/bin/claude" "$CLAUDE_DIR/local/claude" "$HOME/.claude/local/claude"; do
     [ -x "$c" ] && { claude_bin="$c"; break; }
   done
   [ -n "$claude_bin" ] || { echo "Error: the installer reported success but no claude binary was found." >&2; exit 1; }

@@ -1,6 +1,8 @@
 ---
 name: goal-research
 description: Delegate academic-literature research to a background Claude or Codex run using Aitesis and Tavily; check its citations against its Tavily record until the goal holds. User-invoked via /goal-research.
+skills:
+  - aitesis:inquire
 ---
 
 # Goal Research

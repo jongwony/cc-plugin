@@ -251,8 +251,10 @@ claude rm  <jobId>     # retires it: removes worktree and job state
 - **`RemoteTrigger` has no delete.** Retire a routine with `update` setting `enabled: false`.
   `Claude_Code_Remote`'s `delete_trigger` does delete, and takes every session the routine
   started with it.
-- **A routine's own runs cannot retire it.** `RemoteTrigger` is disabled wherever
-  `CLAUDE_CODE_REMOTE` is set, which is every session a routine fires. So a recurrence outlives
+- **A routine's own runs cannot retire it through `RemoteTrigger`.** The tool is disabled
+  wherever `CLAUDE_CODE_REMOTE` is set, which is every session a routine fires.
+  `Claude_Code_Remote`'s `update_trigger` may reach it from such a run, but that is unexercised
+  (`references/harness.md`). So until a run has retired its own routine, a recurrence outlives
   the completion condition of the work it carries unless someone else ends it: name that owner
   when the routine is created and give them the `trigger_id`, or the bounded work keeps
   spawning runs after it is done.

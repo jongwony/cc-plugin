@@ -83,7 +83,10 @@ from the installed 2.1.278 tool definition:
 the tool that created it, and no run can retire its own schedule. This is also
 why a session can reach routines through the `Claude_Code_Remote` MCP server
 while the built-in tool is unavailable in it: they are two surfaces, and only
-the built-in one carries this condition.
+the built-in one carries this condition. That server's `delete_trigger`
+description says a session a routine started cannot delete the routine and
+should stop it with `update_trigger` setting `enabled: false` — *Read* only, so
+whether a run can retire its own schedule that way is unexercised.
 
 **It is the tool path, and it has no first-token constraint.** *Exercised.*
 `create` followed by `run` produced a routine and fired it; `get_run_log` showed

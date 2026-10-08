@@ -20,6 +20,16 @@ Claude `/code-review` implementation to the Source Interface in `SKILL.md`.
   it. A raw PR number alone addresses remote PR state and can omit local or stacked
   repairs.
 
+The skill's forked execution receives its args string and no conversation context,
+so the design-intent bundle reaches it through a file. Write the bundle to a unique
+temporary directory outside the reviewed checkout (`mktemp -d`), keeping it off the
+reviewed surface, and rewrite it when the bundle changes. The args point at that
+path: before reviewing, read the constituted design decisions there and treat them as
+design intent; a defect a decision itself causes remains reportable. The file is
+reviewer context, so Phase 0 rule 5 keeps dispositions, fix-status claims, and
+do-not-reflag instructions out of it. Beside the diff pointer and that path, the args
+name the governing surfaces and ask the Source Interface's closure questions.
+
 Preserve the native result, then normalize only a completed review:
 
 - A findings-array implementation: an explicit valid `[]` yields `approve`; a

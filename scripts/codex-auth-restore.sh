@@ -2,11 +2,12 @@
 # Restore the Codex CLI login from CODEX_AUTH_JSON_B64 when no auth.json exists.
 #
 # Codex keeps its login in $CODEX_HOME/auth.json (default ~/.codex/auth.json).
-# A cloud container has no interactive `codex login`, so the environment carries
-# the file's contents base64-encoded in CODEX_AUTH_JSON_B64 and this script
-# writes it back. It runs as a user-level SessionStart hook, installed by
-# scripts/cloud-setup.sh, because the environment's variables reach the Claude
-# Code session but not the setup script that provisions the container.
+# A cloud container starts with no login, and `codex login --device-auth` can
+# add one only with a person approving it in each new container, so the
+# environment carries the file's contents base64-encoded in CODEX_AUTH_JSON_B64
+# and this script writes it back. It runs as a user-level SessionStart hook,
+# installed by scripts/cloud-setup.sh, because the environment's variables reach
+# the Claude Code session but not the setup script that provisions the container.
 #
 # Idempotent: an existing auth.json is left untouched. Always exits zero — a
 # missing login is reported, not fatal, so the session still starts.

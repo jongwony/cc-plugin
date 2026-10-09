@@ -67,6 +67,7 @@ Modifiers, added to any base pattern above:
 
 ## Error Handling
 - Stop and report failures whenever `codex --version` or a `codex exec` command exits non-zero; request direction before retrying.
+  When the failure is codex's login — a 401, `refresh_token_reused`, or no login — and the user takes up signing in again, read `references/auth.md` for how the re-login proceeds.
 - Before you select `-s danger-full-access`, ask the user for permission using AskUserQuestion unless it was already given. `--skip-git-repo-check` is not a choice you make: the wrapper passes it on every run, because a prompt file in a scratchpad is routinely outside any repository.
 - When output includes warnings or partial results, report them beside the outcome summary.
 

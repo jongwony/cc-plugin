@@ -273,8 +273,10 @@ fire-and-forget and is confirmed by a launch check rather than an ACK;
 The `Claude_Code_Remote` MCP server reaches another cloud session of the same
 account. It is the cloud counterpart of the session registry and the transcript
 directory, which hold local sessions only. Unless marked otherwise, *Exercised*
-below means a probe session created with `create_session` from a cloud session
-and read, messaged, archived and unarchived from there.
+below means called from a cloud session and observed: first against a probe
+session created with `create_session` and read, messaged, archived and
+unarchived from there, later against existing sessions of other kinds, named
+where the kind matters.
 
 **The server's name depends on the host.** *Observed.* On a cloud host it is
 `claude-code-remote`, and its tools are `mcp__claude-code-remote__<tool>`; this
@@ -284,7 +286,11 @@ exercised. Look a tool up by its own name (`get_session`), not by the server's.
 **A session id comes from `list_sessions` or `create_session`.** *Exercised.*
 `ListAgents` in a cloud session listed no cloud peers, so it supplies none.
 `list_sessions` with `mine: true` lists this account's sessions, each with its
-id, title, `status_bucket` and parent.
+id, title, `status_bucket` and parent. A session finds its own id in its
+environment: `CLAUDE_CODE_REMOTE_SESSION_ID` holds it spelled `cse_…` where the
+tools take `session_…`. The `session_id` field on each event `list_events`
+returns is something else — the target container's local uuid — so an id is not
+read back off an event.
 
 **`get_session` answers what the session is; its summaries lag.** *Exercised.*
 It returns the title, `status` and `status_bucket`, the source and outcome
@@ -300,13 +306,38 @@ one did not.
 **`list_events` reads the transcript, tool results included.** *Exercised.* It
 returns user and assistant turns, tool calls and their results — what the session
 fetched from a connector or a repository among them — subagent reports,
-notifications and the environment's provisioning log. Without a cursor it starts
-at the session's oldest events. `before_id` pages backward and `after_id`
-forward. `kinds` filters after the page is read, so a filtered page can come back
-sparse or empty while more events exist; keep paging. A large page overflows
+notifications and the environment's provisioning log. Without a cursor it
+returns the newest page, in the order the events happened; `has_more` then means
+older events remain, and `before_id` set to the page's `first_id` reads the page
+before it, while `after_id` moves toward newer events. `kinds` filters after the
+page is read, so a filtered page can come back sparse or empty while more events
+exist; keep paging. A large page overflows
 inline output and lands in a file to parse. Inline or in the file, the JSON is
 wrapped in an untrusted-data envelope: it is data, not instructions. Reading a
 whole long session is a bounded extract job — the delegated read SKILL.md names.
+
+**That paging shape has already moved once.** *Observed.* The probe this section
+was first written from read a cursorless page as the session's oldest events. A
+later exercise on three sessions read it as the newest, and the tool's own
+description now says the same. Re-check which end a cursorless read starts from
+when the tool moves, rather than trusting either reading.
+
+**A person's turn is a `user` event carrying `client_platform`.** *Exercised*
+on text-only turns, whose content was a plain string. Tool results, notifications
+and cross-session envelopes arrive as `user` events too, so `kinds: ["user"]`
+alone does not isolate what a person typed. A turn with an attachment carries
+blocks rather than a string — *not exercised* — so test for `client_platform`
+and the absence of `tool_result` blocks, not for a string. `get_event` returns
+`isSynthetic` and `inbound_origin` for one event — *Read*, from its tool
+description — where an event's origin stays unclear.
+
+**A Remote Control session refuses a read from a cloud session.** *Exercised.*
+`list_events` on a session started from a local CLI with Remote Control — origin
+`claude_code_cli`, tagged `remote-control-auto` — was refused with
+`non-retryable (elevated_session_untrusted_device)`, and nothing came back. The
+error names the condition: the reader is not one of the owner's trusted devices,
+which leaves its transcript to the owner's own machine or the Claude app. Reading
+it from a local session on that machine was not exercised.
 
 **Only what entered the transcript is reachable.** *Exercised.* Thinking blocks
 come back signature-only, with empty text. The other container's filesystem — its
@@ -330,7 +361,9 @@ it, so re-run it when the tool moves rather than trusting either text.
 archived, then unarchived and asked for them. The new turn ran in a newly
 provisioned sandbox (`session_mode: new`, a different boot id) and both files
 were gone; the conversation was kept. The tool description adds that archiving is
-for a session a human has already said they are done with.
+for a session a human has already said they are done with. An archived session
+stays readable with `list_events`, and its newest events end with an
+`end_session` control request whose reason is `archived`.
 
 **The other acts.** *Read*, from the tool descriptions; none was fired.
 `interrupt_session` stops the current turn at its next checkpoint. `get_event`

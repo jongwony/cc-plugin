@@ -322,10 +322,14 @@ later exercise on three sessions read it as the newest, and the tool's own
 description now says the same. Re-check which end a cursorless read starts from
 when the tool moves, rather than trusting either reading.
 
-**A person's turn is a `user` event with plain-string content.** *Exercised.*
-That event also carries `client_platform`. Tool results, notifications and
-cross-session envelopes arrive as `user` events too, so `kinds: ["user"]` alone
-does not isolate what a person typed.
+**A person's turn is a `user` event carrying `client_platform`.** *Exercised*
+on text-only turns, whose content was a plain string. Tool results, notifications
+and cross-session envelopes arrive as `user` events too, so `kinds: ["user"]`
+alone does not isolate what a person typed. A turn with an attachment carries
+blocks rather than a string — *not exercised* — so test for `client_platform`
+and the absence of `tool_result` blocks, not for a string. `get_event` returns
+`isSynthetic` and `inbound_origin` for one event — *Read*, from its tool
+description — where an event's origin stays unclear.
 
 **A Remote Control session refuses a read from a cloud session.** *Exercised.*
 `list_events` on a session started from a local CLI with Remote Control — origin

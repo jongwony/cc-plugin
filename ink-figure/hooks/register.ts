@@ -1,4 +1,4 @@
-import type { EngineInterface, Register, Timer } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
 import { SERIES_COLOURS, type Role, type Segment } from './diagrams.ts'
 import { fencesOf, piecesOf, type MathPicture } from './figures.ts'
 import { INK, inkOf, type Ink } from './math.ts'
@@ -26,15 +26,12 @@ const STYLE: Record<Role, { color?: string; dimColor?: boolean }> = {
 }
 
 // the math ink for the current theme: read when the session starts, kept in step by
-// a theme change through /config, read on demand only while still unknown, and read
-// again every THEME_POLL_MS once a formula has been drawn, since /theme changes the
-// theme without a config.set; a read that fails settles on the ink that reads on
+// config.set on `theme` (the path /config and /theme both save through), and read on
+// demand only while still unknown; a read that fails settles on the ink that reads on
 // either theme. A read answers only while no theme change landed after it began:
 // `themeSet` counts those changes.
-const THEME_POLL_MS = 5000
 let themeInk: Ink | null = null
 let themeSet = 0
-let themePoll: Timer | null = null
 
 const readTheme = async ($: EngineInterface): Promise<Ink> => {
   const began = themeSet
@@ -46,14 +43,6 @@ const readTheme = async ($: EngineInterface): Promise<Ink> => {
   }
   if (themeSet === began) themeInk = ink
   return themeInk ?? ink
-}
-
-// a new ink redraws the formulas already in the transcript; a render is otherwise
-// reused until its props or viewport change
-const rereadTheme = async ($: EngineInterface): Promise<void> => {
-  const before = themeInk
-  await readTheme($)
-  if (themeInk !== before) $.ui.invalidate('ui.render')
 }
 
 export const register: Register = on => {
@@ -83,7 +72,6 @@ export const register: Register = on => {
     const fences = fencesOf(text)
     if (fences.length === 0) return next(e)
     const math = fences.some(f => f.lang === 'math')
-    if (math && themePoll === null) themePoll = $.clock.every(THEME_POLL_MS, () => void rereadTheme($))
     const ink = themeInk ?? (math ? await readTheme($) : INK.either)
     const pieces = piecesOf(text, (e.viewport?.columns ?? 80) - INLINE_MARGIN, ink, fences)
     if (!pieces) return next(e)

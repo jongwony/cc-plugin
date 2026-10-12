@@ -3,11 +3,11 @@ import { grammarOf } from '../hooks/grammar.ts'
 import { cached, verdictsOf } from '../hooks/figures.ts'
 import { reportOf } from '../hooks/report.ts'
 
-// the fence a reply carried that did not draw: edge labels with a space
+// a fence outside the drawn grammar: a dotted edge
 const BAD = [
   'flowchart TD',
   '  A[반복되는 교정] --> B{판정이 정해진 상태만으로 나오는가}',
-  '  B -->|계약 구조| C[Lean: 표현 자체를 불가능하게]',
+  '  B -.-> C[Lean: 표현 자체를 불가능하게]',
   '  B -->|문맥이 정함| E[판단: 리뷰]',
 ].join('\n')
 const GOOD = 'graph LR\n  A[request] --> B[cache]\n  B --> C[resp]'

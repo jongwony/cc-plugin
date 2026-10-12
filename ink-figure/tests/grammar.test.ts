@@ -1,5 +1,6 @@
 import { expect, test } from 'claude-code/testing'
-import { drawn, plainOf } from '../hooks/diagrams.ts'
+import { drawn, looseEndOf, plainOf, renderOf, SPACING, type Role } from '../hooks/diagrams.ts'
+import { renderMermaidAscii } from '../hooks/vendor/mermaid-ascii.js'
 import { piecesOf } from '../hooks/figures.ts'
 
 // Each allowed statement form draws what it says; each form the renderer was found
@@ -66,8 +67,65 @@ test('flowchart: two edges between one pair, either way round, keep the fence', 
   expect(kept('graph LR\n  A --> B\n  A --> B')).toBe(true)
 })
 
-test('flowchart: an edge label with a space, which draws as line, keeps the fence', () => {
-  expect(kept('graph LR\n  A -->|yes please| B')).toBe(true)
+test('flowchart: an edge label with a space is drawn whole on its edge', () => {
+  expect(art('graph LR\n  A -->|yes please| B').some(l => /A ├─*yes please─*►│ +B/.test(l))).toBe(true)
+  const hangul = art('graph LR\n  A[요청] --> B{판단}\n  B -->|계약 구조| C[Lean]\n  B -->|문맥이 정함| D[리뷰]')
+  expect(hangul.some(l => /판단 ├─+계약 구조─+►│ +Lean/.test(l))).toBe(true)
+  expect(hangul.some(l => /└─+문맥이 정함─+►│ +리뷰/.test(l))).toBe(true)
+  expect(art('graph LR\n  A -->| yes please | B').some(l => /A ├─*yes please─*►│ +B/.test(l))).toBe(true)
+})
+
+test('flowchart: a long label on one edge of a fan-out leaves its sibling edges joined to the source box', () => {
+  for (const label of ['context_decides', 'context decides']) {
+    const lines = art(`flowchart LR\n  A[fix] --> B{judge}\n  B -->|contract| C[Lean]\n  B -->|${label}| E[review]`)
+    expect(lines.some(l => /judge ├─+contract─+►│ +Lean/.test(l))).toBe(true)
+    expect(lines.some(l => new RegExp(`└─+${label}─+►│ +review`).test(l))).toBe(true)
+  }
+})
+
+test('a drawing with an edge detached from its box is refused', () => {
+  // the drawing main passed: B→C's stroke starts in the blank after `judge`'s border
+  const seg = (text: string, role: Role | null) => ({ text, role })
+  const border = (text: string) => [seg(text, 'border')]
+  const detached = [
+    border('┌─────┐   ◇───────◇                          ┌────────┐'),
+    [seg('│', 'border'), seg(' fix ', 'text'), seg('├', 'junction'), seg('──', 'line'), seg('►', 'arrow'), seg('│', 'border'), seg(' judge ', 'text'),
+      seg('│', 'border'), seg('        ', null), seg('────', 'line'), seg('contract', 'text'), seg('─────', 'line'), seg('►', 'arrow'), seg('│', 'border'), seg('  Lean  ', 'text'), seg('│', 'border')],
+    border('└─────┘   ◇───────◇                          └────────┘'),
+  ]
+  expect(looseEndOf(detached)).toContain('an edge drawn detached')
+  const joined = drawn('graph LR\n  A[a] --> B[b]', 200)
+  expect('lines' in joined && looseEndOf(joined.lines)).toBe(null)
+})
+
+test('a box-drawing character inside a node label is the box\'s text, not a detached edge', () => {
+  const art = renderOf('graph LR\n  A[a ─ b] --> B')
+  expect('lines' in art && art.lines.map(plainOf).some(l => l.includes('│ a ─ b ├──►│ B │'))).toBe(true)
+})
+
+test('a stroke that runs into a label it does not run through, or a label on a box border, is refused', () => {
+  // main drew these: C→D's vertical under the `d` of `cd`, `ef` on B's bottom border; `lab` on C's top border
+  for (const source of [
+    'flowchart LR\n A -->|ab| B\n B -->|cd| C\n C -->|ef| D\n A -->|very_long_skip_label| D',
+    'flowchart LR\n  B -->|lablab| A\n  C -->|lab| B',
+  ]) {
+    const art = renderOf(source)
+    expect('error' in art && /a label drawn on a box border|an edge drawn detached/.test(art.error)).toBe(true)
+  }
+})
+
+test('a label\'s space keeps the stroke beneath it, so a label split by a crossing is refused, not drawn over it', () => {
+  const source = 'flowchart LR\n  B --> D\n  C -->|a b c| A\n  B --> C\n  D -->|a b c| E\n  D -->|go on| C'
+  const raw = renderMermaidAscii(source, { useAscii: false, ...SPACING, colorMode: 'none' } as any)
+  expect(raw).toContain('go┬on')
+  const art = renderOf(source)
+  expect('error' in art && art.error).toContain('the drawing lost "go on"')
+})
+
+test('ASCII strokes are held to the same joins', () => {
+  const seg = (text: string, role: Role | null) => ({ text, role })
+  expect(looseEndOf([[seg('|', 'border'), seg(' A ', 'text'), seg('|', 'border'), seg('  ', null), seg('-->', 'line'), seg('|', 'border')]])).toContain('an edge drawn detached')
+  expect(looseEndOf([[seg('|', 'border'), seg(' A ', 'text'), seg('|', 'border'), seg('--', 'line'), seg('>', 'arrow'), seg('|', 'border')]])).toBe(null)
 })
 
 test('flowchart: other edge shapes, chains, `&`, and other node shapes keep the fence', () => {
@@ -93,6 +151,11 @@ test('state: start, end, transitions with labels, names and descriptions draw', 
   for (const label of ['Waiting room', 'start', 'working']) expect(rowOf(lines, label)).toBeGreaterThan(-1)
   expect(lines.some(l => l.includes('●'))).toBe(true)
   expect(lines.some(l => l.includes('╔'))).toBe(true)
+})
+
+test('state: a transition label with a space is drawn whole', () => {
+  const lines = art('stateDiagram-v2\n  direction LR\n  A --> B : go on\n  B --> C : wait a bit')
+  expect(lines.some(l => /A ├─*go on─*►│ B ├─*wait a bit─*►│ C/.test(l))).toBe(true)
 })
 
 test('state: a branching diagram is drawn sideways, each transition an arrow', () => {

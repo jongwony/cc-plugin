@@ -65,6 +65,10 @@ const directed = (source: string): string => {
   return withHeader(source, header, `${line.replace(/\s*;?\s*$/, '')} TD`)
 }
 
+// a flowchart edge label written with padding, `-->| yes |`, is the label `yes`
+const PADDED_LABEL = /-->([ \t]*)\|[ \t]*([^|\n]*?)[ \t]*\|/g
+const trimmedLabels = (source: string): string => source.replace(PADDED_LABEL, (_, gap: string, label: string) => `-->${gap}|${label}|`)
+
 // an xychart is drawn only when it holds a line: bars are written as text
 const LINE_SERIES = /^[ \t]*line\b/m
 
@@ -130,11 +134,12 @@ export const displayWidth = (s: string): number => {
 // An astral character already has two units. A code point the terminal draws in
 // fewer cells than its units — a combining mark, a joiner, a modifier or flag
 // half that merges with its neighbour, an astral character one cell wide — cannot
-// be laid out, and neither can a source that already holds the placeholder, nor a
-// control character (a tab, an escape) inside a statement, which the terminal
-// draws in some other number of cells or not at all.
+// be laid out, and neither can a source that already holds the placeholder or the
+// vendor's label-space placeholder (U+E001, scripts/patches.mjs), nor a control
+// character (a tab, an escape) inside a statement, which the terminal draws in some
+// other number of cells or not at all.
 const CELL = '\uE000'
-const UNPLACEABLE = /[\p{M}\p{Cf}\u1160-\u11ff\ud7b0-\ud7ff\u{1f1e6}-\u{1f1ff}\u{1f3fb}-\u{1f3ff}\uE000]/u
+const UNPLACEABLE = /[\p{M}\p{Cf}\u1160-\u11ff\ud7b0-\ud7ff\u{1f1e6}-\u{1f1ff}\u{1f3fb}-\u{1f3ff}\uE000\ue001]/u
 const CONTROL = /\p{Cc}/u
 const unplaceableOf = (source: string): string | undefined => {
   const mark = UNPLACEABLE.exec(source)?.[0]
@@ -291,12 +296,100 @@ export const compacted = (lines: readonly Segment[][]): Segment[][] => {
   return out
 }
 
+// A flowchart or state drawing joins every edge to the boxes it runs between. Each
+// cell of an edge (a line, a corner, a junction or an arrowhead, by the role the
+// renderer drew it in) reaches out on the sides its glyph opens to, and the cell there
+// must open back toward it, or be a box's border, which an edge meets on any side; a
+// label on the edge is passed through along the edge's own axis, so a stroke that runs
+// into a label it does not run through is loose. An arrowhead is fed on some side other
+// than its tip, and its tip needs only a mark to land on. An ASCII `+`, `.` or `'` stands
+// for any corner or crossing, so it needs two sides joined, not all four. A label drawn
+// between two strokes of a box border sits on the box rather than its edge. Box borders
+// and the text inside boxes are the boxes' own and are not read.
+type Side = 'U' | 'D' | 'L' | 'R'
+const STEP: Record<Side, readonly [number, number]> = { U: [-1, 0], D: [1, 0], L: [0, -1], R: [0, 1] }
+const BACK: Record<Side, Side> = { U: 'D', D: 'U', L: 'R', R: 'L' }
+const OPENS: Record<string, string> = {
+  '─': 'LR', '│': 'UD', '┌': 'RD', '┐': 'LD', '└': 'UR', '┘': 'UL', '╭': 'RD', '╮': 'LD', '╰': 'UR', '╯': 'UL',
+  '├': 'UDR', '┤': 'UDL', '┬': 'LRD', '┴': 'LRU', '┼': 'UDLR',
+  '-': 'LR', '|': 'UD', '+': 'UDLR', '.': 'UDLR', "'": 'UDLR',
+}
+// an arrowhead opens back toward its tail and points at its tip
+const ARROW: Record<string, readonly [Side, Side]> = {
+  '►': ['L', 'R'], '>': ['L', 'R'], '◄': ['R', 'L'], '<': ['R', 'L'],
+  '▼': ['U', 'D'], 'v': ['U', 'D'], '▲': ['D', 'U'], '^': ['D', 'U'],
+}
+const EDGE_ROLES: ReadonlySet<Role> = new Set(['line', 'corner', 'junction', 'arrow'])
+const ANY_CORNER = new Set(['+', '.', "'"])
+const SIDES: readonly Side[] = ['U', 'D', 'L', 'R']
+type Cell = { c: string; role: Role | null }
+
+const cellGridOf = (lines: readonly (readonly Segment[])[]): Cell[][] =>
+  lines.map(line => {
+    const cells: Cell[] = []
+    for (const seg of line)
+      for (const c of seg.text) {
+        cells.push({ c, role: seg.role })
+        if (cellsOf(c.codePointAt(0)!) === 2) cells.push({ c: '', role: seg.role })
+      }
+    return cells
+  })
+
+const opensOf = (cell: Cell): string => (cell.role === 'arrow' ? (ARROW[cell.c] ?? ['', ''])[0] : (OPENS[cell.c] ?? ''))
+
+export const looseEndOf = (lines: readonly (readonly Segment[])[]): string | null => {
+  const grid = cellGridOf(lines)
+  const at = (r: number, j: number): Cell | undefined => grid[r]?.[j]
+  const answers = (r: number, j: number, side: Side): boolean => {
+    const [dr, dj] = STEP[side]
+    let rr = r + dr, jj = j + dj
+    // through a label lying on the edge, along the edge's axis
+    while (at(rr, jj)?.role === 'text') { rr += dr; jj += dj }
+    const next = at(rr, jj)
+    if (!next || next.c === ' ' || next.c === '') return false
+    if (next.role === 'border') return true
+    // an arrowhead is fed on any side; its own check holds it to one
+    if (next.role === 'arrow') return true
+    return (OPENS[next.c] ?? '').includes(BACK[side])
+  }
+  for (let r = 0; r < grid.length; r++) {
+    const row = grid[r]!
+    for (let j = 0; j < row.length; j++) {
+      const cell = row[j]!
+      if (cell.role === 'text' && (j === 0 || row[j - 1]!.role !== 'text')) {
+        let k = j
+        while (row[k + 1]?.role === 'text') k++
+        const left = row[j - 1], right = row[k + 1]
+        if (left?.role === 'border' && right?.role === 'border' && OPENS[left.c]?.includes('R') && OPENS[right.c]?.includes('L'))
+          return `a label drawn on a box border at row ${r + 1}, column ${j + 1}`
+        continue
+      }
+      if (cell.role === null || !EDGE_ROLES.has(cell.role)) continue
+      const loose = `an edge drawn detached at row ${r + 1}, column ${j + 1}`
+      if (cell.role === 'arrow') {
+        const tip = ARROW[cell.c]?.[1]
+        if (tip === undefined) continue
+        const [dr, dj] = STEP[tip]
+        const landing = at(r + dr, j + dj)
+        if (!landing || landing.c === ' ' || landing.c === '' || !SIDES.some(side => side !== tip && answers(r, j, side))) return loose
+        continue
+      }
+      if (ANY_CORNER.has(cell.c)) {
+        if (SIDES.filter(side => answers(r, j, side)).length < 2) return loose
+        continue
+      }
+      for (const side of opensOf(cell) as Iterable<Side>) if (!answers(r, j, side)) return loose
+    }
+  }
+  return null
+}
+
 export const renderOf = (source: string, useAscii = false): Rendered => {
   const kind = kindOf(source)
   if (!DRAWN_KINDS.has(kind)) return { error: `${kind} diagrams are not drawn` }
   if (kind === 'xychart' && !LINE_SERIES.test(source)) return { error: 'a chart with no line series is written as text' }
   if (source.length > MAX_SOURCE_CHARS) return { error: `too big to draw (${source.length} characters)` }
-  const composed = directed(source).normalize('NFC')
+  const composed = (kind === 'flowchart' ? trimmedLabels(directed(source)) : directed(source)).normalize('NFC')
   const unplaceable = unplaceableOf(composed)
   if (unplaceable) return { error: `U+${unplaceable.codePointAt(0)!.toString(16).toUpperCase()} cannot be laid out in cells` }
   const grammar = grammarOf(composed, kind)
@@ -312,7 +405,7 @@ export const renderOf = (source: string, useAscii = false): Rendered => {
     while (lines.length > 0 && lines[0]!.length === 0) lines.shift()
     if (lines.length === 0 || lines.every(l => plainOf(l).trim() === '')) return { error: 'nothing to draw' }
     if (kind !== 'xychart') lines = compacted(lines)
-    const unfaithful = faithfulTo(grammar, lines.map(plainOf))
+    const unfaithful = faithfulTo(grammar, lines.map(plainOf)) ?? (kind === 'flowchart' || kind === 'state' ? looseEndOf(lines) : null)
     return unfaithful ? { error: unfaithful } : { lines }
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) }

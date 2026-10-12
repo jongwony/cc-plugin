@@ -450,11 +450,13 @@ const inked = (rgba: Uint8Array): boolean => {
   return false
 }
 
-// The formula as pixels on a box of whole cells, the box no wider than `columns`:
-// the bitmap is padded to columns × rows cells of CELL_PX so the terminal scales it
-// without distortion, the formula at the left and centred top to bottom. The box
-// covers the viewBox and any outline drawn past it (a \smash, an \rlap).
-export const mathOf = (source: string, columns: number, ink: Ink): MathRendered => {
+// The formula laid out on a box of whole cells, the box no wider than `columns`, without
+// filling a pixel: what a verdict needs, and what `mathOf` fills. The bitmap is padded
+// to columns × rows cells of CELL_PX so the terminal scales it without distortion, the
+// formula at the left and centred top to bottom. The box covers the viewBox and any
+// outline drawn past it (a \smash, an \rlap).
+type MathLayout = { shapes: Shape[]; width: number; height: number; columns: number; rows: number }
+export const mathLayoutOf = (source: string, columns: number): MathLayout | { error: string } => {
   const tex = unwrapped(source)
   if (tex === '') return { error: 'nothing to draw' }
   if (tex.length > MAX_TEX_CHARS) return { error: `too big to draw (${tex.length} characters)` }
@@ -487,6 +489,18 @@ export const mathOf = (source: string, columns: number, ink: Ink): MathRendered 
       const [l, t] = px([clip[0], clip[1]]), [r, b] = px([clip[2], clip[3]])
       return { rings: rings.map(ring => ring.map(px)), clip: [l, t, r, b] }
     })
+    return { shapes, width, height, columns: cols, rows }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+// The formula as pixels on its layout's box.
+export const mathOf = (source: string, columns: number, ink: Ink): MathRendered => {
+  const layout = mathLayoutOf(source, columns)
+  if ('error' in layout) return layout
+  const { shapes, width, height, columns: cols, rows } = layout
+  try {
     const rgba = filled(shapes, width, height, ink)
     if (!inked(rgba)) return { error: 'nothing to draw' }
     return { rgba, width, height, columns: cols, rows }

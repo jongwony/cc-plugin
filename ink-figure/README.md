@@ -43,7 +43,10 @@ itself and shows other fences as code.
 
 Where the fence is not drawn, it shows as written — the mermaid or TeX source,
 readable as it is; the style accepts that rather than fall back to hand-drawn
-art. The mod draws such fences under any output style, not only this one.
+art. The mod draws such fences under any output style, not only this one. When a
+turn ends, each fence of its reply that would not draw is reported to the model
+with the renderer's reason, in a row the model reads and the reader does not see,
+so the figures it writes later fit what draws; the reply itself stands as written.
 
 ## Install
 

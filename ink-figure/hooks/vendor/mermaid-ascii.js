@@ -1406,9 +1406,18 @@ function determineLabelLine(graph, edge) {
   }
   const minX = Math.min(largestLine[0].x, largestLine[1].x);
   const maxX = Math.max(largestLine[0].x, largestLine[1].x);
-  const middleX = minX + Math.floor((maxX - minX) / 2);
+  const middle = minX + Math.floor((maxX - minX) / 2);
+  const inBlock = (x) => graph.nodes.some((n) => n.gridCoord !== null && x >= n.gridCoord.x && x < n.gridCoord.x + 3);
+  let middleX = middle;
+  for (let d = 0; d <= maxX - minX; d++) {
+    const free = [middle - d, middle + d].find((x) => x >= minX && x <= maxX && !inBlock(x));
+    if (free !== void 0) {
+      middleX = free;
+      break;
+    }
+  }
   const current = graph.columnWidth.get(middleX) ?? 0;
-  graph.columnWidth.set(middleX, Math.max(current, lenLabel + 2));
+  graph.columnWidth.set(middleX, Math.max(current, lenLabel + 3));
   edge.labelLine = [largestLine[0], largestLine[1]];
 }
 function calculateLineWidth(graph, line) {
@@ -2570,7 +2579,7 @@ function drawTextOnLine(canvas, line, label, isUpwardEdge) {
   for (let i = 0; i < lines.length; i++) {
     const lineText = lines[i];
     const startX = middleX - Math.floor(lineText.length / 2);
-    drawText(canvas, { x: startX, y: startY + i }, lineText);
+    drawText(canvas, { x: startX, y: startY + i }, lineText.replaceAll(" ", "\uE001"));
   }
 }
 function getNodeAttachmentPoint(graph, node, dir) {
@@ -5634,7 +5643,7 @@ function renderMermaidASCII(text, options = {}) {
         roleCanvas: graph.roleCanvas,
         colorMode,
         theme
-      });
+      }).replaceAll("\uE001", " ");
     }
   }
 }

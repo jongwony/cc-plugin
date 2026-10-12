@@ -149,6 +149,52 @@ export const PATCHES = [
       "  else if (dirEquals(dir, Left)) put(1, 0, '┤', '│', '─')\n" +
       "  else if (dirEquals(dir, Right)) put(-1, 0, '├', '│', '─')\n",
   },
+  // A label widens a column of its segment to fit. A node's 3x3 block is never that
+  // column: widening a node's border column moves the cell its edges leave or enter
+  // by away from the border drawn for it, and the edge is drawn detached from the box.
+  // The column widened is the one nearest the segment's middle outside every node block.
+  {
+    file: /beautiful-mermaid\/src\/ascii\/edge-routing\.ts$/,
+    find:
+      '  const middleX = minX + Math.floor((maxX - minX) / 2)\n\n' +
+      '  const current = graph.columnWidth.get(middleX) ?? 0\n' +
+      '  graph.columnWidth.set(middleX, Math.max(current, lenLabel + 2))\n',
+    replace:
+      '  const middle = minX + Math.floor((maxX - minX) / 2)\n' +
+      '  const inBlock = (x: number): boolean =>\n' +
+      '    graph.nodes.some(n => n.gridCoord !== null && x >= n.gridCoord.x && x < n.gridCoord.x + 3)\n' +
+      '  let middleX = middle\n' +
+      '  for (let d = 0; d <= maxX - minX; d++) {\n' +
+      '    const free = [middle - d, middle + d].find(x => x >= minX && x <= maxX && !inBlock(x))\n' +
+      '    if (free !== undefined) { middleX = free; break }\n' +
+      '  }\n\n' +
+      '  const current = graph.columnWidth.get(middleX) ?? 0\n' +
+      '  graph.columnWidth.set(middleX, Math.max(current, lenLabel + 3))\n',
+  },
+  // A label is drawn on a canvas of its own, and merging canvases skips every space as
+  // empty, so a space inside a label let the line beneath show through it. The label's
+  // spaces go down as U+E001, which merging keeps, and come back as spaces in the
+  // string the flowchart render returns. diagrams.ts refuses a source holding U+E001.
+  {
+    file: /beautiful-mermaid\/src\/ascii\/draw\.ts$/,
+    find: '    drawText(canvas, { x: startX, y: startY + i }, lineText)\n',
+    replace: "    drawText(canvas, { x: startX, y: startY + i }, lineText.replaceAll(' ', '\\uE001'))\n",
+  },
+  {
+    file: /beautiful-mermaid\/src\/ascii\/index\.ts$/,
+    find:
+      '      return canvasToString(graph.canvas, {\n' +
+      '        roleCanvas: graph.roleCanvas,\n' +
+      '        colorMode,\n' +
+      '        theme,\n' +
+      '      })\n',
+    replace:
+      '      return canvasToString(graph.canvas, {\n' +
+      '        roleCanvas: graph.roleCanvas,\n' +
+      '        colorMode,\n' +
+      '        theme,\n' +
+      "      }).replaceAll('\\uE001', ' ')\n",
+  },
   // Every statement is consumed or the parse throws, so a fence the renderer would
   // draw incompletely keeps its source. A trailing `;` ends a flowchart statement.
   {

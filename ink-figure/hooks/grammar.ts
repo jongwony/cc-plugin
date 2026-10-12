@@ -43,13 +43,14 @@ const degrees = () => {
 
 // flowchart: `graph`/`flowchart` LR, TD, TB, BT or none; nodes `A`, `A[text]`,
 // `A(text)`, `A{text}` (text quoted or not); one `-->` edge per statement, with an
-// optional one-word `|label|`; at most one edge between two nodes; style, class,
-// click and accessibility statements, which draw nothing
+// optional `|label|`, spaces allowed inside it; at most one edge between two nodes;
+// style, class, click and accessibility statements, which draw nothing
 const SHAPE = String.raw`(?:\[(${QUOTED}|${TEXT})\]|\((${QUOTED}|${TEXT})\)|\{(${QUOTED}|${TEXT})\})`
 const NODE = String.raw`(${ID})${SHAPE}?`
 const FLOW_HEADER = /^(?:flowchart|graph)(?:\s+(?:LR|TD|TB|BT))?\s*;?$/i
 const FLOW_NODE = new RegExp(String.raw`^${NODE}\s*;?$`, 'u')
-const FLOW_EDGE = new RegExp(String.raw`^${NODE}\s*-->\s*(?:\|([^|<>#"\x60\s]+)\|\s*)?${NODE}\s*;?$`, 'u')
+const EDGE_LABEL = String.raw`[^|<>#"\x60\s](?:[^|<>#"\x60]*[^|<>#"\x60\s])?`
+const FLOW_EDGE = new RegExp(String.raw`^${NODE}\s*-->\s*(?:\|(${EDGE_LABEL})\|\s*)?${NODE}\s*;?$`, 'u')
 const FLOW_SILENT = /^(?:(?:style|classDef|class|click|linkStyle)\s|acc(?:Title|Descr)\s*:)/
 
 const flowchartOf = (lines: string[]): Grammar => {

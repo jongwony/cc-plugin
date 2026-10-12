@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { drawn, plainOf } from '../hooks/diagrams.ts'
+import { drawn, looseEndOf, plainOf } from '../hooks/diagrams.ts'
 import { piecesOf } from '../hooks/figures.ts'
 
 // Each allowed statement form draws what it says; each form the renderer was found
@@ -66,8 +66,31 @@ test('flowchart: two edges between one pair, either way round, keep the fence', 
   expect(kept('graph LR\n  A --> B\n  A --> B')).toBe(true)
 })
 
-test('flowchart: an edge label with a space, which draws as line, keeps the fence', () => {
-  expect(kept('graph LR\n  A -->|yes please| B')).toBe(true)
+test('flowchart: an edge label with a space is drawn whole on its edge', () => {
+  expect(art('graph LR\n  A -->|yes please| B').some(l => /A ├─*yes please─*►│ +B/.test(l))).toBe(true)
+  const hangul = art('graph LR\n  A[요청] --> B{판단}\n  B -->|계약 구조| C[Lean]\n  B -->|문맥이 정함| D[리뷰]')
+  expect(hangul.some(l => /판단 ├─+계약 구조─+►│ +Lean/.test(l))).toBe(true)
+  expect(hangul.some(l => /└─+문맥이 정함─+►│ +리뷰/.test(l))).toBe(true)
+  expect(kept('graph LR\n  A -->| yes| B')).toBe(true)
+})
+
+test('flowchart: a long label on one edge of a fan-out leaves its sibling edges joined to the source box', () => {
+  for (const label of ['context_decides', 'context decides']) {
+    const lines = art(`flowchart LR\n  A[fix] --> B{judge}\n  B -->|contract| C[Lean]\n  B -->|${label}| E[review]`)
+    expect(lines.some(l => /judge ├─+contract─+►│ +Lean/.test(l))).toBe(true)
+    expect(lines.some(l => new RegExp(`└─+${label}─+►│ +review`).test(l))).toBe(true)
+  }
+})
+
+test('a drawing with an edge detached from its box is refused', () => {
+  const detached = [
+    '┌─────┐   ◇───────◇                          ┌────────┐',
+    '│ fix ├──►│ judge │        ────contract─────►│  Lean  │',
+    '└─────┘   ◇───────◇                          └────────┘',
+  ].map(text => [{ text, role: null }])
+  expect(looseEndOf(detached)).toContain('an edge drawn detached')
+  const joined = drawn('graph LR\n  A[a] --> B[b]', 200)
+  expect('lines' in joined && looseEndOf(joined.lines)).toBe(null)
 })
 
 test('flowchart: other edge shapes, chains, `&`, and other node shapes keep the fence', () => {
@@ -93,6 +116,11 @@ test('state: start, end, transitions with labels, names and descriptions draw', 
   for (const label of ['Waiting room', 'start', 'working']) expect(rowOf(lines, label)).toBeGreaterThan(-1)
   expect(lines.some(l => l.includes('●'))).toBe(true)
   expect(lines.some(l => l.includes('╔'))).toBe(true)
+})
+
+test('state: a transition label with a space is drawn whole', () => {
+  const lines = art('stateDiagram-v2\n  direction LR\n  A --> B : go on\n  B --> C : wait a bit')
+  expect(lines.some(l => /A ├─*go on─*►│ B ├─*wait a bit─*►│ C/.test(l))).toBe(true)
 })
 
 test('state: a branching diagram is drawn sideways, each transition an arrow', () => {

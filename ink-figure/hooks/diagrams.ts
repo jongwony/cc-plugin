@@ -130,11 +130,12 @@ export const displayWidth = (s: string): number => {
 // An astral character already has two units. A code point the terminal draws in
 // fewer cells than its units — a combining mark, a joiner, a modifier or flag
 // half that merges with its neighbour, an astral character one cell wide — cannot
-// be laid out, and neither can a source that already holds the placeholder, nor a
-// control character (a tab, an escape) inside a statement, which the terminal
-// draws in some other number of cells or not at all.
+// be laid out, and neither can a source that already holds the placeholder or the
+// vendor's label-space placeholder (U+E001, scripts/patches.mjs), nor a control
+// character (a tab, an escape) inside a statement, which the terminal draws in some
+// other number of cells or not at all.
 const CELL = '\uE000'
-const UNPLACEABLE = /[\p{M}\p{Cf}\u1160-\u11ff\ud7b0-\ud7ff\u{1f1e6}-\u{1f1ff}\u{1f3fb}-\u{1f3ff}\uE000]/u
+const UNPLACEABLE = /[\p{M}\p{Cf}\u1160-\u11ff\ud7b0-\ud7ff\u{1f1e6}-\u{1f1ff}\u{1f3fb}-\u{1f3ff}\uE000\ue001]/u
 const CONTROL = /\p{Cc}/u
 const unplaceableOf = (source: string): string | undefined => {
   const mark = UNPLACEABLE.exec(source)?.[0]
@@ -291,6 +292,25 @@ export const compacted = (lines: readonly Segment[][]): Segment[][] => {
   return out
 }
 
+// A flowchart or state drawing joins every stroke to something: a horizontal stroke
+// has a mark on its left and its right, a vertical one above and below it. A stroke
+// that runs into a blank is an edge drawn detached from the box it leaves or enters,
+// which a drawing showing every label whole can still be.
+const LOOSE: Record<string, readonly [number, number][]> = { '─': [[0, -1], [0, 1]], '│': [[-1, 0], [1, 0]] }
+export const looseEndOf = (lines: readonly (readonly Segment[])[]): string | null => {
+  const rows = lines.map(cellRowOf)
+  for (let r = 0; r < rows.length; r++) {
+    for (let j = 0; j < rows[r]!.length; j++) {
+      const stroke = rows[r]![j]!
+      for (const [dr, dj] of LOOSE[stroke] ?? []) {
+        const next = rows[r + dr]?.[j + dj]
+        if (next === undefined || next === ' ') return `an edge drawn detached at row ${r + 1}, column ${j + 1}`
+      }
+    }
+  }
+  return null
+}
+
 export const renderOf = (source: string, useAscii = false): Rendered => {
   const kind = kindOf(source)
   if (!DRAWN_KINDS.has(kind)) return { error: `${kind} diagrams are not drawn` }
@@ -312,7 +332,7 @@ export const renderOf = (source: string, useAscii = false): Rendered => {
     while (lines.length > 0 && lines[0]!.length === 0) lines.shift()
     if (lines.length === 0 || lines.every(l => plainOf(l).trim() === '')) return { error: 'nothing to draw' }
     if (kind !== 'xychart') lines = compacted(lines)
-    const unfaithful = faithfulTo(grammar, lines.map(plainOf))
+    const unfaithful = faithfulTo(grammar, lines.map(plainOf)) ?? (!useAscii && (kind === 'flowchart' || kind === 'state') ? looseEndOf(lines) : null)
     return unfaithful ? { error: unfaithful } : { lines }
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) }

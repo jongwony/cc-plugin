@@ -1,7 +1,8 @@
-import type { EngineInterface, Register } from 'claude-code'
+import type { ApiContentBlock, EngineInterface, Register } from 'claude-code'
 import { SERIES_COLOURS, type Role, type Segment } from './diagrams.ts'
 import { fencesOf, piecesOf, type MathPicture } from './figures.ts'
 import { INK, inkOf, type Ink } from './math.ts'
+import { DEFAULT_COLUMNS, INLINE_MARGIN, reportOf } from './report.ts'
 
 // Every ```mermaid and ```math fence Claude writes is drawn where the fence was, on
 // the terminal: a diagram or chart as box art built from Text elements, a formula as
@@ -9,10 +10,9 @@ import { INK, inkOf, type Ink } from './math.ts'
 // figure is redrawn as a column of its own: Markdown for the prose around each
 // fence, the figure in the fence's place. A fence that will not draw stays as
 // written; a reply with nothing to draw, or another surface, goes to Claude Code
-// untouched.
-
-// the transcript's gutter and margins the drawing must clear
-const INLINE_MARGIN = 6
+// untouched. When a turn ends, a fence of its reply that would not draw is reported to
+// the model in a row it reads and the person does not see as typed, so the figures it
+// writes later fit what draws.
 
 // colour by role through element styles: the engine refuses escape sequences in text
 const STYLE: Record<Role, { color?: string; dimColor?: boolean }> = {
@@ -32,6 +32,13 @@ const STYLE: Record<Role, { color?: string; dimColor?: boolean }> = {
 // `themeSet` counts those changes.
 let themeInk: Ink | null = null
 let themeSet = 0
+
+// the columns of the last terminal that drew a reply, and the main loop's response
+// text this turn, in order
+let terminalColumns: number | null = null
+let replyTexts: string[] = []
+
+const textsOf = (content: readonly ApiContentBlock[]): string[] => content.flatMap(b => (b.type === 'text' && typeof b.text === 'string' ? [b.text] : []))
 
 const readTheme = async ($: EngineInterface): Promise<Ink> => {
   const began = themeSet
@@ -65,15 +72,52 @@ export const register: Register = on => {
     return result
   })
 
+  on('session.append', { door: 'response' }, async ($, e, next) => {
+    const result = await next(e)
+    // observing only: once next stored the row, nothing here may fail the hook
+    try {
+      if (e.agentId === undefined && result.message?.type === 'assistant') replyTexts.push(...textsOf(result.message.content))
+    } catch {}
+    return result
+  })
+
+  on('turn.start', async ($, e, next) => {
+    replyTexts = []
+    return next(e)
+  })
+
+  on('turn.complete', async ($, e, next) => {
+    const result = await next(e)
+    if (e.agentId !== undefined) return result
+    const texts = replyTexts
+    replyTexts = []
+    if (e.reason !== 'answer') return result
+    const text = reportOf(texts, terminalColumns, themeInk ?? INK.either)
+    if (text !== null) {
+      // a plugin above refuses the row by resolving { deny }; the bottom refuses a run
+      // no plugin may shape by rejecting. The reply stands either way; the debug log
+      // keeps why the report did not reach the model.
+      try {
+        const stored = await $.session.append({ message: { type: 'user', content: [{ type: 'text', text }] } })
+        if (stored.deny !== undefined) $.ui.log(`undrawn-figure report refused: ${stored.deny}`, { to: 'debug' })
+      } catch (err) {
+        $.ui.log(`undrawn-figure report refused: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
+      }
+    }
+    return result
+  })
+
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
     // the figures are terminal drawings; elsewhere the fence stays as Claude wrote it
     if (e.surface !== 'terminal') return next(e)
+    const columns = e.viewport?.columns ?? DEFAULT_COLUMNS
+    terminalColumns = columns
     const text = e.props.text.replace(/\r\n?/g, '\n')
     const fences = fencesOf(text)
     if (fences.length === 0) return next(e)
     const math = fences.some(f => f.lang === 'math')
     const ink = themeInk ?? (math ? await readTheme($) : INK.either)
-    const pieces = piecesOf(text, (e.viewport?.columns ?? 80) - INLINE_MARGIN, ink, fences)
+    const pieces = piecesOf(text, columns - INLINE_MARGIN, ink, fences)
     if (!pieces) return next(e)
     const { Box, Text, Markdown, Image } = $.ui.resolve(e)
 

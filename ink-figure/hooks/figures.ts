@@ -1,5 +1,5 @@
-import { chosenOf, fitsIn, layoutsOf, type Layouts, type Segment } from './diagrams.ts'
-import { INK, MAX_CELLS, mathOf, type Ink } from './math.ts'
+import { chosenOf, fitsIn, kindOf, layoutsOf, widthOf, type Layouts, type Segment } from './diagrams.ts'
+import { INK, MAX_CELLS, mathLayoutOf, mathOf, type Ink } from './math.ts'
 
 // One pass over a reply: every ```mermaid and ```math fence, in order, with the
 // prose between them kept as Markdown.
@@ -7,6 +7,15 @@ import { INK, MAX_CELLS, mathOf, type Ink } from './math.ts'
 export type MathPicture = { rgba: string; width: number; height: number; columns: number; rows: number; tex: string }
 export type Piece = { markdown: string } | { diagram: { lines: Segment[][] } } | { math: MathPicture }
 export type FenceBlock = { lang: 'mermaid' | 'math'; start: number; end: number; source: string }
+// Why a fence draws or not on its own: its kind (a mermaid diagram's header kind, or
+// `math`), that it draws (with its figure, unless only measured), or the reason it
+// stays as written and, for a figure that drew too wide, its width in cells.
+export type FenceVerdict = { kind: string; drawn: true; piece?: Piece } | { kind: string; drawn: false; reason: string; cells?: number }
+// The reply's verdict: one per fence in order, each its own; `held`, the reason the
+// whole reply is left as written even where a fence would draw, or null; and the
+// pieces the reply is drawn as, null when the caller leaves the message untouched or
+// the verdict was only measured.
+export type ReplyVerdict = { fences: FenceVerdict[]; held: string | null; pieces: Piece[] | null }
 
 // Markdown element limit per chunk
 export const MAX_MARKDOWN_CHARS = 10_000
@@ -64,24 +73,46 @@ export const fencesOf = (text: string): FenceBlock[] => {
 // least recently used first out, within a count and a byte budget.
 const CACHE_LIMIT = 200
 const CACHE_BYTES = 16 * 1024 * 1024
-type Drawing = { layouts: Layouts } | { math: MathPicture | null }
+type Drawing = { layouts: Layouts } | { math: MathPicture | { error: string } }
 const figures = new Map<string, { drawing: Drawing; bytes: number }>()
 let cachedBytes = 0
 
+export const fenceKindOf = (block: FenceBlock): string => (block.lang === 'math' ? 'math' : kindOf(block.source))
+
+const WIDE = 'wider than the room'
+
 // Neither drawing depends on the room: a diagram's layouts are kept by source and
 // chosen for the room after the lookup, and a formula is drawn once at the widest
-// an Image takes; either one wider than the room keeps its fence.
-const figureOf = (block: FenceBlock, columns: number, ink: Ink): Piece | null => {
-  const drawing = cachedDrawingOf(block, ink)
+// an Image takes; either one wider than the room keeps its fence. A measured verdict
+// reads the cache but never fills it, and lays a formula out without filling a pixel.
+const verdictOf = (block: FenceBlock, columns: number, ink: Ink, measure: boolean): FenceVerdict => {
+  const kind = fenceKindOf(block)
+  if (measure && block.lang === 'math' && !figures.has(keyOf(block, ink))) {
+    const layout = mathLayoutOf(block.source, MAX_CELLS)
+    if ('error' in layout) return { kind, drawn: false, reason: layout.error }
+    return layout.columns <= columns ? { kind, drawn: true } : { kind, drawn: false, reason: WIDE, cells: layout.columns }
+  }
+  const drawing = cachedDrawingOf(block, ink, !measure)
   if ('layouts' in drawing) {
     const art = chosenOf(drawing.layouts, columns)
-    return fitsIn(art, columns) ? { diagram: { lines: art.lines } } : null
+    if ('error' in art) return { kind, drawn: false, reason: art.error }
+    const { lines } = art
+    return fitsIn(art, columns) ? { kind, drawn: true, piece: { diagram: { lines } } } : { kind, drawn: false, reason: WIDE, cells: widthOf(lines) }
   }
-  return drawing.math && drawing.math.columns <= columns ? { math: drawing.math } : null
+  if ('error' in drawing.math) return { kind, drawn: false, reason: drawing.math.error }
+  return drawing.math.columns <= columns
+    ? { kind, drawn: true, piece: { math: drawing.math } }
+    : { kind, drawn: false, reason: WIDE, cells: drawing.math.columns }
 }
 
-const cachedDrawingOf = (block: FenceBlock, ink: Ink): Drawing => {
-  const key = (block.lang === 'mermaid' ? [block.lang, block.source] : [block.lang, ink.join(','), block.source]).join('\u0000')
+const keyOf = (block: FenceBlock, ink: Ink): string =>
+  (block.lang === 'mermaid' ? [block.lang, block.source] : [block.lang, ink.join(','), block.source]).join('\u0000')
+
+// the figures held for the drawing, for a test to read
+export const cached = () => ({ count: figures.size, bytes: cachedBytes })
+
+const cachedDrawingOf = (block: FenceBlock, ink: Ink, store: boolean): Drawing => {
+  const key = keyOf(block, ink)
   const hit = figures.get(key)
   if (hit) {
     figures.delete(key)
@@ -92,9 +123,10 @@ const cachedDrawingOf = (block: FenceBlock, ink: Ink): Drawing => {
   if (block.lang === 'mermaid') drawing = { layouts: layoutsOf(block.source) }
   else {
     const art = mathOf(block.source, MAX_CELLS, ink)
-    drawing = { math: 'rgba' in art ? { ...art, rgba: art.rgba.toBase64(), tex: block.source } : null }
+    drawing = { math: 'rgba' in art ? { ...art, rgba: art.rgba.toBase64(), tex: block.source } : { error: art.error } }
   }
-  const bytes = 'math' in drawing && drawing.math ? drawing.math.rgba.length : 0
+  if (!store) return drawing
+  const bytes = 'math' in drawing && 'rgba' in drawing.math ? drawing.math.rgba.length : 0
   figures.set(key, { drawing, bytes })
   cachedBytes += bytes
   while (figures.size > CACHE_LIMIT || cachedBytes > CACHE_BYTES) {
@@ -111,39 +143,63 @@ const pushMarkdown = (pieces: Piece[], text: string) => {
 
 const handable = (markdown: string): boolean => markdown.length <= MAX_MARKDOWN_CHARS && DRAWABLE.test(markdown)
 
-// The reply as pieces: markdown between the fences, a figure for each fence that
-// draws; a fence that does not draw stays in the markdown as written. Null when
-// nothing draws, a piece cannot be handed to Markdown, or the reply holds a
-// definition its pieces would lose, in which case the caller leaves the message to
-// Claude Code untouched. Those whole-reply checks run on the prose between the
-// fences before any figure is drawn; `fences` takes the reply's fences already found.
+const PROSE_UNHANDABLE = `the prose around the fences holds a control character or a run over ${MAX_MARKDOWN_CHARS} characters`
+const JOINED_UNHANDABLE = `an undrawn fence's source joined to the prose beside it holds a control character or a run over ${MAX_MARKDOWN_CHARS} characters`
+
+// What keeps a whole reply as written before any figure is weighed: a definition its
+// pieces would lose, or prose between the fences that cannot be handed to Markdown.
+const heldOf = (text: string, blocks: readonly FenceBlock[]): string | null => {
+  if (DEFINITION.test(text)) return 'the reply holds a link reference or footnote definition'
+  let gap = 0
+  for (const block of blocks) {
+    if (!handable(text.slice(gap, block.start).trim())) return PROSE_UNHANDABLE
+    gap = block.end
+  }
+  return handable(text.slice(gap).trim()) ? null : PROSE_UNHANDABLE
+}
+
+// The reply's verdict: each fence's own verdict, always, so a reason that keeps the
+// whole reply as written is reported beside a fence's reason and never in its place;
+// then the markdown between the drawn fences, an undrawn fence staying in it as
+// written. The pieces are null when nothing draws, the reply is held, or `measure`
+// asks for verdicts alone; `fences` takes the reply's fences already found.
+export const verdictsOf = (reply: string, columns: number, ink: Ink = INK.either, fences?: readonly FenceBlock[], measure = false): ReplyVerdict => {
+  const text = reply.replace(/\r\n?/g, '\n')
+  const blocks = fences ?? fencesOf(text)
+  if (blocks.length === 0) return { fences: [], held: null, pieces: null }
+  const verdicts = blocks.map(block => verdictOf(block, columns, ink, measure))
+  const held = heldOf(text, blocks)
+  if (held !== null) return { fences: verdicts, held, pieces: null }
+  if (!verdicts.some(v => v.drawn)) return { fences: verdicts, held: null, pieces: null }
+  const runs: string[] = []
+  let pending = ''
+  let cursor = 0
+  blocks.forEach((block, i) => {
+    if (!verdicts[i]!.drawn) return
+    runs.push(pending + text.slice(cursor, block.start))
+    pending = ''
+    cursor = block.end
+  })
+  runs.push(pending + text.slice(cursor))
+  const trimmed = runs.map(r => r.replace(/^\n+/, '').replace(/\n+$/, ''))
+  if (trimmed.some(r => r.trim() !== '' && !handable(r))) return { fences: verdicts, held: JOINED_UNHANDABLE, pieces: null }
+  if (measure) return { fences: verdicts, held: null, pieces: null }
+  const pieces: Piece[] = []
+  let r = 0
+  pushMarkdown(pieces, runs[r++]!)
+  for (const v of verdicts) {
+    if (!v.drawn) continue
+    pieces.push(v.piece!)
+    pushMarkdown(pieces, runs[r++]!)
+  }
+  return { fences: verdicts, held: null, pieces }
+}
+
+// The reply as pieces, as its verdict draws it; a held reply is left before any
+// figure is drawn.
 export const piecesOf = (reply: string, columns: number, ink: Ink = INK.either, fences?: readonly FenceBlock[]): Piece[] | null => {
   const text = reply.replace(/\r\n?/g, '\n')
   const blocks = fences ?? fencesOf(text)
-  if (blocks.length === 0 || DEFINITION.test(text)) return null
-  let gap = 0
-  for (const block of blocks) {
-    if (!handable(text.slice(gap, block.start).trim())) return null
-    gap = block.end
-  }
-  if (!handable(text.slice(gap).trim())) return null
-  const pieces: Piece[] = []
-  let pending = ''
-  let cursor = 0
-  let drawnCount = 0
-  for (const block of blocks) {
-    const piece = figureOf(block, columns, ink)
-    if (!piece) continue
-    pending += text.slice(cursor, block.start)
-    pushMarkdown(pieces, pending)
-    pieces.push(piece)
-    pending = ''
-    cursor = block.end
-    drawnCount++
-  }
-  pending += text.slice(cursor)
-  pushMarkdown(pieces, pending)
-  if (drawnCount === 0) return null
-  for (const p of pieces) if ('markdown' in p && !handable(p.markdown)) return null
-  return pieces
+  if (blocks.length === 0 || heldOf(text, blocks) !== null) return null
+  return verdictsOf(text, columns, ink, blocks).pieces
 }

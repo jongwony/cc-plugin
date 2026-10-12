@@ -18,11 +18,10 @@
 # Environment variables are set for the whole chat, setup and agent phase
 # alike, while Secrets reach the setup script only and are stripped before the
 # agent phase starts. So the login is written to disk HERE rather than deferred
-# to a SessionStart hook. That is the exact inversion of why
-# scripts/codex-auth-restore.sh exists on the Claude cloud side, where the
-# variables reach the session but not the setup script: there the hook is the
-# only place that can see them, here the setup script is the only place that
-# can see a Secret.
+# to a SessionStart hook: the setup script is the only place that can see a
+# Secret. That is the inversion of the Claude cloud side, where the variables
+# reach the session but not the setup script, so what needs them is read there
+# at session time.
 #
 # The default `universal` image runs as plain root with curl and python3
 # present. The CLI comes from the native installer, which downloads a platform

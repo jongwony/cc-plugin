@@ -85,11 +85,12 @@ only when every statement is one of these forms; any other statement leaves the
 whole fence as written. Each form has a test showing its drawing keeps its
 labels, arrows and direction, and the drawing must still show every label whole
 and, for a flowchart or state diagram, every edge joined to the boxes it runs
-between.
+between: each line, corner, junction and arrowhead meets a stroke that runs on
+toward it, through a label lying on the edge, and no label sits on a box border.
 
 | Kind | Drawn forms |
 |---|---|
-| flowchart | header `LR`, `TD`, `TB`, `BT` or none; nodes `A`, `A[text]`, `A(text)`, `A{text}` (text quoted or not); one `A --> B` per line, optionally `-->\|label\|` (spaces inside it); one edge per pair of nodes; `style`, `classDef`, `class`, `click`, `linkStyle`, `accTitle:`, `accDescr:` |
+| flowchart | header `LR`, `TD`, `TB`, `BT` or none; nodes `A`, `A[text]`, `A(text)`, `A{text}` (text quoted or not); one `A --> B` per line, optionally `-->\|label\|` (spaces inside it, padding trimmed); one edge per pair of nodes; `style`, `classDef`, `class`, `click`, `linkStyle`, `accTitle:`, `accDescr:` |
 | state | `direction LR` or `TB`; `A --> B` between states or `[*]`, optionally `: text`; `state "text" as A`; `A : text`; one transition per pair of states |
 | sequence | `participant A`, `participant A as text`; `A->>B: text`, `A-->>B: text`, a self-message included |
 | class | `class A`, `class A { … }`, `A : member`: `Type name`, `name`, `name()`, `name() Type`, each with an optional `+ - # ~`, a name once per class; `<\|--`, `*--`, `o--`, `-->`, `..>`, `..\|>`, optionally `: text`, as chains (no class above two others or below two, no cycle) |
@@ -102,8 +103,7 @@ as one unlabelled chain: at one row between boxes a label or a branch draws over
 the box borders.
 
 Outside the grammar, among others: subgraphs, composite states and every edge to
-them; `graph RL`; other edge shapes, chained edges and `&`; an edge label opening
-or closing with a space; notes; sequence blocks (`alt`, `opt`, `loop`, …), activations, `actor`,
+them; `graph RL`; other edge shapes, chained edges and `&`; notes; sequence blocks (`alt`, `opt`, `loop`, …), activations, `actor`,
 `autonumber`, `<br/>` and arrows other than `->>`/`-->>`; class methods with
 parameters, overloads, undirected relations, multiplicities, generics,
 annotations, namespaces and fan-outs; ER aliases, attribute keys and comments; a

@@ -152,7 +152,11 @@ export const PATCHES = [
   // A label widens a column of its segment to fit. A node's 3x3 block is never that
   // column: widening a node's border column moves the cell its edges leave or enter
   // by away from the border drawn for it, and the edge is drawn detached from the box.
-  // The column widened is the one nearest the segment's middle outside every node block.
+  // The column widened is the one nearest the segment's middle outside every node block;
+  // where every column of the segment lies in one (a vertical segment always does), none
+  // is widened, and a label that then does not fit is lost and the drawing refused. The
+  // column is the label's width and four: two cells each side, so a stroke shows on both
+  // even where a junction or an arrowhead takes the cell beside the label.
   {
     file: /beautiful-mermaid\/src\/ascii\/edge-routing\.ts$/,
     find:
@@ -163,18 +167,32 @@ export const PATCHES = [
       '  const middle = minX + Math.floor((maxX - minX) / 2)\n' +
       '  const inBlock = (x: number): boolean =>\n' +
       '    graph.nodes.some(n => n.gridCoord !== null && x >= n.gridCoord.x && x < n.gridCoord.x + 3)\n' +
-      '  let middleX = middle\n' +
+      '  let middleX: number | undefined\n' +
       '  for (let d = 0; d <= maxX - minX; d++) {\n' +
       '    const free = [middle - d, middle + d].find(x => x >= minX && x <= maxX && !inBlock(x))\n' +
       '    if (free !== undefined) { middleX = free; break }\n' +
       '  }\n\n' +
-      '  const current = graph.columnWidth.get(middleX) ?? 0\n' +
-      '  graph.columnWidth.set(middleX, Math.max(current, lenLabel + 3))\n',
+      '  if (middleX !== undefined) {\n' +
+      '    const current = graph.columnWidth.get(middleX) ?? 0\n' +
+      '    graph.columnWidth.set(middleX, Math.max(current, lenLabel + 4))\n' +
+      '  }\n',
   },
   // A label is drawn on a canvas of its own, and merging canvases skips every space as
   // empty, so a space inside a label let the line beneath show through it. The label's
   // spaces go down as U+E001, which merging keeps, and come back as spaces in the
   // string the flowchart render returns. diagrams.ts refuses a source holding U+E001.
+  // A label space covers only a blank cell or the horizontal stroke the label sits on:
+  // a crossing edge, a corner or a box border under it stays, and the label it splits
+  // is then not whole, so the drawing is refused rather than shown with a stroke erased.
+  {
+    file: /beautiful-mermaid\/src\/ascii\/canvas\.ts$/,
+    find: "        const c = overlay[x]![y]!\n        if (c !== ' ') {\n",
+    replace:
+      "        const c = overlay[x]![y]!\n" +
+      "        const under = merged[x + offset.x]?.[y + offset.y]\n" +
+      "        if (c === '\\uE001' && under !== ' ' && under !== '─' && under !== '-') continue\n" +
+      "        if (c !== ' ') {\n",
+  },
   {
     file: /beautiful-mermaid\/src\/ascii\/draw\.ts$/,
     find: '    drawText(canvas, { x: startX, y: startY + i }, lineText)\n',

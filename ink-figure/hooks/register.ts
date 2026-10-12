@@ -2,7 +2,7 @@ import type { ApiContentBlock, EngineInterface, Register } from 'claude-code'
 import { SERIES_COLOURS, type Role, type Segment } from './diagrams.ts'
 import { fencesOf, piecesOf, type MathPicture } from './figures.ts'
 import { INK, inkOf, type Ink } from './math.ts'
-import { INLINE_MARGIN, reportOf } from './report.ts'
+import { DEFAULT_COLUMNS, INLINE_MARGIN, reportOf } from './report.ts'
 
 // Every ```mermaid and ```math fence Claude writes is drawn where the fence was, on
 // the terminal: a diagram or chart as box art built from Text elements, a formula as
@@ -94,10 +94,14 @@ export const register: Register = on => {
     if (e.reason !== 'answer') return result
     const text = reportOf(texts, terminalColumns, themeInk ?? INK.either)
     if (text !== null) {
+      // a plugin above refuses the row by resolving { deny }; the bottom refuses a run
+      // no plugin may shape by rejecting. The reply stands either way; the debug log
+      // keeps why the report did not reach the model.
       try {
-        await $.session.append({ message: { type: 'user', content: [{ type: 'text', text }] } })
-      } catch {
-        // a run no plugin may shape refuses the row; the reply stands either way
+        const stored = await $.session.append({ message: { type: 'user', content: [{ type: 'text', text }] } })
+        if (stored.deny !== undefined) $.ui.log(`undrawn-figure report refused: ${stored.deny}`, { to: 'debug' })
+      } catch (err) {
+        $.ui.log(`undrawn-figure report refused: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
       }
     }
     return result
@@ -106,13 +110,14 @@ export const register: Register = on => {
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
     // the figures are terminal drawings; elsewhere the fence stays as Claude wrote it
     if (e.surface !== 'terminal') return next(e)
-    if (e.viewport?.columns !== undefined) terminalColumns = e.viewport.columns
+    const columns = e.viewport?.columns ?? DEFAULT_COLUMNS
+    terminalColumns = columns
     const text = e.props.text.replace(/\r\n?/g, '\n')
     const fences = fencesOf(text)
     if (fences.length === 0) return next(e)
     const math = fences.some(f => f.lang === 'math')
     const ink = themeInk ?? (math ? await readTheme($) : INK.either)
-    const pieces = piecesOf(text, (e.viewport?.columns ?? 80) - INLINE_MARGIN, ink, fences)
+    const pieces = piecesOf(text, columns - INLINE_MARGIN, ink, fences)
     if (!pieces) return next(e)
     const { Box, Text, Markdown, Image } = $.ui.resolve(e)
 

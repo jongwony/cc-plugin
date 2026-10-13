@@ -1,8 +1,16 @@
 {
   "name": "ink-figure",
-  "description": "Epistemic Ink output style, which also flags with a ↻ line a departure that recurs against a clause of an extension the user maintains, with a figure mod that draws the ```mermaid and ```math fences it writes as terminal figures — only what transcript text cannot draw; East Asian labels line up",
-  "version": "0.9.1",
+  "description": "Epistemic Ink output style, which also flags with a ↻ line a departure that recurs against a clause of an extension the user maintains, with a figure mod that draws the ```mermaid and ```math fences it writes as terminal figures — only what transcript text cannot draw; East Asian labels line up — and, with its figure board on, asks the model to keep each session's figures on a private Artifact page for the Claude apps",
+  "version": "0.10.0",
   "outputStyles": "./styles/",
+  "userConfig": {
+    "figureBoard": {
+      "type": "boolean",
+      "title": "Figure board",
+      "description": "Ask the model to keep each session's ```mermaid and ```math figures, newest first with the paragraph that led into each, on a private Artifact page it republishes at one URL",
+      "default": false
+    }
+  },
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

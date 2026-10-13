@@ -189,6 +189,21 @@ a sum with stacked limits; a flat expression stays in the text.
   reach the next. A single `$$…$$` or `\[…\]` wrapper around the whole fence is
   ignored; a fence holding two display formulas keeps its fence.
 
+## Figure board
+
+The Claude apps show a session's fences as source: following a terminal session
+from the mobile app or the Desktop app's Code tab, the app never asks the mod to
+draw. The figure board carries the figures there instead. With it on, the mod adds
+one section to the system prompt asking the model to keep this session's figures on
+one private Artifact page — each figure with the paragraph that led into it and
+when, newest first — published from
+`<CLAUDE_CONFIG_DIR or ~/.claude>/ink-figure/boards/<session id>.html` and
+republished from that file each time, so the page keeps one URL. The model
+composes the page; the mod only names the file. Pin the page to keep it at hand.
+
+The board is off by default. Turn it on from `/config`, the **Figure board** row.
+The section is added only to a request that offers the Artifact tool.
+
 ## Limits
 
 - A diagram or chart wider than the terminal keeps its fence, as a formula

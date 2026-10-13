@@ -1,5 +1,5 @@
 import type { ApiContentBlock, EngineInterface, Register } from 'claude-code'
-import { BOARD_SECTION_ID, boardPathOf, boardSectionOf, configDirOf } from './board.ts'
+import { BOARD_SECTION_ID, boardSectionOf } from './board.ts'
 import { SERIES_COLOURS, type Role, type Segment } from './diagrams.ts'
 import { fencesOf, piecesOf, type MathPicture } from './figures.ts'
 import { INK, inkOf, type Ink } from './math.ts'
@@ -55,16 +55,8 @@ const readTheme = async ($: EngineInterface): Promise<Ink> => {
   return themeInk ?? ink
 }
 
-const readConfigDir = async ($: EngineInterface): Promise<string | null> =>
-  configDirOf({ claudeConfigDir: await $.env.get('CLAUDE_CONFIG_DIR'), home: await $.env.get('HOME'), userProfile: await $.env.get('USERPROFILE') })
-
 export const register: Register = (on, options) => {
   const board = options?.figureBoard === true
-  // the board's file: the config directory read once per load, the session id once
-  // per session (a session started afresh, as by /clear, reads it again)
-  let configDir: string | null | undefined
-  let sessionId: string | undefined
-  let isDirMissingLogged = false
   // whether the engine lists the Artifact tool behind ToolSearch; null until it says
   let isArtifactDeferred: boolean | null = null
 
@@ -83,14 +75,7 @@ export const register: Register = (on, options) => {
     try {
       const isOffered = e.tools.includes('Artifact')
       if (!isOffered && isArtifactDeferred === null && !(await $.tool.list()).some(t => t.name === 'Artifact')) return result
-      if (configDir === undefined) configDir = await readConfigDir($)
-      if (configDir === null) {
-        if (!isDirMissingLogged) $.ui.log('figure board instruction left out: no absolute config directory from CLAUDE_CONFIG_DIR, HOME or USERPROFILE', { to: 'debug' })
-        isDirMissingLogged = true
-        return result
-      }
-      sessionId ??= await $.session.id()
-      const text = boardSectionOf(boardPathOf(configDir, sessionId), isArtifactDeferred === true || !isOffered)
+      const text = boardSectionOf(isArtifactDeferred === true || !isOffered)
       return { ...result, sections: [...result.sections, { id: BOARD_SECTION_ID, text, scope: 'session' as const }] }
     } catch (err) {
       $.ui.log(`figure board instruction left out: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
@@ -100,7 +85,6 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     const result = await next(e)
-    sessionId = undefined
     void readTheme($)
     return result
   })

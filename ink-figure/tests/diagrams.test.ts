@@ -220,10 +220,12 @@ test('a reply with two mermaid fences and prose between them draws both', async 
   expect(await ui.find({ type: 'Markdown', text: 'And the second:' })).toBeDefined()
 })
 
-test('off the terminal the message goes to Claude Code untouched', async ($, on) => {
+test('off the terminal a mermaid fence is drawn as an Svg, its source the alt text', async ($, on) => {
   on('ui.render', () => ENGINE)
   const ui = await $.ui.mount(message(HANGUL, 'desktop'))
-  expect(await ui.find({ type: 'Text', text: 'drawn by Claude Code' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'drawn by Claude Code' })).toBeUndefined()
+  const svg = await ui.find({ type: 'Svg' })
+  expect(svg!.props.alt).toBe(fencesOf(HANGUL)[0]!.source)
 })
 
 test('a mermaid fence shown inside another code block stays that block text', () => {

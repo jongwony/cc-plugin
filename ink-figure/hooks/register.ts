@@ -2,17 +2,18 @@ import type { ApiContentBlock, EngineInterface, Register } from 'claude-code'
 import { SERIES_COLOURS, type Role, type Segment } from './diagrams.ts'
 import { fencesOf, piecesOf, type MathPicture } from './figures.ts'
 import { INK, inkOf, type Ink } from './math.ts'
-import { DEFAULT_COLUMNS, INLINE_MARGIN, reportOf } from './report.ts'
+import { APP_COLUMNS, DEFAULT_COLUMNS, INLINE_MARGIN, reportOf } from './report.ts'
 
 // Every ```mermaid and ```math fence Claude writes is drawn where the fence was, on
 // the terminal: a diagram or chart as box art built from Text elements, a formula as
-// an Image. AssistantMessage is the finest site a mod gets, so a reply holding a
-// figure is redrawn as a column of its own: Markdown for the prose around each
-// fence, the figure in the fence's place. A fence that will not draw stays as
-// written; a reply with nothing to draw, or another surface, goes to Claude Code
-// untouched. When a turn ends, a fence of its reply that would not draw is reported to
-// the model in a row it reads and the person does not see as typed, so the figures it
-// writes later fit what draws.
+// an Image; on a Claude app (any other surface), as an Svg laid out in APP_COLUMNS,
+// but for a formula on the desktop, which the app draws itself. AssistantMessage is
+// the finest site a mod gets, so a reply holding a figure is redrawn as a column of
+// its own: Markdown for the prose around each fence, the figure in the fence's place.
+// A fence that will not draw stays as written; a reply with nothing to draw goes to
+// Claude Code untouched. When a turn ends, a fence of its reply that would not draw is
+// reported to the model in a row it reads and the person does not see as typed, so
+// the figures it writes later fit what draws.
 
 // colour by role through element styles: the engine refuses escape sequences in text
 const STYLE: Record<Role, { color?: string; dimColor?: boolean }> = {
@@ -33,9 +34,10 @@ const STYLE: Record<Role, { color?: string; dimColor?: boolean }> = {
 let themeInk: Ink | null = null
 let themeSet = 0
 
-// the columns of the last terminal that drew a reply, and the main loop's response
-// text this turn, in order
+// the columns of the last terminal that drew a reply, whether a Claude app drew one,
+// and the main loop's response text this turn, in order
 let terminalColumns: number | null = null
+let appDrawn = false
 let replyTexts: string[] = []
 
 const textsOf = (content: readonly ApiContentBlock[]): string[] => content.flatMap(b => (b.type === 'text' && typeof b.text === 'string' ? [b.text] : []))
@@ -92,7 +94,7 @@ export const register: Register = on => {
     const texts = replyTexts
     replyTexts = []
     if (e.reason !== 'answer') return result
-    const text = reportOf(texts, terminalColumns, themeInk ?? INK.either)
+    const text = reportOf(texts, terminalColumns, themeInk ?? INK.either, appDrawn)
     if (text !== null) {
       // a plugin above refuses the row by resolving { deny }; the bottom refuses a run
       // no plugin may shape by rejecting. The reply stands either way; the debug log
@@ -108,8 +110,22 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
-    // the figures are terminal drawings; elsewhere the fence stays as Claude wrote it
-    if (e.surface !== 'terminal') return next(e)
+    if (e.surface !== 'terminal') {
+      // a Claude app draws an Svg at a fixed room, never its own width, and the desktop
+      // draws a formula itself, so there only a diagram is the mod's
+      const text = e.props.text.replace(/\r\n?/g, '\n')
+      const fences = fencesOf(text).filter(f => f.lang === 'mermaid' || e.surface !== 'desktop')
+      if (fences.length === 0) return next(e)
+      const pieces = piecesOf(text, APP_COLUMNS, INK.either, fences, 'svg')
+      if (!pieces) return next(e)
+      appDrawn = true
+      const { Box, Markdown, Svg } = $.ui.resolve(e)
+      return Box({
+        flexDirection: 'column',
+        rowGap: 1,
+        children: pieces.map(p => ('svg' in p ? Svg({ source: p.svg.source, alt: p.svg.alt }) : Markdown({ text: 'markdown' in p ? p.markdown : '' }))),
+      })
+    }
     const columns = e.viewport?.columns ?? DEFAULT_COLUMNS
     terminalColumns = columns
     const text = e.props.text.replace(/\r\n?/g, '\n')
@@ -134,7 +150,7 @@ export const register: Register = on => {
     return Box({
       flexDirection: 'column',
       rowGap: 1,
-      children: pieces.map(p => ('diagram' in p ? diagram(p.diagram) : 'math' in p ? formula(p.math) : Markdown({ text: p.markdown }))),
+      children: pieces.map(p => ('diagram' in p ? diagram(p.diagram) : 'math' in p ? formula(p.math) : Markdown({ text: 'markdown' in p ? p.markdown : '' }))),
     })
   })
 }

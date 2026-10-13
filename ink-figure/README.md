@@ -6,8 +6,9 @@ A Claude Code output style and a mod that draws the figures it writes.
   replies with Ink's phase headers, gates and insights, and decides when a reply
   needs a picture at all. It also flags, with a `↻` line, a departure that recurs
   against the same clause of an extension the user maintains.
-- **Figure mod** — draws, in the terminal transcript, the figures a reply cannot
-  write as text, right where the fence was.
+- **Figure mod** — draws the figures a reply cannot write as text, right where
+  the fence was: in the terminal transcript, and in the Claude mobile and
+  Desktop apps.
 
 ## How the style and the mod work together
 
@@ -35,11 +36,22 @@ its fence.
 One `ui.render` hook on `AssistantMessage` reads every fence in one pass, so a
 reply holding several figures draws whole.
 
-The mod needs Claude Code v2.1.287 or later (mods on by default) and the
-interactive terminal. On any other surface, and for a fence that does not
-parse, is not a drawn kind, holds a statement outside the drawn grammar or is
-wider than the terminal, the fence is left as written. The Desktop app draws ` ```math `
-itself and shows other fences as code.
+The mod needs Claude Code v2.1.287 or later (mods on by default), and draws on
+every surface a session's `ui.render` reaches:
+
+| Surface | Diagram and chart | Formula |
+|---|---|---|
+| interactive terminal | box art in the terminal's cells | an image |
+| Claude mobile app | an SVG of the same box art | MathJax's SVG |
+| Claude Desktop app | an SVG of the same box art | left to the app, which draws ` ```math ` itself |
+
+An app draws the same box art the terminal does, from the same grammar, as an
+SVG laid out in a 255-cell room whatever the app's width; the app scales it to
+its slot. Each run of characters is placed at its own cell and held to its
+cells' width, so East Asian labels line up whatever font the app draws with.
+The browser at claude.ai is no surface a mod reaches, and shows every fence as
+code. For a fence that does not parse, is not a drawn kind, holds a statement
+outside the drawn grammar or is wider than the room, the fence is left as written.
 
 Where the fence is not drawn, it shows as written — the mermaid or TeX source,
 readable as it is; the style accepts that rather than fall back to hand-drawn
@@ -48,8 +60,9 @@ turn ends, each fence of its reply that the terminal renderer would not draw is
 reported to the model with its own reason, and beside it any reason the whole reply
 was left as written, in a row the model reads and the reader does not see, so the
 figures it writes later fit what draws; the reply itself stands as written. The
-verdicts are the terminal's on every surface; where no terminal has drawn a reply,
-the row says the surface in use shows every fence as its source.
+verdicts are measured against the last terminal that drew a reply; where none has,
+against the app's room once an app drew one, and otherwise the row says the
+surface in use shows every fence as its source.
 
 ## Install
 

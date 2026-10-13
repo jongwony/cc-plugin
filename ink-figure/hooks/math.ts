@@ -508,3 +508,21 @@ export const mathOf = (source: string, columns: number, ink: Ink): MathRendered 
     return { error: err instanceof Error ? err.message : String(err) }
   }
 }
+
+// The formula as MathJax's own SVG markup, for the surfaces that draw an `Svg` element:
+// the same bounds as the picture, sized to its pixels, the glyphs in MathJax's
+// `currentColor`.
+export const mathSvgOf = (source: string, columns: number): { source: string; width: number; height: number; columns: number } | { error: string } => {
+  const layout = mathLayoutOf(source, columns)
+  if ('error' in layout) return layout
+  try {
+    const svg = texToSvg(unwrapped(source))
+    adaptor.setAttribute(svg, 'width', `${layout.width}`)
+    adaptor.setAttribute(svg, 'height', `${layout.height}`)
+    adaptor.removeAttribute(svg, 'style')
+    const markup = adaptor.outerHTML(svg)
+    return { source: markup.includes('xmlns=') ? markup : markup.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"'), width: layout.width, height: layout.height, columns: layout.columns }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "description": "ink-figure: draws ```mermaid and ```math fences in the terminal transcript, and tells the model when a turn ends which fences did not draw and why. Builds without function hooks ignore the modules key.",
+  "description": "ink-figure: draws ```mermaid and ```math fences in the terminal transcript, and tells the model when a turn ends which fences did not draw and why; with the figureBoard option on, it also adds a system-prompt section asking the model to keep the session's figures in one place it chooses, such as a private Artifact page it publishes. Builds without function hooks ignore the modules key.",
   "modules": [
     "./register.ts"
   ]

@@ -1,4 +1,5 @@
 import type { ApiContentBlock, EngineInterface, Register } from 'claude-code'
+import { BOARD_SECTION_ID, boardSectionOf } from './board.ts'
 import { SERIES_COLOURS, type Role, type Segment } from './diagrams.ts'
 import { fencesOf, piecesOf, type MathPicture } from './figures.ts'
 import { INK, inkOf, type Ink } from './math.ts'
@@ -12,7 +13,9 @@ import { DEFAULT_COLUMNS, INLINE_MARGIN, reportOf } from './report.ts'
 // written; a reply with nothing to draw, or another surface, goes to Claude Code
 // untouched. When a turn ends, a fence of its reply that would not draw is reported to
 // the model in a row it reads and the person does not see as typed, so the figures it
-// writes later fit what draws.
+// writes later fit what draws. With the `figureBoard` option on, the main loop's
+// system prompt carries the figure board's instruction while the Artifact tool is
+// available to the model, listed or behind ToolSearch.
 
 // colour by role through element styles: the engine refuses escape sequences in text
 const STYLE: Record<Role, { color?: string; dimColor?: boolean }> = {
@@ -52,7 +55,34 @@ const readTheme = async ($: EngineInterface): Promise<Ink> => {
   return themeInk ?? ink
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  const board = options?.figureBoard === true
+  // whether the engine lists the Artifact tool behind ToolSearch; null until it says
+  let isArtifactDeferred: boolean | null = null
+
+  if (board)
+    on('tool.describe', { tool: 'Artifact' }, async ($, e, next) => {
+      const result = await next(e)
+      isArtifactDeferred = (result.isDeferred ?? e.isDeferred) === true
+      return result
+    })
+
+  on('prompt.compose', async ($, e, next) => {
+    const result = await next(e)
+    // the main loop's prompt only, in a session someone reads: a teammate's render and
+    // a headless run (-p, the SDK) go without it
+    if (!board || e.traits.includes('teammate') || e.traits.includes('print') || e.surfaces.length === 0) return result
+    try {
+      const isOffered = e.tools.includes('Artifact')
+      if (!isOffered && isArtifactDeferred === null && !(await $.tool.list()).some(t => t.name === 'Artifact')) return result
+      const text = boardSectionOf(isArtifactDeferred === true || !isOffered)
+      return { ...result, sections: [...result.sections, { id: BOARD_SECTION_ID, text, scope: 'session' as const }] }
+    } catch (err) {
+      $.ui.log(`figure board instruction left out: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
+      return result
+    }
+  })
+
   on('session.start', async ($, e, next) => {
     const result = await next(e)
     void readTheme($)

@@ -3,6 +3,7 @@ import { SERIES_COLOURS, type Role, type Segment } from './diagrams.ts'
 import { fencesOf, piecesOf, type MathPicture } from './figures.ts'
 import { INK, inkOf, type Ink } from './math.ts'
 import { DEFAULT_COLUMNS, INLINE_MARGIN, reportOf } from './report.ts'
+import { boardOf, entriesOf, htmlOf, mergedOf, publishBoard, type Board, type ToolAnswer } from './board.ts'
 
 // Every ```mermaid and ```math fence Claude writes is drawn where the fence was, on
 // the terminal: a diagram or chart as box art built from Text elements, a formula as
@@ -12,7 +13,9 @@ import { DEFAULT_COLUMNS, INLINE_MARGIN, reportOf } from './report.ts'
 // written; a reply with nothing to draw, or another surface, goes to Claude Code
 // untouched. When a turn ends, a fence of its reply that would not draw is reported to
 // the model in a row it reads and the person does not see as typed, so the figures it
-// writes later fit what draws.
+// writes later fit what draws. With the `figureBoard` option on, the same turn's
+// fences also go to the session's figure board, a private Artifact page republished
+// at one URL (board.ts), which the Claude apps open where they draw no fence.
 
 // colour by role through element styles: the engine refuses escape sequences in text
 const STYLE: Record<Role, { color?: string; dimColor?: boolean }> = {
@@ -52,12 +55,91 @@ const readTheme = async ($: EngineInterface): Promise<Ink> => {
   return themeInk ?? ink
 }
 
-export const register: Register = on => {
+// The figure board's life in a session: what the store keeps for it (`board:<session
+// id>`, so a resumed session finds its board again, the BOARDS most recently updated
+// kept), where its page is written (under the Claude configuration directory, outside
+// any repository), and the Artifact calls that publish it. Updates run one after
+// another, after the turn that asked; a failure goes to the debug log alone.
+const BOARDS = 30
+let boardQueue: Promise<void> = Promise.resolve()
+let boardAnnounced: string | null = null
+
+const boardPathOf = async ($: EngineInterface, id: string): Promise<string> => {
+  const dir = (await $.env.get('CLAUDE_CONFIG_DIR'))?.replace(/\/+$/, '') || `${(await $.env.get('HOME')) ?? ''}/.claude`
+  return `${dir}/ink-figure/boards/${id}.html`
+}
+
+const boardNameOf = async ($: EngineInterface, id: string): Promise<string> => {
+  let root = ''
+  try {
+    root = await $.session.root()
+  } catch {}
+  return `${root.split('/').filter(Boolean).at(-1) ?? 'session'} · ${id.slice(0, 8)}`
+}
+
+const keepBoard = async ($: EngineInterface, id: string, at: string) => {
+  const raw = await $.store.get('boards')
+  const rows = (Array.isArray(raw) ? raw : []).filter((r): r is { id: string; at: string } => typeof r?.id === 'string' && typeof r?.at === 'string' && r.id !== id)
+  rows.unshift({ id, at })
+  for (const old of rows.splice(BOARDS)) await $.store.delete(`board:${old.id}`)
+  await $.store.set('boards', rows)
+}
+
+const boardUpdate = async ($: EngineInterface, texts: readonly string[]) => {
+  if (!texts.some(t => t.includes('```') || t.includes('~~~'))) return
+  const at = new Date(await $.clock.now()).toISOString()
+  const fresh = entriesOf(texts, at)
+  if (fresh.length === 0) return
+  if (!(await $.tool.list()).some(t => t.name === 'Artifact')) {
+    $.ui.log('figure board: the Artifact tool is not available in this session; nothing published', { to: 'debug' })
+    return
+  }
+  const id = await $.session.id()
+  const stored = boardOf(await $.store.get(`board:${id}`))
+  const board: Board = { name: stored?.name ?? (await boardNameOf($, id)), url: stored?.url ?? null, updatedAt: at, entries: mergedOf(stored?.entries ?? [], fresh) }
+  const path = await boardPathOf($, id)
+  await $.fs.write(path, htmlOf(board))
+  const outcome = await publishBoard(input => $.tool.call(input as never) as Promise<ToolAnswer>, path, board.url)
+  for (const line of outcome.log) $.ui.log(`figure board: ${line}`, { to: 'debug' })
+  if (outcome.url !== null) board.url = outcome.url
+  await $.store.set(`board:${id}`, board)
+  await keepBoard($, id, at)
+  if (outcome.url !== null && outcome.url !== boardAnnounced) {
+    boardAnnounced = outcome.url
+    $.ui.toast(`Figure board: ${outcome.url}`, { timeoutMs: 8000 })
+  }
+}
+
+const updateBoard = ($: EngineInterface, texts: readonly string[]): Promise<void> => {
+  boardQueue = boardQueue
+    .then(() => boardUpdate($, texts))
+    .catch(err => $.ui.log(`figure board: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' }))
+  return boardQueue
+}
+
+const boardLinkOf = async ($: EngineInterface): Promise<string> => {
+  const board = boardOf(await $.store.get(`board:${await $.session.id()}`))
+  if (board?.url) return `Figure board (${board.entries.length} figure${board.entries.length === 1 ? '' : 's'}): ${board.url}`
+  return 'No figure board in this session yet: it is published when a reply holds a ```mermaid or ```math fence.'
+}
+
+export const register: Register = (on, options) => {
+  const board = options?.figureBoard === true
+
   on('session.start', async ($, e, next) => {
     const result = await next(e)
     void readTheme($)
+    if (board) {
+      try {
+        await $.command.register({ name: 'figure-board', description: "Shows the link to this session's figure board." })
+      } catch (err) {
+        $.ui.log(`figure board: /figure-board not registered: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
+      }
+    }
     return result
   })
+
+  if (board) on('command.run', { command: 'figure-board' }, async $ => ({ text: await boardLinkOf($) }))
 
   on('config.set', { key: 'theme' }, async ($, e, next) => {
     const result = await next(e)
@@ -92,6 +174,7 @@ export const register: Register = on => {
     const texts = replyTexts
     replyTexts = []
     if (e.reason !== 'answer') return result
+    if (board) void updateBoard($, texts)
     const text = reportOf(texts, terminalColumns, themeInk ?? INK.either)
     if (text !== null) {
       // a plugin above refuses the row by resolving { deny }; the bottom refuses a run

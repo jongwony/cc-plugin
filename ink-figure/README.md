@@ -66,6 +66,34 @@ session, or in `settings.json`:
 { "outputStyle": "ink-figure:Epistemic Ink" }
 ```
 
+## Figure board
+
+The Claude apps (Desktop, mobile) following a session show a ` ```mermaid ` fence
+as its source, and the mobile app shows ` ```math ` that way too; they do not ask
+the mod to draw. The figure board keeps those figures where an app can open them:
+one private Artifact page per session, which the mod republishes at the same URL
+when a turn ends whose reply held a fence. It is off until you turn it on.
+
+| The board holds | |
+|---|---|
+| every ` ```mermaid ` and ` ```math ` fence of the main loop's replies | including ones the terminal renderer leaves as written: the page draws with mermaid.js and KaTeX |
+| the paragraph that led into each fence | plain text, cut at 200 characters |
+| when it was written, in the viewer's local time | the newest on top; a figure written again moves up rather than repeating |
+
+Turn it on in `/config`, where the plugin's `Figure board` option is a row (stored in
+`settings.json` under `pluginConfigs`, as `figureBoard`).
+
+The first publish shows the board's link once as a toast, and `/figure-board` prints
+it at any time; pin it in the app to keep it beside the session. A new version sends
+no notification. The board needs the Artifact tool in the session (the mod checks the
+tool list and publishes nothing without it). Its page is written to
+`<Claude config dir>/ink-figure/boards/<session id>.html` and what it holds is kept
+in the plugin's store under `board:<session id>`, the 30 most recently updated
+boards kept, so a resumed session republishes the same board. When a resumed session
+may no longer publish to that URL, the mod reads the board first and tries again,
+and failing that starts a new one; the reason goes to the debug log, as every board
+failure does, and the turn is never held for it.
+
 ## Diagrams
 
 Standard mermaid source, within the grammar below. A top-down flowchart or state

@@ -39,16 +39,18 @@ test('the page file sits under the config directory, named by the session id', (
   expect(boardPathOf('/home/test/.claude/', SID)).toBe(`/home/test/.claude/ink-figure/boards/${SID}.html`)
 })
 
-test('the instruction names the drawn fences, the context, the order, the timing, the file and the republish', () => {
+test('the instruction names the drawn fences, the content, the order, the timing, the medium and the anchor file', () => {
   const text = boardSectionOf('/x/board.html')
   expect(text).toContain('```mermaid')
   expect(text).toContain('```math')
+  expect(text).toContain('one place the person can open away from the terminal')
   expect(text).toContain('paragraph that leads into it')
   expect(text).toContain('newest first')
   expect(text).toContain('before writing the reply\'s final text')
   expect(text).toContain('A fence shown as an example or as syntax is not a drawn figure.')
-  expect(text).toContain('`/x/board.html`')
-  expect(text).toContain('republish that same file')
+  expect(text).toContain('unless the person named a medium')
+  expect(text).toContain('same place for the whole session')
+  expect(text).toContain('A page published from a file uses `/x/board.html` and is republished from that same file.')
   expect(text).not.toContain(DEFERRED)
   expect(boardSectionOf('/x/board.html', true)).toContain(`${DEFERRED}: load it through ToolSearch first.`)
 })

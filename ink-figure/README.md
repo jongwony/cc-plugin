@@ -194,12 +194,13 @@ a sum with stacked limits; a flat expression stays in the text.
 The Claude apps show a session's fences as source: following a terminal session
 from the mobile app or the Desktop app's Code tab, the app never asks the mod to
 draw. The figure board carries the figures there instead. With it on, the mod adds
-one section to the system prompt asking the model to keep this session's figures on
-one private Artifact page — each figure with the paragraph that led into it and
-when, newest first — published from
-`<CLAUDE_CONFIG_DIR or ~/.claude>/ink-figure/boards/<session id>.html` and
-republished from that file each time, so the page keeps one URL. The model
-composes the page; the mod only names the file. Pin the page to keep it at hand.
+one section to the system prompt asking the model to keep this session's figures in
+one place the person can open away from the terminal — each figure with the
+paragraph that led into it and when, newest first. The medium is the model's
+choice (an Artifact page, a document, a deck), unless the person named one, and it
+stays the same place for the whole session so its link holds. A page published from
+a file uses `<CLAUDE_CONFIG_DIR or ~/.claude>/ink-figure/boards/<session id>.html`
+and is republished from that file. Pin the place to keep it at hand.
 
 The board is off by default. Turn it on from `/config`, the **Figure board** row.
 The section goes into the main loop's prompt while the Artifact tool is available

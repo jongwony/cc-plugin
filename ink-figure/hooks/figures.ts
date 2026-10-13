@@ -1,3 +1,4 @@
+import type { RenderSurface } from 'claude-code'
 import { chosenOf, fitsIn, kindOf, layoutsOf, widthOf, type Layouts, type Segment } from './diagrams.ts'
 import { INK, MAX_CELLS, mathLayoutOf, mathOf, mathSvgOf, type Ink } from './math.ts'
 import { gridSvgOf, MAX_SVG_CHARS, type SvgPicture } from './svg.ts'
@@ -6,11 +7,23 @@ import { gridSvgOf, MAX_SVG_CHARS, type SvgPicture } from './svg.ts'
 // prose between them kept as Markdown.
 
 export type MathPicture = { rgba: string; width: number; height: number; columns: number; rows: number; tex: string }
-export type Piece = { markdown: string } | { diagram: { lines: Segment[][] } } | { math: MathPicture } | { svg: SvgPicture }
 // What the figures are drawn for: the terminal's cells and pixels, or an `Svg` element
 // on a surface that draws one (the Claude apps). The verdicts are the same either way
 // but for an SVG past the element's source limit.
 export type Target = 'terminal' | 'svg'
+export type TerminalPiece = { markdown: string } | { diagram: { lines: Segment[][] } } | { math: MathPicture }
+export type SvgPiece = { markdown: string } | { svg: SvgPicture }
+export type Piece = TerminalPiece | SvgPiece
+type PieceOf<T extends Target> = T extends 'svg' ? SvgPiece : TerminalPiece
+
+// Where a reply is drawn: the surface, and the room its figures are laid out in.
+export type Drawer = { surface: RenderSurface; columns: number }
+export const targetOf = (surface: RenderSurface): Target => (surface === 'terminal' ? 'terminal' : 'svg')
+// The fences the mod draws on a surface: the desktop draws a formula itself, so there
+// a ```math fence is the app's and stays in the prose as written.
+export const fencesFor = (fences: readonly FenceBlock[], surface: RenderSurface): FenceBlock[] =>
+  surface === 'desktop' ? fences.filter(f => f.lang === 'mermaid') : [...fences]
+
 export type FenceBlock = { lang: 'mermaid' | 'math'; start: number; end: number; source: string }
 // Why a fence draws or not on its own: its kind (a mermaid diagram's header kind, or
 // `math`), that it draws (with its figure, unless only measured), or the reason it
@@ -113,8 +126,10 @@ const verdictOf = (block: FenceBlock, columns: number, ink: Ink, measure: boolea
 
 const OVER_SVG = `an SVG over the ${MAX_SVG_CHARS}-character source limit of an Svg element`
 
-// SVG figures by fence and room, least recently used first out
-const svgs = new Map<string, FenceVerdict>()
+// SVG verdicts by fence and room, least recently used first out, within the same count
+// and byte budget as the drawn figures; an SVG source counts two bytes a character
+const svgs = new Map<string, { verdict: FenceVerdict; bytes: number }>()
+let svgBytes = 0
 
 // A fence's verdict for an `Svg` element: a diagram takes the layout the terminal would
 // at this room and draws its cells as SVG; a formula takes MathJax's own SVG within the
@@ -125,7 +140,7 @@ const svgVerdictOf = (block: FenceBlock, kind: string, columns: number): FenceVe
   if (hit) {
     svgs.delete(key)
     svgs.set(key, hit)
-    return hit
+    return hit.verdict
   }
   let verdict: FenceVerdict
   if (block.lang === 'mermaid') {
@@ -142,8 +157,14 @@ const svgVerdictOf = (block: FenceBlock, kind: string, columns: number): FenceVe
     else if (svg.columns > columns) verdict = { kind, drawn: false, reason: WIDE, cells: svg.columns }
     else verdict = svgPieceOf(kind, { source: svg.source, width: svg.width, height: svg.height, alt: block.source })
   }
-  svgs.set(key, verdict)
-  while (svgs.size > CACHE_LIMIT) svgs.delete(svgs.keys().next().value!)
+  const bytes = verdict.drawn && verdict.piece && 'svg' in verdict.piece ? verdict.piece.svg.source.length * 2 : 0
+  svgs.set(key, { verdict, bytes })
+  svgBytes += bytes
+  while (svgs.size > CACHE_LIMIT || svgBytes > CACHE_BYTES) {
+    const [oldest, entry] = svgs.entries().next().value!
+    svgs.delete(oldest)
+    svgBytes -= entry.bytes
+  }
   return verdict
 }
 
@@ -153,8 +174,9 @@ const svgPieceOf = (kind: string, picture: SvgPicture): FenceVerdict =>
 const keyOf = (block: FenceBlock, ink: Ink): string =>
   (block.lang === 'mermaid' ? [block.lang, block.source] : [block.lang, ink.join(','), block.source]).join('\u0000')
 
-// the figures held for the drawing, for a test to read
+// the figures held for the drawing, and the SVG verdicts, for a test to read
 export const cached = () => ({ count: figures.size, bytes: cachedBytes })
+export const cachedSvgs = () => ({ count: svgs.size, bytes: svgBytes })
 
 const cachedDrawingOf = (block: FenceBlock, ink: Ink, store: boolean): Drawing => {
   const key = keyOf(block, ink)
@@ -242,10 +264,11 @@ export const verdictsOf = (reply: string, columns: number, ink: Ink = INK.either
 
 // The reply as pieces, as its verdict draws it; a held reply is left before any
 // figure is drawn. Given `fences`, a fence left out of them stays in the prose as
-// written.
-export const piecesOf = (reply: string, columns: number, ink: Ink = INK.either, fences?: readonly FenceBlock[], target: Target = 'terminal'): Piece[] | null => {
+// written. The pieces are the target's: verdictOf draws a terminal figure only for the
+// terminal and an SVG only for `svg`.
+export const piecesOf = <T extends Target = 'terminal'>(reply: string, columns: number, ink: Ink = INK.either, fences?: readonly FenceBlock[], target: T = 'terminal' as T): PieceOf<T>[] | null => {
   const text = reply.replace(/\r\n?/g, '\n')
   const blocks = fences ?? fencesOf(text)
   if (blocks.length === 0 || heldOf(text, blocks) !== null) return null
-  return verdictsOf(text, columns, ink, blocks, false, target).pieces
+  return verdictsOf(text, columns, ink, blocks, false, target).pieces as PieceOf<T>[] | null
 }

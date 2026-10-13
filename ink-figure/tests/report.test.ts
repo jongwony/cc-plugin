@@ -1,7 +1,10 @@
 import { expect, test } from 'claude-code/testing'
 import { grammarOf } from '../hooks/grammar.ts'
 import { cached, verdictsOf } from '../hooks/figures.ts'
-import { reportOf } from '../hooks/report.ts'
+import { INLINE_MARGIN, reportOf } from '../hooks/report.ts'
+
+// a terminal of this many columns that drew the last reply
+const terminal = (columns: number) => ({ surface: 'terminal' as const, columns: columns - INLINE_MARGIN })
 
 // a fence outside the drawn grammar: a dotted edge
 const BAD = [
@@ -15,7 +18,7 @@ const fenced = (source: string, lang = 'mermaid') => '```' + lang + '\n' + sourc
 const REASON = (grammarOf(BAD, 'flowchart') as { error: string }).error
 
 test('a fence outside the drawn grammar is reported with the grammar reason', () => {
-  const text = reportOf([`prose\n\n${fenced(GOOD)}\n\nmore\n\n${fenced(BAD)}`], 140)
+  const text = reportOf([`prose\n\n${fenced(GOOD)}\n\nmore\n\n${fenced(BAD)}`], terminal(140))
   expect(REASON).toContain('a statement outside the drawn grammar')
   expect(text).toContain(REASON)
   expect(text).toContain('figure 2 (mermaid flowchart)')
@@ -23,13 +26,13 @@ test('a fence outside the drawn grammar is reported with the grammar reason', ()
 })
 
 test('a reply whose fences all draw, or that has none, reports nothing', () => {
-  expect(reportOf([`prose\n\n${fenced(GOOD)}`], 140)).toBe(null)
-  expect(reportOf(['no figures here'], 140)).toBe(null)
+  expect(reportOf([`prose\n\n${fenced(GOOD)}`], terminal(140))).toBe(null)
+  expect(reportOf(['no figures here'], terminal(140))).toBe(null)
 })
 
 test('a figure wider than the room reports its cells and the terminal it was measured against', () => {
   const wide = 'graph LR\n' + Array.from({ length: 6 }, (_, i) => `  N${i}[a rather long label number ${i}] --> N${i + 1}[a rather long label number ${i + 1}]`).join('\n')
-  const seen = reportOf([fenced(wide)], 60)
+  const seen = reportOf([fenced(wide)], terminal(60))
   expect(seen).toContain('the terminal last seen was 60 columns (room 54)')
   const unseen = reportOf([fenced(wide)], null)
   expect(unseen).toContain('over the 80-column default (room 74)')
@@ -44,12 +47,12 @@ test('with no terminal seen, the row says every fence shows as source and the ve
 
 test('a reason that holds the whole reply is reported beside each fence\'s own reason, not in its place', () => {
   // the definition sits inside another code block; the bad fence still reports its grammar error
-  const definition = reportOf(['```markdown\n[1]: https://example.com\n```\n\n' + fenced(BAD)], 140)!
+  const definition = reportOf(['```markdown\n[1]: https://example.com\n```\n\n' + fenced(BAD)], terminal(140))!
   expect(definition).toContain(REASON)
   expect(definition).toContain('link reference or footnote definition')
   // an undrawn fence's long source joined to the prose beside it
   const long = BAD + '\n' + Array.from({ length: 400 }, (_, i) => `  style C fill:#f9f${i}`).join('\n')
-  const joined = reportOf(['p'.repeat(6000) + '\n\n' + fenced(long) + '\n\n' + fenced(GOOD)], 140)!
+  const joined = reportOf(['p'.repeat(6000) + '\n\n' + fenced(long) + '\n\n' + fenced(GOOD)], terminal(140))!
   expect(joined).toContain(REASON)
   expect(joined).toContain("an undrawn fence's source joined to the prose")
   expect(joined).toContain('(1 would draw on its own)')

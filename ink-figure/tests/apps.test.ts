@@ -1,8 +1,10 @@
 import { expect, test } from 'claude-code/testing'
 import { displayWidth, drawn, plainOf } from '../hooks/diagrams.ts'
-import { fencesOf, piecesOf } from '../hooks/figures.ts'
+import { cachedSvgs, fencesOf, piecesOf } from '../hooks/figures.ts'
+import { mathSvgOf } from '../hooks/math.ts'
 import { APP_COLUMNS, reportOf } from '../hooks/report.ts'
 import { gridSvgOf, SVG_CELL } from '../hooks/svg.ts'
+import { adaptor, texToSvg } from '../hooks/vendor/math/mathjax.js'
 
 // The Claude apps: every surface but the terminal draws a fence as an Svg element.
 
@@ -51,9 +53,12 @@ const SEQUENCE = [
   '  AU-->>CC: 200 그대로 전달',
 ].join('\n')
 
-// first in the file, before any terminal draws: a turn after an app drew reads the
-// app's room and says so, and the app never stands in for a terminal width
-test('after an app drew a reply, the report speaks for the app at the default room', async ($, on) => {
+const APP_PREFACE = (surface: string) => `The Claude app drawing this session (${surface}) lays figures out in a ${APP_COLUMNS}-cell room`
+const TERMINAL_PREFACE = 'The terminal renderer did not draw'
+
+// Draws each [surface, text] in order, then ends a turn whose reply is `reply`; the
+// rows the model reads.
+const reportAfter = async ($: any, on: any, draws: [Surface, string][], reply: string): Promise<string[]> => {
   on('ui.render', () => ENGINE)
   const notes: string[] = []
   on('session.append', ($: any, e: any, next: any) => {
@@ -62,24 +67,96 @@ test('after an app drew a reply, the report speaks for the app at the default ro
   })
   on('turn.start', ($: any, e: any) => ({ turnId: e.turnId }))
   on('turn.complete', ($: any, e: any) => ({ text: e.answer }))
-  const ui = await $.ui.mount(message(HANGUL, 'mobile', 30))
-  expect(await ui.find({ type: 'Svg' })).toBeDefined()
-  await ui.unmount()
+  for (const [surface, text] of draws) {
+    const ui = await $.ui.mount(message(text, surface, 30))
+    await ui.unmount()
+  }
   await $.turn.start({ text: 'draw it', turnId: 't1' })
-  await $.session.append({ door: 'response', origin: { kind: 'model', model: 'test' }, uuid: 'row-0', message: { type: 'assistant', role: 'assistant', content: [{ type: 'text', text: `${fenced(WIDE)}\n\n${fenced(WIDER)}` }] } } as any)
-  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' } as any)
+  await $.session.append({ door: 'response', origin: { kind: 'model', model: 'test' }, uuid: 'row-0', message: { type: 'assistant', role: 'assistant', content: [{ type: 'text', text: reply }] } })
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
+  return notes
+}
+
+test('after an app drew a reply, the report judges against the app room', async ($, on) => {
+  const notes = await reportAfter($, on, [['mobile', HANGUL]], `${fenced(WIDE)}\n\n${fenced(WIDER)}`)
   expect(notes.length).toBe(1)
-  expect(notes[0]).toContain(`The Claude app drawing this session lays figures out in a ${APP_COLUMNS}-cell room`)
+  expect(notes[0]).toContain(APP_PREFACE('mobile'))
   expect(notes[0]).not.toContain('figure 1 ')
   expect(notes[0]).toContain(`- figure 2 (mermaid flowchart): drew`)
   expect(notes[0]).toContain(`over the app's ${APP_COLUMNS}-cell room`)
 })
 
-test('the report preface names the app once one drew, and the source otherwise', () => {
-  expect(reportOf([fenced(BAD)], null, undefined, true)).toContain('The Claude app drawing this session')
-  expect(reportOf([fenced(BAD)], null, undefined, false)).toContain('the surface in use shows every fence as its source')
-  expect(reportOf([fenced(BAD)], 120, undefined, true)).toContain('The terminal renderer did not draw')
+test('an app whose fences all stay as written is still the surface the report judges for', async ($, on) => {
+  const notes = await reportAfter($, on, [['mobile', fenced(BAD)]], fenced(BAD))
+  expect(notes[0]).toContain(APP_PREFACE('mobile'))
+  expect(notes[0]).toContain('a statement outside the drawn grammar')
 })
+
+test('the report follows the surface that drew last, terminal to app and back', async ($, on) => {
+  const toApp = await reportAfter($, on, [['terminal', HANGUL], ['mobile', HANGUL]], fenced(WIDER))
+  expect(toApp[0]).toContain(APP_PREFACE('mobile'))
+  expect(toApp[0]).not.toContain(TERMINAL_PREFACE)
+})
+
+test('the report follows the surface that drew last, app to terminal', async ($, on) => {
+  const toTerminal = await reportAfter($, on, [['mobile', HANGUL], ['terminal', HANGUL]], fenced(WIDE))
+  expect(toTerminal[0]).toContain(TERMINAL_PREFACE)
+  expect(toTerminal[0]).toContain('the terminal last seen was 30 columns (room 24)')
+})
+
+test('on the desktop app a formula is the app own and is not reported, and figures keep their place', async ($, on) => {
+  const broken = fenced('\\frac{1}{\\nope}', 'math')
+  const notes = await reportAfter($, on, [['desktop', HANGUL]], `${broken}\n\n${fenced(BAD)}`)
+  expect(notes.length).toBe(1)
+  expect(notes[0]).toContain(APP_PREFACE('desktop'))
+  expect(notes[0]).not.toContain('figure 1 ')
+  expect(notes[0]).toContain('- figure 2 (mermaid flowchart): ')
+  expect(reportOf([broken], { surface: 'desktop', columns: APP_COLUMNS })).toBe(null)
+  expect(reportOf([broken], { surface: 'mobile', columns: APP_COLUMNS })).toContain('- figure 1 (math): ')
+})
+
+test('an SVG over the Svg source limit stays as written on the apps, and is reported so', async ($, on) => {
+  const long = ['sequenceDiagram', '  participant A', '  participant B', ...Array.from({ length: 100 }, (_, i) => `  A->>B: a b c d e f g h ${i}`)].join('\n')
+  expect(piecesOf(fenced(long), APP_COLUMNS, undefined, undefined, 'svg')).toBe(null)
+  const notes = await reportAfter($, on, [['mobile', HANGUL]], fenced(long))
+  expect(notes[0]).toContain('source limit of an Svg element')
+})
+
+test('the report preface names the surface in use, and the source where none drew', () => {
+  expect(reportOf([fenced(BAD)], { surface: 'mobile', columns: APP_COLUMNS })).toContain(APP_PREFACE('mobile'))
+  expect(reportOf([fenced(BAD)], null)).toContain('the surface in use shows every fence as its source')
+  expect(reportOf([fenced(BAD)], { surface: 'terminal', columns: 114 })).toContain(TERMINAL_PREFACE)
+})
+
+test('the SVG verdicts are held within a byte budget, two bytes a character', () => {
+  const source = 'graph LR\n  Q[budget probe] --> R[held]'
+  const before = cachedSvgs()
+  const pieces = piecesOf(fenced(source), APP_COLUMNS, undefined, undefined, 'svg')!
+  const svg = pieces.find(p => 'svg' in p) as { svg: { source: string } }
+  const after = cachedSvgs()
+  expect(after.count).toBe(before.count + 1)
+  expect(after.bytes - before.bytes).toBe(svg.svg.source.length * 2)
+})
+
+// a formula drawn past its own box: \rlap's text to the right, \smash's fraction above
+// and below
+for (const tex of ['\\rlap{\\text{overhanging text here}}x', '\\smash{\\frac{\\frac a b}{\\frac c d}}']) {
+  test(`a formula's SVG covers its overhang and keeps it at the left: ${tex}`, () => {
+    const svg = mathSvgOf(tex, APP_COLUMNS)
+    if ('error' in svg) throw new Error(svg.error)
+    const view = /viewBox="([^"]+)"/.exec(svg.source)![1]!.split(' ').map(Number) as [number, number, number, number]
+    const own = adaptor.getAttribute(texToSvg(tex), 'viewBox')!.split(' ').map(Number) as [number, number, number, number]
+    // the box the picture is laid out on, in MathJax's units: no letterbox, so nothing is centred
+    expect(Math.abs(view[2] / view[3] - svg.width / svg.height)).toBeLessThan(1e-6)
+    expect(svg.source).toContain('preserveAspectRatio="xMinYMin meet"')
+    expect(view[0]).toBeLessThanOrEqual(own[0])
+    expect(view[1]).toBeLessThanOrEqual(own[1])
+    expect(view[0] + view[2]).toBeGreaterThanOrEqual(own[0] + own[2])
+    expect(view[1] + view[3]).toBeGreaterThanOrEqual(own[1] + own[3])
+    if (tex.startsWith('\\rlap')) expect(view[2]).toBeGreaterThan(own[2] * 5)
+    else expect(view[3]).toBeGreaterThan(own[3] * 5)
+  })
+}
 
 test('each surface draws a diagram its own way: Text on the terminal, an Svg on the apps', async ($, on) => {
   on('ui.render', () => ENGINE)

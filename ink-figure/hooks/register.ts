@@ -1,6 +1,6 @@
 import type { ApiContentBlock, EngineInterface, Register } from 'claude-code'
 import { SERIES_COLOURS, type Role, type Segment } from './diagrams.ts'
-import { fencesOf, piecesOf, type MathPicture } from './figures.ts'
+import { fencesFor, fencesOf, piecesOf, type Drawer, type MathPicture } from './figures.ts'
 import { INK, inkOf, type Ink } from './math.ts'
 import { APP_COLUMNS, DEFAULT_COLUMNS, INLINE_MARGIN, reportOf } from './report.ts'
 
@@ -34,10 +34,10 @@ const STYLE: Record<Role, { color?: string; dimColor?: boolean }> = {
 let themeInk: Ink | null = null
 let themeSet = 0
 
-// the columns of the last terminal that drew a reply, whether a Claude app drew one,
-// and the main loop's response text this turn, in order
-let terminalColumns: number | null = null
-let appDrawn = false
+// the surface that last drew a reply and the room it lays figures out in, recorded on
+// every draw whether or not a figure drew; and the main loop's response text this turn,
+// in order
+let drawer: Drawer | null = null
 let replyTexts: string[] = []
 
 const textsOf = (content: readonly ApiContentBlock[]): string[] => content.flatMap(b => (b.type === 'text' && typeof b.text === 'string' ? [b.text] : []))
@@ -94,7 +94,7 @@ export const register: Register = on => {
     const texts = replyTexts
     replyTexts = []
     if (e.reason !== 'answer') return result
-    const text = reportOf(texts, terminalColumns, themeInk ?? INK.either, appDrawn)
+    const text = reportOf(texts, drawer, themeInk ?? INK.either)
     if (text !== null) {
       // a plugin above refuses the row by resolving { deny }; the bottom refuses a run
       // no plugin may shape by rejecting. The reply stands either way; the debug log
@@ -111,23 +111,23 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
     if (e.surface !== 'terminal') {
-      // a Claude app draws an Svg at a fixed room, never its own width, and the desktop
-      // draws a formula itself, so there only a diagram is the mod's
+      // a Claude app draws an Svg in a fixed room, never its own width, and only the
+      // fences fencesFor leaves to the mod
+      drawer = { surface: e.surface, columns: APP_COLUMNS }
       const text = e.props.text.replace(/\r\n?/g, '\n')
-      const fences = fencesOf(text).filter(f => f.lang === 'mermaid' || e.surface !== 'desktop')
+      const fences = fencesFor(fencesOf(text), e.surface)
       if (fences.length === 0) return next(e)
       const pieces = piecesOf(text, APP_COLUMNS, INK.either, fences, 'svg')
       if (!pieces) return next(e)
-      appDrawn = true
       const { Box, Markdown, Svg } = $.ui.resolve(e)
       return Box({
         flexDirection: 'column',
         rowGap: 1,
-        children: pieces.map(p => ('svg' in p ? Svg({ source: p.svg.source, alt: p.svg.alt }) : Markdown({ text: 'markdown' in p ? p.markdown : '' }))),
+        children: pieces.map(p => ('svg' in p ? Svg({ source: p.svg.source, alt: p.svg.alt }) : Markdown({ text: p.markdown }))),
       })
     }
     const columns = e.viewport?.columns ?? DEFAULT_COLUMNS
-    terminalColumns = columns
+    drawer = { surface: 'terminal', columns: columns - INLINE_MARGIN }
     const text = e.props.text.replace(/\r\n?/g, '\n')
     const fences = fencesOf(text)
     if (fences.length === 0) return next(e)
@@ -150,7 +150,7 @@ export const register: Register = on => {
     return Box({
       flexDirection: 'column',
       rowGap: 1,
-      children: pieces.map(p => ('diagram' in p ? diagram(p.diagram) : 'math' in p ? formula(p.math) : Markdown({ text: 'markdown' in p ? p.markdown : '' }))),
+      children: pieces.map(p => ('diagram' in p ? diagram(p.diagram) : 'math' in p ? formula(p.math) : Markdown({ text: p.markdown }))),
     })
   })
 }

@@ -1,4 +1,5 @@
-import { isWide, type Role, type Segment } from './diagrams.ts'
+import { cellsOf, SERIES_COLOURS, type Role, type Segment } from './diagrams.ts'
+import { CELL_PX } from './math.ts'
 
 // A drawn diagram's cells as an SVG document, for the surfaces that draw an `Svg`
 // element (the Claude apps) rather than a grid of terminal cells. Every run of
@@ -11,8 +12,9 @@ export type SvgPicture = { source: string; width: number; height: number; alt: s
 // an `Svg` element's source limit
 export const MAX_SVG_CHARS = 131_072
 
-// one cell, in CSS pixels, and the font size whose monospace advance fills it
-export const SVG_CELL = { width: 9, height: 18 } as const
+// one cell, in CSS pixels: the cell a formula's picture is sized against; and the font
+// size whose monospace advance fills it
+export const SVG_CELL = CELL_PX
 const FONT_PX = 15
 
 // the terminal's role colours, as values that read on a light page and a dark one;
@@ -27,8 +29,8 @@ const FILL: Record<Role, string> = {
   accent: '#c040c0',
 }
 const DIM: ReadonlySet<Role> = new Set(['line', 'corner'])
-// SERIES_COLOURS, in the same order
-const SERIES_FILL = ['#2e9e44', '#3b73d9', '#d24c4c'] as const
+// each of SERIES_COLOURS, as a value that reads on either page
+const SERIES_FILL: Record<(typeof SERIES_COLOURS)[number], string> = { green: '#2e9e44', blue: '#3b73d9', red: '#d24c4c' }
 
 const escaped = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
@@ -38,20 +40,18 @@ type Run = { text: string; column: number; cells: number }
 // run with the column it starts at and the cells it covers
 const runsOf = (text: string, column: number): { runs: Run[]; next: number } => {
   const runs: Run[] = []
-  let current: { text: string; column: number; cells: number; wide: boolean } | null = null
+  let current: (Run & { each: number }) | null = null
   for (const ch of text) {
-    const cp = ch.codePointAt(0)!
-    const wide = isWide(cp)
-    const cells = wide ? 2 : 1
+    const cells = cellsOf(ch.codePointAt(0)!)
     if (ch === ' ') {
       if (current) runs.push(current)
       current = null
-    } else if (current && current.wide === wide) {
+    } else if (current && current.each === cells) {
       current.text += ch
       current.cells += cells
     } else {
       if (current) runs.push(current)
-      current = { text: ch, column, cells, wide }
+      current = { text: ch, column, cells, each: cells }
     }
     column += cells
   }
@@ -69,7 +69,7 @@ export const gridSvgOf = (lines: readonly (readonly Segment[])[], alt: string): 
       const { runs, next } = runsOf(segment.text, column)
       column = next
       const role = segment.role ?? 'text'
-      const fill = segment.series ? SERIES_FILL[segment.series - 1]! : FILL[role]
+      const fill = segment.series ? SERIES_FILL[SERIES_COLOURS[segment.series - 1]!] : FILL[role]
       const opacity = DIM.has(role) && !segment.series ? ' fill-opacity="0.6"' : ''
       for (const run of runs) {
         const x = run.column * SVG_CELL.width

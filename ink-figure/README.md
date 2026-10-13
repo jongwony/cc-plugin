@@ -60,8 +60,9 @@ turn ends, each fence of its reply that the terminal renderer would not draw is
 reported to the model with its own reason, and beside it any reason the whole reply
 was left as written, in a row the model reads and the reader does not see, so the
 figures it writes later fit what draws; the reply itself stands as written. The
-verdicts are measured against the last terminal that drew a reply; where none has,
-against the app's room once an app drew one, and otherwise the row says the
+verdicts are those of the surface that last drew a reply, as it draws: the
+terminal at its width, an app as SVG in its room, a formula on the desktop being
+the app's and not reported. Where nothing has drawn a reply, the row says the
 surface in use shows every fence as its source.
 
 ## Install

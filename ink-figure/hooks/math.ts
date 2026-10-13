@@ -454,8 +454,9 @@ const inked = (rgba: Uint8Array): boolean => {
 // filling a pixel: what a verdict needs, and what `mathOf` fills. The bitmap is padded
 // to columns × rows cells of CELL_PX so the terminal scales it without distortion, the
 // formula at the left and centred top to bottom. The box covers the viewBox and any
-// outline drawn past it (a \smash, an \rlap).
-type MathLayout = { shapes: Shape[]; width: number; height: number; columns: number; rows: number }
+// outline drawn past it (a \smash, an \rlap). `svg` is the MathJax node it was laid out
+// from and `view` that box in the node's own units, so an `Svg` draws the same box.
+type MathLayout = { shapes: Shape[]; width: number; height: number; columns: number; rows: number; svg: LiteNode; view: readonly [number, number, number, number] }
 export const mathLayoutOf = (source: string, columns: number): MathLayout | { error: string } => {
   const tex = unwrapped(source)
   if (tex === '') return { error: 'nothing to draw' }
@@ -489,7 +490,7 @@ export const mathLayoutOf = (source: string, columns: number): MathLayout | { er
       const [l, t] = px([clip[0], clip[1]]), [r, b] = px([clip[2], clip[3]])
       return { rings: rings.map(ring => ring.map(px)), clip: [l, t, r, b] }
     })
-    return { shapes, width, height, columns: cols, rows }
+    return { shapes, width, height, columns: cols, rows, svg, view: [vx, vy - top / scale, width / scale, height / scale] }
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) }
   }
@@ -510,13 +511,16 @@ export const mathOf = (source: string, columns: number, ink: Ink): MathRendered 
 }
 
 // The formula as MathJax's own SVG markup, for the surfaces that draw an `Svg` element:
-// the same bounds as the picture, sized to its pixels, the glyphs in MathJax's
-// `currentColor`.
+// the node its layout was built from, its viewBox widened to the layout's box (overhang
+// included, the formula at the left and centred top to bottom, as in the picture),
+// sized to the picture's pixels, the glyphs in MathJax's `currentColor`.
 export const mathSvgOf = (source: string, columns: number): { source: string; width: number; height: number; columns: number } | { error: string } => {
   const layout = mathLayoutOf(source, columns)
   if ('error' in layout) return layout
   try {
-    const svg = texToSvg(unwrapped(source))
+    const { svg } = layout
+    adaptor.setAttribute(svg, 'viewBox', layout.view.join(' '))
+    adaptor.setAttribute(svg, 'preserveAspectRatio', 'xMinYMin meet')
     adaptor.setAttribute(svg, 'width', `${layout.width}`)
     adaptor.setAttribute(svg, 'height', `${layout.height}`)
     adaptor.removeAttribute(svg, 'style')

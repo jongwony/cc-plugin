@@ -202,7 +202,9 @@ republished from that file each time, so the page keeps one URL. The model
 composes the page; the mod only names the file. Pin the page to keep it at hand.
 
 The board is off by default. Turn it on from `/config`, the **Figure board** row.
-The section is added only to a request that offers the Artifact tool.
+The section goes into the main loop's prompt while the Artifact tool is available
+to the model, listed or behind ToolSearch; a teammate's prompt and a headless run
+(`-p`, the SDK) go without it.
 
 ## Limits
 

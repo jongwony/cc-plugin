@@ -15,7 +15,8 @@ import { DEFAULT_COLUMNS, INLINE_MARGIN, reportOf } from './report.ts'
 // the model in a row it reads and the person does not see as typed, so the figures it
 // writes later fit what draws. With the `figureBoard` option on, the main loop's
 // system prompt carries the figure board's instruction while the Artifact tool is
-// available to the model, listed or behind ToolSearch.
+// available to the model, listed or behind ToolSearch, in a session that draws on a
+// surface or a cloud session a person attends.
 
 // colour by role through element styles: the engine refuses escape sequences in text
 const STYLE: Record<Role, { color?: string; dimColor?: boolean }> = {
@@ -55,10 +56,22 @@ const readTheme = async ($: EngineInterface): Promise<Ink> => {
   return themeInk ?? ink
 }
 
+// whether this is a cloud session a person attends: read on first need, once per load
+let attendedRemote: Promise<boolean> | null = null
+
+const readAttendedRemote = async ($: EngineInterface): Promise<boolean> => {
+  try {
+    return (await $.env.get('CLAUDE_CODE_REMOTE')) === 'true' && (await $.env.get('CLAUDE_CODE_SESSION_ATTENDED')) === '1'
+  } catch {
+    return false
+  }
+}
+
 export const register: Register = (on, options) => {
   const board = options?.figureBoard === true
   // whether the engine lists the Artifact tool behind ToolSearch; null until it says
   let isArtifactDeferred: boolean | null = null
+  attendedRemote = null
 
   if (board)
     on('tool.describe', { tool: 'Artifact' }, async ($, e, next) => {
@@ -69,10 +82,13 @@ export const register: Register = (on, options) => {
 
   on('prompt.compose', async ($, e, next) => {
     const result = await next(e)
-    // the main loop's prompt only, in a session someone reads: a teammate's render and
-    // a headless run (-p, the SDK) go without it
-    if (!board || e.traits.includes('teammate') || e.traits.includes('print') || e.surfaces.length === 0) return result
+    // the main loop's prompt only, in a session someone reads: a surface that draws, or a
+    // cloud session a person attends; a teammate's render and a headless run (-p, the
+    // SDK) go without it
+    if (!board || e.traits.includes('teammate')) return result
     try {
+      const isDrawn = e.surfaces.length > 0 && !e.traits.includes('print')
+      if (!isDrawn && !(await (attendedRemote ??= readAttendedRemote($)))) return result
       const isOffered = e.tools.includes('Artifact')
       if (!isOffered && isArtifactDeferred === null && !(await $.tool.list()).some(t => t.name === 'Artifact')) return result
       const text = boardSectionOf(isArtifactDeferred === true || !isOffered)

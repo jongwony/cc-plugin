@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 import { BOARD_SECTION_ID, boardSectionOf } from '../hooks/board.ts'
 
 const BASE = [{ id: 'intro', text: 'intro', scope: 'shared' as const }]
@@ -56,9 +56,36 @@ test('without the Artifact tool, offered or listed, no section is added', ON, as
 
 test('a teammate\'s render, a headless run, and a session with no surface go without the section', ON, async ($, on) => {
   engine(on)
+  mock.env(on, {})
   expect(boardOf((await $.prompt.compose(facts({ traits: ['teammate'] }))).sections)).toBe(undefined)
   expect(boardOf((await $.prompt.compose(facts({ traits: ['print'] }))).sections)).toBe(undefined)
   expect(boardOf((await $.prompt.compose(facts({ surfaces: [] }))).sections)).toBe(undefined)
+})
+
+test('a cloud session a person attends gets the section with no surface, headless trait or not', ON, async ($, on) => {
+  engine(on)
+  mock.env(on, { CLAUDE_CODE_REMOTE: 'true', CLAUDE_CODE_SESSION_ATTENDED: '1' })
+  expect(boardOf((await $.prompt.compose(facts({ surfaces: [] }))).sections)?.text).toBe(boardSectionOf())
+  expect(boardOf((await $.prompt.compose(facts({ surfaces: [], traits: ['print'] }))).sections)?.text).toBe(boardSectionOf())
+  expect(boardOf((await $.prompt.compose(facts({ surfaces: [], traits: ['teammate'] }))).sections)).toBe(undefined)
+})
+
+test('a cloud session no person attends goes without the section', ON, async ($, on) => {
+  engine(on)
+  mock.env(on, { CLAUDE_CODE_REMOTE: 'true' })
+  expect(boardOf((await $.prompt.compose(facts({ surfaces: [] }))).sections)).toBe(undefined)
+})
+
+test('a local headless run (-p, no surface, not remote) goes without the section', ON, async ($, on) => {
+  engine(on)
+  mock.env(on, {})
+  expect(boardOf((await $.prompt.compose(facts({ surfaces: [], traits: ['print'] }))).sections)).toBe(undefined)
+})
+
+test('a terminal session still gets the section', ON, async ($, on) => {
+  engine(on)
+  mock.env(on, {})
+  expect(boardOf((await $.prompt.compose(facts({ surfaces: ['terminal'] }))).sections)?.text).toBe(boardSectionOf())
 })
 
 test('with the board off (the default), no section is added', async ($, on) => {

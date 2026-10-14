@@ -105,18 +105,6 @@ session and returns without waiting. The other headless creators are
 (see *Reaching a cloud session*), and `-p --environment <ccpool_…>`, on a
 self-hosted pool only.
 
-**Where `create_session` is not reachable, a pseudo-terminal creates the session
-instead, from a local session.** `script` gives the CLI the terminal it requires
-— on macOS and BSD `script -q <log> claude --cloud "<prompt>" </dev/null`, with
-util-linux `script -q -c 'claude --cloud "<prompt>"' <log> </dev/null` — and the
-new session's `session_…` id is read from the log. Follow-ups go through `claude
--p "<msg>" --cloud <session_id>`, and the transcript is read with
-`RemoteTrigger` `get_run_log` on that id. That read is why the path is local
-only: the built-in `RemoteTrigger` is off wherever `CLAUDE_CODE_REMOTE` is set.
-This passes the CLI's interactive-terminal refusal rather than a published path,
-so it is the fallback only: reach for `create_session` first, and expect this to
-break silently when the CLI's terminal check moves.
-
 **`claude --cloud` sets the session's permission mode at creation.** Without
 `--permission-mode` the session opens in Accept edits, not in the creator's
 default mode; `--permission-mode auto` alongside `--cloud` opens it in auto.

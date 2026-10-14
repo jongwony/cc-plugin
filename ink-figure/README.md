@@ -205,7 +205,8 @@ The board is off by default. Turn it on from `/config`, the **Figure board** row
 The section goes into the main loop's prompt while the Artifact tool is available
 to the model, listed or behind ToolSearch; a teammate's prompt and a headless run
 (`-p`, the SDK) go without it. A cloud session a person is attending gets it too,
-though nothing in it draws on a surface.
+though nothing in it draws on a surface. While the board is on and the section did
+not go in, the row the model reads at the end of a turn says why, once per reason.
 
 ## Limits
 

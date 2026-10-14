@@ -211,7 +211,8 @@ and the session's permission mode governs the publish itself.
 **In a cloud environment** there is no `/config` to open, and a repository cannot
 supply the option: plugin options are read from user and managed settings only. The
 environment's **Setup script** sets it in the user settings with the plugin's own
-options command:
+options command. Values go in as strings and are stored typed, so the boolean is
+written `"true"`:
 
 ```bash
 echo '{"figureBoard":"true"}' | claude plugin configure ink-figure@cc-plugin --values-stdin
@@ -226,7 +227,9 @@ curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/clo
 
 A cloud session runs the plugins its environment's setup cache installed, so a new
 ink-figure version reaches cloud sessions only after the Setup script field changes
-and the cache is rebuilt.
+and the cache is rebuilt. With the one-line field above, add or edit a comment line
+in it (`# rebuild 2026-10-14`, say) to force that rebuild without changing what it
+runs.
 
 ## Limits
 

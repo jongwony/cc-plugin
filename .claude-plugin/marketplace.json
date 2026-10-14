@@ -7,7 +7,7 @@
     {
       "name": "google",
       "source": "./google",
-      "description": "Google Gemini video understanding, Veo video generation"
+      "description": "Google Gemini video understanding, Veo video generation, Gemini CLI headless runs"
     },
     {
       "name": "claude-code-internals",

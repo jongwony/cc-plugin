@@ -203,10 +203,10 @@ Pin the place to keep it at hand.
 
 The board is off by default. Turn it on from `/config`, the **Figure board** row.
 The section goes into the main loop's prompt while the Artifact tool is available
-to the model, listed or behind ToolSearch; a teammate's prompt and a headless run
-(`-p`, the SDK) go without it. A cloud session a person is attending gets it too,
-though nothing in it draws on a surface. While the board is on and the section did
-not go in, the row the model reads at the end of a turn says why, once per reason.
+to the model, listed or behind ToolSearch, in every session where the board is on:
+an interactive one, a headless run (`-p`, the SDK) and a cloud session alike. A
+teammate's prompt goes without it. Whether a reply publishes is the model's to judge,
+and the session's permission mode governs the publish itself.
 
 ## Limits
 

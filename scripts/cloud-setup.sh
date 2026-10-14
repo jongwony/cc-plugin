@@ -1,6 +1,7 @@
 #!/bin/bash
 # Provision a Claude Code cloud environment: both plugin marketplaces, the
-# opt-in epistemic-protocols plugins, the Codex CLI with the Tavily MCP server
+# opt-in epistemic-protocols plugins, ink-figure's figure board option and the
+# Epistemic Ink output style, the Codex CLI with the Tavily MCP server
 # registered, and a SessionStart hook that reports a missing Codex login at
 # each session start.
 # Idempotent: safe to re-run in a container that already has any of these.
@@ -72,27 +73,46 @@ ensure_plugin() {
 ensure_plugin epistemic-cooperative@epistemic-protocols
 ensure_plugin route@epistemic-protocols
 
-# --- Codex login check: fetched from this repo and registered in the user-level
-# settings once as a SessionStart hook; a hook entry that already points at the
-# file is left alone.
+# --- ink-figure's figure board option, through the plugin's own options CLI;
+# option values go in as strings and are stored typed.
+if [ "$(plugin_state ink-figure@cc-plugin)" != "absent" ]; then
+  echo '{"figureBoard":"true"}' | claude plugin configure ink-figure@cc-plugin --values-stdin \
+    || echo "Error: could not turn on ink-figure's figure board option." >&2
+fi
+
+# --- User-level settings: the Epistemic Ink output style, set to that value on
+# every run, and the Codex login check — fetched from this repo — registered
+# once as a SessionStart hook; a hook entry that already points at the file is
+# left alone. The file is written only when one of them changed it.
 mkdir -p "$(dirname "$HOOK")"
+hook=""
 if curl -fsSL "$RAW/cc-plugin/main/scripts/codex-login-check.sh" -o "$HOOK"; then
   chmod +x "$HOOK"
-  python3 - "$CLAUDE_DIR/settings.json" "$HOOK" <<'PY'
-import json, os, sys
-path, hook = sys.argv[1], sys.argv[2]
-settings = json.load(open(path)) if os.path.exists(path) else {}
-entries = settings.setdefault("hooks", {}).setdefault("SessionStart", [])
-if not any(h.get("command") == hook for e in entries for h in e.get("hooks", [])):
-    entries.append({"hooks": [{"type": "command", "command": hook}]})
-    with open(path, "w") as f:
-        json.dump(settings, f, indent=2)
-        f.write("\n")
-    print(f"Registered SessionStart hook: {hook}")
-PY
+  hook="$HOOK"
 else
   echo "Error: could not fetch codex-login-check.sh; the Codex login check was not installed." >&2
 fi
+python3 - "$CLAUDE_DIR/settings.json" "$hook" "ink-figure:Epistemic Ink" <<'PY' || echo "Error: could not update $CLAUDE_DIR/settings.json." >&2
+import json, os, sys
+path, hook, style = sys.argv[1], sys.argv[2], sys.argv[3]
+settings = json.load(open(path)) if os.path.exists(path) else {}
+changed = False
+if settings.get("outputStyle") != style:
+    settings["outputStyle"] = style
+    changed = True
+    print(f"Set output style: {style}")
+if hook:
+    entries = settings.setdefault("hooks", {}).setdefault("SessionStart", [])
+    if not any(h.get("command") == hook for e in entries for h in e.get("hooks", [])):
+        entries.append({"hooks": [{"type": "command", "command": hook}]})
+        changed = True
+        print(f"Registered SessionStart hook: {hook}")
+if changed:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(settings, f, indent=2)
+        f.write("\n")
+PY
 
 # --- Join the Codex install.
 if [ -n "$codex_pid" ]; then

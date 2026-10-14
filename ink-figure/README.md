@@ -207,18 +207,19 @@ prompt and a headless run (`-p`, the SDK) go without it.
 
 ### Turning it on
 
-Two settings, and the board needs both:
+**On your own machine**, two settings:
 
 | Setting | What it does | Where to set it |
 |---|---|---|
 | The **Figure board** option | adds the board's section to the system prompt | `/config`, the **Figure board** row |
 | An allow rule for the `Artifact` tool | lets the model publish the board without a prompt | `/permissions`, the **Allow** tab, saved to user settings |
 
-The allow rule is needed in auto mode: the permission classifier treats a publish
-that only the board's section asked for as one the person never requested, and
-refuses it ("Unrequested Commit in a Connected App"). With the rule, the model's
-first publish goes through. The rule is not limited to the board: it lets every
-Artifact publish in every session through without the classifier's check.
+In a local session in auto mode (Claude Code 2.1.296), the option alone was not
+enough: the model drew up the board, and its first publish was refused by the
+permission classifier as "Unrequested Commit in a Connected App". With the allow
+rule added, the next session published its board without a prompt. The rule is not
+limited to the board: it lets every Artifact publish in every session through
+without the classifier's check.
 
 The same two settings in `~/.claude/settings.json`, merged with what is already
 there:
@@ -234,14 +235,22 @@ there:
 }
 ```
 
-Claude Code does not let the model write these into `~/.claude/settings.json` for
-you; add them yourself.
+In that session the model's own attempt to edit `~/.claude/settings.json` was
+refused too ("Self-Modification"), so add these yourself.
 
-A cloud session reads only the settings its environment's setup script writes, so
-the two keys go there too. The setup script in this repository,
-`scripts/cloud-setup.sh`, adds both for an environment whose **Setup script**
-field runs it with `curl … | bash`. Any other setup script adds the same two keys
-to the container's `~/.claude/settings.json`.
+**In a cloud environment**, the user-level settings are the ones the environment's
+setup script writes, and the repository's project settings (`.claude/settings.json`)
+apply as well. The setup script in this repository, `scripts/cloud-setup.sh`, turns
+the **Figure board** option on when its **Setup script** line passes
+`--figure-board`:
+
+```text
+curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/cloud-setup.sh | bash -s -- --figure-board
+```
+
+It sets the option only where it is unset, and only while `ink-figure@cc-plugin` is
+enabled. Whether a cloud session also needs the `Artifact` allow rule before the
+model can publish the board is not yet established, so the script does not add it.
 
 ## Limits
 

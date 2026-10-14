@@ -208,6 +208,26 @@ an interactive one, a headless run (`-p`, the SDK) and a cloud session alike. A
 teammate's prompt goes without it. Whether a reply publishes is the model's to judge,
 and the session's permission mode governs the publish itself.
 
+**In a cloud environment** there is no `/config` to open, and a repository cannot
+supply the option: plugin options are read from user and managed settings only. The
+environment's **Setup script** sets it in the user settings with the plugin's own
+options command:
+
+```bash
+echo '{"figureBoard":"true"}' | claude plugin configure ink-figure@cc-plugin --values-stdin
+```
+
+This repository's `scripts/cloud-setup.sh` already runs that line and also sets the
+Epistemic Ink output style, so the Setup script field can be this one line:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/cloud-setup.sh | bash
+```
+
+A cloud session runs the plugins its environment's setup cache installed, so a new
+ink-figure version reaches cloud sessions only after the Setup script field changes
+and the cache is rebuilt.
+
 ## Limits
 
 - A diagram or chart wider than the terminal keeps its fence, as a formula

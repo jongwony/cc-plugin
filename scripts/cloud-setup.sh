@@ -1,8 +1,9 @@
 #!/bin/bash
 # Provision a Claude Code cloud environment: both plugin marketplaces, the
 # opt-in epistemic-protocols plugins, the Codex CLI with the Tavily MCP server
-# registered, and a SessionStart hook that reports a missing Codex login at
-# each session start.
+# registered, a SessionStart hook that reports a missing Codex login at each
+# session start, and ink-figure's figure board turned on with the Artifact tool
+# allowed to publish it.
 # Idempotent: safe to re-run in a container that already has any of these.
 #
 # Paste this one line into the environment's "Setup script" field:
@@ -93,6 +94,34 @@ PY
 else
   echo "Error: could not fetch codex-login-check.sh; the Codex login check was not installed." >&2
 fi
+
+# --- ink-figure figure board: the option that adds the board's section to the
+# system prompt, and an allow rule for the Artifact tool. Both go in the
+# user-level settings, since a cloud session reads no other: without the option
+# no section is added, and without the rule the auto-mode classifier refuses a
+# publish only that section asked for. The rule covers every Artifact publish,
+# not the board's alone. Other plugins' options and other rules stay as found,
+# and the file is written only when one of the two was missing.
+python3 - "$CLAUDE_DIR/settings.json" <<'PY' || echo "Error: could not turn on the ink-figure figure board." >&2
+import json, os, sys
+path = sys.argv[1]
+settings = json.load(open(path)) if os.path.exists(path) else {}
+options = settings.setdefault("pluginConfigs", {}).setdefault("ink-figure@cc-plugin", {}).setdefault("options", {})
+allow = settings.setdefault("permissions", {}).setdefault("allow", [])
+added = []
+if options.get("figureBoard") is not True:
+    options["figureBoard"] = True
+    added.append("ink-figure figureBoard option")
+if "Artifact" not in allow:
+    allow.append("Artifact")
+    added.append("Artifact allow rule")
+if added:
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(settings, f, indent=2)
+        f.write("\n")
+    print("Registered: " + ", ".join(added))
+PY
 
 # --- Join the Codex install.
 if [ -n "$codex_pid" ]; then

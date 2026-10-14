@@ -201,10 +201,47 @@ choice (an Artifact page, a document, a deck), unless the person named one, and 
 stays the same place for the whole session, updated at the link it already has.
 Pin the place to keep it at hand.
 
-The board is off by default. Turn it on from `/config`, the **Figure board** row.
-The section goes into the main loop's prompt while the Artifact tool is available
-to the model, listed or behind ToolSearch; a teammate's prompt and a headless run
-(`-p`, the SDK) go without it.
+The board is off by default. The section goes into the main loop's prompt while the
+Artifact tool is available to the model, listed or behind ToolSearch; a teammate's
+prompt and a headless run (`-p`, the SDK) go without it.
+
+### Turning it on
+
+Two settings, and the board needs both:
+
+| Setting | What it does | Where to set it |
+|---|---|---|
+| The **Figure board** option | adds the board's section to the system prompt | `/config`, the **Figure board** row |
+| An allow rule for the `Artifact` tool | lets the model publish the board without a prompt | `/permissions`, the **Allow** tab, saved to user settings |
+
+The allow rule is needed in auto mode: the permission classifier treats a publish
+that only the board's section asked for as one the person never requested, and
+refuses it ("Unrequested Commit in a Connected App"). With the rule, the model's
+first publish goes through. The rule is not limited to the board: it lets every
+Artifact publish in every session through without the classifier's check.
+
+The same two settings in `~/.claude/settings.json`, merged with what is already
+there:
+
+```json
+{
+  "pluginConfigs": {
+    "ink-figure@cc-plugin": { "options": { "figureBoard": true } }
+  },
+  "permissions": {
+    "allow": ["Artifact"]
+  }
+}
+```
+
+Claude Code does not let the model write these into `~/.claude/settings.json` for
+you; add them yourself.
+
+A cloud session reads only the settings its environment's setup script writes, so
+the two keys go there too. The setup script in this repository,
+`scripts/cloud-setup.sh`, adds both for an environment whose **Setup script**
+field runs it with `curl … | bash`. Any other setup script adds the same two keys
+to the container's `~/.claude/settings.json`.
 
 ## Limits
 

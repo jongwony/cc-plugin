@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'claude-code/testing'
-import { BOARD_SECTION_ID, boardSectionOf } from '../hooks/board.ts'
+import { BOARD_SECTION_ID, boardLineOf, boardSectionOf } from '../hooks/board.ts'
 
 const BASE = [{ id: 'intro', text: 'intro', scope: 'shared' as const }]
 const DEFERRED = 'The Artifact tool is deferred'
@@ -93,4 +93,69 @@ test('with the board off (the default), no section is added', async ($, on) => {
   const { sections } = await $.prompt.compose(facts())
   expect(boardOf(sections)).toBe(undefined)
   expect(sections).toEqual(BASE)
+})
+
+// a main-loop turn end, after the prompt was (or was not) composed: the rows the model reads
+const turnEnd = async ($: any, on: any, compose?: () => Promise<unknown>) => {
+  const notes: string[] = []
+  on('session.append', ($: any, e: any, next: any) => {
+    if (e.door === 'note') notes.push(...e.message.content.map((b: any) => b.text))
+    return next(e)
+  })
+  on('turn.start', ($: any, e: any) => ({ turnId: e.turnId }))
+  on('turn.complete', ($: any, e: any) => ({ text: e.answer }))
+  if (compose) await compose()
+  await $.turn.start({ text: 'explain it', turnId: 't1' })
+  await $.session.append({ door: 'response', origin: { kind: 'model', model: 'test' }, uuid: 'row-0', message: { type: 'assistant', role: 'assistant', content: [{ type: 'text', text: 'no figure here' }] } } as any)
+  await $.turn.complete({ answer: 'no figure here', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' } as any)
+  return notes
+}
+
+test('with the board on and no prompt composed, the turn end says prompt.compose did not run', ON, async ($, on) => {
+  engine(on)
+  const notes = await turnEnd($, on)
+  expect(notes.length).toBe(1)
+  expect(notes[0]).toBe('[ink-figure] The figure board is on, but its section was not added to your system prompt: prompt.compose did not run for this session.')
+})
+
+test('a section the gate left out is reported with the values it read', ON, async ($, on) => {
+  engine(on)
+  mock.env(on, { CLAUDE_CODE_REMOTE: 'true' })
+  const notes = await turnEnd($, on, () => $.prompt.compose(facts({ surfaces: [], traits: ['print'] })))
+  expect(notes.length).toBe(1)
+  expect(notes[0]).toContain('no surface draws (surfaces=0, print=yes) and it is not a cloud session a person attends (CLAUDE_CODE_REMOTE=true, CLAUDE_CODE_SESSION_ATTENDED=unset)')
+})
+
+test('an Artifact tool neither offered nor listed is the reported reason', ON, async ($, on) => {
+  engine(on, ['Read'])
+  mock.env(on, {})
+  const notes = await turnEnd($, on, () => $.prompt.compose(facts({ tools: ['Read'] })))
+  expect(notes[0]).toContain('the Artifact tool is neither offered to the model nor listed')
+})
+
+test('an error while composing the section is the reported reason, with its message', ON, async ($, on) => {
+  on('prompt.compose', () => ({ sections: BASE }))
+  on('tool.list', () => {
+    throw new Error('tool list unavailable')
+  })
+  mock.env(on, {})
+  const notes = await turnEnd($, on, () => $.prompt.compose(facts({ tools: ['Read'] })))
+  // the kit skips the throwing hook and rejects the call with its own message
+  expect(notes[0]).toContain('composing it threw: no implementation for tool.list')
+})
+
+test('a section that went in leaves the turn end silent', ON, async ($, on) => {
+  engine(on)
+  mock.env(on, {})
+  expect(await turnEnd($, on, () => $.prompt.compose(facts()))).toEqual([])
+})
+
+test('with the board off, the turn end says nothing about it', async ($, on) => {
+  engine(on)
+  expect(await turnEnd($, on)).toEqual([])
+})
+
+test('the line carries what session.start said of the session', () => {
+  expect(boardLineOf(undefined, 'surface=none, interactive=no')).toBe('[ink-figure] The figure board is on, but its section was not added to your system prompt: prompt.compose did not run for this session (session.start: surface=none, interactive=no).')
+  expect(boardLineOf(null, 'surface=terminal, interactive=yes')).toBe(null)
 })

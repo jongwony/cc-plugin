@@ -1,5 +1,5 @@
 import type { ApiContentBlock, EngineInterface, Register } from 'claude-code'
-import { BOARD_SECTION_ID, boardSectionOf } from './board.ts'
+import { BOARD_SECTION_ID, boardLineOf, boardSectionOf } from './board.ts'
 import { SERIES_COLOURS, type Role, type Segment } from './diagrams.ts'
 import { fencesOf, piecesOf, type MathPicture } from './figures.ts'
 import { INK, inkOf, type Ink } from './math.ts'
@@ -16,7 +16,8 @@ import { DEFAULT_COLUMNS, INLINE_MARGIN, reportOf } from './report.ts'
 // writes later fit what draws. With the `figureBoard` option on, the main loop's
 // system prompt carries the figure board's instruction while the Artifact tool is
 // available to the model, listed or behind ToolSearch, in a session that draws on a
-// surface or a cloud session a person attends.
+// surface or a cloud session a person attends; when it does not go in, the turn's
+// report row says why.
 
 // colour by role through element styles: the engine refuses escape sequences in text
 const STYLE: Record<Role, { color?: string; dimColor?: boolean }> = {
@@ -56,22 +57,37 @@ const readTheme = async ($: EngineInterface): Promise<Ink> => {
   return themeInk ?? ink
 }
 
-// whether this is a cloud session a person attends: read on first need, once per load
-let attendedRemote: Promise<boolean> | null = null
+// the two variables that mark a cloud session a person attends: read on first need,
+// once per load
+type RemoteEnv = { remote: string | undefined; attended: string | undefined }
+let remoteEnv: Promise<RemoteEnv> | null = null
 
-const readAttendedRemote = async ($: EngineInterface): Promise<boolean> => {
+const readRemoteEnv = async ($: EngineInterface): Promise<RemoteEnv> => {
   try {
-    return (await $.env.get('CLAUDE_CODE_REMOTE')) === 'true' && (await $.env.get('CLAUDE_CODE_SESSION_ATTENDED')) === '1'
+    return { remote: await $.env.get('CLAUDE_CODE_REMOTE'), attended: await $.env.get('CLAUDE_CODE_SESSION_ATTENDED') }
   } catch {
-    return false
+    return { remote: undefined, attended: undefined }
   }
 }
+
+const isAttendedRemote = ({ remote, attended }: RemoteEnv): boolean => remote === 'true' && attended === '1'
+
+// what the board's gate did this session, while the option is on: undefined until the
+// main loop's prompt is composed, null once the section went in, else why it did not;
+// `boardStart` is what session.start said of the session, and `boardReported` the
+// reason last reported, so a reason is reported once until it changes
+let boardGate: string | null | undefined = undefined
+let boardStart = ''
+let boardReported: string | null = null
 
 export const register: Register = (on, options) => {
   const board = options?.figureBoard === true
   // whether the engine lists the Artifact tool behind ToolSearch; null until it says
   let isArtifactDeferred: boolean | null = null
-  attendedRemote = null
+  remoteEnv = null
+  boardGate = undefined
+  boardStart = ''
+  boardReported = null
 
   if (board)
     on('tool.describe', { tool: 'Artifact' }, async ($, e, next) => {
@@ -85,16 +101,34 @@ export const register: Register = (on, options) => {
     // the main loop's prompt only, in a session someone reads: a surface that draws, or a
     // cloud session a person attends; a teammate's render and a headless run (-p, the
     // SDK) go without it
-    if (!board || e.traits.includes('teammate')) return result
+    if (!board) return result
+    // a teammate's render leaves the main loop's record alone once it has one
+    if (e.traits.includes('teammate')) {
+      if (boardGate === undefined) boardGate = "only a teammate's prompt was composed"
+      return result
+    }
     try {
-      const isDrawn = e.surfaces.length > 0 && !e.traits.includes('print')
-      if (!isDrawn && !(await (attendedRemote ??= readAttendedRemote($)))) return result
+      const isPrint = e.traits.includes('print')
+      const isDrawn = e.surfaces.length > 0 && !isPrint
+      if (!isDrawn) {
+        const env = await (remoteEnv ??= readRemoteEnv($))
+        if (!isAttendedRemote(env)) {
+          boardGate = `no surface draws (surfaces=${e.surfaces.length}, print=${isPrint ? 'yes' : 'no'}) and it is not a cloud session a person attends (CLAUDE_CODE_REMOTE=${env.remote ?? 'unset'}, CLAUDE_CODE_SESSION_ATTENDED=${env.attended ?? 'unset'})`
+          return result
+        }
+      }
       const isOffered = e.tools.includes('Artifact')
-      if (!isOffered && isArtifactDeferred === null && !(await $.tool.list()).some(t => t.name === 'Artifact')) return result
+      if (!isOffered && isArtifactDeferred === null && !(await $.tool.list()).some(t => t.name === 'Artifact')) {
+        boardGate = 'the Artifact tool is neither offered to the model nor listed'
+        return result
+      }
       const text = boardSectionOf(isArtifactDeferred === true || !isOffered)
+      boardGate = null
       return { ...result, sections: [...result.sections, { id: BOARD_SECTION_ID, text, scope: 'session' as const }] }
     } catch (err) {
-      $.ui.log(`figure board instruction left out: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
+      const message = err instanceof Error ? err.message : String(err)
+      boardGate = `composing it threw: ${message}`
+      $.ui.log(`figure board instruction left out: ${message}`, { to: 'debug' })
       return result
     }
   })
@@ -102,6 +136,11 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     const result = await next(e)
     void readTheme($)
+    if (board) {
+      boardGate = undefined
+      boardReported = null
+      boardStart = `surface=${e.surface ?? 'none'}, interactive=${e.isInteractive ? 'yes' : 'no'}`
+    }
     return result
   })
 
@@ -138,7 +177,12 @@ export const register: Register = (on, options) => {
     const texts = replyTexts
     replyTexts = []
     if (e.reason !== 'answer') return result
-    const text = reportOf(texts, terminalColumns, themeInk ?? INK.either)
+    const report = reportOf(texts, terminalColumns, themeInk ?? INK.either)
+    // the board's line, once per reason: the gate's state as this turn left it
+    const gate = board ? boardGate : null
+    const boardLine = gate === null || (gate ?? '') === boardReported ? null : boardLineOf(gate, boardStart)
+    if (boardLine !== null) boardReported = gate ?? ''
+    const text = report === null ? boardLine : boardLine === null ? report : `${report}\n${boardLine}`
     if (text !== null) {
       // a plugin above refuses the row by resolving { deny }; the bottom refuses a run
       // no plugin may shape by rejecting. The reply stands either way; the debug log

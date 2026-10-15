@@ -31,8 +31,5 @@ the user has taken up signing in again.
   lives in `$CODEX_HOME/auth.json` (default `~/.codex/auth.json`) in that container
   only, so each new one signs in by device code (above).
 - When the user wants new containers to start logged in: device login per container is
-  the path in use, so each container signs in once. The alternative that starts logged
-  in is an API key — `printenv OPENAI_API_KEY | codex login --with-api-key` — billed by
-  API usage, with no refresh token to rotate; it is the user's choice and not yet
-  exercised. A shared `auth.json` snapshot does not serve, for the rotation reason
-  above.
+  the one route, so each container signs in once. A shared `auth.json` snapshot does
+  not serve, for the rotation reason above.

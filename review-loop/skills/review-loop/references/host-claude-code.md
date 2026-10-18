@@ -14,6 +14,10 @@ not the model name or the presence of a plugin directory alone.
   local configuration its wrapper runs. This is an external CLI review, regardless of
   which model drives Claude Code.
 
+- Split consult (Phase 3): a fresh context on the source's own side — a new codex
+  session through codex-plus, or for `code-review` an isolated subagent given the
+  review pointer, intent, and the consult's question, since the review skill's report
+  has no place for its answer.
 - Writer fork (Phase 4): the `Agent` tool with `subagent_type: "fork"` inherits the
   loop's context, runs in the background, and keeps its tool output out of the driving
   session. Resume the same fork with `SendMessage` to its agent name to continue with

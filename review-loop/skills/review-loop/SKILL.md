@@ -163,11 +163,11 @@ the source found nothing. Name the goal and consequence behind any additional fi
 verify it through Phase 2, and include it in classification. Record an empty goal
 reading too; omit this pass only where no declared goal was found.
 
-Where one designated source approved this round and another's findings survive
-verification, consult across that split before reading the set: ask the source still
-holding findings what in the artifact would turn its verdict to approve, and give
-those findings to the approving source to adjudicate, withholding the loop's
-dispositions from both. A consult is not a review. Its answers are material that
+Where one designated source's review this round meets its Phase 5 convergence arm and
+another's new findings survive verification, consult across that split before reading
+the set: ask the source still holding findings what in the artifact would turn its
+verdict to approve, and give those findings to the converged source to adjudicate,
+withholding the loop's dispositions from both. A consult is not a review. Its answers are material that
 Phase 2 and this reading weigh, never a verdict or a vote for either side.
 
 Read the verified set for a shared mechanism, competing explanations, unexplained

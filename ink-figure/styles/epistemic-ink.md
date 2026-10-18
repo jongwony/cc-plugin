@@ -18,13 +18,13 @@ Ink formatting takes precedence over standard markdown. Render every Ink element
 
 ## Realization Mapping
 
-SKILL.md uses `present` as a platform-neutral verb for gate interactions. This Output Style maps `present` to Ink elements and adds native formatting elements.
+SKILL.md uses `present` as a platform-neutral verb for interactions with the person, each annotated in its TOOL GROUNDING as a Constitution or an Extension. This Output Style maps `present` to Ink elements and adds native formatting elements.
 
 **Layer principle**: Output Style is the realization layer. The SKILL.md definition layer has precedence; Output Style maps SKILL.md semantics to Ink elements.
 
 **SKILL.md `present` mappings**:
 
-- `present` (gate interaction) → `gate`
+- `present` on a Constitution → `gate`; on an Extension, no gate block and no turn yield — the round is shown in prose and the work proceeds
 - Convergence evidence → `convergence`
 - Phase transition → `phase-header`
 - Progress tracking (`(track)` operations) → `cognitive-work`
@@ -68,7 +68,7 @@ Whether a rendering earns its place, and what form it takes, in every reply whil
 
 **Durable recording** externalizes only the problem-to-solve and framing shifts; everything else — dependencies, sub-steps, granular progress — stays in session.
 
-**Gate** — how to render SKILL.md's `present` verb in Ink. The divider block below IS the gate: the `· {label} ─` top divider and terminal `──` bracket a structured choice region. Emit the region as terminal text and yield turn — that satisfies SKILL.md's `present(structured content) → yield turn → parse response` contract directly, with no tool call wrapper (this scopes to the gate's own rendering — a genuine tool call still goes through the tool-use channel; see **Channel boundary** below). **Content placement**: present all context, analysis, and evidence as text BEFORE the gate block; the gate block contains ONLY the question and numbered options, the question keeping every line without which its options could not be told apart. Always yield turn after emitting the gate:
+**Gate** — how to render SKILL.md's `present` verb on a Constitution in Ink. The divider block below IS the gate: the `· {label} ─` top divider and terminal `──` bracket a structured choice region. Emit the region as terminal text and yield turn — that satisfies the Constitution's stop for the person's turn directly, with no tool call wrapper (this scopes to the gate's own rendering — a genuine tool call still goes through the tool-use channel; see **Channel boundary** below). **Content placement**: present all context, analysis, and evidence as text BEFORE the gate block; the gate block contains ONLY the question and numbered options, the question keeping every line without which its options could not be told apart. Always yield turn after emitting the gate:
 
 · {label} ──────────────
 {question}
@@ -89,7 +89,7 @@ Rendered shape:
 
 **Several items in one gate.** Where one gate asks about several items — claims, uncertainties, units — each with options of its own, what each item is belongs to the question and sits inside the block: head each item's options with one line that says what the item is in the reader's words, readable without the material above the block. Number the options once across the whole block, so every number the reader may answer with names exactly one option.
 
-**Channel boundary — text gate vs genuine tool call.** Two channels carry user-facing output: the *text channel* carries the Ink divider gate and prose; the *tool-use channel* carries every genuine tool invocation. Each interaction travels exactly one. An Ink gate is complete as text — the divider block plus turn-yield are the whole gate, and it satisfies `present` on its own. A genuine tool call — AskUserQuestion, or any tool a skill's SKILL.md directs — is realized by invoking it on the tool-use channel, while the message text stays prose. The "no tool call wrapper" note on the Gate element scopes to the gate's own text rendering; the two realizations stay on their own channels.
+**Channel boundary — text gate vs genuine tool call.** Two channels carry user-facing output: the *text channel* carries the Ink divider gate and prose; the *tool-use channel* carries every genuine tool invocation. Each interaction travels exactly one. An Ink gate is complete as text — the divider block plus turn-yield are the whole gate, and it satisfies a Constitution's `present` on its own. A genuine tool call — AskUserQuestion, or any tool a skill's SKILL.md directs — is realized by invoking it on the tool-use channel, while the message text stays prose. The "no tool call wrapper" note on the Gate element scopes to the gate's own text rendering; the two realizations stay on their own channels.
 
 **Convergence** — emit each dimension's status between dividers, using ✓ for defined and ○ for pending. Each line stands on its own as that dimension's resolution state — a framing readout, per-dimension and kind-separated — and those lines are the block's whole content.
 

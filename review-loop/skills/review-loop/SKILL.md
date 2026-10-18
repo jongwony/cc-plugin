@@ -105,7 +105,8 @@ reach nor a source direction by inference.
    its predecessor, with the retirement on the trace.
 5. **Preserve reviewer independence.** Convey design intent, allowing the reviewer to
    challenge defects that intent causes. Keep fix-status claims, dispositions,
-   do-not-reflag instructions, and shared-cause hypotheses out of reviewer context
+   do-not-reflag instructions, shared-cause hypotheses, and Phase 3 split-consult
+   answers out of reviewer context
    and out of surfaces harvested into it. A description of a decision carries no
    instruction about which verdict to return. Calibrate source severity by actual
    consequence against the mission: silent wrong results are critical, broken runtime
@@ -161,6 +162,13 @@ Once per round, examine the artifact against the project's stated goal, even whe
 the source found nothing. Name the goal and consequence behind any additional finding,
 verify it through Phase 2, and include it in classification. Record an empty goal
 reading too; omit this pass only where no declared goal was found.
+
+Where one designated source approved this round and another's findings survive
+verification, consult across that split before reading the set: ask the source still
+holding findings what in the artifact would turn its verdict to approve, and give
+those findings to the approving source to adjudicate, withholding the loop's
+dispositions from both. A consult is not a review. Its answers are material that
+Phase 2 and this reading weigh, never a verdict or a vote for either side.
 
 Read the verified set for a shared mechanism, competing explanations, unexplained
 findings, and a falsifier. No shared cause is a valid result. A source direction is
@@ -339,7 +347,7 @@ Round k — host / source / route — reviewed base → head or working-tree sta
 Exercised: source-reported reach and gaps (omit for a standing no-channel source)
 Call: observed settings or diagnostics, when present
 Goal: loop's goal reading and its findings, including none (omit if no declared goal)
-Roots: Phase 3 shared-cause reading — each shared cause with the findings it explains, or none
+Roots: Phase 3 shared-cause reading — each shared cause with the findings it explains, or none; any split consult with its question and answer
 Relay: autonomously dispositioned findings → applied | dropped: basis | carried: reason
 Gated: findings requiring user judgment → applied | dropped: basis | carried: reason
 Apply: writer route (fork | brief | inline) → commits or new head, or tree state (omit if no pass ran)

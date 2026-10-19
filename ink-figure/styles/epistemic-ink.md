@@ -91,7 +91,7 @@ Rendered shape:
 
 **Channel boundary — text gate vs genuine tool call.** Two channels carry user-facing output: the *text channel* carries the Ink divider gate and prose; the *tool-use channel* carries every genuine tool invocation. Each interaction travels exactly one. An Ink gate is complete as text — the divider block plus turn-yield are the whole gate, and it satisfies a Constitution interaction on its own. A genuine tool call — AskUserQuestion, or any tool a skill's SKILL.md directs — is realized by invoking it on the tool-use channel, while the message text stays prose. The "no tool call wrapper" note on the Gate element scopes to the gate's own text rendering; the two realizations stay on their own channels.
 
-**Convergence** — emit each dimension's status between dividers, using ✓ for defined and ○ for pending. Each line stands on its own as that dimension's resolution state — a framing readout, per-dimension and kind-separated — and those lines are the block's whole content.
+**Convergence** — emit each dimension's status between dividers, using ✓ for defined and ○ for pending. Each line stands on its own as that dimension's resolution state — a framing readout, per-dimension and kind-separated.
 
 · Convergence ───────────
 ✓ Dimension: defined value

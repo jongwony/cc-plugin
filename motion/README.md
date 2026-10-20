@@ -29,7 +29,7 @@ Then install what `skills/motion/SKILL.md` lists under Prerequisites.
 |---|---|
 | `skills/motion/SKILL.md` | Decisions every video turns on (the slow axes), plus the build → preview → render procedure |
 | `skills/motion/references/fast-axes.md` | Decisions that depend on the kind of video, and how to pull live examples |
-| `skills/motion/references/rendering.md` | How the builder turns the `seek(t)` page into preview frames and the mp4 with Playwright and ffmpeg, and the three mistakes that go wrong without failing |
+| `skills/motion/references/rendering.md` | How the builder turns the `seek(t)` page into preview frames and the mp4 with Playwright and ffmpeg, and the mistakes that go wrong without failing |
 | `skills/motion/references/axes.json` | The pattern each decision is measured by, keyed by the decision's name in `SKILL.md` or `fast-axes.md` |
 | `skills/motion/scripts/corpus.py` | Reads [awesome-opus5-5-videos](https://github.com/yihui-dev/awesome-opus5-5-videos) `data/videos.json` live: `examples` lists links to look at, `axes` re-measures which decisions vary by kind |
 

@@ -27,7 +27,7 @@ Respond in the person's language.
 | Playwright + Chromium | `npm i -g playwright && npx playwright install chromium` (on Linux, `--with-deps` adds Chromium's system libraries) | Steps the page through time and captures frames |
 | ffmpeg (with libx264, and libvpx-vp9 and libopus for Phase 4's re-encode) | `brew install ffmpeg` (or `apt install ffmpeg`) | Encodes frames and sound to mp4 |
 
-Before the seam, confirm each of these runs here; one that does not is an install the seam lists. Corpus reads need network access to `raw.githubusercontent.com`, and downloading a library the page uses needs it too.
+Corpus reads need network access to `raw.githubusercontent.com`, and downloading a library the page uses needs it too.
 
 ## Phase 1: Seed
 
@@ -91,7 +91,7 @@ Save the prompt as `prompt.md` in this run's output folder and show it: it is al
 Write one HTML file in the output folder, with every file it uses referenced by a relative path — each supplied file copied in beside it, and a library the page uses (Three.js, GSAP, …) downloaded once into the folder, which is served as a local web page (`references/rendering.md`). A supplied video or audio file the page itself plays is copied as WebM (`ffmpeg -i <file> -c:v libvpx-vp9 -c:a libopus <name>.webm`), since Playwright's Chromium does not decode H.264 or AAC:
 
 - `window.DURATION` — length in seconds, greater than 0.
-- `window.seek(t)` — draws the frame for time `t` from `t` alone: no timers, CSS transitions, `requestAnimationFrame` loops, or state carried between calls. It is called in any order and awaited when it returns a Promise, so an image, video, or data the frame needs is awaited inside `seek`; a failure there — a load, a decode, a parse — is caught, reported with `console.warn`, and the frame drawn without it.
+- `window.seek(t)` — draws the frame for time `t` from `t` alone: no timers, CSS transitions, `requestAnimationFrame` loops, or state carried between calls. It is called in any order and awaited when it returns a Promise, so an image, video, web font (`document.fonts.load(…)`), or data the frame needs is awaited inside `seek`; a failure there — a load, a decode, a parse — is caught, reported with `console.warn`, and the frame drawn without it.
 - A fixed canvas size matching the shape chosen in Phase 2.
 - With a loop, the frame at `DURATION` matches the frame at 0.
 - Sound: each supplied track is mixed in at render; synthesized sound is exposed as `window.renderAudio()`, resolving to a base64 WAV rendered with an `OfflineAudioContext`.

@@ -9,7 +9,7 @@ flowchart LR
   G --> S
   B -- nothing open --> S[build sheet: every value the build reads, with its source]
   S --> C[build prompt]
-  C --> D[seek-t HTML page]
+  C --> D[page drawn from time]
   D --> E{preview frames}
   E -- changes --> D
   E -- go --> F[mp4]
@@ -27,9 +27,8 @@ Then install what `skills/motion/SKILL.md` lists under Prerequisites.
 
 | Piece | Role |
 |---|---|
-| `skills/motion/SKILL.md` | Decisions every video turns on (the slow axes), plus the build → preview → render procedure |
+| `skills/motion/SKILL.md` | Decisions every video turns on (the slow axes), plus the sheet → prompt → page → preview → mp4 procedure |
 | `skills/motion/references/fast-axes.md` | Decisions that depend on the kind of video, and how to pull live examples |
-| `skills/motion/references/rendering.md` | How the builder turns the `seek(t)` page into preview frames and the mp4 with Playwright and ffmpeg, and the mistakes that go wrong without failing |
 | `skills/motion/references/axes.json` | The pattern each decision is measured by, keyed by the decision's name in `SKILL.md` or `fast-axes.md` |
 | `skills/motion/scripts/corpus.py` | Reads [awesome-opus5-5-videos](https://github.com/yihui-dev/awesome-opus5-5-videos) `data/videos.json` live: `examples` lists links to look at, `axes` re-measures which decisions vary by kind |
 
@@ -43,5 +42,3 @@ Slow decisions hold for every kind of video, so they live in `SKILL.md`. Fast de
 python3 -I skills/motion/scripts/corpus.py examples --limit 3
 python3 -I skills/motion/scripts/corpus.py axes
 ```
-
-There is no renderer to test: the builder writes the capture for each run from `references/rendering.md`, and the person checks the result at the preview.

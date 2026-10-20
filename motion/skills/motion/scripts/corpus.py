@@ -6,7 +6,7 @@
       Prompt text is never printed.
   corpus.py axes
       Per axis: share of non-partial prompts that mention it, overall and per
-      category, plus the spread across categories. Low spread = slow axis.
+      category, plus the spread across categories, which informs the slow/fast split.
 
 Stdlib only. The corpus is fetched on every run; nothing is cached.
 """

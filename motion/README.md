@@ -29,13 +29,13 @@ brew install ffmpeg                             # or: apt install ffmpeg
 | Piece | Role |
 |---|---|
 | `skills/motion/SKILL.md` | Decisions every video turns on (the slow axes), plus the build → preview → render procedure |
-| `skills/motion/references/fast-axes.md` | Decisions that depend on the kind of video (motion, 3d, explainer, interactive), and how to pull live examples |
+| `skills/motion/references/fast-axes.md` | Decisions that depend on the kind of video, and how to pull live examples |
 | `skills/motion/scripts/corpus.py` | Reads [awesome-opus5-5-videos](https://github.com/yihui-dev/awesome-opus5-5-videos) `data/videos.json` live: `examples` lists links to look at, `axes` re-measures which decisions vary by kind |
 | `skills/motion/scripts/render.cjs` | Steps a `window.seek(t)` page through time with Playwright and encodes it with ffmpeg; `--preview` writes PNGs instead |
 
 ## Slow and fast
 
-Slow decisions hold for every kind of video, so they live in `SKILL.md`. Fast decisions vary by kind, so they live in `references/`. The split is measured, not fixed: `python3 -I skills/motion/scripts/corpus.py axes` prints each decision's spread across kinds. If a slow decision's spread grows, or a fast one's shrinks, move it to the other file.
+Slow decisions hold for every kind of video, so they live in `SKILL.md`. Fast decisions vary by kind, so they live in `references/`. `python3 -I skills/motion/scripts/corpus.py axes` prints each decision's spread across kinds, which informs revisiting the split; moving a decision is a judgment, not a threshold.
 
 ## Test
 

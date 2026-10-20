@@ -34,14 +34,14 @@ Carry the person's words about the video verbatim as the seed; invoked without t
 Invoke `/elicit` on the seed — the skill call itself. The decisions below hold for every kind of video. They are candidates `/elicit` draws on where the seed and the person's words leave them open, never a checklist walked in order. Each is phrased in the person's situation, with what happens if it is left unsaid:
 
 - **Where it will be shown** (aspect ratio, size) — "Where will people watch this: a phone feed, a web page, a slide?" Left unsaid, the builder picks a frame shape, and a vertical feed video built square loses half the screen.
-- **How long** (duration) — "About how many seconds?" Every later timing hangs on this number.
+- **How long** (duration) — "About how many seconds?" Left unsaid, the builder picks a length, and every later timing hangs on it.
 - **What happens in what order** (scenes, beats) — "What should be seen first, what next, how does it end?" Left unsaid, the builder invents the sequence.
 - **Sound** (music, effects, voice) — "Silent, music, or a voice? If music, do you have a track, and should the motion land on its beats?" Left unsaid, the builder chooses silence or synthesized sound.
 - **Look** (style reference, colors) — "Is there a video, brand, or site whose look you want? Any colors to use or avoid?" Left unsaid, the result tends toward a generic look.
 - **Words on screen** (text, typography) — "Must any exact words appear? Any font or brand lettering?" Left unsaid, the builder writes its own text.
 - **Smoothness** (frame rate) — "Smooth like a phone screen, or calmer and film-like?" Left unsaid, 30 frames a second.
 - **Repeat** (loop) — "Will it autoplay on repeat, so the end should flow back into the start?" Left unsaid, it ends with a hard cut.
-- **What would make it wrong** — "What would you look for to say 'not this'?" The answer is what the moving preview is checked against.
+- **What would make it wrong** — "What would you look for to say 'not this'?" The answer is what the moving preview is checked against. Left unsaid, the builder picks the moments for the stills and says they are its own.
 
 Where the kind of video comes into view — the seed implies it, or the person cannot picture it — read `references/fast-axes.md` for the decisions that change with the kind and for real examples to point at.
 
@@ -61,10 +61,10 @@ Write the page as one HTML file in a folder of this run's own, with each supplie
 
 ## Watch it moving
 
-Show the page playing — a short capture or the page itself — with its sound. Beside it, show stills at the moments the person named in "what would make it wrong", each with its time, and say what the builder chose on its own: each decision the person left unsaid and the value it took, and any warning the build saw. Whether the video is what was asked is the person's judgment, made here.
+Show the page playing — a short capture or the page itself — with its sound. Beside it, show stills at the moments chosen for "what would make it wrong", each with its time, and say what the builder chose on its own: each decision the person left unsaid and the value it took, and any warning the build saw. Whether the video is what was asked is the person's judgment, made here.
 
 Then stop for the person's turn. A change goes into the page and the preview runs again; their go-ahead moves to the render.
 
 ## Render
 
-Capture every frame of the page and encode the mp4, however the builder sees fit. The mp4 lands beside the page and runs `DURATION`. Report the file, its length and size, and any warning the render saw.
+Capture every frame of the page and encode the mp4 with the page's sound, at the frame shape and smoothness this run settled, however the builder sees fit. The mp4 lands beside the page and runs `DURATION`. Report the file, its length and size, and any warning the render saw.

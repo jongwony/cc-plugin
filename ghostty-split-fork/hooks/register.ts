@@ -20,9 +20,14 @@ const SPLIT = `on run argv
   end tell
 end run`
 
-const WINDOW_MS = 10_000
+// The id in /fork's output line, `session running · <name> · <8 hex>`.
+const FORK_OUTPUT = /session running · .* · ([0-9a-f]{8})(?:<|\s*$)/
+const FORK_OUTPUT_WAIT_MS = 3_000
 
-// The mod acts only in a session drawn by Ghostty on macOS; read once per load.
+// Set while a /fork hook waits for the command's output row; called with the id it carries.
+let onForkOutput: ((id: string) => void) | undefined
+
+// True only in a session drawn by Ghostty on macOS; read once per load.
 let inGhostty: Promise<boolean> | undefined
 const ghostty = ($: EngineInterface) =>
   (inGhostty ??= (async () => {
@@ -31,7 +36,7 @@ const ghostty = ($: EngineInterface) =>
     return os.stdout.trim() === 'Darwin'
   })().catch(() => false))
 
-// Splits the Ghostty terminal this session draws in and types `command` into the new pane.
+// Splits the Ghostty terminal whose tty is this session's and types `command` into the new pane; failures toast.
 const split = async ($: EngineInterface, cwd: string, direction: Direction, command: string) => {
   try {
     const tty = (await $.process.run(['/bin/sh', '-c', 'ps -o tty= -p $PPID'])).stdout.trim()
@@ -46,79 +51,51 @@ const split = async ($: EngineInterface, cwd: string, direction: Direction, comm
   }
 }
 
-const jobsDir = async ($: EngineInterface) => {
-  const config = await $.env.get('CLAUDE_CONFIG_DIR')
-  if (config) return `${config}/jobs`
-  const home = await $.env.get('HOME')
-  return home ? `${home}/.claude/jobs` : undefined
-}
-
-// Job ids under `jobs`: [] when the directory does not exist yet, undefined when it exists but cannot be listed.
-const jobIds = async ($: EngineInterface, jobs: string) => {
-  try {
-    return (await $.fs.list(jobs)).filter(entry => entry.kind === 'dir').map(entry => entry.name)
-  } catch {
-    return (await $.fs.stat(jobs).then(() => true, () => false)) ? undefined : []
-  }
-}
-
-// True when the job's state names `parent` as the session it was forked from.
-const forkedFrom = async ($: EngineInterface, jobs: string, id: string, parent: string) => {
-  try {
-    const state = JSON.parse(await $.fs.read(`${jobs}/${id}/state.json`))
-    return state.forkParentSessionId === parent
-  } catch {
-    return false
-  }
-}
-
-// /fork's result carries no id, so the fork is the new job that records this session as its parent.
-const waitForked = async (
-  $: EngineInterface,
-  signal: AbortSignal,
-  jobs: string,
-  parent: string,
-  known: readonly string[],
-) => {
-  const deadline = (await $.clock.now()) + WINDOW_MS
-  for (let tries = 0; !signal.aborted; tries++) {
-    if (tries > 0) {
-      if ((await $.clock.now()) >= deadline) return undefined
-      await $.process.run(['sleep', '0.5'])
-      if (signal.aborted) return undefined
-    }
-    for (const id of ((await jobIds($, jobs)) ?? []).filter(id => !known.includes(id))) {
-      if (await forkedFrom($, jobs, id, parent)) return id
-    }
-  }
-  return undefined
-}
-
 export const register: Register = on => {
-  // /branch moves this process onto the branch, so the split picks the original back up on the left.
+  // Passes every row through unchanged; hands a /fork output line's id to a waiting /fork hook.
+  on('session.append', ($, e, next) => {
+    if (onForkOutput) {
+      for (const block of e.message.content) {
+        const id = block.type === 'text' && typeof block.text === 'string' ? block.text.match(FORK_OUTPUT)?.[1] : undefined
+        if (id) onForkOutput(id)
+      }
+    }
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  // Opens the original session in a split on the left once /branch has moved this process onto the branch.
   on('command.run', { command: 'branch' }, async ($, e, next) => {
     if (e.origin.kind !== 'composer' || !(await ghostty($))) return next(e)
     const cwd = await $.session.cwd()
     const before = await $.session.id()
     const ran = await next(e)
+    if (next.signal.aborted) return ran
     if ((await $.session.id()) !== before) await split($, cwd, 'left', `claude --resume ${before}`)
     return ran
   }).catch(($, e, next) => next(e))
 
-  // /fork keeps this process on the original, so the split attaches to the fork on the right.
+  // Attaches to the session /fork started in a split on the right; no id in its output within the wait → toast.
   on('command.run', { command: 'fork' }, async ($, e, next) => {
     if (e.origin.kind !== 'composer' || !(await ghostty($))) return next(e)
-    const jobs = await jobsDir($)
-    if (!jobs) return ($.ui.toast(`HOME is not set; no split`), next(e))
     const cwd = await $.session.cwd()
-    const parent = await $.session.id()
-    const known = await jobIds($, jobs)
-    const ran = await next(e)
-    if (!known) return ($.ui.toast(`cannot list ${jobs}; no split`), ran)
-    const id = await waitForked($, next.signal, jobs, parent, known)
-    if (next.signal.aborted) return ran
-    if (id) await split($, cwd, 'right', `claude attach ${id}`)
-    else $.ui.toast(`no background session from this /fork appeared`)
-    return ran
+    const found = new Promise<string>(resolve => (onForkOutput = resolve))
+    try {
+      const ran = await next(e)
+      const id =
+        ran.text?.match(FORK_OUTPUT)?.[1] ??
+        (await Promise.race([
+          found,
+          $.clock.sleep(FORK_OUTPUT_WAIT_MS, { signal: next.signal }).then(
+            () => undefined,
+            () => undefined,
+          ),
+        ]))
+      if (next.signal.aborted) return ran
+      if (id) await split($, cwd, 'right', `claude attach ${id}`)
+      else $.ui.toast(`no session id in /fork's output`)
+      return ran
+    } finally {
+      onForkOutput = undefined
+    }
   }).catch(($, e, next) => next(e))
 }

@@ -48,11 +48,10 @@ commands pass straight through: no split, no toast, no extra delay.
 
 - `/branch` switches the running session to a new session id in place, so the mod
   reads the id before and after the command and resumes the original in the split.
-- `/fork` does not hand its new session id to the mod, so the mod notes the job
-  directories under `~/.claude/jobs` (or `$CLAUDE_CONFIG_DIR/jobs`) before the
-  command, then for up to 10 seconds looks for a new one whose `state.json` names
-  this session as its fork parent. The `/fork` output can appear up to that long
-  after you press Enter.
+- `/fork` does not hand its new session id to the mod, so the mod reads the
+  `/fork` command's own output line (`session running · <name> · <id>`) as the
+  conversation keeps it, waiting up to 3 seconds for it. If no id turns up, a
+  toast says so and no split opens.
 - The split is made from the Ghostty terminal whose `tty` matches the session. If
   the session has no terminal of its own, a toast says so and no split opens.
 - When `CLAUDE_CONFIG_DIR` is set, the new pane gets the same value, so
@@ -60,8 +59,8 @@ commands pass straight through: no split, no toast, no extra delay.
 
 ## Known limits
 
-- The job record is an undocumented Claude Code file. If a release moves or
-  reshapes it, `/fork` still runs but no split opens and a toast says so.
+- The `/fork` output line is not a documented format. If a release rewords it,
+  `/fork` still runs but no split opens and a toast says so.
 - With agent view disabled (`CLAUDE_CODE_DISABLE_AGENT_VIEW`), `/fork` runs a
-  subagent instead of a background session, so no split opens; after the
-  10-second wait a toast says so.
+  subagent instead of a background session, so no split opens and a toast says
+  so.

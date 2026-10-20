@@ -4,12 +4,7 @@ Read when the kind of video is in view: when the person's seed implies one, when
 
 ## The kind of video
 
-The corpus sorts videos into kinds; `corpus.py` names the current ones. The kind is itself a decision a newcomer rarely names; show live examples (below) and let them point.
-
-- **motion** — product, brand, or UI motion: a launch reel, a logo sting, an interface that morphs.
-- **3d** — a scene with depth: terrain, objects, a camera flying through space.
-- **explainer** — something taught or told: a recipe, a process, data, a piece of history.
-- **interactive** — something played or steered: a game, a simulation, a toy.
+The corpus sorts videos into kinds; the first line `corpus.py axes` prints names the current ones, after `ALL`. The kind is itself a decision a newcomer rarely names; show live examples (below) and let them point.
 
 ## Decisions that depend on the kind
 

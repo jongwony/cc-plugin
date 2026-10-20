@@ -7,7 +7,7 @@ skills:
   - horismos:bound
 ---
 
-# Motion Elicit
+# Motion
 
 Invoke with `/motion <what the video is for>`. The person may know nothing about motion graphics or about writing prompts; the skill is written for that person.
 
@@ -24,9 +24,9 @@ Respond in the person's language.
 | Python 3 | (system) | `scripts/corpus.py` reads the example corpus live |
 | Node.js 18+ | `brew install node` (or the distro package) | `scripts/render.cjs` |
 | Playwright + Chromium | `npm i -g playwright && npx playwright install chromium` | Steps the page through time and captures frames |
-| ffmpeg (with ffprobe) | `brew install ffmpeg` (or `apt install ffmpeg`) | Encodes frames (and audio) to mp4; ffprobe checks its length |
+| ffmpeg (with ffprobe and libx264) | `brew install ffmpeg` (or `apt install ffmpeg`) | Encodes frames (and audio) to mp4; ffprobe checks its length |
 
-Preflight: `python3 --version && node --version && ffmpeg -version | head -1 && ffprobe -version | head -1 && node -e "require(require('path').join(require('child_process').execSync('npm root -g').toString().trim(),'playwright'))"`. Set `CHROMIUM_PATH` when Chromium lives outside Playwright's cache. Corpus reads need network access to `raw.githubusercontent.com`.
+Preflight: `python3 --version >/dev/null && node --version >/dev/null && ffmpeg -version >/dev/null && ffprobe -version >/dev/null && ffmpeg -hide_banner -encoders 2>/dev/null | grep -q libx264 && node -e "const {chromium}=require(require('path').join(require('child_process').execSync('npm root -g').toString().trim(),'playwright'));process.exit(require('fs').existsSync(process.env.CHROMIUM_PATH||chromium.executablePath())?0:1)"` — a non-zero exit names nothing, so run each part on its own to see which is missing. Set `CHROMIUM_PATH` when Chromium lives outside Playwright's cache. Corpus reads need network access to `raw.githubusercontent.com`.
 
 ## Phase 1: Seed
 
@@ -36,7 +36,7 @@ Carry the person's words about the video verbatim as the seed. Invoked without t
 
 Open with one plain sentence on what happens next: a few questions about the video, answered in any words or skipped, then preview frames to check, then the finished video.
 
-Invoke `/elicit` on the seed — the skill call itself. The coordinates below are the domain's decision structure that `/elicit` draws on: candidates raised where the seed leaves them open and the person's own words have not already settled them, after the coordinates those words raise, never as a checklist walked in order. Phrase each in the person's situation rather than the craft term, and say what happens if it is left unsaid. A coordinate left open stays open into the seam.
+Invoke `/elicit` on the seed — the skill call itself. The coordinates below are the domain's decision structure that `/elicit` draws on: candidates raised where the seed leaves them open and the person's own words have not already settled them, after the coordinates those words raise, never as a checklist walked in order. Phrase each in the person's situation rather than the craft term, and say what happens if it is left unsaid.
 
 These decisions hold for every kind of video:
 
@@ -50,11 +50,11 @@ These decisions hold for every kind of video:
 - **Repeat** (loop) — "Will it autoplay on repeat, so the end should flow back into the start?" Left unsaid, it ends with a hard cut.
 - **What would make it wrong** (checking) — "What would you look for to say 'not this'?" The answer chooses the moments shown as preview frames in Phase 5. Left unsaid, the builder checks its own work.
 
-Where the kind of video comes into view — the seed implies it, or the person cannot picture it — read `references/fast-axes.md`: it names the kinds, the decisions that depend on the kind, and how to pull live examples the person can point at.
+Where the kind of video comes into view — the seed implies it, or the person cannot picture it — read `references/fast-axes.md`: it says where the current kinds are named, the decisions that depend on the kind, and how to pull live examples the person can point at.
 
 ## Seam: who settles what stays open
 
-When `/elicit` resolves, run the Preflight and list the output folder (`~/motion-output/<name>/`), so a missing prerequisite (an install) and an existing file there (an overwrite) are known. Then read `/elicit`'s residual beside the build and render plan. Who settles what is still open, and how far an entrustment reaches, is undefined — the deficit `/bound` resolves — where either holds:
+When `/elicit` resolves, run the Preflight, so a missing prerequisite (an install) is known. This run's output folder is `~/motion-output/<name>/`, `<name>` a short slug of the seed plus the start time (`launch-reel-20261020-1432`): fresh for every run, so nothing from an earlier run is overwritten, while files this run writes there are regenerated as the preview loop needs. Then read `/elicit`'s residual beside the build and render plan. Who settles what is still open, and how far an entrustment reaches, is undefined — the deficit `/bound` resolves — where either holds:
 
 - the residual is non-empty;
 - the plan includes an act that is hard to undo or reaches outside: installing a render prerequisite, fetching an asset that carries a license (music, fonts, images), overwriting an existing output.
@@ -68,7 +68,7 @@ Once the boundary stands, its arrangements govern the build:
 - an item entrusted to the builder is chosen within the stated limits and reported in Phase 6;
 - an act that is hard to undo goes only as far as the reach shown for it.
 
-An item the boundary leaves with no arrangement: a coordinate is built on what its "Left unsaid" clause above states and is marked at the Phase 5 preview as not yet decided; an act does not happen.
+An item the boundary leaves with no arrangement: a coordinate is built on a value the builder states — the coordinate's "Left unsaid" value where it has one — and is marked at the Phase 5 preview as not yet decided, with that value; an act does not happen.
 
 ## Phase 3: Assemble the prompt
 
@@ -81,7 +81,7 @@ Past the seam, write the build prompt from `/elicit`'s record in this shape, eac
 - `<gotchas>` — what the person said would make it wrong.
 - `<start>` — "Build the page, then show the preview frames before the full render."
 
-Each residual coordinate goes into `<build>` with the arrangement the seam's boundary gives it. Save the prompt as `prompt.md` in the output folder (`~/motion-output/<name>/`) and show it: it is also something the person can paste into another session.
+Each residual coordinate goes into `<build>` with the arrangement the seam's boundary gives it. Save the prompt as `prompt.md` in this run's output folder and show it: it is also something the person can paste into another session.
 
 ## Phase 4: Build
 
@@ -99,7 +99,7 @@ Write one self-contained HTML file in the output folder:
 node ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/render.cjs <page.html> --size <W>x<H> --preview <t1,t2,...>
 ```
 
-A non-zero exit is a failed check — a page error, a font that did not load, a bad argument — and its message says which; fix the page and run again. Choose times at each scene boundary and at the moments the person named in "what would make it wrong". Show each `MOTION_PREVIEW=` frame with its time and the scene it belongs to, each item left for proposal with its candidates, and each item marked not yet decided with the value it was built on, then stop for the person's turn. Changes go back into the page and the preview runs again; their go-ahead moves to Phase 6.
+A non-zero exit is a failed check — a page error, a font that did not load, a bad argument — and its message says which; fix the page and run again. Choose times at each scene boundary and at the moments the person named in "what would make it wrong". Show each `MOTION_PREVIEW=` frame with its time and the scene it belongs to, each item left for proposal with its candidates, and each item marked not yet decided with the value it was built on, then stop for the person's turn. Changes go back into the page, and into `prompt.md` where they change what it says, and the preview runs again; their go-ahead moves to Phase 6.
 
 ## Phase 6: Render
 

@@ -42,5 +42,5 @@ Slow decisions hold for every kind of video, so they live in `SKILL.md`. Fast de
 ```bash
 python3 -I skills/motion/scripts/corpus.py examples --category motion --limit 3
 node skills/motion/scripts/render.cjs page.html --size 320x320 --preview 0,1
-node skills/motion/scripts/render.cjs page.html --size 320x320
+node skills/motion/scripts/render.cjs page.html --size 320x320 --fps 30
 ```

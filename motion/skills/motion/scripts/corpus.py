@@ -28,7 +28,8 @@ AXES = {
     "length": r"\b\d+\s*(s|sec|secs|seconds?|-second|min|minutes?)\b|\bseconds?\b",
     "story_order": r"scene|act \d|\bbeat|storyboard|timeline|sequence|intro|outro|ending|start(s)? with|→|->",
     "sound": r"audio|music|sound|\bsong\b|\bbpm\b|voice|narrat",
-    "look": r"style|aesthetic|dribbble|cinematic|minimal|retro|brutalist|inspired by|look like",
+    "look": r"style|aesthetic|dribbble|cinematic|minimal|retro|brutalist|inspired by|look like"
+    r"|colou?r|palette|black and white|monochrome|gradient|neon",
     "words_on_screen": r"font|typograph|typeface|\btext\b|title|caption|kinetic type",
     "smoothness": r"\b\d{2}\s*fps\b|frame rate",
     "loop": r"\bloop",
@@ -36,34 +37,36 @@ AXES = {
     "render_tech": r"canvas|svg|three\.?js|webgl|shader|glsl|gsap|\bcss\b|p5|d3",
     "interactivity": r"interactiv|playable|click|drag|hover|mouse|keyboard",
     "subject_narration": r"explain|visuali[sz]e|narrat|voice-?over|data|history|recipe",
-    "color": r"colou?r|palette|black and white|monochrome|gradient|neon",
     "motion_feel": r"spring|eas(e|ing)|physics|bounce|morph|particle",
 }
 
 
 def load():
     with urllib.request.urlopen(CORPUS_URL, timeout=60) as r:
-        return json.load(r)
+        v = json.load(r)
+    # Third-party schema: rows missing the fields every command needs are skipped.
+    return [x for x in v if isinstance(x, dict) and isinstance(x.get("category"), str)]
 
 
 def cmd_examples(v, a):
     rows = [x for x in v if x["category"] == a.category]
     if a.tag:
-        rows = [x for x in rows if a.tag in x["tech_tags"]]
+        rows = [x for x in rows if a.tag in (x.get("tech_tags") or [])]
     if not rows:
         cats = sorted({x["category"] for x in v})
         sys.exit(f"no entries for category={a.category!r} tag={a.tag!r}; categories: {', '.join(cats)}")
-    rows.sort(key=lambda x: x["added"], reverse=True)
+    rows.sort(key=lambda x: x.get("added") or "", reverse=True)
     for x in rows[: a.limit]:
-        print(f"- @{x['author']} [{', '.join(x['tech_tags'])}]")
-        if x.get("skillry_url"):
-            print(f"  watch: {x['skillry_url']}")
-        print(f"  original post: {x['post_url']}")
-        print(f"  poster: {x['poster_url']}")
+        print(f"- @{x.get('author', '?')} [{', '.join(x.get('tech_tags') or [])}]")
+        for label, key in (("watch", "skillry_url"), ("original post", "post_url"), ("poster", "poster_url")):
+            if x.get(key):
+                print(f"  {label}: {x[key]}")
 
 
 def cmd_axes(v, _a):
-    full = [x for x in v if not x["prompt_partial"]]
+    full = [x for x in v if isinstance(x.get("prompt"), str) and not x.get("prompt_partial")]
+    if not full:
+        sys.exit("no complete prompts in the corpus")
     cats = sorted({x["category"] for x in full})
     groups = {"ALL": full, **{c: [x for x in full if x["category"] == c] for c in cats}}
     print("n (non-partial):", {k: len(g) for k, g in groups.items()})
@@ -82,7 +85,7 @@ def cmd_axes(v, _a):
         print(ax.ljust(18) + cells + f"   {spread * 100:6.0f}")
     print("tech_tags by category:")
     for c in cats:
-        tags = collections.Counter(t for x in groups[c] for t in x["tech_tags"])
+        tags = collections.Counter(t for x in groups[c] for t in x.get("tech_tags") or [])
         print(f"  {c}: " + ", ".join(f"{t} {n}" for t, n in tags.most_common(6)))
 
 

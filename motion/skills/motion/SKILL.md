@@ -24,7 +24,7 @@ Respond in the person's language.
 | horismos plugin | `/plugin install horismos@epistemic-protocols` | `/bound`, invoked only at the seam below |
 | Python 3 | `brew install python` (or the distro package, e.g. `apt install python3`) | `scripts/corpus.py` reads the example corpus live; serves the page folder for the capture |
 | Node.js 18+ | `brew install node`, or nodejs.org / nvm (distro packages are often older than 18) | Runs Playwright for the capture |
-| Playwright + Chromium | `npm i -g playwright && npx playwright install chromium` (on Linux, `--with-deps` adds Chromium's system libraries) | Steps the page through time and captures frames |
+| Playwright + Chromium | `npm i -g playwright && npx playwright install chromium` (on Linux, `--with-deps` adds Chromium's system libraries); run the capture with `NODE_PATH="$(npm root -g)"` so a script in the output folder finds it (installing it there instead is a download, an act at the seam) | Steps the page through time and captures frames |
 | ffmpeg (with libx264, and libvpx-vp9 and libopus for Phase 4's re-encode) | `brew install ffmpeg` (or `apt install ffmpeg`) | Encodes frames and sound to mp4 |
 
 Corpus reads need network access to `raw.githubusercontent.com`, and downloading a library the page uses needs it too.
@@ -64,14 +64,15 @@ Where it is undefined, invoke `/bound` — the skill call itself — on the buil
 
 ### Build sheet
 
-Then write `sheet.md` in this run's output folder: one row for each value that a Phase 3 prompt section (`<inputs>`, `<direction>`, `<structure>`, `<build>`, `<gotchas>`) or the render reads, whether or not `/elicit` raised it (supplied files, what is banned, how the movement feels, the kind's own decisions, frame size, frame rate, motion blur, each sound source and, where motion lands on a track's beats, its BPM and first-beat time). It is this skill's list of what the build consumes, not a further round of questions; `/elicit` and `/bound` remain the contracts that settled what it holds. Each row carries its value and where the value came from:
+Then write `sheet.md` in this run's output folder: one row for each value that a Phase 3 prompt section (`<inputs>`, `<direction>`, `<structure>`, `<build>`, `<gotchas>`) or the render reads, whether or not `/elicit` raised it (supplied files, what is banned, how the movement feels, the kind's own decisions, frame size, frame rate, motion blur, each sound source, where in a supplied track the video starts if that matters, and, where motion lands on a track's beats, its BPM and first-beat time). It is this skill's list of what the build consumes, not a further round of questions; `/elicit` and `/bound` remain the contracts that settled what it holds. Each row carries its value and where the value came from:
 
 - the person's words — `/elicit`'s record, or what they gave during `/bound` — kept in those words;
 - a `/bound` arrangement: a value the person keeps is asked for now, before the build; a value they asked proposals for lists its candidates, shown in Phase 5; a value entrusted to the builder is chosen within the stated limits;
+- a value `/elicit` recorded as entrusted to the builder ("you pick"): the builder's choice under that grant;
 - the builder's reading of the person's words or of an example they picked ("a phone feed" → 1080x1920, a picked Three.js example → Three.js), marked as the builder's reading;
 - otherwise a default the builder states — the row's "Left unsaid" value above where it has one.
 
-An act that is hard to undo goes only as far as the reach `/bound` showed for it; one with no arrangement does not happen.
+An act that is hard to undo goes only as far as the reach `/bound` showed for it; one with no arrangement does not happen. An act that arises after the seam — a library the sheet now needs, a licensed asset a preview change asks for — is where that deficit appears: invoke `/bound` there, before the act.
 
 ## Phase 3: Assemble the prompt
 
@@ -92,16 +93,16 @@ Write one HTML file in the output folder, with every file it uses referenced by 
 
 - `window.DURATION` — length in seconds, greater than 0.
 - `window.seek(t)` — draws the frame for time `t` from `t` alone: no timers, CSS transitions, `requestAnimationFrame` loops, or state carried between calls. It is called in any order and awaited when it returns a Promise, so an image, video, web font (`document.fonts.load(…)`), or data the frame needs is awaited inside `seek`; a failure there — a load, a decode, a parse — is caught, reported with `console.warn`, and the frame drawn without it.
-- A fixed canvas size matching the shape chosen in Phase 2.
+- A fixed canvas size: the sheet's frame size.
 - With a loop, the frame at `DURATION` matches the frame at 0.
 - Sound: each supplied track is mixed in at render; synthesized sound is exposed as `window.renderAudio()`, resolving to a base64 WAV rendered with an `OfflineAudioContext`.
 
 ## Phase 5: Preview
 
-Render the preview as `references/rendering.md` describes. Whether the page is what was asked is the person's judgment, made on these frames. Choose times at each scene boundary and at the moments the person named in "what would make it wrong". Show each frame with its time and the scene it belongs to, and ask them to check that the picture fills the frame and that each supplied asset (logo, text, image) appears; show beside the frames each warning the build saw — a load that failed, a `console.warn` from the page; offer the mixed sound — every source the mp4 will carry, at its own level — to listen to, since stills do not show sound, and whether it is balanced or clips is the person's to hear there; show beside the frames each sheet row whose value is a builder default or the builder's reading; for a value with candidates, preview each at a moment where the value shows — a candidate that changes the page gets its own variant page file, previewed as a still; candidates that differ only in how the page is rendered (frame rate, blur) keep the one page and each get a short clip, named by the value.
+Render the preview as `references/rendering.md` describes. Whether the page is what was asked is the person's judgment, made on these frames. Choose times at each scene boundary and at the moments the person named in "what would make it wrong". Show each frame with its time and the scene it belongs to, and ask them to check that the picture fills the frame and that each supplied asset (logo, text, image) appears; show beside the frames each warning the build saw — a load that failed, a `console.warn` from the page; offer the mixed sound — every source the mp4 will carry, at its own level — to listen to, since stills do not show sound, and whether it is balanced or clips is the person's to hear there; show beside the frames each sheet row whose value is a builder default, the builder's reading, or the builder's choice under a grant; for a value with candidates, preview each at a moment where the value shows — a candidate that differs in motion (frame rate, blur, speed, easing, how the movement feels) as a short clip, one that differs in a still look as a still; a candidate that changes the page gets its own variant page file, one that changes only how it is rendered keeps the one page; each is named by its value.
 
-The pick — a variant page or a render value — is written into its sheet row as the value, with the person's pick as its source, and `prompt.md` is rendered again; a picked variant page becomes the page. Then stop for the person's turn. Accepted changes go into the page, `sheet.md`, and `prompt.md`, and the preview runs again; their go-ahead moves to Phase 6.
+Then stop for the person's turn. Their pick — a variant page or a render value — is written into its sheet row as the value, with the pick as its source, and `prompt.md` is rendered again; a picked variant page becomes the page. Other accepted changes go into the page, `sheet.md`, and `prompt.md`, and the preview runs again; their go-ahead moves to Phase 6.
 
 ## Phase 6: Render
 
-Render the mp4 as `references/rendering.md` describes, in the background: every frame is a capture, so a long or large render takes minutes. Frame rate and motion blur come from their sheet rows. The mp4 lands beside the page and runs `DURATION`. Report the file, its length and size, any warning the build saw, and each sheet row the builder chose.
+Render the mp4 as `references/rendering.md` describes, in the background: every frame is a capture, so a long or large render takes minutes. The mp4 lands beside the page and runs `DURATION`. Report the file, its length and size, any warning the build saw, and each sheet row the builder chose.

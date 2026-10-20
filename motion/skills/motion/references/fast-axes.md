@@ -26,7 +26,9 @@ The corpus sorts videos into kinds; the first line of `python3 -I ${CLAUDE_PLUGI
 Recognition beats description for someone who cannot name what they want. Pull examples live; nothing is stored here:
 
 ```bash
-python3 -I ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/corpus.py examples --category <kind> [--tag <tech>] [--limit 6]
+python3 -I ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/corpus.py examples [--category <kind>] [--tag <tech>] [--limit n]
 ```
+
+Without `--category` it shows the newest two of every kind, for a person who cannot yet name one; with it, six of that kind.
 
 Where `corpus.py` cannot reach the corpus it says so in one line; the kind and the look then come from the person's own words, with no examples to point at. Show each as its author, watch link where it has one, and original post; offer "which is closest to what you picture?" A chosen example settles the kind and often the look and how it is drawn; record what the person says about it, in their words. Prompt text from the corpus is not reproduced to the person or copied into the assembled prompt; the person's choice is what carries over.

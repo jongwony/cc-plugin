@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Read the awesome-opus5-5-videos corpus live and report on it.
 
-  corpus.py examples --category motion [--limit 6] [--tag svg]
-      Recognition material: who made each video, where to watch it, its poster.
+  corpus.py examples [--category motion] [--limit 6] [--tag svg]
+      Recognition material: who made each video, where to watch it, its poster;
+      without --category, the newest two of every kind.
       Prompt text is never printed.
   corpus.py axes
       First line: the current kinds (categories), from every row. Then, per
@@ -54,18 +55,22 @@ def load():
 
 
 def cmd_examples(v, a):
-    rows = [x for x in v if x["category"] == a.category]
+    rows = [x for x in v if a.category in (None, x["category"])]
     if a.tag:
         rows = [x for x in rows if a.tag in (x.get("tech_tags") or [])]
     if not rows:
         cats = sorted({x["category"] for x in v})
         sys.exit(f"no entries for category={a.category!r} tag={a.tag!r}; categories: {', '.join(cats)}")
     rows.sort(key=lambda x: x.get("added") or "", reverse=True)
-    for x in rows[: a.limit]:
-        print(f"- @{x.get('author', '?')} [{', '.join(x.get('tech_tags') or [])}]")
-        for label, key in (("watch", "skillry_url"), ("original post", "post_url"), ("poster", "poster_url")):
-            if x.get(key):
-                print(f"  {label}: {x[key]}")
+    # Without --category, the newest few of every kind, so a newcomer can point at a kind.
+    kinds = [a.category] if a.category else sorted({x["category"] for x in rows})
+    for k in kinds:
+        print(f"{k}:")
+        for x in [x for x in rows if x["category"] == k][: a.limit]:
+            print(f"- @{x.get('author', '?')} [{', '.join(x.get('tech_tags') or [])}]")
+            for label, key in (("watch", "skillry_url"), ("original post", "post_url"), ("poster", "poster_url")):
+                if x.get(key):
+                    print(f"  {label}: {x[key]}")
 
 
 def cmd_axes(v, _a):
@@ -106,11 +111,13 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     e = sub.add_parser("examples")
-    e.add_argument("--category", required=True)
+    e.add_argument("--category")
     e.add_argument("--tag")
-    e.add_argument("--limit", type=positive, default=6)
+    e.add_argument("--limit", type=positive, default=None)
     sub.add_parser("axes")
     a = p.parse_args()
+    if a.cmd == "examples" and a.limit is None:
+        a.limit = 6 if a.category else 2
     v = load()
     {"examples": cmd_examples, "axes": cmd_axes}[a.cmd](v, a)
 

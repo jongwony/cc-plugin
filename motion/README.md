@@ -1,19 +1,39 @@
 # motion
 
-For someone who wants a short motion-graphics video but can't yet say what it should be, and who may know nothing about motion design or prompting. `/motion` asks about the decisions such a video turns on, in plain words. It builds the video as a web page drawn from code, shows preview frames, and renders an mp4 once they're approved.
+For someone who wants a short motion-graphics video but can't yet say what it should be, and who may know nothing about motion design or prompting. `/motion` asks about the decisions such a video turns on, in plain words. Where words run out, it lets the person see drafts or contrasting directions instead. It then builds the video as a web page drawn from code, shows it moving, and renders an mp4 once they approve it.
 
 ```mermaid
 flowchart LR
-  A[seed: what the video is for] --> B["/elicit + video decisions"]
-  B -- open items or hard-to-undo acts --> G["/bound: who settles them"]
-  G --> S
-  B -- nothing open --> S[build sheet: every value the build reads, with its source]
-  S --> C[build prompt]
-  C --> D[page drawn from time]
-  D --> E{preview frames}
-  E -- changes --> D
-  E -- go --> F[mp4]
+  A[what the video is for] --> B["/elicit: the decisions a video turns on"]
+  B --> P[page drawn from time]
+  B -. look or feel can't be said .-> S["/sketch: moving drafts"]
+  B -. directions can't be judged from words .-> V["/preview: contrasting clips"]
+  B -. who settles it, or an outside act .-> D["/bound"]
+  S --> P
+  V --> P
+  D --> P
+  P --> W{watch it moving}
+  W -- changes --> P
+  W -- go --> M[mp4]
 ```
+
+The dotted paths are taken only where the run shows that need.
+
+## Composition
+
+| Protocol | Enters when |
+|---|---|
+| `/elicit` | Always: what the video should be is not yet said |
+| `/sketch` | The look or the movement would be recognized on sight but cannot be described |
+| `/preview` | The person must commit to one of several directions they cannot judge from descriptions |
+| `/bound` | Who settles an open decision, or how far an install, download, or licensed asset may go, is unsettled |
+
+## Pieces
+
+| Piece | Role |
+|---|---|
+| `skills/motion/SKILL.md` | Decisions every video turns on, where the other protocols enter, and page → watch → mp4 |
+| `skills/motion/references/fast-axes.md` | Decisions that change with the kind of video, and real examples to point at |
 
 ## Install
 
@@ -21,24 +41,4 @@ flowchart LR
 /plugin install motion@cc-plugin
 ```
 
-Then install what `skills/motion/SKILL.md` lists under Prerequisites.
-
-## Pieces
-
-| Piece | Role |
-|---|---|
-| `skills/motion/SKILL.md` | Decisions every video turns on (the slow axes), plus the sheet → prompt → page → preview → mp4 procedure |
-| `skills/motion/references/fast-axes.md` | Decisions that depend on the kind of video, and how to pull live examples |
-| `skills/motion/references/axes.json` | The pattern each decision is measured by, keyed by the decision's name in `SKILL.md` or `fast-axes.md` |
-| `skills/motion/scripts/corpus.py` | Reads [awesome-opus5-5-videos](https://github.com/yihui-dev/awesome-opus5-5-videos) `data/videos.json` live: `examples` lists links to look at, `axes` re-measures which decisions vary by kind |
-
-## Slow and fast
-
-Slow decisions hold for every kind of video, so they live in `SKILL.md`. Fast decisions vary by kind, so they live in `references/`. `python3 -I skills/motion/scripts/corpus.py axes` prints each decision's spread across kinds, which informs revisiting the split; moving a decision is a judgment, not a threshold.
-
-## Test
-
-```bash
-python3 -I skills/motion/scripts/corpus.py examples --limit 3
-python3 -I skills/motion/scripts/corpus.py axes
-```
+Then install the protocol plugins `skills/motion/SKILL.md` lists under Prerequisites.

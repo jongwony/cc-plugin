@@ -1,9 +1,11 @@
 ---
 name: motion
-description: "Someone wants a short motion-graphics video made from code but cannot yet say what it should be: /motion surfaces, in plain words, the decisions such a video turns on through /elicit, then builds it and renders an mp4 after they check preview frames."
+description: "Someone wants a short motion-graphics video made from code but cannot yet say what it should be: /motion surfaces, in plain words, the decisions such a video turns on through /elicit, lets them see what words cannot settle, then builds it, shows it moving, and renders an mp4."
 argument-hint: "[what the video is for, in any words]"
 skills:
   - euporia:elicit
+  - hypotyposis:sketch
+  - proplasma:preview
   - horismos:bound
 ---
 
@@ -11,7 +13,7 @@ skills:
 
 Invoke with `/motion <what the video is for>`. The person may know nothing about motion graphics or about writing prompts; the skill is written for that person.
 
-**Composition**: `/elicit` carries the epistemic contract — what the person's intent turns on, what stands on their own words, what stays open. This skill supplies only the decisions a code-rendered video turns on, phrased for a newcomer, and the pipeline that turns the resolved intent into an mp4. Where who settles what is still open is undefined, `/bound` carries that contract in the same way (see **Seam**).
+**Composition**: `/elicit` carries the contract for what the person's intent turns on. `/sketch`, `/preview`, and `/bound` each carry their own contract and enter only where their deficit shows in this run. This skill supplies what is particular to a code-rendered video: the decisions it turns on, phrased for a newcomer, and how a page drawn from time becomes something to watch and then an mp4.
 
 Respond in the person's language.
 
@@ -19,79 +21,50 @@ Respond in the person's language.
 
 | Dependency | Install | Purpose |
 |------------|---------|---------|
-| epistemic-protocols marketplace | `/plugin marketplace add jongwony/epistemic-protocols` | Where the next two plugins come from |
+| epistemic-protocols marketplace | `/plugin marketplace add jongwony/epistemic-protocols` | Where the plugins below come from |
 | euporia plugin | `/plugin install euporia@epistemic-protocols` | `/elicit` |
-| horismos plugin | `/plugin install horismos@epistemic-protocols` | `/bound`, invoked only at the seam below |
-| Python 3 | `brew install python` (or the distro package, e.g. `apt install python3`) | `scripts/corpus.py` reads the example corpus live (network access to `raw.githubusercontent.com`) |
+| hypotyposis plugin | `/plugin install hypotyposis@epistemic-protocols` | `/sketch` |
+| proplasma plugin | `/plugin install proplasma@epistemic-protocols` | `/preview` |
+| horismos plugin | `/plugin install horismos@epistemic-protocols` | `/bound` |
 
-## Phase 1: Seed
+## What the video turns on
 
-Carry the person's words about the video verbatim as the seed. Invoked without them, ask once what the video is for, then proceed.
+Carry the person's words about the video verbatim as the seed; invoked without them, ask once what the video is for. Open with one plain sentence on what happens next: a few questions answered in any words or skipped, then the video shown moving to check, then the mp4.
 
-## Phase 2: Elicit
-
-Open with one plain sentence on what happens next: a few questions about the video, answered in any words or skipped, then preview frames to check, then the finished video.
-
-Invoke `/elicit` on the seed — the skill call itself. The coordinates below are the domain's decision structure that `/elicit` draws on: candidates raised where the seed leaves them open and the person's own words have not already settled them, never as a checklist walked in order. Phrase each in the person's situation rather than the craft term, and say what happens if it is left unsaid.
-
-These decisions hold for every kind of video:
+Invoke `/elicit` on the seed — the skill call itself. The decisions below hold for every kind of video. They are candidates `/elicit` draws on where the seed and the person's words leave them open, never a checklist walked in order. Each is phrased in the person's situation, with what happens if it is left unsaid:
 
 - **Where it will be shown** (aspect ratio, size) — "Where will people watch this: a phone feed, a web page, a slide?" Left unsaid, the builder picks a frame shape, and a vertical feed video built square loses half the screen.
-- **How long** (duration) — "About how many seconds?" Left unsaid, the builder picks; every later timing hangs on this number.
+- **How long** (duration) — "About how many seconds?" Every later timing hangs on this number.
 - **What happens in what order** (scenes, beats) — "What should be seen first, what next, how does it end?" Left unsaid, the builder invents the sequence.
-- **Sound** (music, effects, voice; sync) — "Silent, music, or a voice? If music, do you have a track?" With a track, motion lands on its beats only where its tempo (BPM) and the time of its first beat are known — the person says them; otherwise scene times are in seconds. Left unsaid, the builder chooses silence or synthesized sound.
+- **Sound** (music, effects, voice) — "Silent, music, or a voice? If music, do you have a track, and should the motion land on its beats?" Left unsaid, the builder chooses silence or synthesized sound.
 - **Look** (style reference, colors) — "Is there a video, brand, or site whose look you want? Any colors to use or avoid?" Left unsaid, the result tends toward a generic look.
 - **Words on screen** (text, typography) — "Must any exact words appear? Any font or brand lettering?" Left unsaid, the builder writes its own text.
-- **Smoothness** (frame rate) — "Smooth like a phone screen (60 frames a second) or calmer, film-like (24–30)?" Left unsaid, 30.
+- **Smoothness** (frame rate) — "Smooth like a phone screen, or calmer and film-like?" Left unsaid, 30 frames a second.
 - **Repeat** (loop) — "Will it autoplay on repeat, so the end should flow back into the start?" Left unsaid, it ends with a hard cut.
-- **What would make it wrong** (checking) — "What would you look for to say 'not this'?" The answer chooses the moments shown as preview frames in Phase 5. Left unsaid, the builder picks those moments itself and says which at Phase 5.
+- **What would make it wrong** — "What would you look for to say 'not this'?" The answer is what the moving preview is checked against.
 
-Where the kind of video comes into view — the seed implies it, or the person cannot picture it — read `references/fast-axes.md`: it says where the current kinds are named, the decisions that depend on the kind — offered to `/elicit` in the same way as those above — and how to pull live examples the person can point at.
+Where the kind of video comes into view — the seed implies it, or the person cannot picture it — read `references/fast-axes.md` for the decisions that change with the kind and for real examples to point at.
 
-## Seam: who settles what stays open
+## Where words run out
 
-When `/elicit` resolves, this run's output folder is `~/motion-output/<name>/`, `<name>` a short slug of the seed plus the start time to the second (`launch-reel-20261020-143205`), with `-2`, `-3`… appended where that folder already exists: fresh for every run, so nothing from an earlier run is overwritten, while files this run writes there are regenerated as the preview loop needs. Then read `/elicit`'s residual beside the build and render plan. Who settles what is still open, and how far an entrustment reaches, is undefined — the deficit `/bound` resolves — where either holds:
+A video's look and movement are often things a person would recognize on sight long before they could describe them. Read the run for where that shows:
 
-- the residual is non-empty;
-- the plan includes an act that is hard to undo or reaches outside: installing a tool, downloading a library the page uses, fetching an asset that carries a license (music, fonts, images).
+- The look or the feel of the movement cannot be said but would be known when seen — "I'd know it when I see it", a description rewritten instead of settled. Propose `/sketch`, citing what showed it; the versions it makes are short moving drafts of the page.
+- Two or more directions are on the table and the person must commit to one they cannot judge from how they are described — flat or with depth, a calm reveal or a fast cut. Propose `/preview`, citing what showed it; its probes are short placeholder clips, and real examples that show the difference sit beside them as gathered evidence.
+- Who settles something still open, or how far an act that reaches outside this session may go — installing a tool, downloading a library the page uses, fetching music, fonts, or images that carry a license — is not settled. Invoke `/bound` on that boundary before the act. An act no arrangement reaches does not happen.
 
-Where it is undefined, invoke `/bound` — the skill call itself — on the build boundary: those residual coordinates and those acts. The video's content stays as `/elicit` closed it. Where neither holds, go straight to the build sheet.
+What a run of these settles is the person's, in their words, and the build follows it.
 
-### Build sheet
+## Build
 
-Then write `sheet.md` in this run's output folder: one row for each value that a Phase 3 prompt section (`<inputs>`, `<direction>`, `<structure>`, `<build>`, `<gotchas>`) or the render reads, whether or not `/elicit` raised it (supplied files, what is banned, how the movement feels, the kind's own decisions, frame size, frame rate, motion blur, each sound source, where in a supplied track the video starts if that matters, and, where motion lands on a track's beats, its BPM and first-beat time). It is this skill's list of what the build consumes, not a further round of questions; `/elicit` and `/bound` remain the contracts that settled what it holds. Each row carries its value and where the value came from:
+Write the page as one HTML file in a folder of this run's own, with each supplied file copied in beside it. The page draws every frame as a function of time — `window.DURATION` (seconds) and `window.seek(t)` drawing the frame for `t` from `t` alone — so what is previewed and what is rendered are the same frames. With a loop, the frame at `DURATION` meets the frame at 0.
 
-- the person's words — `/elicit`'s record, or what they gave during `/bound` — kept in those words;
-- a `/bound` arrangement: a value the person keeps is asked for now, before the build; a value they asked proposals for lists its candidates, shown in Phase 5; a value entrusted to the builder is chosen within the stated limits;
-- a value `/elicit` recorded as entrusted to the builder ("you pick"): the builder's choice under that grant;
-- the builder's reading of the person's words or of an example they picked ("a phone feed" → 1080x1920, a picked Three.js example → Three.js), marked as the builder's reading;
-- otherwise a default the builder states — the row's "Left unsaid" value above where it has one.
+## Watch it moving
 
-An act that is hard to undo goes only as far as the reach `/bound` showed for it; one with no arrangement does not happen. An act that arises after the seam — a library the sheet now needs, a licensed asset a preview change asks for — is where that deficit appears: invoke `/bound` there, before the act.
+Show the page playing — a short capture or the page itself — with its sound. Beside it, show stills at the moments the person named in "what would make it wrong", each with its time, and say what the builder chose on its own: each decision the person left unsaid and the value it took, and any warning the build saw. Whether the video is what was asked is the person's judgment, made here.
 
-## Phase 3: Assemble the prompt
+Then stop for the person's turn. A change goes into the page and the preview runs again; their go-ahead moves to the render.
 
-Write the build prompt from the build sheet in this shape, each section in the words the sheet holds:
+## Render
 
-- `<inputs>` — files the person supplies (track, logo, exact text) and where they are.
-- `<direction>` — how it is drawn, the look, the feel of movement, and what is banned.
-- `<structure>` — what is being told, and the scenes in order, each with its start time in seconds; on a provided track whose BPM and first beat are known, on its beats.
-- `<build>` — the page contract of Phase 4, the length (`DURATION`), size, frame rate, and loop.
-- `<gotchas>` — what the person said would make it wrong.
-- `<start>` — "Build the page, then show the preview frames before the full render."
-
-Save the prompt as `prompt.md` in this run's output folder and show it: it is also something the person can paste into another session.
-
-## Phase 4: Build
-
-Write the page as one HTML file in the output folder, with each supplied file copied in beside it. The page draws every frame as a function of time — `window.DURATION` (seconds) and `window.seek(t)` drawing the frame for `t` from `t` alone — so the preview and the mp4 come from the same page. Its canvas is the sheet's frame size; with a loop, the frame at `DURATION` meets the frame at 0; its sound is the sources the sheet holds.
-
-## Phase 5: Preview
-
-Capture the page in a browser at the chosen times, however the builder sees fit. Whether the page is what was asked is the person's judgment, made on these frames. Choose times at each scene boundary and at the moments the person named in "what would make it wrong" — where they named none, at moments the builder picks, said as its own. Show each frame with its time and the scene it belongs to, and ask them to check that the picture fills the frame and that each supplied asset (logo, text, image) appears; show beside the frames each warning the build saw — a load that failed, an error the page reported; offer the mixed sound — every source the mp4 will carry, at its own level — to listen to, since stills do not show sound, and whether it is balanced or clips is the person's to hear there; show beside the frames each sheet row whose value is a builder default, the builder's reading, or the builder's choice under a grant; for a value with candidates, preview each at a moment where the value shows — a candidate that differs in motion (frame rate, blur, speed, easing, how the movement feels) as a short clip, one that differs in a still look as a still; a candidate that changes the page gets its own variant page file, one that changes only how it is rendered keeps the one page; each is named by its value.
-
-Then stop for the person's turn. Their pick — a variant page or a render value — is written into its sheet row as the value, with the pick as its source, and `prompt.md` is rendered again; a picked variant page becomes the page. Other accepted changes go into the page, `sheet.md`, and `prompt.md`, and the preview runs again; their go-ahead moves to Phase 6.
-
-## Phase 6: Render
-
-Capture every frame of the page and encode the mp4, however the builder sees fit. The mp4 lands beside the page and runs `DURATION`. Report the file, its length and size, any warning the build saw, and each sheet row the builder chose.
+Capture every frame of the page and encode the mp4, however the builder sees fit. The mp4 lands beside the page and runs `DURATION`. Report the file, its length and size, and any warning the render saw.

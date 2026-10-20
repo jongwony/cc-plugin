@@ -21,7 +21,7 @@ flowchart LR
 /plugin install motion@cc-plugin
 ```
 
-Then install what `skills/motion/SKILL.md` lists under Prerequisites, and run its Preflight.
+Then install what `skills/motion/SKILL.md` lists under Prerequisites.
 
 ## Pieces
 
@@ -29,9 +29,9 @@ Then install what `skills/motion/SKILL.md` lists under Prerequisites, and run it
 |---|---|
 | `skills/motion/SKILL.md` | Decisions every video turns on (the slow axes), plus the build → preview → render procedure |
 | `skills/motion/references/fast-axes.md` | Decisions that depend on the kind of video, and how to pull live examples |
+| `skills/motion/references/rendering.md` | How the builder turns the `seek(t)` page into preview frames and the mp4 with Playwright and ffmpeg, and the three mistakes that go wrong without failing |
 | `skills/motion/references/axes.json` | The pattern each decision is measured by, keyed by the decision's name in `SKILL.md` or `fast-axes.md` |
 | `skills/motion/scripts/corpus.py` | Reads [awesome-opus5-5-videos](https://github.com/yihui-dev/awesome-opus5-5-videos) `data/videos.json` live: `examples` lists links to look at, `axes` re-measures which decisions vary by kind |
-| `skills/motion/scripts/render.cjs` | Serves the page's folder on a loopback port, steps its `window.seek(t)` through time with Playwright, and encodes it with ffmpeg; `--preview` writes PNGs instead, `--range a,b` a short clip, `--check` is the skill's preflight |
 
 ## Slow and fast
 
@@ -40,8 +40,8 @@ Slow decisions hold for every kind of video, so they live in `SKILL.md`. Fast de
 ## Test
 
 ```bash
-node skills/motion/scripts/render.cjs --check
-python3 -I skills/motion/scripts/corpus.py examples --category motion --limit 3
-node skills/motion/scripts/render.cjs page.html --size 320x320 --preview 0,1
-node skills/motion/scripts/render.cjs page.html --size 320x320 --fps 30
+python3 -I skills/motion/scripts/corpus.py examples --limit 3
+python3 -I skills/motion/scripts/corpus.py axes
 ```
+
+There is no renderer to test: the builder writes the capture for each run from `references/rendering.md`, and the person checks the result at the preview.

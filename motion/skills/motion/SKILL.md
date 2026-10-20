@@ -22,12 +22,12 @@ Respond in the person's language.
 | epistemic-protocols marketplace | `/plugin marketplace add jongwony/epistemic-protocols` | Where the next two plugins come from |
 | euporia plugin | `/plugin install euporia@epistemic-protocols` | `/elicit` |
 | horismos plugin | `/plugin install horismos@epistemic-protocols` | `/bound`, invoked only at the seam below |
-| Python 3 | `brew install python` (or the distro package, e.g. `apt install python3`) | `scripts/corpus.py` reads the example corpus live |
-| Node.js 18+ | `brew install node`, or nodejs.org / nvm (distro packages are often older than 18) | `scripts/render.cjs` |
+| Python 3 | `brew install python` (or the distro package, e.g. `apt install python3`) | `scripts/corpus.py` reads the example corpus live; serves the page folder for the capture |
+| Node.js 18+ | `brew install node`, or nodejs.org / nvm (distro packages are often older than 18) | Runs Playwright for the capture |
 | Playwright + Chromium | `npm i -g playwright && npx playwright install chromium` (on Linux, `--with-deps` adds Chromium's system libraries) | Steps the page through time and captures frames |
-| ffmpeg (with ffprobe, libx264, and libvpx-vp9 and libopus for Phase 4's re-encode) | `brew install ffmpeg` (or `apt install ffmpeg`) | Encodes frames (and audio) to mp4; ffprobe checks its length |
+| ffmpeg (with libx264, and libvpx-vp9 and libopus for Phase 4's re-encode) | `brew install ffmpeg` (or `apt install ffmpeg`) | Encodes frames and sound to mp4 |
 
-Preflight: `python3 --version && node ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/render.cjs --check` — the check resolves Playwright, Chromium and ffmpeg the way a render does, and a failure's message names what is missing. Set `CHROMIUM_PATH` when Chromium lives outside Playwright's cache. Corpus reads need network access to `raw.githubusercontent.com`, and downloading a library the page uses needs it too.
+Before the seam, confirm each of these runs here; one that does not is an install the seam lists. Corpus reads need network access to `raw.githubusercontent.com`, and downloading a library the page uses needs it too.
 
 ## Phase 1: Seed
 
@@ -55,7 +55,7 @@ Where the kind of video comes into view — the seed implies it, or the person c
 
 ## Seam: who settles what stays open
 
-When `/elicit` resolves, run the Preflight, so a missing prerequisite (an install) is known. This run's output folder is `~/motion-output/<name>/`, `<name>` a short slug of the seed plus the start time to the second (`launch-reel-20261020-143205`), with `-2`, `-3`… appended where that folder already exists: fresh for every run, so nothing from an earlier run is overwritten, while files this run writes there are regenerated as the preview loop needs. Then read `/elicit`'s residual beside the build and render plan. Who settles what is still open, and how far an entrustment reaches, is undefined — the deficit `/bound` resolves — where either holds:
+When `/elicit` resolves, confirm the prerequisites run, so a missing one (an install) is known. This run's output folder is `~/motion-output/<name>/`, `<name>` a short slug of the seed plus the start time to the second (`launch-reel-20261020-143205`), with `-2`, `-3`… appended where that folder already exists: fresh for every run, so nothing from an earlier run is overwritten, while files this run writes there are regenerated as the preview loop needs. Then read `/elicit`'s residual beside the build and render plan. Who settles what is still open, and how far an entrustment reaches, is undefined — the deficit `/bound` resolves — where either holds:
 
 - the residual is non-empty;
 - the plan includes an act that is hard to undo or reaches outside: installing a render prerequisite, downloading a library the page uses, fetching an asset that carries a license (music, fonts, images).
@@ -64,7 +64,7 @@ Where it is undefined, invoke `/bound` — the skill call itself — on the buil
 
 ### Build sheet
 
-Then write `sheet.md` in this run's output folder: one row for each value that a Phase 3 prompt section (`<inputs>`, `<direction>`, `<structure>`, `<build>`, `<gotchas>`) or a render flag (`--size`, `--fps`, `--subframes`, `--audio`, `--limit`) reads, whether or not `/elicit` raised it (supplied files, what is banned, how the movement feels, the kind's own decisions, motion blur, each sound source and, where motion lands on a track's beats, its BPM and first-beat time; `--limit`'s row holds the renderer's default unless a heavy first frame calls for more). It is this skill's list of what the build consumes, not a further round of questions; `/elicit` and `/bound` remain the contracts that settled what it holds. Each row carries its value and where the value came from:
+Then write `sheet.md` in this run's output folder: one row for each value that a Phase 3 prompt section (`<inputs>`, `<direction>`, `<structure>`, `<build>`, `<gotchas>`) or the render reads, whether or not `/elicit` raised it (supplied files, what is banned, how the movement feels, the kind's own decisions, frame size, frame rate, motion blur, each sound source and, where motion lands on a track's beats, its BPM and first-beat time). It is this skill's list of what the build consumes, not a further round of questions; `/elicit` and `/bound` remain the contracts that settled what it holds. Each row carries its value and where the value came from:
 
 - the person's words — `/elicit`'s record, or what they gave during `/bound` — kept in those words;
 - a `/bound` arrangement: a value the person keeps is asked for now, before the build; a value they asked proposals for lists its candidates, shown in Phase 5; a value entrusted to the builder is chosen within the stated limits;
@@ -88,32 +88,20 @@ Save the prompt as `prompt.md` in this run's output folder and show it: it is al
 
 ## Phase 4: Build
 
-Write one HTML file in the output folder, with every file it uses referenced by a relative path — each supplied file copied in beside it, and a library the page uses (Three.js, GSAP, …) downloaded once into the folder; the renderer serves that folder as a local web page. A supplied video or audio file the page itself plays is copied as WebM where `--check` prints `h264:no` or `aac:no` (`ffmpeg -i <file> -c:v libvpx-vp9 -c:a libopus <name>.webm`), since that Chromium cannot decode it:
+Write one HTML file in the output folder, with every file it uses referenced by a relative path — each supplied file copied in beside it, and a library the page uses (Three.js, GSAP, …) downloaded once into the folder, which is served as a local web page (`references/rendering.md`). A supplied video or audio file the page itself plays is copied as WebM (`ffmpeg -i <file> -c:v libvpx-vp9 -c:a libopus <name>.webm`), since Playwright's Chromium does not decode H.264 or AAC:
 
 - `window.DURATION` — length in seconds, greater than 0.
-- `window.seek(t)` — draws the frame for time `t` from `t` alone: no timers, CSS transitions, `requestAnimationFrame` loops, or state carried between calls. The renderer calls it in any order and waits for it when it returns a Promise (any other return value is ignored), so an image, video, or data the frame needs is awaited inside `seek`, and a failure there — a load, a decode, a parse — is caught, reported with `window.motionWarn?.(message)` (defined only under the renderer), and the frame drawn without it. An uncaught exception, a rejected `seek`, or a `seek` or `renderAudio()` that does not settle within the renderer's `--limit` (seconds) is a broken page; the message names it.
+- `window.seek(t)` — draws the frame for time `t` from `t` alone: no timers, CSS transitions, `requestAnimationFrame` loops, or state carried between calls. It is called in any order and awaited when it returns a Promise, so an image, video, or data the frame needs is awaited inside `seek`; a failure there — a load, a decode, a parse — is caught, reported with `console.warn`, and the frame drawn without it.
 - A fixed canvas size matching the shape chosen in Phase 2.
 - With a loop, the frame at `DURATION` matches the frame at 0.
-- Sound: each supplied track is mixed in by the renderer; synthesized sound is exposed as `window.renderAudio()`, resolving to a base64 WAV rendered with an `OfflineAudioContext`. The renderer mixes every source it is given.
+- Sound: each supplied track is mixed in at render; synthesized sound is exposed as `window.renderAudio()`, resolving to a base64 WAV rendered with an `OfflineAudioContext`.
 
 ## Phase 5: Preview
 
-```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/render.cjs <page.html> --size <W>x<H> --preview <t1,t2,...> [--audio <track>]...
-```
+Render the preview as `references/rendering.md` describes. Whether the page is what was asked is the person's judgment, made on these frames. Choose times at each scene boundary and at the moments the person named in "what would make it wrong". Show each frame with its time and the scene it belongs to, and ask them to check that the picture fills the frame and that each supplied asset (logo, text, image) appears; show beside the frames each warning the build saw — a load that failed, a `console.warn` from the page; offer the mixed sound — every source the mp4 will carry, at its own level — to listen to, since stills do not show sound, and whether it is balanced or clips is the person's to hear there; show beside the frames each sheet row whose value is a builder default or the builder's reading; for a value with candidates, preview each at a moment where the value shows — a candidate that changes the page gets its own variant page file, previewed as a still; candidates that differ only in how the page is rendered (frame rate, blur) keep the one page and each get a short clip, named by the value.
 
-A non-zero exit's message names its cause; fix it and run again. Whether the page is what was asked is the person's judgment, made on these frames. Choose times at each scene boundary and at the moments the person named in "what would make it wrong". Show each `MOTION_PREVIEW=` frame with its time and the scene it belongs to, and ask them to check that the picture fills the frame and that each supplied asset (logo, text, image) appears; show every `MOTION_WARNING=` line — what the renderer saw fail to load, and what the page reported through `motionWarn` — beside the frames; offer the `MOTION_SOUND=` file, where one is printed — every sound source the mp4 will carry, mixed at their own levels with no limiter — to listen to, since stills do not show sound, and whether it is balanced or clips is the person's to hear there; show beside the frames each sheet row whose value is a builder default or the builder's reading; for a value with candidates, preview each at a moment where the value shows — a candidate that changes the page gets its own variant page file, previewed as a still; candidates that differ only in a render flag (frame rate, blur) keep the one page and each get a short clip with that flag, named by it:
-
-```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/render.cjs <page.html> --size <W>x<H> --fps <fps> --subframes <n> --range <a,b> --out preview-<page>/clip-<flag>-<value>.mp4 [--audio <track>]... [--overwrite]
-```
-
-`--overwrite` re-renders a clip or mp4 this run wrote; a relative `--out` lands in the page's folder. The pick — a variant page or a flag value — is written into its sheet row as the value, with the person's pick as its source, and `prompt.md` is rendered again; a picked variant page becomes the page. Then stop for the person's turn. Accepted changes go into the page, `sheet.md`, and `prompt.md`, and the preview runs again; their go-ahead moves to Phase 6.
+The pick — a variant page or a render value — is written into its sheet row as the value, with the person's pick as its source, and `prompt.md` is rendered again; a picked variant page becomes the page. Then stop for the person's turn. Accepted changes go into the page, `sheet.md`, and `prompt.md`, and the preview runs again; their go-ahead moves to Phase 6.
 
 ## Phase 6: Render
 
-```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/render.cjs <page.html> --size <W>x<H> --fps <fps> --subframes <n> [--audio <track>]... [--overwrite]
-```
-
-Run it in the background and wait for it to exit: every frame is a screenshot, so a long or large render takes minutes. `--fps`, `--subframes`, and `--limit` where its row sets one come from their sheet rows; `--subframes N` blends N captures per frame into motion blur, 1 for none. The mp4 lands beside the page and runs within one frame of `DURATION`: a shorter track is padded with silence, a longer one cut. A non-zero exit means no mp4 was written; report its message. Report the `MOTION_OUTPUT_PATH=` file, its length and size, any `MOTION_WARNING=` line, and each sheet row the builder chose.
+Render the mp4 as `references/rendering.md` describes, in the background: every frame is a capture, so a long or large render takes minutes. Frame rate and motion blur come from their sheet rows. The mp4 lands beside the page and runs `DURATION`. Report the file, its length and size, any warning the build saw, and each sheet row the builder chose.

@@ -1,6 +1,6 @@
 ---
 name: stint
-description: Use when a bounded delegation needs a session of its own, or the user asks for a Stint — spawning an independent Stint, or standing up monitoring that wakes on an event, on a clock, or on its own rounds. Use it also whenever a message arrives from another session, before addressing a peer, and when listing, observing, resuming or retiring any of them.
+description: Use when a bounded delegation needs a session of its own, or the user asks for a Stint — spawning an independent Stint, or standing up a routine that wakes on an event or a clock. Use it also whenever a message arrives from another session, before addressing a peer, and when listing, observing, resuming or retiring any of them.
 ---
 
 # Stint

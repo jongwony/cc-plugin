@@ -5,7 +5,9 @@ For someone who wants a short motion-graphics video but can't yet say what it sh
 ```mermaid
 flowchart LR
   A[seed: what the video is for] --> B[/elicit + video decisions/]
-  B --> C[build prompt]
+  B -- open items or hard-to-undo acts --> G[/bound: who settles them/]
+  G --> C
+  B -- nothing open --> C[build prompt]
   C --> D[seek-t HTML page]
   D --> E{preview frames}
   E -- changes --> D
@@ -16,6 +18,7 @@ flowchart LR
 
 ```bash
 /plugin install euporia@epistemic-protocols   # provides /elicit
+/plugin install horismos@epistemic-protocols  # provides /bound, used only when something is left open
 /plugin install motion-elicit@cc-plugin
 npm i -g playwright && npx playwright install chromium
 brew install ffmpeg                             # or: apt install ffmpeg

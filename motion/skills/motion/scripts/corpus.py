@@ -43,8 +43,11 @@ AXES = {
 
 
 def load():
-    with urllib.request.urlopen(CORPUS_URL, timeout=60) as r:
-        v = json.load(r)
+    try:
+        with urllib.request.urlopen(CORPUS_URL, timeout=60) as r:
+            v = json.load(r)
+    except (OSError, ValueError) as e:
+        sys.exit(f"corpus unreachable ({e}); proceed from the person's own words")
     # Third-party schema: rows missing the fields every command needs are skipped.
     return [x for x in v if isinstance(x, dict) and isinstance(x.get("category"), str)]
 
@@ -91,13 +94,20 @@ def cmd_axes(v, _a):
         print(f"  {c}: " + ", ".join(f"{t} {n}" for t, n in tags.most_common(6)))
 
 
+def positive(s):
+    n = int(s)
+    if n < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return n
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     e = sub.add_parser("examples")
     e.add_argument("--category", required=True)
     e.add_argument("--tag")
-    e.add_argument("--limit", type=int, default=6)
+    e.add_argument("--limit", type=positive, default=6)
     sub.add_parser("axes")
     a = p.parse_args()
     v = load()

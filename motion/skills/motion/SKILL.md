@@ -43,14 +43,14 @@ These decisions hold for every kind of video:
 - **Where it will be shown** (aspect ratio, size) — "Where will people watch this: a phone feed, a web page, a slide?" Left unsaid, the builder picks a frame shape, and a vertical feed video built square loses half the screen.
 - **How long** (duration) — "About how many seconds?" Left unsaid, the builder picks; every later timing hangs on this number.
 - **What happens in what order** (scenes, beats) — "What should be seen first, what next, how does it end?" Left unsaid, the builder invents the sequence.
-- **Sound** (music, effects, voice; sync) — "Silent, music, or a voice? If music, do you have a track?" With a track, motion lands on its beat only where its tempo (BPM) is known — the person says it, or the track's metadata carries it; otherwise scene times are in seconds. Left unsaid, the builder chooses silence or synthesized sound.
+- **Sound** (music, effects, voice; sync) — "Silent, music, or a voice? If music, do you have a track?" With a track, motion lands on its beats only where its tempo (BPM) and the time of its first beat are known — the person says them, or the track's metadata carries them; otherwise scene times are in seconds. Left unsaid, the builder chooses silence or synthesized sound.
 - **Look** (style reference, colors) — "Is there a video, brand, or site whose look you want? Any colors to use or avoid?" Left unsaid, the result tends toward a generic look.
 - **Words on screen** (text, typography) — "Must any exact words appear? Any font or brand lettering?" Left unsaid, the builder writes its own text.
 - **Smoothness** (frame rate) — "Smooth like a phone screen (60 frames a second) or calmer, film-like (24–30)?" Left unsaid, 30.
 - **Repeat** (loop) — "Will it autoplay on repeat, so the end should flow back into the start?" Left unsaid, it ends with a hard cut.
 - **What would make it wrong** (checking) — "What would you look for to say 'not this'?" The answer chooses the moments shown as preview frames in Phase 5. Left unsaid, the builder checks its own work.
 
-Where the kind of video comes into view — the seed implies it, or the person cannot picture it — read `references/fast-axes.md`: it says where the current kinds are named, the decisions that depend on the kind, and how to pull live examples the person can point at.
+Where the kind of video comes into view — the seed implies it, or the person cannot picture it — read `references/fast-axes.md`: it says where the current kinds are named, the decisions that depend on the kind — offered to `/elicit` in the same way as those above — and how to pull live examples the person can point at.
 
 ## Seam: who settles what stays open
 
@@ -59,52 +59,53 @@ When `/elicit` resolves, run the Preflight, so a missing prerequisite (an instal
 - the residual is non-empty;
 - the plan includes an act that is hard to undo or reaches outside: installing a render prerequisite, fetching an asset that carries a license (music, fonts, images).
 
-Where it is undefined, invoke `/bound` — the skill call itself — on the build boundary: those residual coordinates and those acts. The video's content stays as `/elicit` closed it. Where neither holds, go straight to Phase 3.
+Where it is undefined, invoke `/bound` — the skill call itself — on the build boundary: those residual coordinates and those acts. The video's content stays as `/elicit` closed it. Where neither holds, go straight to the build sheet.
 
-Once the boundary stands, its arrangements govern the build:
+### Build sheet
 
-- an item the person keeps waits for their value;
-- an item they asked proposals for is shown with its candidates at the Phase 5 preview;
-- an item entrusted to the builder is chosen within the stated limits and reported in Phase 6;
-- an act that is hard to undo goes only as far as the reach shown for it.
+Then write `sheet.md` in this run's output folder: one row for every value the build reads — frame shape and size, duration, frame rate, loop, the scenes in order with their start times, each sound source (each supplied file, synthesized sound; where motion lands on a track's beats, its BPM and first-beat time), the exact words on screen, and the look — whether or not `/elicit` raised it. It is this skill's list of what the build consumes, not a further round of questions; `/elicit` and `/bound` remain the contracts that settled what it holds. Each row carries its value and where the value came from:
 
-An item the boundary leaves with no arrangement: a coordinate is built on a value the builder states — the coordinate's "Left unsaid" value where it has one — and is marked at the Phase 5 preview as not yet decided, with that value; an act does not happen.
+- the person's words — `/elicit`'s record, or what they gave during `/bound` — kept in those words;
+- a `/bound` arrangement: a value the person keeps is asked for now, before the build; a value they asked proposals for lists its candidates, each shown in its own preview frame in Phase 5; a value entrusted to the builder is chosen within the stated limits;
+- otherwise a default the builder states — the row's "Left unsaid" value above where it has one.
+
+An act that is hard to undo goes only as far as the reach `/bound` showed for it; one with no arrangement does not happen.
 
 ## Phase 3: Assemble the prompt
 
-Past the seam, write the build prompt from `/elicit`'s record in this shape, each section in the words the record holds:
+Write the build prompt from the build sheet in this shape, each section in the words the sheet holds:
 
 - `<inputs>` — files the person supplies (track, logo, exact text) and where they are.
 - `<direction>` — the look, the feel of movement, and what is banned.
-- `<structure>` — the scenes in order, each with its start time in seconds; on a provided track whose BPM is known, on its beats.
+- `<structure>` — the scenes in order, each with its start time in seconds; on a provided track whose BPM and first beat are known, on its beats.
 - `<build>` — the page contract of Phase 4, the size, frame rate, and loop.
 - `<gotchas>` — what the person said would make it wrong.
 - `<start>` — "Build the page, then show the preview frames before the full render."
 
-Each residual coordinate goes into `<build>` with the arrangement the seam's boundary gives it. Save the prompt as `prompt.md` in this run's output folder and show it: it is also something the person can paste into another session.
+Save the prompt as `prompt.md` in this run's output folder and show it: it is also something the person can paste into another session.
 
 ## Phase 4: Build
 
 Write one self-contained HTML file in the output folder:
 
-- `window.DURATION` — length in seconds.
-- `window.seek(t)` — draws the frame for time `t` from `t` alone: no timers, CSS transitions, `requestAnimationFrame` loops, or state carried between calls. The renderer calls it in any order.
+- `window.DURATION` — length in seconds, greater than 0.
+- `window.seek(t)` — draws the frame for time `t` from `t` alone: no timers, CSS transitions, `requestAnimationFrame` loops, or state carried between calls. The renderer calls it in any order and waits for it when it returns a promise, so an image, video, or data the frame needs is awaited inside `seek`.
 - A fixed canvas size matching the shape chosen in Phase 2.
 - With a loop, the frame at `DURATION` matches the frame at 0.
-- Sound: a supplied track is muxed by the renderer, with the structure times on its beats where its BPM is known; synthesized sound is exposed as `window.renderAudio()`, resolving to a base64 WAV rendered with an `OfflineAudioContext`. With both, the renderer mixes them.
+- Sound: each supplied track is mixed in by the renderer, with the structure times on its beats where its BPM and first beat are known; synthesized sound is exposed as `window.renderAudio()`, resolving to a base64 WAV rendered with an `OfflineAudioContext`. The renderer mixes every source it is given.
 
 ## Phase 5: Preview
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/render.cjs <page.html> --size <W>x<H> --preview <t1,t2,...>
+node ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/render.cjs <page.html> --size <W>x<H> --preview <t1,t2,...> [--audio <track>]...
 ```
 
-A non-zero exit is a broken page (an uncaught exception) or a bad argument, and its message says which; fix it and run again. Whether the page is what was asked is the person's judgment, made on these frames. Choose times at each scene boundary and at the moments the person named in "what would make it wrong". Show each `MOTION_PREVIEW=` frame with its time and the scene it belongs to, and ask them to check that the picture fills the frame and that each supplied asset (logo, text, image) appears; show every `MOTION_WARNING=` line beside the frames; name the sound sources the mp4 will carry (the track, the page's synthesized sound, or both), since stills do not show sound; show each item left for proposal with its candidates, and each item marked not yet decided with the value it was built on, then stop for the person's turn. Changes go back into the page, and into `prompt.md` where they change what it says, and the preview runs again; their go-ahead moves to Phase 6.
+A non-zero exit is a broken page (an uncaught exception, a `renderAudio()` that fails) or a bad argument, and its message says which; fix it and run again. Whether the page is what was asked is the person's judgment, made on these frames. Choose times at each scene boundary and at the moments the person named in "what would make it wrong". Show each `MOTION_PREVIEW=` frame with its time and the scene it belongs to, and ask them to check that the picture fills the frame and that each supplied asset (logo, text, image) appears; show every `MOTION_WARNING=` line beside the frames; offer the `MOTION_SOUND=` file, where one is printed — every sound source the mp4 will carry, mixed — to listen to, since stills do not show sound; show beside the frames each sheet row whose value is a builder default; for a value with candidates, build one variant of the page per candidate and preview each at a moment where the value shows; the variant the person picks becomes the page. Then stop for the person's turn. Accepted changes go into the page, `sheet.md`, and `prompt.md`, and the preview runs again; their go-ahead moves to Phase 6.
 
 ## Phase 6: Render
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/render.cjs <page.html> --size <W>x<H> --fps <fps> [--subframes 4] [--audio <track>] [--overwrite]
+node ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/render.cjs <page.html> --size <W>x<H> --fps <fps> [--subframes 4] [--audio <track>]... [--overwrite]
 ```
 
-`--subframes N` blends N captures per frame into motion blur. The mp4 lands beside the page and runs exactly `DURATION`: a shorter track is padded with silence, a longer one cut. `--overwrite` replaces an existing mp4 or wav, and is passed for a file this run wrote. A non-zero exit means no mp4 was written; report its message. Report the `MOTION_OUTPUT_PATH=` file, its length and size, any `MOTION_WARNING=` line, and each choice the builder made on an item entrusted to it.
+Run it in the background and wait for it to exit: every frame is a screenshot, so a long or large render takes minutes. `--subframes N` blends N captures per frame into motion blur. The mp4 lands beside the page and runs within one frame of `DURATION`: a shorter track is padded with silence, a longer one cut. `--overwrite` replaces an existing mp4 or wav, and is passed for a file this run wrote. A non-zero exit means no mp4 was written; report its message. Report the `MOTION_OUTPUT_PATH=` file, its length and size, any `MOTION_WARNING=` line, and each sheet row the builder chose.

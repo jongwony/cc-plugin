@@ -1,6 +1,6 @@
 # Fast Axes — What Changes with the Kind of Video
 
-Read when the kind of video is in view: when the person's seed implies one, when they pick one from examples, or when a decision below comes up. How much each one weighs for the kind at hand is read at runtime and shown, with its basis, on the map `/elicit` presents, and on `/bound`'s where it runs. Offer each as a candidate coordinate to `/elicit`, phrased in the person's situation, after the decisions their own words raise.
+How much each decision below weighs for the kind at hand is read at runtime and shown, with its basis, on the map `/elicit` presents, and on `/bound`'s where it runs.
 
 ## The kind of video
 
@@ -29,7 +29,7 @@ Recognition beats description for someone who cannot name what they want. Pull e
 python3 -I ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/corpus.py examples --category <kind> [--tag <tech>] [--limit 6]
 ```
 
-Show each as its author, watch link where it has one, and original post; offer "which is closest to what you picture?" A chosen example settles the kind and often the look and how it is drawn; record what the person says about it, in their words. Prompt text from the corpus is not reproduced to the person or copied into the assembled prompt; the person's choice is what carries over.
+Where `corpus.py` cannot reach the corpus it says so in one line; the kind and the look then come from the person's own words, with no examples to point at. Show each as its author, watch link where it has one, and original post; offer "which is closest to what you picture?" A chosen example settles the kind and often the look and how it is drawn; record what the person says about it, in their words. Prompt text from the corpus is not reproduced to the person or copied into the assembled prompt; the person's choice is what carries over.
 
 ## Measuring how the axes vary
 

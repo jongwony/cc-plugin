@@ -1,11 +1,12 @@
 ---
 name: stint
-description: Use when work belongs in a session of its own rather than this one — spawning an independent Stint, or standing up monitoring that wakes on an event, on a clock, or on its own rounds. Use it also whenever a message arrives from another session, before addressing a peer, and when listing, observing, resuming or retiring any of them.
+description: Use when a bounded delegation needs a session of its own, or the user asks for a Stint — spawning an independent Stint, or standing up monitoring that wakes on an event, on a clock, or on its own rounds. Use it also whenever a message arrives from another session, before addressing a peer, and when listing, observing, resuming or retiring any of them.
 ---
 
 # Stint
 
-Independently managed bounded work, carried by a session other than this one. This skill
+A Stint carries a bounded delegation whose work needs a session of its own, or one the user
+explicitly asks for. This skill
 decides **whether work belongs in such a session at all**, **what wakes it**, and writes the
 brief. It does not implement monitoring — each wake mechanism below is already built, and the
 choice between them is the work here.
@@ -15,8 +16,10 @@ otherwise `~/.claude`.
 
 ## Does it belong in a session of its own
 
-- **Ask first: can this session discharge its responsibility without receiving the completed
-  work?** That question, not whether the caller waits, decides everything below.
+- **An explicit request for a Stint → a Stint.** Go to **Which wake**.
+- **Otherwise ask: can this session discharge its responsibility without receiving the
+  completed work?** That question, not whether the caller waits, establishes whether the work
+  needs a session of its own.
 - **Yes → a Stint or a monitor.** Completion is recorded at the brief's durable destination and
   the creator is not a required recipient. Go to **Which wake**.
 - **No → it stays here.** A result this session must collect and check is a native subagent

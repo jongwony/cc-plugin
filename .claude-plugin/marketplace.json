@@ -22,7 +22,7 @@
     {
       "name": "stint",
       "source": "./stint",
-      "description": "Independently managed bounded work in a session of its own: spawn a Stint, or stand up an event/clock/self-round monitor"
+      "description": "A bounded delegation that needs a session of its own, or one you ask for: spawn a Stint, or stand up an event/clock/self-round monitor"
     },
     {
       "name": "pdf-split",

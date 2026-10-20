@@ -1,7 +1,7 @@
 # stint
 
-A **Stint** is independently managed bounded work, carried by a session other than the one
-you are in. This plugin decides **whether work belongs in such a session at all** and **what
+A **Stint** carries a bounded delegation whose work needs a session of its own, or one you
+explicitly ask for. This plugin decides **whether work belongs in such a session at all** and **what
 wakes it**, then writes the brief. It implements no monitoring of its own — every wake
 mechanism it routes to already exists.
 
@@ -10,6 +10,9 @@ It replaces `remote-tmux` (the `/remote-spawn` skill) and absorbs what survived 
 prompt you write and run yourself, not a mode of this plugin.
 
 ## The one question
+
+When you ask for a Stint, you get one, and the question below is not asked. Otherwise it
+decides whether the work needs a session of its own:
 
 > Can the calling session discharge its responsibility **without receiving the completed
 > work**?

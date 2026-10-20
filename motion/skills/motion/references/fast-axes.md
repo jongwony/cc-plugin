@@ -1,7 +1,5 @@
 # Fast Axes — What Changes with the Kind of Video
 
-How much each decision below weighs for the kind at hand is the builder's own reading, made at runtime and shown as such on the map `/elicit` presents, and on `/bound`'s where it runs.
-
 ## The kind of video
 
 The corpus sorts videos into kinds; `corpus.py examples` without `--category` (below) lists the current ones, each with a few examples. The kind is itself a decision a newcomer rarely names; show live examples (below) and let them point.

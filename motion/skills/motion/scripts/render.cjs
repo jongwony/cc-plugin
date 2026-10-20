@@ -5,6 +5,7 @@
 //   node render.cjs page.html --fps 30 --range 1,2.5 [--subframes n] [--audio track.mp3]...
 //   node render.cjs page.html --fps 30 [--out x.mp4] [--subframes n]
 //                             [--size 1080x1920] [--audio track.mp3]... [--overwrite]
+//   node render.cjs --check
 //
 // Page contract and behaviour: SKILL.md Phases 4–6.
 "use strict";
@@ -15,15 +16,17 @@ const path = require("path");
 
 const USAGE =
   "usage: render.cjs page.html [--preview t1,t2] [--range a,b] [--preview-dir d] [--out x.mp4] [--fps n] " +
-  "[--subframes n] [--size WxH] [--audio track] [--overwrite]";
+  "[--subframes n] [--size WxH] [--audio track] [--overwrite]   |   render.cjs --check";
 const VALUE_FLAGS = new Set(["preview", "range", "preview-dir", "out", "fps", "subframes", "size", "audio"]);
 const BOOL_FLAGS = new Set(["overwrite"]);
-const SEEK_LIMIT_MS = 20000;
+// Every call into the page settles within this limit or fails the run.
+const LIMIT_MS = 20000;
 const TYPES = {
   ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css",
-  ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-  ".svg": "image/svg+xml", ".wav": "audio/wav", ".mp3": "audio/mpeg", ".mp4": "video/mp4",
-  ".woff2": "font/woff2",
+  ".json": "application/json", ".wasm": "application/wasm", ".png": "image/png", ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml",
+  ".wav": "audio/wav", ".mp3": "audio/mpeg", ".ogg": "audio/ogg", ".mp4": "video/mp4", ".webm": "video/webm",
+  ".woff": "font/woff", ".woff2": "font/woff2", ".ttf": "font/ttf", ".otf": "font/otf",
 };
 
 function loadPlaywright() {
@@ -33,6 +36,43 @@ function loadPlaywright() {
     const root = execSync("npm root -g", { encoding: "utf8" }).trim();
     return require(path.join(root, "playwright"));
   }
+}
+
+const launch = (chromium) =>
+  chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
+
+// The skill's preflight: everything a render needs, resolved the way a render resolves it.
+async function check() {
+  const fail = (m) => {
+    console.error(`check failed: ${m}`);
+    process.exit(1);
+  };
+  if (Number(process.versions.node.split(".")[0]) < 18) fail(`Node ${process.versions.node}; 18 or newer is needed`);
+  const run = (cmd, args) => {
+    try {
+      return execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    } catch {
+      return null;
+    }
+  };
+  if (run("ffprobe", ["-version"]) === null) fail("ffprobe not found");
+  const encoders = run("ffmpeg", ["-hide_banner", "-encoders"]);
+  if (encoders === null) fail("ffmpeg not found");
+  if (!/libx264/.test(encoders)) fail("ffmpeg has no libx264 encoder");
+  if (!/normalize/.test(run("ffmpeg", ["-hide_banner", "-h", "filter=amix"]) || ""))
+    fail("ffmpeg's amix filter has no normalize option; a newer ffmpeg is needed");
+  let chromium;
+  try {
+    ({ chromium } = loadPlaywright());
+  } catch {
+    fail("Playwright not found (npm i -g playwright)");
+  }
+  try {
+    await (await launch(chromium)).close();
+  } catch (e) {
+    fail(`Chromium does not launch: ${String(e.message).split("\n")[0]}`);
+  }
+  console.log("MOTION_CHECK=ok");
 }
 
 function parseArgs(argv) {
@@ -55,9 +95,15 @@ function parseArgs(argv) {
   }
   if (rest.length !== 1) throw new Error(USAGE);
   a.page = path.resolve(rest[0]);
+  try {
+    fs.accessSync(a.page, fs.constants.R_OK);
+    if (!fs.statSync(a.page).isFile()) throw 0;
+  } catch {
+    throw new Error(`page not found or unreadable: ${a.page}`);
+  }
   if (a.preview !== undefined && a.range !== undefined) throw new Error(`--preview and --range exclude each other\n${USAGE}`);
   if (a.preview === undefined && a.fps === undefined) throw new Error(`an mp4 render needs --fps\n${USAGE}`);
-  a.fps = Number(a.fps ?? 1);
+  a.fps = Number(a.fps === undefined ? 1 : a.fps);
   if (!(Number.isFinite(a.fps) && a.fps > 0)) throw new Error(`bad --fps ${a.fps}`);
   a.subframes = Number(a.subframes);
   if (!(Number.isInteger(a.subframes) && a.subframes >= 1)) throw new Error(`bad --subframes ${a.subframes}`);
@@ -78,6 +124,7 @@ function parseArgs(argv) {
   if (a.range !== undefined) {
     const r = a.range.split(",").map(Number);
     if (r.length !== 2 || !r.every(Number.isFinite) || r[0] < 0 || r[1] <= r[0]) throw new Error(`bad --range ${a.range}`);
+    if (r[1] - r[0] < 1 / a.fps) throw new Error(`--range ${a.range} is shorter than one frame at ${a.fps} fps`);
     a.span = r;
   }
   const clip = a.span && path.join(a.previewDir, `clip-${a.span.map((t) => t.toFixed(2)).join("-")}.mp4`);
@@ -126,7 +173,7 @@ function ffmpeg(args) {
     p.on("error", rej);
     p.on("close", (code, signal) => {
       exited = true;
-      code === 0 ? res() : rej(new Error(`ffmpeg exited ${code ?? signal}\n${err.slice(-2000)}`));
+      code === 0 ? res() : rej(new Error(`ffmpeg exited ${code !== null ? code : signal}\n${err.slice(-2000)}`));
     });
   });
   done.catch(() => {}); // awaited by the caller; this only keeps an early exit from crashing Node
@@ -142,13 +189,18 @@ function audioMapArgs(first, n) {
   return ["-filter_complex", `${ins};${refs}amix=inputs=${n}:normalize=0,alimiter=limit=0.95[mix]`, "-map", "[mix]"];
 }
 
+// The length of the mp4's video stream; an mp4 with no video frames is an error, never a length of 0.
 function probeVideoDuration(file) {
   const out = execFileSync(
     "ffprobe",
-    ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=duration", "-of", "default=nw=1:nk=1", file],
+    ["-v", "error", "-count_packets", "-select_streams", "v:0", "-show_entries", "stream=duration,nb_read_packets",
+      "-of", "json", file],
     { encoding: "utf8" }
   );
-  return Number(out.trim());
+  const s = (JSON.parse(out).streams || [])[0];
+  const duration = s ? Number(s.duration) : NaN;
+  if (!s || !(Number(s.nb_read_packets) >= 1) || !Number.isFinite(duration)) throw new Error(`${file} has no video frames`);
+  return duration;
 }
 
 function failOnPageErrors(pageErrors) {
@@ -156,12 +208,11 @@ function failOnPageErrors(pageErrors) {
 }
 
 async function main() {
+  if (process.argv[2] === "--check") return check();
   const a = parseArgs(process.argv.slice(2));
-  if (!a.times && !a.span) refuseExisting(a.out, a.overwrite);
+  if (!a.times) refuseExisting(a.out, a.overwrite);
   const { chromium } = loadPlaywright();
-  const browser = await chromium.launch(
-    process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}
-  );
+  const browser = await launch(chromium);
   const server = await serve(path.dirname(a.page));
   let partial = null;
   let wavTemp = null;
@@ -184,44 +235,67 @@ async function main() {
   try {
     const page = await browser.newPage({ viewport: { width: a.width, height: a.height } });
     const pageErrors = [];
-    const warnings = [];
-    const warn = (w) => {
-      warnings.push(w);
+    // One warning per failing file (its URL without the query, so a per-frame request counts once) or page message.
+    const warnings = new Map();
+    const warn = (key, w) => {
+      if (warnings.has(key)) return;
+      warnings.set(key, w);
       console.log(`MOTION_WARNING=${w}`);
     };
+    const bare = (u) => u.split(/[?#]/)[0];
     page.on("pageerror", (e) => pageErrors.push(String(e)));
-    page.on("requestfailed", (r) => warn(`failed to load ${r.url()}`));
-    page.on("response", (r) => r.status() >= 400 && warn(`HTTP ${r.status()} ${r.url()}`));
+    page.on("requestfailed", (r) => warn(bare(r.url()), `failed to load ${bare(r.url())}`));
+    page.on("response", (r) => r.status() >= 400 && warn(bare(r.url()), `HTTP ${r.status()} ${bare(r.url())}`));
+    // The page reports a failure it caught itself (a decode, a parse, missing data) through window.motionWarn.
+    await page.exposeFunction("motionWarn", (m) => warn(`page: ${m}`, `page: ${String(m)}`));
+    // Every call into the page goes through here: it settles within LIMIT_MS, or the run fails naming the call.
+    const bounded = (label, p) => {
+      let timer;
+      const late = new Promise((_, rej) => {
+        timer = setTimeout(() => {
+          const seen = warnings.size ? `\nwarnings so far:\n${[...warnings.values()].join("\n")}` : "";
+          rej(new Error(`${label} did not settle within ${LIMIT_MS / 1000}s${seen}`));
+        }, LIMIT_MS);
+      });
+      p.catch(() => {}); // past the limit the run is failing; the browser's close rejects p
+      return Promise.race([p, late]).finally(() => clearTimeout(timer));
+    };
     const { port } = server.address();
     await page.goto(`http://127.0.0.1:${port}/${encodeURIComponent(path.basename(a.page))}`, { waitUntil: "load" });
     await page.addStyleTag({ content: "html,body{margin:0;padding:0;overflow:hidden}" });
     // A module may define seek and DURATION after a top-level await, so wait for them.
-    const ready = await page
-      .waitForFunction(
+    const notReady = await bounded(
+      "the page's window.seek(t) and window.DURATION > 0 (it must define both)",
+      page.waitForFunction(
         () => typeof window.seek === "function" && Number.isFinite(window.DURATION) && window.DURATION > 0,
         null,
-        { timeout: SEEK_LIMIT_MS }
+        { timeout: 0 }
       )
-      .then(() => true, () => false);
+    ).then(() => null, (e) => e);
     // Canvas only requests a face when it first draws with it, so load every declared face up front.
-    const fontFailures = await page.evaluate(async () => {
-      if (!document.fonts) return [];
-      const fails = [];
-      await Promise.all(
-        [...document.fonts].map((f) => f.load().catch((e) => fails.push(`font ${f.family}: ${e}`)))
-      );
-      await document.fonts.ready;
-      return fails;
-    });
-    for (const f of fontFailures) warn(f);
+    // A font is an asset: one that fails or never finishes loading is a warning, not a broken page.
+    const fontFailures = await bounded(
+      "font loading",
+      page.evaluate(async () => {
+        if (!document.fonts) return [];
+        const fails = [];
+        await Promise.all(
+          [...document.fonts].map((f) => f.load().catch((e) => fails.push(`font ${f.family}: ${e}`)))
+        );
+        await document.fonts.ready;
+        return fails;
+      })
+    ).catch((e) => [`fonts: ${String(e.message).split("\n")[0]}`]);
+    for (const f of fontFailures) warn(f, f);
     failOnPageErrors(pageErrors);
-    if (!ready) throw new Error("page must define window.seek(t) and a window.DURATION > 0");
-    const duration = await page.evaluate(() => window.DURATION);
+    if (notReady) throw notReady;
+    const duration = await bounded("window.DURATION", page.evaluate(() => window.DURATION));
     const tracks = (a.audio || []).map((f) => path.resolve(f));
     // The page's synthesized sound, written to `file`; false when the page has none.
     const synthesize = async (file) => {
-      const r = await page.evaluate(async () =>
-        typeof window.renderAudio === "function" ? { wav: await window.renderAudio() } : null
+      const r = await bounded(
+        "renderAudio()",
+        page.evaluate(async () => (typeof window.renderAudio === "function" ? { wav: await window.renderAudio() } : null))
       );
       if (r === null) return false;
       const wav = r.wav;
@@ -231,15 +305,7 @@ async function main() {
     };
     // One seek at a time: each settles, rejects, or fails the run at the limit before the next starts.
     const shoot = async (t) => {
-      const seek = page.evaluate((t) => window.seek(t), t);
-      let timer;
-      const late = new Promise((r) => (timer = setTimeout(() => r(true), SEEK_LIMIT_MS)));
-      const timedOut = await Promise.race([seek.then(() => false), late]).finally(() => clearTimeout(timer));
-      if (timedOut) {
-        seek.catch(() => {}); // the run is already failing; the browser's close rejects it
-        const seen = warnings.length ? `\nwarnings so far:\n${warnings.join("\n")}` : "";
-        throw new Error(`seek(${t}) did not settle within ${SEEK_LIMIT_MS / 1000}s${seen}`);
-      }
+      await bounded(`seek(${t})`, page.evaluate((t) => window.seek(t), t));
       const png = await page.screenshot({ type: "png" });
       failOnPageErrors(pageErrors);
       return png;

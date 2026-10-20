@@ -9,6 +9,7 @@
       First line: the current kinds (categories), from every row. Then, per
       axis: share of non-partial prompts that mention it, overall and per
       category, plus the spread across categories, which informs the slow/fast split.
+      Axes and their patterns: references/axes.json.
 
 Stdlib only. The corpus is fetched on every run; nothing is cached.
 """
@@ -19,29 +20,16 @@ import json
 import re
 import sys
 import urllib.request
+from pathlib import Path
 
 CORPUS_URL = (
     "https://raw.githubusercontent.com/yihui-dev/awesome-opus5-5-videos/main/data/videos.json"
 )
 
-# Each axis is a decision a prompt can fix; the pattern detects that the prompt
-# mentions it, not that the decision was made.
-AXES = {
-    "where_shown": r"\b\d{3,4}\s*[x×]\s*\d{3,4}\b|\b(16:9|9:16|1:1|4:5)\b|square|vertical|portrait|landscape|1080p|4k",
-    "length": r"\b\d+\s*(s|sec|secs|seconds?|-second|min|minutes?)\b|\bseconds?\b",
-    "story_order": r"scene|act \d|\bbeat|storyboard|timeline|sequence|intro|outro|ending|start(s)? with|→|->",
-    "sound": r"audio|music|sound|\bsong\b|\bbpm\b|voice|narrat",
-    "look": r"style|aesthetic|dribbble|cinematic|minimal|retro|brutalist|inspired by|look like"
-    r"|colou?r|palette|black and white|monochrome|gradient|neon",
-    "words_on_screen": r"font|typograph|typeface|\btext\b|title|caption|kinetic type",
-    "smoothness": r"\b\d{2}\s*fps\b|frame rate",
-    "loop": r"\bloop",
-    "checking": r"verify|validate|screenshot|preview|fix anything|check (it|the|each|every)",
-    "render_tech": r"canvas|svg|three\.?js|webgl|shader|glsl|gsap|\bcss\b|p5|d3",
-    "interactivity": r"interactiv|playable|click|drag|hover|mouse|keyboard",
-    "subject_narration": r"explain|visuali[sz]e|narrat|voice-?over|data|history|recipe",
-    "motion_feel": r"spring|eas(e|ing)|physics|bounce|morph|particle",
-}
+# Each axis is a decision a prompt can fix, keyed by its name in SKILL.md or
+# references/fast-axes.md; its pattern detects that a prompt mentions it, not that
+# the decision was made.
+AXES = json.loads((Path(__file__).resolve().parent.parent / "references" / "axes.json").read_text())
 
 
 def load():
@@ -81,7 +69,8 @@ def cmd_axes(v, _a):
     cats = sorted({x["category"] for x in full})
     groups = {"ALL": full, **{c: [x for x in full if x["category"] == c] for c in cats}}
     print("n (non-partial):", {k: len(g) for k, g in groups.items()})
-    head = "axis".ljust(18) + "".join(k[:11].rjust(12) for k in groups) + "   spread"
+    width = max(map(len, AXES)) + 2
+    head = "axis".ljust(width) + "".join(k[:11].rjust(12) for k in groups) + "   spread"
     print(head)
     out = []
     for ax, pat in AXES.items():
@@ -93,7 +82,7 @@ def cmd_axes(v, _a):
         out.append((max(per_cat) - min(per_cat), ax, rate))
     for spread, ax, rate in sorted(out):
         cells = "".join(f"{rate[k] * 100:11.0f}%" for k in groups)
-        print(ax.ljust(18) + cells + f"   {spread * 100:6.0f}")
+        print(ax.ljust(width) + cells + f"   {spread * 100:6.0f}")
     print("tech_tags by category:")
     for c in cats:
         tags = collections.Counter(t for x in groups[c] for t in x.get("tech_tags") or [])

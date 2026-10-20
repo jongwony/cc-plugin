@@ -49,6 +49,8 @@ def load():
             v = json.load(r)
     except (OSError, ValueError, http.client.HTTPException) as e:
         sys.exit(f"corpus unreachable ({e}); proceed from the person's own words")
+    if not isinstance(v, list):
+        sys.exit("corpus changed (its top level is not a list); proceed from the person's own words")
     # Third-party schema: rows missing the fields every command needs are skipped.
     return [x for x in v if isinstance(x, dict) and isinstance(x.get("category"), str)]
 

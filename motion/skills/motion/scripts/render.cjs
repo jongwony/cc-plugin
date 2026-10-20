@@ -56,7 +56,8 @@ async function check() {
   if (run("ffprobe", ["-version"]) === null) fail("ffprobe not found");
   const encoders = run("ffmpeg", ["-hide_banner", "-encoders"]);
   if (encoders === null) fail("ffmpeg not found");
-  if (!/libx264/.test(encoders)) fail("ffmpeg has no libx264 encoder");
+  for (const enc of ["libx264", "libvpx-vp9", "libopus"])
+    if (!new RegExp(`\\b${enc}\\b`).test(encoders)) fail(`ffmpeg has no ${enc} encoder`);
   if (!/normalize/.test(run("ffmpeg", ["-hide_banner", "-h", "filter=amix"]) || ""))
     fail("ffmpeg's amix filter has no normalize option; a newer ffmpeg is needed");
   let chromium;
@@ -138,7 +139,8 @@ function parseArgs(argv) {
   }
   const base = path.basename(a.page, path.extname(a.page));
   const dir = path.dirname(a.page);
-  a.previewDir = path.resolve(a["preview-dir"] || path.join(dir, `preview-${base}`));
+  // Output paths given relative are relative to the page's folder, this run's output folder.
+  a.previewDir = path.resolve(dir, a["preview-dir"] || `preview-${base}`);
   if (a.range !== undefined) {
     const r = a.range.split(",").map(Number);
     if (r.length !== 2 || !r.every(Number.isFinite) || r[0] < 0 || r[1] <= r[0]) throw new Error(`bad --range ${a.range}`);
@@ -146,7 +148,7 @@ function parseArgs(argv) {
     a.span = r;
   }
   const clip = a.span && path.join(a.previewDir, `clip-${a.span.map((t) => t.toFixed(2)).join("-")}.mp4`);
-  a.out = path.resolve(a.out || clip || path.join(dir, `${base}.mp4`));
+  a.out = path.resolve(dir, a.out || clip || `${base}.mp4`);
   return a;
 }
 
@@ -204,7 +206,7 @@ function audioMapArgs(first, n) {
   if (n === 1) return ["-map", `${first}:a:0`, "-af", "apad"];
   const ins = Array.from({ length: n }, (_, i) => `[${first + i}:a]apad[a${i}]`).join(";");
   const refs = Array.from({ length: n }, (_, i) => `[a${i}]`).join("");
-  return ["-filter_complex", `${ins};${refs}amix=inputs=${n}:normalize=0,alimiter=limit=0.95[mix]`, "-map", "[mix]"];
+  return ["-filter_complex", `${ins};${refs}amix=inputs=${n}:normalize=0[mix]`, "-map", "[mix]"];
 }
 
 // The length of the mp4's video stream; an mp4 with no video frames is an error, never a length of 0.
@@ -263,7 +265,12 @@ async function main() {
     };
     const bare = (u) => u.split(/[?#]/)[0];
     page.on("pageerror", (e) => pageErrors.push(String(e)));
-    page.on("requestfailed", (r) => warn(bare(r.url()), `failed to load ${bare(r.url())}`));
+    // A media element cancels its own in-flight range requests when the page seeks it; that is not a failed load.
+    page.on("requestfailed", (r) => {
+      const media = r.resourceType() === "media" || "range" in r.headers();
+      if (media && /ERR_ABORTED/.test((r.failure() || {}).errorText || "")) return;
+      warn(bare(r.url()), `failed to load ${bare(r.url())}`);
+    });
     page.on("response", (r) => r.status() >= 400 && warn(bare(r.url()), `HTTP ${r.status()} ${bare(r.url())}`));
     // The page reports a failure it caught itself (a decode, a parse, missing data) through window.motionWarn.
     await page.exposeFunction("motionWarn", (m) => warn(`page: ${m}`, `page: ${String(m)}`));
@@ -280,8 +287,9 @@ async function main() {
       return Promise.race([p, late]).finally(() => clearTimeout(timer));
     };
     const { port } = server.address();
-    await page.goto(`http://127.0.0.1:${port}/${encodeURIComponent(path.basename(a.page))}`, { waitUntil: "load" });
-    await page.addStyleTag({ content: "html,body{margin:0;padding:0;overflow:hidden}" });
+    const url = `http://127.0.0.1:${port}/${encodeURIComponent(path.basename(a.page))}`;
+    await bounded("loading the page", page.goto(url, { waitUntil: "load", timeout: 0 }));
+    await bounded("styling the page", page.addStyleTag({ content: "html,body{margin:0;padding:0;overflow:hidden}" }));
     // A module may define seek and DURATION after a top-level await, so wait for them.
     const notReady = await bounded(
       "the page's window.seek(t) and window.DURATION > 0 (it must define both)",
@@ -296,9 +304,10 @@ async function main() {
     // with the fallback (captures do not wait on fonts; see shoot).
     const fontFailures = await page.evaluate(async (ms) => {
       if (!document.fonts) return [];
+      const P = (async () => {})().constructor; // the native Promise, even where the page replaced window.Promise
       const faces = [...document.fonts];
-      const expiry = new Promise((r) => setTimeout(r, ms));
-      await Promise.race([Promise.all(faces.map((f) => f.load().catch(() => {}))), expiry]);
+      const expiry = new P((r) => setTimeout(r, ms));
+      await P.race([P.all(faces.map((f) => f.load().catch(() => {}))), expiry]);
       return faces
         .filter((f) => f.status !== "loaded")
         .map((f) => `font ${f.family}: ${f.status === "error" ? "failed to load" : "still loading at --limit"}`);
@@ -327,12 +336,14 @@ async function main() {
         `seek(${t})`,
         page.evaluate((t) => {
           const r = window.seek(t);
-          return r instanceof Promise ? r.then(() => {}) : undefined;
+          // Checked by tag, not instanceof: a page may replace window.Promise.
+          return Object.prototype.toString.call(r) === "[object Promise]" ? r.then(() => {}) : undefined;
         }, t)
       );
       // Captured over CDP: Playwright's screenshot waits on document.fonts.ready, which a font still
       // loading at --limit never resolves.
-      const png = Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64");
+      const shot = await bounded(`capturing ${t}`, cdp.send("Page.captureScreenshot", { format: "png" }));
+      const png = Buffer.from(shot.data, "base64");
       failOnPageErrors(pageErrors);
       return png;
     };

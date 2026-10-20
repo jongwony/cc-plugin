@@ -123,6 +123,11 @@
       "name": "review-loop",
       "source": "./review-loop",
       "description": "Convergence-paced review-resolve loop over a change and its governing surfaces — verifies each finding against the codebase and its base, then re-reviews until each is disposed of (/review-loop)"
+    },
+    {
+      "name": "ghostty-split-fork",
+      "source": "./ghostty-split-fork",
+      "description": "Opens the other side of /branch and /fork in a Ghostty split to the right"
     }
   ]
 }

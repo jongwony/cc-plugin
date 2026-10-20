@@ -57,14 +57,14 @@ What a run of these settles is the person's, in their words, and the build follo
 
 ## Build
 
-Write the page as one HTML file in a folder of this run's own, with each supplied file copied in beside it. The page draws every frame as a function of time — `window.DURATION` (seconds) and `window.seek(t)` drawing the frame for `t` from `t` alone — so what is previewed and what is rendered are the same frames. With a loop, the frame at `DURATION` meets the frame at 0.
+Where `/sketch` ran, the page continues from the version the person took, never rewritten from a description of it. Write the page as one HTML file in a folder of this run's own, with each supplied file copied in beside it, its canvas the frame shape this run settled and its sound what this run settled. The page draws every frame as a function of time — `window.DURATION` (seconds) and `window.seek(t)` drawing the frame for `t` from `t` alone — and both the preview and the render take its frames at the smoothness this run settled, so what is previewed and what is rendered are the same frames. With a loop, the frame at `DURATION` meets the frame at 0.
 
 ## Watch it moving
 
-Show the page playing — a short capture or the page itself — with its sound. Beside it, show stills at the moments chosen for "what would make it wrong", each with its time, and say what the builder chose on its own: each decision the person left unsaid and the value it took, and any warning the build saw. Whether the video is what was asked is the person's judgment, made here.
+Show the page playing through its whole length at the settled smoothness, with its sound — a capture or the page itself. Beside it, show stills at the moments chosen for "what would make it wrong", each with its time, and say what the builder chose on its own: each decision the person left unsaid and the value it took, and any warning the build saw. Whether the video is what was asked is the person's judgment, made here.
 
 Then stop for the person's turn. A change goes into the page and the preview runs again; their go-ahead moves to the render.
 
 ## Render
 
-Capture every frame of the page and encode the mp4 with the page's sound, at the frame shape and smoothness this run settled, however the builder sees fit. The mp4 lands beside the page and runs `DURATION`. Report the file, its length and size, and any warning the render saw.
+Capture every frame of the page at the settled smoothness and encode the mp4 with its sound, however the builder sees fit. The mp4 lands beside the page and runs `DURATION`. Report the file, its length and size, and any warning the render saw.

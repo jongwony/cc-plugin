@@ -1,5 +1,5 @@
 {
-  "description": "ghostty-split-fork: after /branch, resumes the original session in a Ghostty split to the right; after /fork, attaches to the new background session there. Builds without function hooks ignore the modules key.",
+  "description": "ghostty-split-fork: opens the other side of /branch and /fork in a Ghostty split. Builds without function hooks ignore the modules key.",
   "modules": [
     "./register.ts"
   ]

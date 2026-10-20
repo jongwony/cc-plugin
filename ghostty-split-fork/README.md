@@ -23,7 +23,7 @@ the SDK or another plugin runs the built-in alone.
   Ghostty 1.3.2.
 - Claude Code with function hooks (mods). Tested on Claude Code 2.1.304; the mod
   API is early access and may change between releases.
-- `osascript` and `claude` on `PATH`.
+- `osascript` on `PATH`, and `claude` on the `PATH` of the shell a new Ghostty pane starts.
 
 ## Install
 
@@ -48,14 +48,15 @@ commands pass straight through: no split, no toast, no extra delay.
 
 - `/branch` switches the running session to a new session id in place, so the mod
   reads the id before and after the command and resumes the original in the split.
-- `/fork` does not hand its new session id to the mod, so the mod lists the
-  background sessions (`claude agents --json`) before the command, then polls for
-  up to 10 seconds for a new one whose job record
-  (`~/.claude/jobs/<id>/state.json`, or under `CLAUDE_CONFIG_DIR`) names this
-  session as its fork parent. The `/fork` output can appear up to that long after
-  you press Enter.
+- `/fork` does not hand its new session id to the mod, so the mod notes the job
+  directories under `~/.claude/jobs` (or `$CLAUDE_CONFIG_DIR/jobs`) before the
+  command, then for up to 10 seconds looks for a new one whose `state.json` names
+  this session as its fork parent. The `/fork` output can appear up to that long
+  after you press Enter.
 - The split is made from the Ghostty terminal whose `tty` matches the session. If
   the session has no terminal of its own, a toast says so and no split opens.
+- When `CLAUDE_CONFIG_DIR` is set, the new pane gets the same value, so
+  `claude --resume` and `claude attach` look in the same place.
 
 ## Known limits
 

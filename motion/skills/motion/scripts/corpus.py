@@ -5,7 +5,8 @@
       Recognition material: who made each video, where to watch it, its poster.
       Prompt text is never printed.
   corpus.py axes
-      Per axis: share of non-partial prompts that mention it, overall and per
+      First line: the current kinds (categories), from every row. Then, per
+      axis: share of non-partial prompts that mention it, overall and per
       category, plus the spread across categories, which informs the slow/fast split.
 
 Stdlib only. The corpus is fetched on every run; nothing is cached.
@@ -64,6 +65,7 @@ def cmd_examples(v, a):
 
 
 def cmd_axes(v, _a):
+    print("kinds:", ", ".join(sorted({x["category"] for x in v})))
     full = [x for x in v if isinstance(x.get("prompt"), str) and not x.get("prompt_partial")]
     if not full:
         sys.exit("no complete prompts in the corpus")

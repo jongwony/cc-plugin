@@ -6,16 +6,17 @@
 //                             [--size 1080x1920] [--audio track.mp3] [--overwrite]
 //
 // Page contract: window.DURATION (seconds) and window.seek(t), which draws the
-// frame for time t (sync, or returning a promise). Page margins are reset to 0, so the
-// canvas at the top-left fills the --size viewport. Optional window.renderAudio()
-// resolves to a base64 WAV that is muxed when --audio is absent.
+// frame for time t (sync, or returning a promise); DURATION > 0. Page margins are reset to 0,
+// so a canvas at the top-left starts at the frame's corner; whether it fills the frame is for
+// the person to judge at the preview. Optional window.renderAudio() resolves to a base64 WAV,
+// mixed with --audio when both are present.
 // Outputs land beside the page (preview/, <page>.mp4) unless --preview-dir/--out say otherwise.
 // Preview PNGs are rewritten on every run; an existing mp4 or wav is replaced only with --overwrite.
 // Audio is padded or trimmed to DURATION, so the mp4 is always the page's length.
-// Exits 1 on any page error, font that fails to load, or mp4 whose probed length is off
-// DURATION by more than one frame or whose picture is not --size; the mp4's picture is
-// always the page (stream 0) and its sound the track (stream 1). Prints MOTION_PREVIEW=<png> per preview frame, or
-// MOTION_OUTPUT_PATH=<mp4>, only once every check has passed.
+// A subresource or font that fails to load prints MOTION_WARNING=<what>; it does not stop the
+// run. Exits 1 on an uncaught page exception, a bad argument, or an mp4 whose probed length is
+// off DURATION by more than one frame. The mp4's picture is always the page (stream 0).
+// Prints MOTION_PREVIEW=<png> per preview frame, or MOTION_OUTPUT_PATH=<mp4>, only on success.
 "use strict";
 const { spawn, execSync, execFileSync } = require("child_process");
 const fs = require("fs");
@@ -69,6 +70,8 @@ function parseArgs(argv) {
   if (a.preview !== undefined) {
     a.times = a.preview.split(",").map((s) => (s.trim() === "" ? NaN : Number(s)));
     if (a.times.some((t) => !(Number.isFinite(t) && t >= 0))) throw new Error(`bad --preview ${a.preview}`);
+    const names = a.times.map((t) => t.toFixed(2));
+    if (new Set(names).size !== names.length) throw new Error(`--preview times collide at 2 decimals: ${a.preview}`);
   }
   const base = path.basename(a.page, path.extname(a.page));
   const dir = path.dirname(a.page);
@@ -99,15 +102,13 @@ function ffmpeg(args) {
   return { stdin: p.stdin, done, exited: () => exited, kill: () => p.kill("SIGKILL") };
 }
 
-function probe(file) {
+function probeDuration(file) {
   const out = execFileSync(
     "ffprobe",
-    ["-v", "error", "-select_streams", "v:0", "-show_entries", "format=duration:stream=width,height", "-of", "json", file],
+    ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", file],
     { encoding: "utf8" }
   );
-  const j = JSON.parse(out);
-  const v = (j.streams || [])[0] || {};
-  return { duration: Number(j.format && j.format.duration), width: v.width, height: v.height };
+  return Number(out.trim());
 }
 
 function failOnPageErrors(pageErrors) {
@@ -122,7 +123,7 @@ async function main() {
   const browser = await chromium.launch(
     process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}
   );
-  const partial = a.out.replace(/\.mp4$/, "") + ".partial.mp4";
+  let partial = null;
   let ff = null;
   let wroteWav = false;
   let finished = false;
@@ -130,6 +131,7 @@ async function main() {
     const page = await browser.newPage({ viewport: { width: a.width, height: a.height } });
     const pageErrors = [];
     page.on("pageerror", (e) => pageErrors.push(String(e)));
+    page.on("requestfailed", (r) => console.log(`MOTION_WARNING=failed to load ${r.url()}`));
     await page.goto(pathToFileURL(a.page).href, { waitUntil: "load" });
     await page.addStyleTag({ content: "html,body{margin:0;padding:0;overflow:hidden}" });
     // Canvas only requests a face when it first draws with it, so load every declared face up front.
@@ -142,12 +144,14 @@ async function main() {
       await document.fonts.ready;
       return fails;
     });
-    pageErrors.push(...fontFailures);
-    const duration = await page.evaluate(() =>
-      typeof window.seek === "function" && Number.isFinite(window.DURATION) ? window.DURATION : null
-    );
-    if (duration === null) throw new Error("page must define window.seek(t) and a finite window.DURATION");
+    for (const f of fontFailures) console.log(`MOTION_WARNING=${f}`);
     failOnPageErrors(pageErrors);
+    const duration = await page.evaluate(() =>
+      typeof window.seek === "function" && Number.isFinite(window.DURATION) && window.DURATION > 0
+        ? window.DURATION
+        : null
+    );
+    if (duration === null) throw new Error("page must define window.seek(t) and a window.DURATION > 0");
     const shoot = async (t) => {
       await page.evaluate((t) => window.seek(t), t);
       const png = await page.screenshot({ type: "png" });
@@ -156,39 +160,43 @@ async function main() {
     };
 
     if (a.times) {
+      const late = a.times.filter((t) => t > duration);
+      if (late.length) throw new Error(`--preview ${late.join(",")} past DURATION=${duration}s`);
       fs.mkdirSync(a.previewDir, { recursive: true });
       const written = [];
       for (const t of a.times) {
         const f = path.join(a.previewDir, `t=${t.toFixed(2)}.png`);
-        fs.writeFileSync(f, await shoot(Math.min(t, duration)));
+        fs.writeFileSync(f, await shoot(t));
         written.push(f);
       }
       failOnPageErrors(pageErrors);
       for (const f of written) console.log(`MOTION_PREVIEW=${f}`);
     } else {
       fs.mkdirSync(path.dirname(a.out), { recursive: true });
-      let audio = a.audio ? path.resolve(a.audio) : null;
-      if (!audio) {
-        const wav = await page.evaluate(async () =>
-          typeof window.renderAudio === "function" ? await window.renderAudio() : null
-        );
-        if (wav) {
-          refuseExisting(wavOut, a.overwrite);
-          audio = wavOut;
-          fs.writeFileSync(audio, Buffer.from(wav, "base64"));
-          wroteWav = true;
-        }
+      partial = a.out.replace(/\.mp4$/, "") + `.partial-${process.pid}.mp4`;
+      const audio = a.audio ? [path.resolve(a.audio)] : [];
+      const wav = await page.evaluate(async () =>
+        typeof window.renderAudio === "function" ? await window.renderAudio() : null
+      );
+      if (wav) {
+        refuseExisting(wavOut, a.overwrite);
+        fs.writeFileSync(wavOut, Buffer.from(wav, "base64"));
+        wroteWav = true;
+        audio.push(wavOut);
       }
       const rate = a.fps * a.subframes;
       const vf = [];
-      if (a.subframes > 1) vf.push(`tmix=frames=${a.subframes}`, `select=not(mod(n\\,${a.subframes}))`, `setpts=N/${a.fps}/TB`);
+      // Output frame k blends captures kN..kN+N-1: a forward shutter, so frame 0 is blurred like the rest.
+      if (a.subframes > 1)
+        vf.push(`tmix=frames=${a.subframes}`, `select=eq(mod(n\\,${a.subframes})\\,${a.subframes - 1})`, `setpts=N/${a.fps}/TB`);
       vf.push("format=yuv420p");
       const args = ["-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", String(rate), "-i", "-"];
-      if (audio) args.push("-i", audio);
+      for (const f of audio) args.push("-i", f);
       args.push("-map", "0:v:0");
-      if (audio) args.push("-map", "1:a:0");
+      if (audio.length === 1) args.push("-map", "1:a:0", "-af", "apad");
+      if (audio.length === 2) args.push("-filter_complex", "[1:a]apad[x];[2:a]apad[y];[x][y]amix=inputs=2:normalize=0[a]", "-map", "[a]");
       args.push("-vf", vf.join(","), "-r", String(a.fps), "-c:v", "libx264", "-crf", "18");
-      if (audio) args.push("-af", "apad", "-c:a", "aac");
+      if (audio.length) args.push("-c:a", "aac");
       args.push("-t", String(duration), "-movflags", "+faststart", partial);
       ff = ffmpeg(args);
       const total = Math.round(duration * rate);
@@ -199,11 +207,9 @@ async function main() {
       ff.stdin.end();
       await ff.done;
       failOnPageErrors(pageErrors);
-      const probed = probe(partial);
-      if (!(Math.abs(probed.duration - duration) <= 1 / a.fps))
-        throw new Error(`rendered ${probed.duration}s but the page declares DURATION=${duration}s`);
-      if (probed.width !== a.width || probed.height !== a.height)
-        throw new Error(`rendered ${probed.width}x${probed.height} but --size is ${a.width}x${a.height}`);
+      const probed = probeDuration(partial);
+      if (!(Math.abs(probed - duration) <= 1 / a.fps))
+        throw new Error(`rendered ${probed}s but the page declares DURATION=${duration}s`);
       fs.renameSync(partial, a.out);
       finished = true;
       console.log(`MOTION_OUTPUT_PATH=${a.out}`);
@@ -213,7 +219,7 @@ async function main() {
       ff.kill();
       await ff.done.catch(() => {});
     }
-    fs.rmSync(partial, { force: true });
+    if (partial) fs.rmSync(partial, { force: true });
     if (wroteWav && !finished) fs.rmSync(wavOut, { force: true });
     await browser.close();
   }

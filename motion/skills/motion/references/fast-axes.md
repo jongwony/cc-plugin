@@ -4,7 +4,7 @@ Read when the kind of video is in view: when the person's seed implies one, when
 
 ## The kind of video
 
-The corpus sorts videos into kinds; the first line `corpus.py axes` prints names the current ones, after `ALL`. The kind is itself a decision a newcomer rarely names; show live examples (below) and let them point.
+The corpus sorts videos into kinds; the first line `corpus.py axes` prints (`kinds:`) names the current ones. The kind is itself a decision a newcomer rarely names; show live examples (below) and let them point.
 
 ## Decisions that depend on the kind
 

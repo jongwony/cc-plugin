@@ -13,6 +13,7 @@ Stdlib only. The corpus is fetched on every run; nothing is cached.
 """
 import argparse
 import collections
+import http.client
 import json
 import re
 import sys
@@ -46,7 +47,7 @@ def load():
     try:
         with urllib.request.urlopen(CORPUS_URL, timeout=60) as r:
             v = json.load(r)
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, http.client.HTTPException) as e:
         sys.exit(f"corpus unreachable ({e}); proceed from the person's own words")
     # Third-party schema: rows missing the fields every command needs are skipped.
     return [x for x in v if isinstance(x, dict) and isinstance(x.get("category"), str)]

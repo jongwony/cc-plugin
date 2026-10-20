@@ -4,8 +4,8 @@ For someone who wants a short motion-graphics video but can't yet say what it sh
 
 ```mermaid
 flowchart LR
-  A[seed: what the video is for] --> B[/elicit + video decisions/]
-  B -- open items or hard-to-undo acts --> G[/bound: who settles them/]
+  A[seed: what the video is for] --> B["/elicit + video decisions"]
+  B -- open items or hard-to-undo acts --> G["/bound: who settles them"]
   G --> S
   B -- nothing open --> S[build sheet: every value the build reads, with its source]
   S --> C[build prompt]
@@ -21,8 +21,8 @@ flowchart LR
 /plugin install euporia@epistemic-protocols   # provides /elicit
 /plugin install horismos@epistemic-protocols  # provides /bound, used only when something is left open or the render would do something hard to undo
 /plugin install motion@cc-plugin
-brew install python node ffmpeg                # or: apt install python3 nodejs ffmpeg
-npm i -g playwright && npx playwright install chromium
+brew install python node ffmpeg                # or: apt install python3 ffmpeg, plus Node 18+ from nodejs.org or nvm
+npm i -g playwright && npx playwright install chromium   # on Linux: npx playwright install --with-deps chromium
 ```
 
 ## Pieces

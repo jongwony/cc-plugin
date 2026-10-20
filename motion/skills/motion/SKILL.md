@@ -22,11 +22,11 @@ Respond in the person's language.
 | euporia plugin | `/plugin install euporia@epistemic-protocols` | `/elicit` |
 | horismos plugin | `/plugin install horismos@epistemic-protocols` | `/bound`, invoked only at the seam below |
 | Python 3 | `brew install python` (or the distro package, e.g. `apt install python3`) | `scripts/corpus.py` reads the example corpus live |
-| Node.js 18+ | `brew install node` (or the distro package) | `scripts/render.cjs` |
-| Playwright + Chromium | `npm i -g playwright && npx playwright install chromium` | Steps the page through time and captures frames |
+| Node.js 18+ | `brew install node`, or nodejs.org / nvm (distro packages are often older than 18) | `scripts/render.cjs` |
+| Playwright + Chromium | `npm i -g playwright && npx playwright install chromium` (on Linux, `--with-deps` adds Chromium's system libraries) | Steps the page through time and captures frames |
 | ffmpeg (with ffprobe and libx264) | `brew install ffmpeg` (or `apt install ffmpeg`) | Encodes frames (and audio) to mp4; ffprobe checks its length |
 
-Preflight: `python3 --version >/dev/null && node --version >/dev/null && ffmpeg -version >/dev/null && ffprobe -version >/dev/null && ffmpeg -hide_banner -encoders 2>/dev/null | grep -q libx264 && node -e "const {chromium}=require(require('path').join(require('child_process').execSync('npm root -g').toString().trim(),'playwright'));process.exit(require('fs').existsSync(process.env.CHROMIUM_PATH||chromium.executablePath())?0:1)"` — a non-zero exit names nothing, so run each part on its own to see which is missing. Set `CHROMIUM_PATH` when Chromium lives outside Playwright's cache. Corpus reads need network access to `raw.githubusercontent.com`.
+Preflight: `python3 --version >/dev/null && node -e "process.exit(+process.versions.node.split('.')[0]>=18?0:1)" && ffmpeg -version >/dev/null && ffprobe -version >/dev/null && ffmpeg -hide_banner -encoders 2>/dev/null | grep -q libx264 && node -e "const {chromium}=require(require('path').join(require('child_process').execSync('npm root -g').toString().trim(),'playwright'));chromium.launch(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{}).then(b=>b.close(),()=>process.exit(1))"` — a non-zero exit names nothing, so run each part on its own to see which is missing. Set `CHROMIUM_PATH` when Chromium lives outside Playwright's cache. Corpus reads need network access to `raw.githubusercontent.com`.
 
 ## Phase 1: Seed
 
@@ -36,7 +36,7 @@ Carry the person's words about the video verbatim as the seed. Invoked without t
 
 Open with one plain sentence on what happens next: a few questions about the video, answered in any words or skipped, then preview frames to check, then the finished video.
 
-Invoke `/elicit` on the seed — the skill call itself. The coordinates below are the domain's decision structure that `/elicit` draws on: candidates raised where the seed leaves them open and the person's own words have not already settled them, after the coordinates those words raise, never as a checklist walked in order. Phrase each in the person's situation rather than the craft term, and say what happens if it is left unsaid.
+Invoke `/elicit` on the seed — the skill call itself. The coordinates below are the domain's decision structure that `/elicit` draws on: candidates raised where the seed leaves them open and the person's own words have not already settled them, never as a checklist walked in order. Phrase each in the person's situation rather than the craft term, and say what happens if it is left unsaid.
 
 These decisions hold for every kind of video:
 
@@ -63,7 +63,7 @@ Where it is undefined, invoke `/bound` — the skill call itself — on the buil
 
 ### Build sheet
 
-Then write `sheet.md` in this run's output folder: one row for every value the build reads — frame shape and size, duration, frame rate, loop, the scenes in order with their start times, each sound source (each supplied file, synthesized sound; where motion lands on a track's beats, its BPM and first-beat time), the exact words on screen, and the look — whether or not `/elicit` raised it. It is this skill's list of what the build consumes, not a further round of questions; `/elicit` and `/bound` remain the contracts that settled what it holds. Each row carries its value and where the value came from:
+Then write `sheet.md` in this run's output folder: one row for each value that a Phase 3 prompt section (`<inputs>`, `<direction>`, `<structure>`, `<build>`, `<gotchas>`) or a render flag (`--size`, `--fps`, `--subframes`, `--audio`) reads, whether or not `/elicit` raised it (supplied files, what is banned, how the movement feels, the kind's own decisions, motion blur, each sound source and, where motion lands on a track's beats, its BPM and first-beat time). It is this skill's list of what the build consumes, not a further round of questions; `/elicit` and `/bound` remain the contracts that settled what it holds. Each row carries its value and where the value came from:
 
 - the person's words — `/elicit`'s record, or what they gave during `/bound` — kept in those words;
 - a `/bound` arrangement: a value the person keeps is asked for now, before the build; a value they asked proposals for lists its candidates, each shown in its own preview frame in Phase 5; a value entrusted to the builder is chosen within the stated limits;
@@ -89,7 +89,7 @@ Save the prompt as `prompt.md` in this run's output folder and show it: it is al
 Write one self-contained HTML file in the output folder:
 
 - `window.DURATION` — length in seconds, greater than 0.
-- `window.seek(t)` — draws the frame for time `t` from `t` alone: no timers, CSS transitions, `requestAnimationFrame` loops, or state carried between calls. The renderer calls it in any order and waits for it when it returns a promise, so an image, video, or data the frame needs is awaited inside `seek`.
+- `window.seek(t)` — draws the frame for time `t` from `t` alone: no timers, CSS transitions, `requestAnimationFrame` loops, or state carried between calls. The renderer calls it in any order and waits for it when it returns a promise, so an image, video, or data the frame needs is awaited inside `seek`, and a load that fails is caught there and the frame drawn without it — the renderer reports the failed load as a warning, while an uncaught exception or a rejected `seek` is a broken page. A `seek` that never settles gets a warning and its frame captured as drawn.
 - A fixed canvas size matching the shape chosen in Phase 2.
 - With a loop, the frame at `DURATION` matches the frame at 0.
 - Sound: each supplied track is mixed in by the renderer, with the structure times on its beats where its BPM and first beat are known; synthesized sound is exposed as `window.renderAudio()`, resolving to a base64 WAV rendered with an `OfflineAudioContext`. The renderer mixes every source it is given.
@@ -100,7 +100,7 @@ Write one self-contained HTML file in the output folder:
 node ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/render.cjs <page.html> --size <W>x<H> --preview <t1,t2,...> [--audio <track>]...
 ```
 
-A non-zero exit is a broken page (an uncaught exception, a `renderAudio()` that fails) or a bad argument, and its message says which; fix it and run again. Whether the page is what was asked is the person's judgment, made on these frames. Choose times at each scene boundary and at the moments the person named in "what would make it wrong". Show each `MOTION_PREVIEW=` frame with its time and the scene it belongs to, and ask them to check that the picture fills the frame and that each supplied asset (logo, text, image) appears; show every `MOTION_WARNING=` line beside the frames; offer the `MOTION_SOUND=` file, where one is printed — every sound source the mp4 will carry, mixed — to listen to, since stills do not show sound; show beside the frames each sheet row whose value is a builder default; for a value with candidates, build one variant of the page per candidate and preview each at a moment where the value shows; the variant the person picks becomes the page. Then stop for the person's turn. Accepted changes go into the page, `sheet.md`, and `prompt.md`, and the preview runs again; their go-ahead moves to Phase 6.
+A non-zero exit is a broken page (an uncaught exception, a rejected `seek`, a `renderAudio()` that fails) or a bad argument, and its message says which; fix it and run again. Whether the page is what was asked is the person's judgment, made on these frames. Choose times at each scene boundary and at the moments the person named in "what would make it wrong". Show each `MOTION_PREVIEW=` frame with its time and the scene it belongs to, and ask them to check that the picture fills the frame and that each supplied asset (logo, text, image) appears; show every `MOTION_WARNING=` line beside the frames; offer the `MOTION_SOUND=` file, where one is printed — every sound source the mp4 will carry, mixed — to listen to, since stills do not show sound; show beside the frames each sheet row whose value is a builder default; for a value with candidates, build one variant page file per candidate and preview each at a moment where the value shows; the variant the person picks becomes the page. Then stop for the person's turn. Accepted changes go into the page, `sheet.md`, and `prompt.md`, and the preview runs again; their go-ahead moves to Phase 6.
 
 ## Phase 6: Render
 
@@ -108,4 +108,4 @@ A non-zero exit is a broken page (an uncaught exception, a `renderAudio()` that 
 node ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/render.cjs <page.html> --size <W>x<H> --fps <fps> [--subframes 4] [--audio <track>]... [--overwrite]
 ```
 
-Run it in the background and wait for it to exit: every frame is a screenshot, so a long or large render takes minutes. `--subframes N` blends N captures per frame into motion blur. The mp4 lands beside the page and runs within one frame of `DURATION`: a shorter track is padded with silence, a longer one cut. `--overwrite` replaces an existing mp4 or wav, and is passed for a file this run wrote. A non-zero exit means no mp4 was written; report its message. Report the `MOTION_OUTPUT_PATH=` file, its length and size, any `MOTION_WARNING=` line, and each sheet row the builder chose.
+Run it in the background and wait for it to exit: every frame is a screenshot, so a long or large render takes minutes. `--subframes N` blends N captures per frame into motion blur. The mp4 lands beside the page and runs within one frame of `DURATION`: a shorter track is padded with silence, a longer one cut. `--overwrite` replaces an existing mp4, and is passed for a file this run wrote. A non-zero exit means no mp4 was written; report its message. Report the `MOTION_OUTPUT_PATH=` file, its length and size, any `MOTION_WARNING=` line, and each sheet row the builder chose.

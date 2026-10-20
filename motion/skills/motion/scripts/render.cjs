@@ -6,13 +6,16 @@
 //                             [--size 1080x1920] [--audio track.mp3]... [--overwrite]
 //
 // Page contract: window.DURATION (seconds) and window.seek(t), which draws the
-// frame for time t (sync, or returning a promise); DURATION > 0. Page margins are reset to 0,
+// frame for time t (sync, or returning a promise); DURATION > 0. A seek that has not settled
+// after SEEK_LIMIT_MS prints MOTION_WARNING= and its frame is captured as drawn; after the first,
+// later seeks get SEEK_GRACE_MS, so a page that never settles still renders. Page margins are reset to 0,
 // so a canvas at the top-left starts at the frame's corner; whether it fills the frame is for
 // the person to judge at the preview. Optional window.renderAudio() resolves to a base64 WAV.
 // Every sound source (renderAudio and each --audio) is mixed at its own level, with a limiter
-// against clipping; a preview writes that mix to preview/sound.wav (MOTION_SOUND=) to listen to.
-// Outputs land beside the page (preview/, <page>.mp4) unless --preview-dir/--out say otherwise.
-// Preview PNGs are rewritten on every run; an existing mp4 or wav is replaced only with --overwrite.
+// against clipping; a preview writes that mix to sound.wav (MOTION_SOUND=) to listen to.
+// Outputs land beside the page (preview-<page>/, <page>.mp4) unless --preview-dir/--out say otherwise.
+// Preview files (PNGs, sound.wav) are rewritten on every run; an existing mp4 is replaced only
+// with --overwrite. Synthesized sound is a temporary file, removed once it is muxed.
 // Audio is padded or trimmed to DURATION, so the mp4 is always the page's length.
 // A subresource or font that fails to load, or an HTTP response >= 400, prints MOTION_WARNING=<what>;
 // it does not stop the run. Exits 1 on an uncaught page exception, a failing renderAudio(), a bad
@@ -30,6 +33,8 @@ const USAGE =
   "[--subframes n] [--size WxH] [--audio track] [--overwrite]";
 const VALUE_FLAGS = new Set(["preview", "preview-dir", "out", "fps", "subframes", "size", "audio"]);
 const BOOL_FLAGS = new Set(["overwrite"]);
+const SEEK_LIMIT_MS = 20000;
+const SEEK_GRACE_MS = 200;
 
 function loadPlaywright() {
   try {
@@ -79,7 +84,7 @@ function parseArgs(argv) {
   const base = path.basename(a.page, path.extname(a.page));
   const dir = path.dirname(a.page);
   a.out = path.resolve(a.out || path.join(dir, `${base}.mp4`));
-  a.previewDir = path.resolve(a["preview-dir"] || path.join(dir, "preview"));
+  a.previewDir = path.resolve(a["preview-dir"] || path.join(dir, `preview-${base}`));
   return a;
 }
 
@@ -129,7 +134,6 @@ function failOnPageErrors(pageErrors) {
 
 async function main() {
   const a = parseArgs(process.argv.slice(2));
-  const wavOut = a.out.replace(/\.mp4$/, "") + ".wav";
   if (!a.times) refuseExisting(a.out, a.overwrite);
   const { chromium } = loadPlaywright();
   const browser = await chromium.launch(
@@ -138,14 +142,13 @@ async function main() {
   let partial = null;
   let wavTemp = null;
   let ff = null;
-  let finished = false;
   const cleanup = async () => {
     if (ff && !ff.exited()) {
       ff.kill();
       await ff.done.catch(() => {});
     }
     if (partial) fs.rmSync(partial, { force: true });
-    if (wavTemp && !finished) fs.rmSync(wavTemp, { force: true });
+    if (wavTemp) fs.rmSync(wavTemp, { force: true });
     await browser.close().catch(() => {});
   };
   for (const sig of ["SIGINT", "SIGTERM"])
@@ -179,16 +182,27 @@ async function main() {
     const tracks = (a.audio || []).map((f) => path.resolve(f));
     // The page's synthesized sound, written to `file`; false when the page has none.
     const synthesize = async (file) => {
-      const wav = await page.evaluate(async () =>
-        typeof window.renderAudio === "function" ? await window.renderAudio() : null
+      const r = await page.evaluate(async () =>
+        typeof window.renderAudio === "function" ? { wav: await window.renderAudio() } : null
       );
-      if (wav === null) return false;
+      if (r === null) return false;
+      const wav = r.wav;
       if (typeof wav !== "string" || !wav) throw new Error("renderAudio() must resolve to a base64 WAV string");
       fs.writeFileSync(file, Buffer.from(wav, "base64"));
       return true;
     };
+    let seekLimit = SEEK_LIMIT_MS;
     const shoot = async (t) => {
-      await page.evaluate((t) => window.seek(t), t);
+      const seek = page.evaluate((t) => window.seek(t), t);
+      seek.catch(() => {}); // a seek left unsettled rejects when the browser closes
+      let timer;
+      const late = new Promise((r) => (timer = setTimeout(() => r(true), seekLimit)));
+      if (await Promise.race([seek.then(() => false), late])) {
+        if (seekLimit === SEEK_LIMIT_MS)
+          console.log(`MOTION_WARNING=seek(${t}) did not settle within ${SEEK_LIMIT_MS / 1000}s; frame captured as drawn, later seeks wait ${SEEK_GRACE_MS / 1000}s`);
+        seekLimit = SEEK_GRACE_MS;
+      }
+      clearTimeout(timer);
       const png = await page.screenshot({ type: "png" });
       failOnPageErrors(pageErrors);
       return png;
@@ -208,12 +222,13 @@ async function main() {
       wavTemp = path.join(a.previewDir, `.synth-${process.pid}.wav`);
       const sources = (await synthesize(wavTemp)) ? [...tracks, wavTemp] : tracks;
       if (sources.length) {
-        const mix = ffmpeg(["-y", "-loglevel", "error", ...sources.flatMap((f) => ["-i", f]),
-          ...audioMapArgs(0, sources.length), "-t", String(duration), sound]);
-        mix.stdin.end();
-        await mix.done;
+        partial = path.join(a.previewDir, `.sound-${process.pid}.wav`);
+        ff = ffmpeg(["-y", "-loglevel", "error", ...sources.flatMap((f) => ["-i", f]),
+          ...audioMapArgs(0, sources.length), "-t", String(duration), partial]);
+        ff.stdin.end();
+        await ff.done;
+        fs.renameSync(partial, sound);
       }
-      fs.rmSync(wavTemp, { force: true });
       failOnPageErrors(pageErrors);
       for (const f of written) console.log(`MOTION_PREVIEW=${f}`);
       if (sources.length) console.log(`MOTION_SOUND=${sound}`);
@@ -222,10 +237,7 @@ async function main() {
       partial = a.out.replace(/\.mp4$/, "") + `.partial-${process.pid}.mp4`;
       const audio = [...tracks];
       wavTemp = a.out.replace(/\.mp4$/, "") + `.partial-${process.pid}.wav`;
-      if (await synthesize(wavTemp)) {
-        refuseExisting(wavOut, a.overwrite);
-        audio.push(wavTemp);
-      } else wavTemp = null;
+      if (await synthesize(wavTemp)) audio.push(wavTemp);
       const rate = a.fps * a.subframes;
       const vf = [];
       // Output frame k blends captures kN..kN+N-1: a forward shutter, so frame 0 is blurred like the rest.
@@ -251,8 +263,6 @@ async function main() {
       if (!(Math.abs(probed - duration) <= 1 / a.fps))
         throw new Error(`rendered ${probed}s but the page declares DURATION=${duration}s`);
       fs.renameSync(partial, a.out);
-      if (wavTemp) fs.renameSync(wavTemp, wavOut);
-      finished = true;
       console.log(`MOTION_OUTPUT_PATH=${a.out}`);
     }
   } finally {

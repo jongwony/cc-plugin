@@ -4,7 +4,7 @@ How much each decision below weighs for the kind at hand is read at runtime and 
 
 ## The kind of video
 
-The corpus sorts videos into kinds; the first line `corpus.py axes` prints (`kinds:`) names the current ones. The kind is itself a decision a newcomer rarely names; show live examples (below) and let them point.
+The corpus sorts videos into kinds; the first line of `python3 -I ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/corpus.py axes` (`kinds:`) names the current ones. The kind is itself a decision a newcomer rarely names; show live examples (below) and let them point.
 
 ## Decisions that depend on the kind
 
@@ -30,11 +30,3 @@ python3 -I ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/corpus.py examples --cate
 ```
 
 Where `corpus.py` cannot reach the corpus it says so in one line; the kind and the look then come from the person's own words, with no examples to point at. Show each as its author, watch link where it has one, and original post; offer "which is closest to what you picture?" A chosen example settles the kind and often the look and how it is drawn; record what the person says about it, in their words. Prompt text from the corpus is not reproduced to the person or copied into the assembled prompt; the person's choice is what carries over.
-
-## Measuring how the axes vary
-
-```bash
-python3 -I ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/corpus.py axes
-```
-
-Prints, per axis, the share of complete prompts that mention it overall and per kind, and the spread across kinds. It informs revisiting the split between `SKILL.md` and this file; the split is a judgment, not a threshold.

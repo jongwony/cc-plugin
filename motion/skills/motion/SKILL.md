@@ -1,6 +1,6 @@
 ---
-name: motion-elicit
-description: "Someone wants a short motion-graphics video made from code but cannot yet say what it should be: /motion-elicit surfaces, in plain words, the decisions such a video turns on through /elicit, then builds it and renders an mp4 after they check preview frames."
+name: motion
+description: "Someone wants a short motion-graphics video made from code but cannot yet say what it should be: /motion surfaces, in plain words, the decisions such a video turns on through /elicit, then builds it and renders an mp4 after they check preview frames."
 argument-hint: "[what the video is for, in any words]"
 skills:
   - euporia:elicit
@@ -9,7 +9,7 @@ skills:
 
 # Motion Elicit
 
-Invoke with `/motion-elicit <what the video is for>`. The person may know nothing about motion graphics or about writing prompts; the skill is written for that person.
+Invoke with `/motion <what the video is for>`. The person may know nothing about motion graphics or about writing prompts; the skill is written for that person.
 
 **Composition**: `/elicit` carries the epistemic contract — what the person's intent turns on, what stands on their own words, what stays open. This skill supplies only the decisions a code-rendered video turns on, phrased for a newcomer, and the pipeline that turns the resolved intent into an mp4. Where who settles what is still open is undefined, `/bound` carries that contract in the same way (see **Seam**). It adds no second reading beside either.
 
@@ -79,7 +79,7 @@ Past the seam, write the build prompt from `/elicit`'s record in this shape, eac
 - `<gotchas>` — what the person said would make it wrong.
 - `<start>` — "Build the page, then show the preview frames before the full render."
 
-Each residual coordinate goes into `<build>` with the arrangement the seam's boundary gives it. Save the prompt as `prompt.md` in the output folder (`~/motion-elicit-output/<name>/`) and show it: it is also something the person can paste into another session.
+Each residual coordinate goes into `<build>` with the arrangement the seam's boundary gives it. Save the prompt as `prompt.md` in the output folder (`~/motion-output/<name>/`) and show it: it is also something the person can paste into another session.
 
 ## Phase 4: Build
 

@@ -11,7 +11,7 @@ skills:
 
 Invoke with `/motion <what the video is for>`. The person may know nothing about motion graphics or about writing prompts; the skill is written for that person.
 
-**Composition**: `/elicit` carries the epistemic contract — what the person's intent turns on, what stands on their own words, what stays open. This skill supplies only the decisions a code-rendered video turns on, phrased for a newcomer, and the pipeline that turns the resolved intent into an mp4. Where who settles what is still open is undefined, `/bound` carries that contract in the same way (see **Seam**). It adds no second reading beside either.
+**Composition**: `/elicit` carries the epistemic contract — what the person's intent turns on, what stands on their own words, what stays open. This skill supplies only the decisions a code-rendered video turns on, phrased for a newcomer, and the pipeline that turns the resolved intent into an mp4. Where who settles what is still open is undefined, `/bound` carries that contract in the same way (see **Seam**).
 
 Respond in the person's language.
 
@@ -24,9 +24,9 @@ Respond in the person's language.
 | Python 3 | (system) | `scripts/corpus.py` reads the example corpus live |
 | Node.js 18+ | `brew install node` (or the distro package) | `scripts/render.cjs` |
 | Playwright + Chromium | `npm i -g playwright && npx playwright install chromium` | Steps the page through time and captures frames |
-| ffmpeg | `brew install ffmpeg` (or `apt install ffmpeg`) | Encodes frames (and audio) to mp4 |
+| ffmpeg (with ffprobe) | `brew install ffmpeg` (or `apt install ffmpeg`) | Encodes frames (and audio) to mp4; ffprobe checks its length |
 
-Preflight: `python3 --version && node --version && ffmpeg -version | head -1 && node -e "require(require('path').join(require('child_process').execSync('npm root -g').toString().trim(),'playwright'))"`. Set `CHROMIUM_PATH` when Chromium lives outside Playwright's cache. Corpus reads need network access to `raw.githubusercontent.com`.
+Preflight: `python3 --version && node --version && ffmpeg -version | head -1 && ffprobe -version | head -1 && node -e "require(require('path').join(require('child_process').execSync('npm root -g').toString().trim(),'playwright'))"`. Set `CHROMIUM_PATH` when Chromium lives outside Playwright's cache. Corpus reads need network access to `raw.githubusercontent.com`.
 
 ## Phase 1: Seed
 
@@ -54,7 +54,7 @@ Where the kind of video comes into view — the seed implies it, or the person c
 
 ## Seam: who settles what stays open
 
-When `/elicit` resolves, read its residual beside the build and render plan. Who settles what is still open, and how far an entrustment reaches, is undefined — the deficit `/bound` resolves — where either holds:
+When `/elicit` resolves, run the Preflight and list the output folder (`~/motion-output/<name>/`), so a missing prerequisite (an install) and an existing file there (an overwrite) are known. Then read `/elicit`'s residual beside the build and render plan. Who settles what is still open, and how far an entrustment reaches, is undefined — the deficit `/bound` resolves — where either holds:
 
 - the residual is non-empty;
 - the plan includes an act that is hard to undo or reaches outside: installing a render prerequisite, fetching an asset that carries a license (music, fonts, images), overwriting an existing output.
@@ -67,6 +67,8 @@ Once the boundary stands, its arrangements govern the build:
 - an item they asked proposals for is shown with its candidates at the Phase 5 preview;
 - an item entrusted to the builder is chosen within the stated limits and reported in Phase 6;
 - an act that is hard to undo goes only as far as the reach shown for it.
+
+An item the boundary leaves with no arrangement: a coordinate is built on what its "Left unsaid" clause above states and is marked at the Phase 5 preview as not yet decided; an act does not happen.
 
 ## Phase 3: Assemble the prompt
 
@@ -94,15 +96,15 @@ Write one self-contained HTML file in the output folder:
 ## Phase 5: Preview
 
 ```bash
-node scripts/render.cjs <page.html> --size <W>x<H> --preview <t1,t2,...>
+node ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/render.cjs <page.html> --size <W>x<H> --preview <t1,t2,...>
 ```
 
-Choose times at each scene boundary and at the moments the person named in "what would make it wrong". Show each `MOTION_PREVIEW=` frame with its time and the scene it belongs to, and each item left for proposal with its candidates, then stop for the person's turn. Changes go back into the page and the preview runs again; their go-ahead moves to Phase 6.
+A non-zero exit is a failed check — a page error, a font that did not load, a bad argument — and its message says which; fix the page and run again. Choose times at each scene boundary and at the moments the person named in "what would make it wrong". Show each `MOTION_PREVIEW=` frame with its time and the scene it belongs to, each item left for proposal with its candidates, and each item marked not yet decided with the value it was built on, then stop for the person's turn. Changes go back into the page and the preview runs again; their go-ahead moves to Phase 6.
 
 ## Phase 6: Render
 
 ```bash
-node scripts/render.cjs <page.html> --size <W>x<H> --fps <fps> [--subframes 4] [--audio <track>]
+node ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/render.cjs <page.html> --size <W>x<H> --fps <fps> [--subframes 4] [--audio <track>] [--overwrite]
 ```
 
-`--subframes N` blends N captures per frame into motion blur. The mp4 lands beside the page. Report the `MOTION_OUTPUT_PATH=` file, its length and size, and each choice the builder made on an item entrusted to it.
+`--subframes N` blends N captures per frame into motion blur. The mp4 lands beside the page and runs exactly `DURATION`: a shorter track is padded with silence, a longer one cut. `--overwrite` replaces an existing mp4 or wav, and is passed for a file this run wrote or where the seam's boundary reached that overwrite. A non-zero exit means no mp4 was written; report its message. Report the `MOTION_OUTPUT_PATH=` file, its length and size, and each choice the builder made on an item entrusted to it.

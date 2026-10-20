@@ -56,7 +56,8 @@ def cmd_examples(v, a):
     rows.sort(key=lambda x: x["added"], reverse=True)
     for x in rows[: a.limit]:
         print(f"- @{x['author']} [{', '.join(x['tech_tags'])}]")
-        print(f"  watch: {x['skillry_url']}")
+        if x.get("skillry_url"):
+            print(f"  watch: {x['skillry_url']}")
         print(f"  original post: {x['post_url']}")
         print(f"  poster: {x['poster_url']}")
 

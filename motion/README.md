@@ -18,7 +18,7 @@ flowchart LR
 
 ```bash
 /plugin install euporia@epistemic-protocols   # provides /elicit
-/plugin install horismos@epistemic-protocols  # provides /bound, used only when something is left open
+/plugin install horismos@epistemic-protocols  # provides /bound, used only when something is left open or the render would do something hard to undo
 /plugin install motion@cc-plugin
 npm i -g playwright && npx playwright install chromium
 brew install ffmpeg                             # or: apt install ffmpeg

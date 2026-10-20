@@ -3,7 +3,7 @@
 
   corpus.py examples [--category motion] [--limit 6] [--tag svg]
       Recognition material: who made each video, where to watch it, its poster;
-      without --category, the newest two of every kind.
+      without --category, a few of every kind.
       Prompt text is never printed.
   corpus.py axes
       First line: the current kinds (categories), from every row. Then, per
@@ -29,7 +29,18 @@ CORPUS_URL = (
 # Each axis is a decision a prompt can fix, keyed by its name in SKILL.md or
 # references/fast-axes.md; its pattern detects that a prompt mentions it, not that
 # the decision was made.
-AXES = json.loads((Path(__file__).resolve().parent.parent / "references" / "axes.json").read_text())
+SKILL_DIR = Path(__file__).resolve().parent.parent
+AXES = json.loads((SKILL_DIR / "references" / "axes.json").read_text())
+
+
+def warn_unnamed_axes():
+    """An axes.json key no longer named in bold in SKILL.md or fast-axes.md measures a decision the skill dropped."""
+    names = set()
+    for f in (SKILL_DIR / "SKILL.md", SKILL_DIR / "references" / "fast-axes.md"):
+        names |= set(re.findall(r"\*\*(.+?)\*\*", f.read_text()))
+    for k in AXES:
+        if k not in names:
+            print(f"warning: axes.json key {k!r} is not a decision named in SKILL.md or fast-axes.md", file=sys.stderr)
 
 
 def load():
@@ -62,6 +73,7 @@ def cmd_examples(v, a):
 
 
 def cmd_axes(v, _a):
+    warn_unnamed_axes()
     print("kinds:", ", ".join(sorted({x["category"] for x in v})))
     full = [x for x in v if isinstance(x.get("prompt"), str) and not x.get("prompt_partial")]
     if not full:

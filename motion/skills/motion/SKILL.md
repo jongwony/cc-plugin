@@ -19,12 +19,13 @@ Respond in the person's language.
 
 | Dependency | Install | Purpose |
 |------------|---------|---------|
+| epistemic-protocols marketplace | `/plugin marketplace add jongwony/epistemic-protocols` | Where the next two plugins come from |
 | euporia plugin | `/plugin install euporia@epistemic-protocols` | `/elicit` |
 | horismos plugin | `/plugin install horismos@epistemic-protocols` | `/bound`, invoked only at the seam below |
 | Python 3 | `brew install python` (or the distro package, e.g. `apt install python3`) | `scripts/corpus.py` reads the example corpus live |
 | Node.js 18+ | `brew install node`, or nodejs.org / nvm (distro packages are often older than 18) | `scripts/render.cjs` |
 | Playwright + Chromium | `npm i -g playwright && npx playwright install chromium` (on Linux, `--with-deps` adds Chromium's system libraries) | Steps the page through time and captures frames |
-| ffmpeg (with ffprobe and libx264) | `brew install ffmpeg` (or `apt install ffmpeg`) | Encodes frames (and audio) to mp4; ffprobe checks its length |
+| ffmpeg (with ffprobe and libx264; libvpx and libopus where a supplied video is re-encoded in Phase 4) | `brew install ffmpeg` (or `apt install ffmpeg`) | Encodes frames (and audio) to mp4; ffprobe checks its length |
 
 Preflight: `python3 --version && node ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/render.cjs --check` — the check resolves Playwright, Chromium and ffmpeg the way a render does, and a failure's message names what is missing. Set `CHROMIUM_PATH` when Chromium lives outside Playwright's cache. Corpus reads need network access to `raw.githubusercontent.com`.
 
@@ -67,6 +68,7 @@ Then write `sheet.md` in this run's output folder: one row for each value that a
 
 - the person's words — `/elicit`'s record, or what they gave during `/bound` — kept in those words;
 - a `/bound` arrangement: a value the person keeps is asked for now, before the build; a value they asked proposals for lists its candidates, shown in Phase 5; a value entrusted to the builder is chosen within the stated limits;
+- the builder's reading of the person's words or of an example they picked ("a phone feed" → 1080x1920, a picked Three.js example → Three.js), marked as the builder's reading;
 - otherwise a default the builder states — the row's "Left unsaid" value above where it has one.
 
 An act that is hard to undo goes only as far as the reach `/bound` showed for it; one with no arrangement does not happen.
@@ -86,10 +88,10 @@ Save the prompt as `prompt.md` in this run's output folder and show it: it is al
 
 ## Phase 4: Build
 
-Write one HTML file in the output folder, with every file it uses — each supplied file copied in beside it — referenced by a relative path; the renderer serves that folder as a local web page:
+Write one HTML file in the output folder, with every file it uses — each supplied file copied in beside it — referenced by a relative path; the renderer serves that folder as a local web page. A supplied video or audio file the page itself plays is copied as WebM where `--check` prints `h264:no` or `aac:no` (`ffmpeg -i <file> -c:v libvpx-vp9 -c:a libopus <name>.webm`), since that Chromium cannot decode it:
 
 - `window.DURATION` — length in seconds, greater than 0.
-- `window.seek(t)` — draws the frame for time `t` from `t` alone: no timers, CSS transitions, `requestAnimationFrame` loops, or state carried between calls. The renderer calls it in any order and waits for it when it returns a promise, so an image, video, or data the frame needs is awaited inside `seek`, and a failure there — a load, a decode, a parse — is caught, reported with `window.motionWarn?.(message)` (defined only under the renderer), and the frame drawn without it. An uncaught exception, a rejected `seek`, or a `seek` or `renderAudio()` that does not settle within the renderer's limit is a broken page; the message names it.
+- `window.seek(t)` — draws the frame for time `t` from `t` alone: no timers, CSS transitions, `requestAnimationFrame` loops, or state carried between calls. The renderer calls it in any order and waits for it when it returns a Promise (any other return value is ignored), so an image, video, or data the frame needs is awaited inside `seek`, and a failure there — a load, a decode, a parse — is caught, reported with `window.motionWarn?.(message)` (defined only under the renderer), and the frame drawn without it. An uncaught exception, a rejected `seek`, or a `seek` or `renderAudio()` that does not settle within the renderer's `--limit` (seconds) is a broken page; the message names it.
 - A fixed canvas size matching the shape chosen in Phase 2.
 - With a loop, the frame at `DURATION` matches the frame at 0.
 - Sound: each supplied track is mixed in by the renderer, with the structure times on its beats where its BPM and first beat are known; synthesized sound is exposed as `window.renderAudio()`, resolving to a base64 WAV rendered with an `OfflineAudioContext`. The renderer mixes every source it is given.
@@ -100,10 +102,10 @@ Write one HTML file in the output folder, with every file it uses — each suppl
 node ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/render.cjs <page.html> --size <W>x<H> --preview <t1,t2,...> [--audio <track>]...
 ```
 
-A non-zero exit's message names its cause; fix it and run again. Whether the page is what was asked is the person's judgment, made on these frames. Choose times at each scene boundary and at the moments the person named in "what would make it wrong". Show each `MOTION_PREVIEW=` frame with its time and the scene it belongs to, and ask them to check that the picture fills the frame and that each supplied asset (logo, text, image) appears; show every `MOTION_WARNING=` line — what the renderer saw fail to load, and what the page reported through `motionWarn` — beside the frames; offer the `MOTION_SOUND=` file, where one is printed — every sound source the mp4 will carry, mixed — to listen to, since stills do not show sound; show beside the frames each sheet row whose value is a builder default; for a value with candidates, build one variant page file per candidate and preview each at a moment where the value shows — as a still, or, where the candidates differ in motion (frame rate, blur, speed), as a short clip rendered with that candidate's flags:
+A non-zero exit's message names its cause; fix it and run again. Whether the page is what was asked is the person's judgment, made on these frames. Choose times at each scene boundary and at the moments the person named in "what would make it wrong". Show each `MOTION_PREVIEW=` frame with its time and the scene it belongs to, and ask them to check that the picture fills the frame and that each supplied asset (logo, text, image) appears; show every `MOTION_WARNING=` line — what the renderer saw fail to load, and what the page reported through `motionWarn` — beside the frames; offer the `MOTION_SOUND=` file, where one is printed — every sound source the mp4 will carry, mixed — to listen to, since stills do not show sound; show beside the frames each sheet row whose value is a builder default or the builder's reading; for a value with candidates, preview each at a moment where the value shows — a candidate that changes the page gets its own variant page file, previewed as a still; candidates that differ only in a render flag (frame rate, blur) keep the one page and each get a short clip with that flag, named by it:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/render.cjs <variant.html> --size <W>x<H> --fps <fps> --subframes <n> --range <a,b> [--audio <track>]... [--overwrite]
+node ${CLAUDE_PLUGIN_ROOT}/skills/motion/scripts/render.cjs <page.html> --size <W>x<H> --fps <fps> --subframes <n> --range <a,b> --out preview-<page>/clip-<flag>-<value>.mp4 [--audio <track>]... [--overwrite]
 ```
 
 `--overwrite` re-renders a clip this run wrote. The pick — a variant page or a flag value — is written into its sheet row as the value, with the person's pick as its source, and `prompt.md` is rendered again; a picked variant page becomes the page. Then stop for the person's turn. Accepted changes go into the page, `sheet.md`, and `prompt.md`, and the preview runs again; their go-ahead moves to Phase 6.

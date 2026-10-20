@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // Render a seek(t) HTML page to preview PNGs, a short clip, or an mp4.
 //
-//   node render.cjs page.html --preview 0,2.5,7 [--size 1080x1920] [--audio track.mp3]...
-//   node render.cjs page.html --fps 30 --range 1,2.5 [--subframes n] [--audio track.mp3]...
-//   node render.cjs page.html --fps 30 [--out x.mp4] [--subframes n]
-//                             [--size 1080x1920] [--audio track.mp3]... [--overwrite]
+//   node render.cjs page.html --size 1080x1920 --preview 0,2.5,7 [--audio track.mp3]...
+//   node render.cjs page.html --size 1080x1920 --fps 30 --range 1,2.5 [--subframes n] [--audio track.mp3]...
+//   node render.cjs page.html --size 1080x1920 --fps 30 [--out x.mp4] [--subframes n]
+//                             [--audio track.mp3]... [--limit seconds] [--overwrite]
 //   node render.cjs --check
 //
 // Page contract and behaviour: SKILL.md Phases 4–6.
@@ -16,11 +16,9 @@ const path = require("path");
 
 const USAGE =
   "usage: render.cjs page.html [--preview t1,t2] [--range a,b] [--preview-dir d] [--out x.mp4] [--fps n] " +
-  "[--subframes n] [--size WxH] [--audio track] [--overwrite]   |   render.cjs --check";
-const VALUE_FLAGS = new Set(["preview", "range", "preview-dir", "out", "fps", "subframes", "size", "audio"]);
+  "[--subframes n] --size WxH [--audio track] [--limit seconds] [--overwrite]   |   render.cjs --check";
+const VALUE_FLAGS = new Set(["preview", "range", "preview-dir", "out", "fps", "subframes", "size", "audio", "limit"]);
 const BOOL_FLAGS = new Set(["overwrite"]);
-// Every call into the page settles within this limit or fails the run.
-const LIMIT_MS = 20000;
 const TYPES = {
   ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css",
   ".json": "application/json", ".wasm": "application/wasm", ".png": "image/png", ".jpg": "image/jpeg",
@@ -67,16 +65,25 @@ async function check() {
   } catch {
     fail("Playwright not found (npm i -g playwright)");
   }
+  let browser;
   try {
-    await (await launch(chromium)).close();
+    browser = await launch(chromium);
   } catch (e) {
     fail(`Chromium does not launch: ${String(e.message).split("\n")[0]}`);
   }
+  // Informational: a supplied file the page plays in a codec this Chromium lacks is transcoded (SKILL.md Phase 4).
+  const plays = await (await browser.newPage()).evaluate(() => {
+    const v = document.createElement("video");
+    const yes = (t) => (v.canPlayType(t) ? "yes" : "no");
+    return `h264:${yes('video/mp4; codecs="avc1.42E01E"')} aac:${yes('audio/mp4; codecs="mp4a.40.2"')}`;
+  });
+  await browser.close();
+  console.log(`MOTION_CHECK_CODECS=${plays}`);
   console.log("MOTION_CHECK=ok");
 }
 
 function parseArgs(argv) {
-  const a = { subframes: "1", size: "1080x1080", overwrite: false };
+  const a = { subframes: "1", limit: "20", overwrite: false };
   const rest = [];
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
@@ -107,6 +114,17 @@ function parseArgs(argv) {
   if (!(Number.isFinite(a.fps) && a.fps > 0)) throw new Error(`bad --fps ${a.fps}`);
   a.subframes = Number(a.subframes);
   if (!(Number.isInteger(a.subframes) && a.subframes >= 1)) throw new Error(`bad --subframes ${a.subframes}`);
+  // Every call into the page settles within --limit seconds or fails the run.
+  a.limitMs = Number(a.limit) * 1000;
+  if (!(a.limitMs > 0)) throw new Error(`bad --limit ${a.limit}`);
+  for (const f of a.audio || []) {
+    try {
+      fs.accessSync(f, fs.constants.R_OK);
+    } catch {
+      throw new Error(`--audio not found or unreadable: ${path.resolve(f)}`);
+    }
+  }
+  if (a.size === undefined) throw new Error(`--size WxH is needed\n${USAGE}`);
   const [w, h] = a.size.split("x").map(Number);
   if (!w || !h) throw new Error(`bad --size ${a.size}`);
   if (w % 2 || h % 2) throw new Error(`bad --size ${a.size}: libx264 yuv420p needs even dimensions`);
@@ -234,6 +252,7 @@ async function main() {
     });
   try {
     const page = await browser.newPage({ viewport: { width: a.width, height: a.height } });
+    const cdp = await page.context().newCDPSession(page);
     const pageErrors = [];
     // One warning per failing file (its URL without the query, so a per-frame request counts once) or page message.
     const warnings = new Map();
@@ -248,14 +267,14 @@ async function main() {
     page.on("response", (r) => r.status() >= 400 && warn(bare(r.url()), `HTTP ${r.status()} ${bare(r.url())}`));
     // The page reports a failure it caught itself (a decode, a parse, missing data) through window.motionWarn.
     await page.exposeFunction("motionWarn", (m) => warn(`page: ${m}`, `page: ${String(m)}`));
-    // Every call into the page goes through here: it settles within LIMIT_MS, or the run fails naming the call.
+    // Every call into the page goes through here: it settles within --limit, or the run fails naming the call.
     const bounded = (label, p) => {
       let timer;
       const late = new Promise((_, rej) => {
         timer = setTimeout(() => {
           const seen = warnings.size ? `\nwarnings so far:\n${[...warnings.values()].join("\n")}` : "";
-          rej(new Error(`${label} did not settle within ${LIMIT_MS / 1000}s${seen}`));
-        }, LIMIT_MS);
+          rej(new Error(`${label} did not settle within ${a.limit}s (--limit)${seen}`));
+        }, a.limitMs);
       });
       p.catch(() => {}); // past the limit the run is failing; the browser's close rejects p
       return Promise.race([p, late]).finally(() => clearTimeout(timer));
@@ -273,19 +292,17 @@ async function main() {
       )
     ).then(() => null, (e) => e);
     // Canvas only requests a face when it first draws with it, so load every declared face up front.
-    // A font is an asset: one that fails or never finishes loading is a warning, not a broken page.
-    const fontFailures = await bounded(
-      "font loading",
-      page.evaluate(async () => {
-        if (!document.fonts) return [];
-        const fails = [];
-        await Promise.all(
-          [...document.fonts].map((f) => f.load().catch((e) => fails.push(`font ${f.family}: ${e}`)))
-        );
-        await document.fonts.ready;
-        return fails;
-      })
-    ).catch((e) => [`fonts: ${String(e.message).split("\n")[0]}`]);
+    // A font is an asset: one that fails or is still loading at --limit is a warning, and frames draw
+    // with the fallback (captures do not wait on fonts; see shoot).
+    const fontFailures = await page.evaluate(async (ms) => {
+      if (!document.fonts) return [];
+      const faces = [...document.fonts];
+      const expiry = new Promise((r) => setTimeout(r, ms));
+      await Promise.race([Promise.all(faces.map((f) => f.load().catch(() => {}))), expiry]);
+      return faces
+        .filter((f) => f.status !== "loaded")
+        .map((f) => `font ${f.family}: ${f.status === "error" ? "failed to load" : "still loading at --limit"}`);
+    }, a.limitMs);
     for (const f of fontFailures) warn(f, f);
     failOnPageErrors(pageErrors);
     if (notReady) throw notReady;
@@ -305,8 +322,17 @@ async function main() {
     };
     // One seek at a time: each settles, rejects, or fails the run at the limit before the next starts.
     const shoot = async (t) => {
-      await bounded(`seek(${t})`, page.evaluate((t) => window.seek(t), t));
-      const png = await page.screenshot({ type: "png" });
+      // Only a real Promise is waited on; any other return value (a GSAP timeline is a thenable) is dropped.
+      await bounded(
+        `seek(${t})`,
+        page.evaluate((t) => {
+          const r = window.seek(t);
+          return r instanceof Promise ? r.then(() => {}) : undefined;
+        }, t)
+      );
+      // Captured over CDP: Playwright's screenshot waits on document.fonts.ready, which a font still
+      // loading at --limit never resolves.
+      const png = Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64");
       failOnPageErrors(pageErrors);
       return png;
     };

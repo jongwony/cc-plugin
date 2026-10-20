@@ -18,12 +18,10 @@ flowchart LR
 ## Install
 
 ```bash
-/plugin install euporia@epistemic-protocols   # provides /elicit
-/plugin install horismos@epistemic-protocols  # provides /bound, used only when something is left open or the render would do something hard to undo
 /plugin install motion@cc-plugin
-brew install python node ffmpeg                # or: apt install python3 ffmpeg, plus Node 18+ from nodejs.org or nvm
-npm i -g playwright && npx playwright install chromium   # on Linux: npx playwright install --with-deps chromium
 ```
+
+Then install what `skills/motion/SKILL.md` lists under Prerequisites, and run its Preflight.
 
 ## Pieces
 

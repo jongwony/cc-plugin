@@ -123,6 +123,11 @@
       "name": "review-loop",
       "source": "./review-loop",
       "description": "Convergence-paced review-resolve loop over a change and its governing surfaces — verifies each finding against the codebase and its base, then re-reviews until each is disposed of (/review-loop)"
+    },
+    {
+      "name": "motion-elicit",
+      "source": "./motion-elicit",
+      "description": "Turn a vague wish for a motion-graphics video into a rendered mp4 — /elicit surfaces the decisions it turns on in newcomer terms, then build, preview, render (/motion-elicit)"
     }
   ]
 }

@@ -1,4 +1,4 @@
-# ghostty-split-fork
+# ghostty-split
 
 A Claude Code mod that opens the other side of `/branch` and `/fork` in a new
 Ghostty split beside the session that ran the command. The built-in commands run
@@ -33,7 +33,7 @@ macOS-only facility. Install it deliberately:
 
 ```bash
 claude plugin marketplace add jongwony/cc-plugin
-claude plugin install ghostty-split-fork@cc-plugin
+claude plugin install ghostty-split@cc-plugin
 ```
 
 Then `/reload-plugins` in a running session.

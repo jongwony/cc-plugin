@@ -1,6 +1,0 @@
-{
-  "description": "ghostty-split-fork: opens the other side of /branch and /fork in a Ghostty split. Builds without function hooks ignore the modules key.",
-  "modules": [
-    "./register.ts"
-  ]
-}

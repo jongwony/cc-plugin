@@ -1,7 +1,7 @@
 {
   "name": "ghostty-split-fork",
   "description": "Opens the other side of /branch and /fork in a Ghostty split, the original conversation always on the left: the original after /branch, the new background session after /fork",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

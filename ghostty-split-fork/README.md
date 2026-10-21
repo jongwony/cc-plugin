@@ -53,17 +53,21 @@ zellij), no Ghostty terminal owns the session's tty, so nothing happens either.
   `session running · <name> · <id>` or `session waiting for a prompt · <id>`
   (optionally followed by a note such as `edits this checkout`), the right pane
   opens with `claude attach <id>`. Only `/fork` prints that line. If it never
-  lands in the conversation, or a release changes its format, nothing happens:
-  no pane and no toast.
-- The split is made from the Ghostty terminal whose `tty` matches the session. If
-  the session has no tty, a toast says so and no split opens.
-- When `CLAUDE_CONFIG_DIR` is set, the new pane gets the same value, so
-  `claude --resume` and `claude attach` look in the same place.
+  lands in the conversation, no pane opens and nothing is shown.
+- The split is made from the Ghostty terminal whose `tty` matches the session. A
+  session with no tty of its own, such as the background session inside an
+  attach pane, opens nothing.
+- The new pane starts in Ghostty's own shell environment, not the environment
+  the session was launched with.
 
 ## Known limits
 
 - The `/fork` confirmation line is not a documented format. If a release
   rewords it, `/fork` still runs and no pane opens.
+- A session that depends on variables set when it was launched (a custom
+  `CLAUDE_CONFIG_DIR`, provider or base-URL variables) is outside what the mod
+  reproduces: `claude --resume` and `claude attach` in the new pane run without
+  them.
 - With agent view disabled (`CLAUDE_CODE_DISABLE_AGENT_VIEW`), `/fork` runs a
   subagent instead of a background session and prints no such line, so no pane
   opens.

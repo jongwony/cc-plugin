@@ -14,9 +14,6 @@ const SPLIT = `on run argv
     set cfg to new surface configuration
     set initial working directory of cfg to item 2 of argv
     set initial input of cfg to (item 3 of argv) & linefeed
-    if item 5 of argv is not "" then
-      set environment variables of cfg to {"CLAUDE_CONFIG_DIR=" & item 5 of argv}
-    end if
     if item 4 of argv is "left" then
       split t direction left with configuration cfg
     else
@@ -27,9 +24,11 @@ end run`
 
 const FORK_STATES = ['session running', 'session waiting for a prompt']
 
-// The id in /fork's confirmation, `<state> · [<name> · ]<8 hex>[ · <chip>]`, or undefined.
+// The id in /fork's confirmation, `<local-command-stdout><state> · [<name> · ]<8 hex>[ · <chip>]</local-command-stdout>`
+// on one line, or undefined.
 const forkId = (text: string) => {
-  const body = text.match(/<local-command-stdout>([\s\S]*?)<\/local-command-stdout>/)?.[1] ?? text
+  const body = text.match(/^<local-command-stdout>([^\n]*)<\/local-command-stdout>$/)?.[1]
+  if (body === undefined) return undefined
   const segments = body.trim().split(' · ')
   if (!FORK_STATES.includes(segments[0] ?? '')) return undefined
   return segments.slice(1).filter(segment => /^[0-9a-f]{8}$/.test(segment)).pop()
@@ -48,13 +47,12 @@ const ghostty = ($: EngineInterface) =>
   })().catch(() => false))
 
 // Splits the Ghostty terminal whose tty is this session's and types `command` into the new pane.
-// No Ghostty terminal with that tty: nothing happens. Other failures toast.
+// No tty, or no Ghostty terminal with that tty: nothing happens. Other failures toast.
 const split = async ($: EngineInterface, cwd: string, direction: Direction, command: string) => {
   try {
     const tty = (await $.process.run(['/bin/sh', '-c', 'ps -o tty= -p $PPID'])).stdout.trim()
-    if (!tty || tty.startsWith('?')) return $.ui.toast(`no terminal found for this session`)
-    const config = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? ''
-    const ran = await $.process.run(['osascript', '-', `/dev/${tty}`, cwd, command, direction, config], {
+    if (!tty || tty.startsWith('?')) return
+    const ran = await $.process.run(['osascript', '-', `/dev/${tty}`, cwd, command, direction], {
       stdin: SPLIT,
     })
     if (ran.exitCode !== 0) $.ui.toast(ran.stderr.trim() || `osascript exited ${ran.exitCode}`)
@@ -79,9 +77,7 @@ export const register: Register = on => {
     const cwd = await $.session.cwd()
     const before = await $.session.id()
     const ran = await next(e)
-    if (!next.signal.aborted && (await $.session.id()) !== before) {
-      void split($, cwd, 'left', `claude --resume ${before}`)
-    }
+    if ((await $.session.id()) !== before) void split($, cwd, 'left', `claude --resume ${before}`)
     return ran
   }).catch(($, e, next) => next(e))
 }

@@ -11,7 +11,8 @@ The original conversation always ends up on the left:
 | `/branch` | on the **left**: `claude --resume <original session id>`, the conversation as it was before the branch | on the right, moved onto the new branch (built-in behaviour) |
 | `/fork` | on the **right**: `claude attach <id>`, the new background session `/fork` started | on the left, still the original conversation |
 
-The pane you typed in keeps focus while Ghostty is in front.
+After `/branch` the pane you typed in keeps focus while Ghostty is in front.
+After `/fork` focus follows Ghostty's default for a new split.
 
 ## Requirements
 
@@ -24,6 +25,9 @@ The pane you typed in keeps focus while Ghostty is in front.
 - `osascript` on `PATH`, and `claude` on the `PATH` of the shell a new Ghostty pane starts.
 
 ## Install
+
+The marketplace's install-all script leaves this plugin out, since it drives a
+macOS-only facility. Install it deliberately:
 
 ```bash
 claude plugin marketplace add jongwony/cc-plugin
@@ -38,38 +42,47 @@ no split opens and a toast shows the `osascript` error.
 
 ## Domain
 
-The mod acts only on macOS, while Ghostty is running, when the pid Ghostty
-reports for one of its terminals is this Claude's pid; the split is made from
-that terminal. Outside that, both commands run as built and the mod does
-nothing. Inside it, an `osascript` failure, such as a denied Automation
-permission or a call that times out, shows as a toast. Until Automation access
-to Ghostty is allowed, membership cannot be decided, so a permission-error toast
-can appear in any session that inherits `TERM_PROGRAM=ghostty`.
+A **candidate** session runs on macOS with `TERM_PROGRAM=ghostty` while Ghostty
+is running. The **domain** is a candidate whose pid Ghostty reports for one of
+its terminals; the split is made from that terminal.
 
-Focus stays on the pane you typed in when Ghostty is in front; if another app is
-in front when the pane opens, Ghostty is not brought forward.
+- A session that is not a candidate is untouched: both commands run as built.
+- Inside a candidate, any `osascript` failure, before or after membership is
+  decided, shows as a toast: a denied Automation permission, a call that times
+  out, or an older Ghostty without the AppleScript dictionary. Until Automation
+  access to Ghostty is allowed, membership cannot be decided, so such a toast can
+  appear in any candidate.
+
+After `/branch`, focus returns to the pane you typed in only when Ghostty is in
+front; Ghostty is never brought forward.
 
 `/fork` detection relies on the confirmation line format of the tested Claude
 Code versions, 2.1.304 and 2.1.305; other versions are outside the tested domain.
+It also presumes that no other command in the session prints a line in that
+format.
 After `/cd` or a worktree move, `/branch`'s left pane can show Claude's own hint,
 `cd … && claude --resume …`; follow it there.
 
 ## How it finds the session
 
 - `/branch` switches the running session to a new session id in place, so the mod
-  reads the id before and after the command and resumes the original in the split,
-  started from the session's project root.
+  reads the id before and after the command and resumes the original in the split.
 - `/fork` does not hand its new session id to the mod. Its confirmation line is
   the trigger instead: when the conversation keeps a line
   `session running · <name> · <id>` or `session waiting for a prompt · <id>`
   (optionally followed by a note such as `edits this checkout`), the right pane
   opens with `claude attach <id>`. Only `/fork` prints that line. If it never
   lands in the conversation, no pane opens and nothing is shown.
-- The new pane starts in Ghostty's own shell environment, not the environment
-  the session was launched with.
+- Both kinds of pane start in the session's project root, in Ghostty's own shell
+  environment rather than the environment the session was launched with.
 
 ## Known limits
 
+- New panes run `claude` from Ghostty's own shell `PATH` with default options;
+  flags the original session was launched with are not reproduced.
+- Whether `claude --resume <id> --fork-session` keeps old `/fork` confirmation
+  rows again through the mod's hook was not verified; if it does, extra attach
+  panes can open.
 - A session that depends on variables set when it was launched (a custom
   `CLAUDE_CONFIG_DIR`, provider or base-URL variables) is outside what the mod
   reproduces: `claude --resume` and `claude attach` in the new pane run without

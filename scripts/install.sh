@@ -17,12 +17,13 @@ MANIFEST_URL="https://raw.githubusercontent.com/$REPO/main/.claude-plugin/market
 
 # Opt-in plugins the default installer leaves out: each drives a macOS-only
 # facility (pmset, Apple Notes, the macOS uninstall surface, an iOS/Android
-# device attach, a whisper.cpp paste daemon). Install one deliberately:
+# device attach, a whisper.cpp paste daemon, a Ghostty split via osascript).
+# Install one deliberately:
 #   claude plugin install <name>@cc-plugin
 # The plugin list itself comes from the manifest; this is the one
 # hand-maintained exclusion, and every name here is checked against the
 # fetched manifest below so a retired plugin cannot linger in it.
-SKIP_PLUGINS="caffeinate safe-uninstall handwriting voice-dictation agent-device-preflight"
+SKIP_PLUGINS="caffeinate safe-uninstall handwriting voice-dictation agent-device-preflight ghostty-split-fork"
 
 command -v claude >/dev/null 2>&1 || { echo "Error: claude CLI not found. Install Claude Code first." >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "Error: python3 not found." >&2; exit 1; }

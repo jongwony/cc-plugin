@@ -1,13 +1,14 @@
 import type { EngineInterface, Register } from 'claude-code'
+import { forkId } from './fork-id.ts'
 
 type Direction = 'left' | 'right'
 
 const SPLIT = `on run argv
   if application "Ghostty" is not running then return
-  set claudePid to (item 1 of argv) as integer
+  set claudeGroup to (item 1 of argv) as integer
   tell application "Ghostty"
     try
-      set t to first terminal whose pid is claudePid
+      set t to first terminal whose pid is claudeGroup
     on error errorMessage number errorNumber
       if errorNumber is -1719 or errorNumber is -1728 then return
       error errorMessage number errorNumber
@@ -24,31 +25,23 @@ const SPLIT = `on run argv
   end tell
 end run`
 
-const FORK_STATES = ['session running', 'session waiting for a prompt']
-
-// The id in /fork's confirmation, `<local-command-stdout><state> · [<name> · ]<8 hex>[ · <chip>]</local-command-stdout>`
-// on one line, or undefined.
-const forkId = (text: string) => {
-  const body = text.match(/^<local-command-stdout>([^\n]*)<\/local-command-stdout>$/)?.[1]
-  if (body === undefined) return undefined
-  const segments = body.trim().split(' · ')
-  if (!FORK_STATES.includes(segments[0] ?? '')) return undefined
-  return segments.slice(1).filter(segment => /^[0-9a-f]{8}$/.test(segment)).pop()
-}
-
 const textOf = (content: readonly { type: string; text?: unknown }[]) =>
   content.map(block => (block.type === 'text' && typeof block.text === 'string' ? block.text : '')).join('')
 
-// Splits the Ghostty terminal whose pid is this Claude's and types `command` into the new pane; with `keepFocus`
-// and Ghostty frontmost, focus returns to that terminal. Nothing happens unless TERM_PROGRAM is ghostty, osascript
-// exists, Ghostty is running and a terminal has this pid; every other failure toasts. Never rejects.
+// Runs SPLIT with the process group of this sh's parent (this Claude), or exits 0 silently without osascript.
+const SPAWN = 'command -v osascript >/dev/null || exit 0; exec osascript - "$(ps -o pgid= -p "$PPID" | tr -d " ")" "$@"'
+
+// Splits the Ghostty terminal whose foreground process group is this Claude's and types `command` into the new
+// pane; with `keepFocus` and Ghostty frontmost, focus returns to that terminal. Nothing happens unless TERM_PROGRAM is
+// ghostty, osascript exists, Ghostty is running and a terminal has this process group; every other failure toasts.
+// Never rejects.
 const split = async ($: EngineInterface, cwd: string, direction: Direction, command: string, keepFocus: boolean) => {
   try {
     if ((await $.env.get('TERM_PROGRAM')) !== 'ghostty') return
-    const probe = 'command -v osascript >/dev/null && printf %s "$PPID"'
-    const pid = (await $.process.run(['/bin/sh', '-c', probe], { cwd: '/' })).stdout.trim()
-    if (!pid) return
-    const ran = await $.process.run(['osascript', '-', pid, cwd, command, direction, keepFocus ? 'focus' : ''], { cwd: '/', stdin: SPLIT })
+    const ran = await $.process.run(['/bin/sh', '-c', SPAWN, 'sh', cwd, command, direction, keepFocus ? 'focus' : ''], {
+      cwd: '/',
+      stdin: SPLIT,
+    })
     if (ran.exitCode !== 0) $.ui.toast(ran.stderr.trim() || `osascript exited ${ran.exitCode}`)
   } catch (err) {
     try {

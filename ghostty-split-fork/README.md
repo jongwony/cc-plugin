@@ -11,15 +11,16 @@ The original conversation always ends up on the left:
 | `/branch` | on the **left**: `claude --resume <original session id>`, the conversation as it was before the branch | on the right, moved onto the new branch (built-in behaviour) |
 | `/fork` | on the **right**: `claude attach <id>`, the new background session `/fork` started | on the left, still the original conversation |
 
-After `/branch` the pane you typed in keeps focus while Ghostty is in front.
-After `/fork` focus follows Ghostty's default for a new split.
+`/branch` returns focus to the pane you typed in when Ghostty is frontmost at the
+moment of the split. After `/fork` focus follows Ghostty's default for a new split.
 
 ## Requirements
 
 - macOS.
 - [Ghostty](https://ghostty.org) built with its AppleScript dictionary
-  (`new surface configuration`, `split`, `focus`, and a terminal's `pid`).
-  Tested on Ghostty 1.3.2.
+  (`new surface configuration`, `split`, `focus`, and a terminal's `pid`), with
+  AppleScript enabled (`macos-applescript`, on by default); with it off the mod
+  does nothing. Tested on Ghostty 1.3.2.
 - Claude Code with function hooks (mods). Tested on Claude Code 2.1.304 and
   2.1.305; the mod API is early access and may change between releases.
 - `osascript` on `PATH`, and `claude` on the `PATH` of the shell a new Ghostty pane starts.
@@ -43,8 +44,10 @@ no split opens and a toast shows the `osascript` error.
 ## Domain
 
 A **candidate** session runs on macOS with `TERM_PROGRAM=ghostty` while Ghostty
-is running. The **domain** is a candidate whose pid Ghostty reports for one of
-its terminals; the split is made from that terminal.
+is running. The **domain** is a candidate where the foreground process group
+Ghostty reports for one of its terminals is this Claude's process group; the
+split is made from that terminal. A Claude started through a launcher that forks
+it, such as `doppler run -- claude`, is inside the domain the same way.
 
 - A session that is not a candidate is untouched: both commands run as built.
 - Inside a candidate, any `osascript` failure, before or after membership is
@@ -52,9 +55,6 @@ its terminals; the split is made from that terminal.
   out, or an older Ghostty without the AppleScript dictionary. Until Automation
   access to Ghostty is allowed, membership cannot be decided, so such a toast can
   appear in any candidate.
-
-After `/branch`, focus returns to the pane you typed in only when Ghostty is in
-front; Ghostty is never brought forward.
 
 `/fork` detection relies on the confirmation line format of the tested Claude
 Code versions, 2.1.304 and 2.1.305; other versions are outside the tested domain.

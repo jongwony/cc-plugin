@@ -17,13 +17,14 @@ moment of the split. After `/fork` focus follows Ghostty's default for a new spl
 ## Requirements
 
 - macOS.
-- [Ghostty](https://ghostty.org) built with its AppleScript dictionary
-  (`new surface configuration`, `split`, `focus`, and a terminal's `pid`), with
-  AppleScript enabled (`macos-applescript`, on by default); with it off the mod
-  does nothing. Tested on Ghostty 1.3.2.
+- [Ghostty](https://ghostty.org) 1.3 or later with its AppleScript dictionary
+  installed (`new surface configuration`, `split`, `focus`, and a terminal's
+  `pid`), with AppleScript enabled (`macos-applescript`, on by default); with it
+  off the mod does nothing. Tested on Ghostty 1.3.2.
 - Claude Code with function hooks (mods). Tested on Claude Code 2.1.304 and
   2.1.305; the mod API is early access and may change between releases.
 - `osascript` on `PATH`, and `claude` on the `PATH` of the shell a new Ghostty pane starts.
+- That shell must not prompt at startup: the mod types the `claude` command into it.
 
 ## Install
 
@@ -44,10 +45,11 @@ no split opens and a toast shows the `osascript` error.
 ## Domain
 
 A **candidate** session runs on macOS with `TERM_PROGRAM=ghostty` while Ghostty
-is running. The **domain** is a candidate where the foreground process group
-Ghostty reports for one of its terminals is this Claude's process group; the
-split is made from that terminal. A Claude started through a launcher that forks
-it, such as `doppler run -- claude`, is inside the domain the same way.
+is running. The **domain** is a candidate where the pid Ghostty reports for one
+of its terminals is this Claude's pid; the split is made from that terminal.
+This rests on a premise: Claude is launched directly in the Ghostty pane, not
+through a launcher that forks it, so it leads the pane's foreground process group
+and Ghostty reports its pid.
 
 - A session that is not a candidate is untouched: both commands run as built.
 - Inside a candidate, any `osascript` failure, before or after membership is
@@ -59,7 +61,7 @@ it, such as `doppler run -- claude`, is inside the domain the same way.
 `/fork` detection relies on the confirmation line format of the tested Claude
 Code versions, 2.1.304 and 2.1.305; other versions are outside the tested domain.
 It also presumes that no other command in the session prints a line in that
-format.
+format; if one does, a `claude attach` pane opens for it.
 After `/cd` or a worktree move, `/branch`'s left pane can show Claude's own hint,
 `cd … && claude --resume …`; follow it there.
 
@@ -80,9 +82,10 @@ After `/cd` or a worktree move, `/branch`'s left pane can show Claude's own hint
 
 - New panes run `claude` from Ghostty's own shell `PATH` with default options;
   flags the original session was launched with are not reproduced.
-- Whether `claude --resume <id> --fork-session` keeps old `/fork` confirmation
-  rows again through the mod's hook was not verified; if it does, extra attach
-  panes can open.
+- Whether `claude --resume <id>` (the left pane after `/branch`) or
+  `claude --resume <id> --fork-session` keeps old `/fork` confirmation rows again
+  through the mod's hook was not verified; if it does, extra attach panes can
+  open.
 - A session that depends on variables set when it was launched (a custom
   `CLAUDE_CONFIG_DIR`, provider or base-URL variables) is outside what the mod
   reproduces: `claude --resume` and `claude attach` in the new pane run without

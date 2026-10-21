@@ -11,17 +11,16 @@ The original conversation always ends up on the left:
 | `/branch` | on the **left**: `claude --resume <original session id>`, the conversation as it was before the branch | on the right, moved onto the new branch (built-in behaviour) |
 | `/fork` | on the **right**: `claude attach <id>`, the new background session `/fork` started | on the left, still the original conversation |
 
-This holds however the command reached the session: typed at the prompt, or sent
-from Remote Control, the SDK or another plugin to a session running in Ghostty.
+The pane you typed in keeps focus.
 
 ## Requirements
 
 - macOS.
 - [Ghostty](https://ghostty.org) built with its AppleScript dictionary
-  (`new surface configuration`, `split`, and a terminal's `tty`). Tested on
-  Ghostty 1.3.2.
-- Claude Code with function hooks (mods). Tested on Claude Code 2.1.304; the mod
-  API is early access and may change between releases.
+  (`new surface configuration`, `split`, `focus`, and a terminal's `pid`).
+  Tested on Ghostty 1.3.2.
+- Claude Code with function hooks (mods). Tested on Claude Code 2.1.304 and
+  2.1.305; the mod API is early access and may change between releases.
 - `osascript` on `PATH`, and `claude` on the `PATH` of the shell a new Ghostty pane starts.
 
 ## Install
@@ -37,15 +36,18 @@ The first time the mod opens a split, macOS asks whether the terminal may contro
 Ghostty (System Settings → Privacy & Security → Automation). Allow it; until then
 no split opens and a toast shows the `osascript` error.
 
-## Outside Ghostty
+## Domain
 
-The mod only acts in a session whose terminal is Ghostty on macOS
-(`TERM_PROGRAM=ghostty`) and that has a tty of its own. That is probed once per
-load; anywhere else both commands pass straight through: no split, no toast, no
-extra delay. A probe that fails, even for a passing reason, leaves the mod inert
-until the next reload (`/reload-plugins` or a restart). Inside a multiplexer
-running in Ghostty (tmux, zellij), no Ghostty terminal owns the session's tty,
-so nothing happens either.
+The mod acts only when this Claude is the foreground process of a local Ghostty
+terminal on macOS: the split is made from the Ghostty terminal whose process is
+this Claude. Outside that, both commands run as built and the mod does nothing.
+Inside it, an `osascript` failure, such as a denied Automation permission, shows
+as a toast.
+
+`/fork` detection relies on the confirmation line format of the tested Claude
+Code versions, 2.1.304 and 2.1.305; other versions are outside the tested domain.
+After `/cd` or a worktree move, `/branch`'s left pane can show Claude's own hint,
+`cd … && claude --resume …`; follow it there.
 
 ## How it finds the session
 
@@ -58,23 +60,15 @@ so nothing happens either.
   (optionally followed by a note such as `edits this checkout`), the right pane
   opens with `claude attach <id>`. Only `/fork` prints that line. If it never
   lands in the conversation, no pane opens and nothing is shown.
-- The split is made from the Ghostty terminal whose `tty` matches the session. A
-  session with no tty of its own, such as the background session inside an
-  attach pane, is outside the mod's domain and opens nothing.
 - The new pane starts in Ghostty's own shell environment, not the environment
   the session was launched with.
 
 ## Known limits
 
-- The `/fork` confirmation line is not a documented format. If a release
-  rewords it, `/fork` still runs and no pane opens.
 - A session that depends on variables set when it was launched (a custom
   `CLAUDE_CONFIG_DIR`, provider or base-URL variables) is outside what the mod
   reproduces: `claude --resume` and `claude attach` in the new pane run without
   them.
-- After `/cd` or a worktree move, the original transcript can be filed under a
-  different directory than the session root. The left pane then shows Claude's
-  own hint, `cd … && claude --resume …`; follow it there.
 - If `/fork` prints no short id and the session name is itself 8 hex digits, that
   name is taken as the id. Claude Code's own reading of the line has the same
   ambiguity.

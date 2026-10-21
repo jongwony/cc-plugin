@@ -3,10 +3,10 @@ import type { EngineInterface, Register } from 'claude-code'
 type Direction = 'left' | 'right'
 
 const SPLIT = `on run argv
-  set ttyPath to item 1 of argv
+  set claudePid to (item 1 of argv) as integer
   tell application "Ghostty"
     try
-      set t to first terminal whose tty is ttyPath
+      set t to first terminal whose pid is claudePid
     on error errorMessage number errorNumber
       if errorNumber is -1719 or errorNumber is -1728 then return
       error errorMessage number errorNumber
@@ -19,6 +19,7 @@ const SPLIT = `on run argv
     else
       split t direction right with configuration cfg
     end if
+    focus t
   end tell
 end run`
 
@@ -37,48 +38,39 @@ const forkId = (text: string) => {
 const textOf = (content: readonly { type: string; text?: unknown }[]) =>
   content.map(block => (block.type === 'text' && typeof block.text === 'string' ? block.text : '')).join('')
 
-// This session's tty when it is drawn by Ghostty on macOS, else undefined; probed once per load.
-let probe: Promise<string | undefined> | undefined
-const domainTty = ($: EngineInterface) =>
-  (probe ??= (async () => {
-    if ((await $.env.get('TERM_PROGRAM')) !== 'ghostty') return undefined
-    if ((await $.process.run(['uname', '-s'])).stdout.trim() !== 'Darwin') return undefined
-    const tty = (await $.process.run(['/bin/sh', '-c', 'ps -o tty= -p $PPID'])).stdout.trim()
-    return tty && !tty.startsWith('?') ? `/dev/${tty}` : undefined
-  })().catch(() => undefined))
-
-// Splits the Ghostty terminal whose tty is `tty` and types `command` into the new pane.
-// No Ghostty terminal with that tty: nothing happens. Other failures toast.
-const split = async ($: EngineInterface, tty: string, cwd: string, direction: Direction, command: string) => {
+// Splits the Ghostty terminal whose foreground process is this Claude, types `command` into the new pane and
+// keeps focus on the original terminal. Outside a Ghostty session, without osascript, or with no terminal for
+// this pid: nothing happens. Other osascript failures toast.
+const split = async ($: EngineInterface, cwd: string, direction: Direction, command: string) => {
+  if ((await $.env.get('TERM_PROGRAM')) !== 'ghostty') return
+  let ran
   try {
-    const ran = await $.process.run(['osascript', '-', tty, cwd, command, direction], { stdin: SPLIT })
-    if (ran.exitCode !== 0) $.ui.toast(ran.stderr.trim() || `osascript exited ${ran.exitCode}`)
-  } catch (err) {
-    $.ui.toast(String(err))
+    const pid = (await $.process.run(['/bin/sh', '-c', 'printf %s "$PPID"'])).stdout.trim()
+    ran = await $.process.run(['osascript', '-', pid, cwd, command, direction], { stdin: SPLIT })
+  } catch {
+    return
   }
+  if (ran.exitCode !== 0) $.ui.toast(ran.stderr.trim() || `osascript exited ${ran.exitCode}`)
 }
 
 export const register: Register = on => {
   // Stores every row unchanged. Once a main-loop local_command row in /fork's confirmation grammar is stored,
-  // in a Ghostty session, starts a right split attached to the session it names.
+  // starts a right split attached to the session it names.
   on('session.append', async ($, e, next) => {
     if (e.message.type !== 'system' || e.message.name !== 'local_command' || e.agentId) return next(e)
     const stored = await next(e)
     const id = forkId(textOf(stored.deny === undefined ? stored.message.content : e.message.content))
-    const tty = id ? await domainTty($) : undefined
-    if (id && tty) void split($, tty, await $.session.cwd(), 'right', `claude attach ${id}`)
+    if (id) void split($, await $.session.cwd(), 'right', `claude attach ${id}`)
     return stored
   }).catch(($, e, next) => next(e))
 
   // Starts the left split with the original session, from the session root, once /branch has moved
   // this process onto the branch.
   on('command.run', { command: 'branch' }, async ($, e, next) => {
-    const tty = await domainTty($)
-    if (!tty) return next(e)
     const root = await $.session.root()
     const before = await $.session.id()
     const ran = await next(e)
-    if ((await $.session.id()) !== before) void split($, tty, root, 'left', `claude --resume ${before}`)
+    if ((await $.session.id()) !== before) void split($, root, 'left', `claude --resume ${before}`)
     return ran
   }).catch(($, e, next) => next(e))
 }

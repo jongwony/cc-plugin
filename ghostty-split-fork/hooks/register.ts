@@ -35,17 +35,25 @@ const forkId = (text: string) => {
   return segments.slice(1).filter(segment => /^[0-9a-f]{8}$/.test(segment)).pop()
 }
 
-const textOf = (content: unknown) =>
-  typeof content === 'string'
-    ? content
-    : Array.isArray(content)
-      ? content.map(block => (block?.type === 'text' && typeof block.text === 'string' ? block.text : '')).join('')
-      : ''
+const textOf = (content: readonly { type: string; text?: unknown }[]) =>
+  content.map(block => (block.type === 'text' && typeof block.text === 'string' ? block.text : '')).join('')
 
-// The /fork run waiting for its confirmation row; cleared by the row, by the miss timer, or once `until` passes.
-let pending: { token: object; cwd: string; until: number } | undefined
+type Claim = { cwd: string }
 
-// True only in a session drawn by Ghostty on macOS; a successful probe is cached per load, a failed one is not.
+// /fork runs waiting for their confirmation rows, oldest first. A row consumes the oldest claim;
+// otherwise the claim's own timer, or its abandoned or failed dispatch, removes it.
+const claims: Claim[] = []
+
+// Removes `claim` if it is still queued; true when it was.
+const release = (claim: Claim) => {
+  const at = claims.indexOf(claim)
+  if (at < 0) return false
+  claims.splice(at, 1)
+  return true
+}
+
+// True only in a session drawn by Ghostty on macOS. A completed probe (true or false) is cached per load;
+// one that throws or whose uname exits nonzero is retried.
 let inGhostty: boolean | undefined
 const ghostty = async ($: EngineInterface) => {
   if (inGhostty !== undefined) return inGhostty
@@ -78,18 +86,11 @@ const split = async ($: EngineInterface, cwd: string, direction: Direction, comm
 export const register: Register = on => {
   // Passes every row through unchanged; a main-loop local_command row carrying /fork's id starts the right split.
   on('session.append', async ($, e, next) => {
-    if (!pending) return next(e)
+    if (claims.length === 0) return next(e)
     if (e.message.type !== 'system' || e.message.name !== 'local_command' || e.agentId) return next(e)
-    const claim = pending
-    if ((await $.clock.now()) > claim.until) {
-      if (pending === claim) pending = undefined
-      return next(e)
-    }
     const id = forkId(textOf(e.message.content))
-    if (id && pending === claim) {
-      pending = undefined
-      void split($, claim.cwd, 'right', `claude attach ${id}`)
-    }
+    const claim = id ? claims.shift() : undefined
+    if (id && claim) void split($, claim.cwd, 'right', `claude attach ${id}`)
     return next(e)
   }).catch(($, e, next) => next(e))
 
@@ -105,18 +106,26 @@ export const register: Register = on => {
     return ran
   }).catch(($, e, next) => next(e))
 
-  // Arms the wait for /fork's confirmation row and returns at once; no row within the window → toast.
+  // Queues a claim for /fork's confirmation row and returns the command's result at once.
+  // The claim's timer, started at arming, removes it after the window and toasts if no row consumed it;
+  // an abandoned or failed dispatch removes it without a toast.
   on('command.run', { command: 'fork' }, async ($, e, next) => {
     if (e.origin.kind !== 'composer' || !(await ghostty($))) return next(e)
-    const token = {}
-    pending = { token, cwd: await $.session.cwd(), until: (await $.clock.now()) + FORK_OUTPUT_WINDOW_MS }
-    const ran = await next(e)
-    void (async () => {
-      await $.process.run(['sleep', String(FORK_OUTPUT_WINDOW_MS / 1000)], { timeoutMs: FORK_OUTPUT_WINDOW_MS + 5_000 })
-      if (pending?.token !== token) return
-      pending = undefined
-      $.ui.toast(`no session id in /fork's output`)
-    })().catch(() => {})
-    return ran
+    const claim: Claim = { cwd: await $.session.cwd() }
+    claims.push(claim)
+    void $.process
+      .run(['sleep', String(FORK_OUTPUT_WINDOW_MS / 1000)], { timeoutMs: FORK_OUTPUT_WINDOW_MS + 5_000 })
+      .then(
+        () => release(claim) && $.ui.toast(`no session id in /fork's output`),
+        () => release(claim),
+      )
+    try {
+      const ran = await next(e)
+      if (next.signal.aborted) release(claim)
+      return ran
+    } catch (err) {
+      release(claim)
+      throw err
+    }
   }).catch(($, e, next) => next(e))
 }

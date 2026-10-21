@@ -54,8 +54,10 @@ zellij), no Ghostty terminal owns the session's tty, so nothing happens either.
   confirmation line `/fork` prints, as the conversation keeps it:
   `session running · <name> · <id>` or `session waiting for a prompt · <id>`,
   optionally followed by a note such as `edits this checkout`. `/fork` itself
-  returns at once; the split opens when that line arrives. If none arrives within
-  10 seconds, a toast says so and no split opens.
+  returns at once; the split opens when that line arrives. One timer per `/fork`
+  runs for about 10 seconds from Enter: if no line has arrived by then, a toast
+  says so and no split opens. Several `/fork`s in a row each get their own pane,
+  in the order the lines arrive.
 - The split is made from the Ghostty terminal whose `tty` matches the session. If
   the session has no tty, a toast says so and no split opens.
 - When `CLAUDE_CONFIG_DIR` is set, the new pane gets the same value, so

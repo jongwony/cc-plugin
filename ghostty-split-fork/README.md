@@ -41,19 +41,23 @@ no split opens and a toast shows the `osascript` error.
 ## Outside Ghostty
 
 The mod only acts in a session whose terminal is Ghostty on macOS
-(`TERM_PROGRAM=ghostty`), checked once per load at the first `/branch` or `/fork`. Anywhere else both
-commands pass straight through: no split, no toast, no extra delay.
+(`TERM_PROGRAM=ghostty`), checked at the first `/branch` or `/fork` and remembered
+for the rest of the load. Anywhere else both commands pass straight through: no
+split, no toast, no extra delay. Inside a multiplexer running in Ghostty (tmux,
+zellij), no Ghostty terminal owns the session's tty, so nothing happens either.
 
 ## How it finds the session
 
 - `/branch` switches the running session to a new session id in place, so the mod
   reads the id before and after the command and resumes the original in the split.
 - `/fork` does not hand its new session id to the mod, so the mod reads the
-  `/fork` command's own output line (`session running · <name> · <id>`) as the
-  conversation keeps it, waiting up to 3 seconds for it. If no id turns up, a
-  toast says so and no split opens.
+  confirmation line `/fork` prints, as the conversation keeps it:
+  `session running · <name> · <id>` or `session waiting for a prompt · <id>`,
+  optionally followed by a note such as `edits this checkout`. `/fork` itself
+  returns at once; the split opens when that line arrives. If none arrives within
+  10 seconds, a toast says so and no split opens.
 - The split is made from the Ghostty terminal whose `tty` matches the session. If
-  the session has no terminal of its own, a toast says so and no split opens.
+  the session has no tty, a toast says so and no split opens.
 - When `CLAUDE_CONFIG_DIR` is set, the new pane gets the same value, so
   `claude --resume` and `claude attach` look in the same place.
 

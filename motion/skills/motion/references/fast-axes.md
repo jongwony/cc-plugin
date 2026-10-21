@@ -18,7 +18,7 @@ Read the current listing of [awesome-opus5-5-videos](https://github.com/yihui-de
   - Where it shows someone playing, the clicks, drags, and key presses become moments in the sequence. Left unsaid, things move on their own.
 - **What is being told** (subject and narration)
   - Ask: "What should someone know or be able to do after watching?"
-  - Where the person wants a voice (Sound), it needs a recorded or provided audio file; without one, the weight moves onto words on screen and pacing.
+  - A voice (Sound) needs a recorded or provided audio file; with no voice, the weight moves onto words on screen and pacing.
 - **How the movement feels** (springs, easing, physics, particles)
   - Ask: "Should things move crisply like an app interface, or loosely like objects with weight?"
   - Left unsaid, the builder may add bounce and particles, which read as template-like in interface motion.

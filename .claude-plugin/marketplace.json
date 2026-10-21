@@ -128,6 +128,11 @@
       "name": "motion",
       "source": "./motion",
       "description": "Turn a vague wish for a motion-graphics video into a rendered mp4: /elicit surfaces the decisions it turns on in newcomer terms, /sketch or /preview where a look or direction must be seen to be judged, then the mp4 is rendered and shown to approve or change (/motion)"
+    },
+    {
+      "name": "ghostty-split",
+      "source": "./ghostty-split",
+      "description": "Opens the other side of /branch and /fork in a Ghostty split: the original on the left after /branch, the background session on the right after /fork."
     }
   ]
 }

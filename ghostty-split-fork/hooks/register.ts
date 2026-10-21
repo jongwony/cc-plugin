@@ -3,6 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 type Direction = 'left' | 'right'
 
 const SPLIT = `on run argv
+  if application "Ghostty" is not running then return
   set claudePid to (item 1 of argv) as integer
   tell application "Ghostty"
     try
@@ -19,7 +20,7 @@ const SPLIT = `on run argv
     else
       split t direction right with configuration cfg
     end if
-    focus t
+    if frontmost then focus t
   end tell
 end run`
 
@@ -38,19 +39,22 @@ const forkId = (text: string) => {
 const textOf = (content: readonly { type: string; text?: unknown }[]) =>
   content.map(block => (block.type === 'text' && typeof block.text === 'string' ? block.text : '')).join('')
 
-// Splits the Ghostty terminal whose foreground process is this Claude, types `command` into the new pane and
-// keeps focus on the original terminal. Outside a Ghostty session, without osascript, or with no terminal for
-// this pid: nothing happens. Other osascript failures toast.
+// Splits the Ghostty terminal whose pid is this Claude's, types `command` into the new pane and, when Ghostty is
+// frontmost, keeps focus on that terminal. Nothing happens unless TERM_PROGRAM is ghostty, osascript exists,
+// Ghostty is running and a terminal has this pid; every other failure toasts. Never rejects.
 const split = async ($: EngineInterface, cwd: string, direction: Direction, command: string) => {
-  if ((await $.env.get('TERM_PROGRAM')) !== 'ghostty') return
-  let ran
   try {
-    const pid = (await $.process.run(['/bin/sh', '-c', 'printf %s "$PPID"'])).stdout.trim()
-    ran = await $.process.run(['osascript', '-', pid, cwd, command, direction], { stdin: SPLIT })
-  } catch {
-    return
+    if ((await $.env.get('TERM_PROGRAM')) !== 'ghostty') return
+    const probe = 'command -v osascript >/dev/null && printf %s "$PPID"'
+    const pid = (await $.process.run(['/bin/sh', '-c', probe], { cwd: '/' })).stdout.trim()
+    if (!pid) return
+    const ran = await $.process.run(['osascript', '-', pid, cwd, command, direction], { cwd: '/', stdin: SPLIT })
+    if (ran.exitCode !== 0) $.ui.toast(ran.stderr.trim() || `osascript exited ${ran.exitCode}`)
+  } catch (err) {
+    try {
+      $.ui.toast(String(err))
+    } catch {}
   }
-  if (ran.exitCode !== 0) $.ui.toast(ran.stderr.trim() || `osascript exited ${ran.exitCode}`)
 }
 
 export const register: Register = on => {
@@ -59,7 +63,8 @@ export const register: Register = on => {
   on('session.append', async ($, e, next) => {
     if (e.message.type !== 'system' || e.message.name !== 'local_command' || e.agentId) return next(e)
     const stored = await next(e)
-    const id = forkId(textOf(stored.deny === undefined ? stored.message.content : e.message.content))
+    if (stored.deny !== undefined) return stored
+    const id = forkId(textOf(stored.message.content))
     if (id) void split($, await $.session.cwd(), 'right', `claude attach ${id}`)
     return stored
   }).catch(($, e, next) => next(e))

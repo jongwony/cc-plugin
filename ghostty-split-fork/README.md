@@ -11,7 +11,7 @@ The original conversation always ends up on the left:
 | `/branch` | on the **left**: `claude --resume <original session id>`, the conversation as it was before the branch | on the right, moved onto the new branch (built-in behaviour) |
 | `/fork` | on the **right**: `claude attach <id>`, the new background session `/fork` started | on the left, still the original conversation |
 
-The pane you typed in keeps focus.
+The pane you typed in keeps focus while Ghostty is in front.
 
 ## Requirements
 
@@ -38,11 +38,16 @@ no split opens and a toast shows the `osascript` error.
 
 ## Domain
 
-The mod acts only when this Claude is the foreground process of a local Ghostty
-terminal on macOS: the split is made from the Ghostty terminal whose process is
-this Claude. Outside that, both commands run as built and the mod does nothing.
-Inside it, an `osascript` failure, such as a denied Automation permission, shows
-as a toast.
+The mod acts only on macOS, while Ghostty is running, when the pid Ghostty
+reports for one of its terminals is this Claude's pid; the split is made from
+that terminal. Outside that, both commands run as built and the mod does
+nothing. Inside it, an `osascript` failure, such as a denied Automation
+permission or a call that times out, shows as a toast. Until Automation access
+to Ghostty is allowed, membership cannot be decided, so a permission-error toast
+can appear in any session that inherits `TERM_PROGRAM=ghostty`.
+
+Focus stays on the pane you typed in when Ghostty is in front; if another app is
+in front when the pane opens, Ghostty is not brought forward.
 
 `/fork` detection relies on the confirmation line format of the tested Claude
 Code versions, 2.1.304 and 2.1.305; other versions are outside the tested domain.

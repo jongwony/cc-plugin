@@ -37,24 +37,21 @@ const forkId = (text: string) => {
 const textOf = (content: readonly { type: string; text?: unknown }[]) =>
   content.map(block => (block.type === 'text' && typeof block.text === 'string' ? block.text : '')).join('')
 
-// True only in a session drawn by Ghostty on macOS; probed once per load.
-let inGhostty: Promise<boolean> | undefined
-const ghostty = ($: EngineInterface) =>
-  (inGhostty ??= (async () => {
-    if ((await $.env.get('TERM_PROGRAM')) !== 'ghostty') return false
-    const os = await $.process.run(['uname', '-s'])
-    return os.stdout.trim() === 'Darwin'
-  })().catch(() => false))
-
-// Splits the Ghostty terminal whose tty is this session's and types `command` into the new pane.
-// No tty, or no Ghostty terminal with that tty: nothing happens. Other failures toast.
-const split = async ($: EngineInterface, cwd: string, direction: Direction, command: string) => {
-  try {
+// This session's tty when it is drawn by Ghostty on macOS, else undefined; probed once per load.
+let probe: Promise<string | undefined> | undefined
+const domainTty = ($: EngineInterface) =>
+  (probe ??= (async () => {
+    if ((await $.env.get('TERM_PROGRAM')) !== 'ghostty') return undefined
+    if ((await $.process.run(['uname', '-s'])).stdout.trim() !== 'Darwin') return undefined
     const tty = (await $.process.run(['/bin/sh', '-c', 'ps -o tty= -p $PPID'])).stdout.trim()
-    if (!tty || tty.startsWith('?')) return
-    const ran = await $.process.run(['osascript', '-', `/dev/${tty}`, cwd, command, direction], {
-      stdin: SPLIT,
-    })
+    return tty && !tty.startsWith('?') ? `/dev/${tty}` : undefined
+  })().catch(() => undefined))
+
+// Splits the Ghostty terminal whose tty is `tty` and types `command` into the new pane.
+// No Ghostty terminal with that tty: nothing happens. Other failures toast.
+const split = async ($: EngineInterface, tty: string, cwd: string, direction: Direction, command: string) => {
+  try {
+    const ran = await $.process.run(['osascript', '-', tty, cwd, command, direction], { stdin: SPLIT })
     if (ran.exitCode !== 0) $.ui.toast(ran.stderr.trim() || `osascript exited ${ran.exitCode}`)
   } catch (err) {
     $.ui.toast(String(err))
@@ -62,22 +59,26 @@ const split = async ($: EngineInterface, cwd: string, direction: Direction, comm
 }
 
 export const register: Register = on => {
-  // Passes every row through unchanged. A main-loop local_command row in /fork's confirmation grammar,
+  // Stores every row unchanged. Once a main-loop local_command row in /fork's confirmation grammar is stored,
   // in a Ghostty session, starts a right split attached to the session it names.
   on('session.append', async ($, e, next) => {
     if (e.message.type !== 'system' || e.message.name !== 'local_command' || e.agentId) return next(e)
-    const id = forkId(textOf(e.message.content))
-    if (id && (await ghostty($))) void split($, await $.session.cwd(), 'right', `claude attach ${id}`)
-    return next(e)
+    const stored = await next(e)
+    const id = forkId(textOf(stored.deny === undefined ? stored.message.content : e.message.content))
+    const tty = id ? await domainTty($) : undefined
+    if (id && tty) void split($, tty, await $.session.cwd(), 'right', `claude attach ${id}`)
+    return stored
   }).catch(($, e, next) => next(e))
 
-  // Starts the left split with the original session once /branch has moved this process onto the branch.
+  // Starts the left split with the original session, from the session root, once /branch has moved
+  // this process onto the branch.
   on('command.run', { command: 'branch' }, async ($, e, next) => {
-    if (!(await ghostty($))) return next(e)
-    const cwd = await $.session.cwd()
+    const tty = await domainTty($)
+    if (!tty) return next(e)
+    const root = await $.session.root()
     const before = await $.session.id()
     const ran = await next(e)
-    if ((await $.session.id()) !== before) void split($, cwd, 'left', `claude --resume ${before}`)
+    if ((await $.session.id()) !== before) void split($, tty, root, 'left', `claude --resume ${before}`)
     return ran
   }).catch(($, e, next) => next(e))
 }

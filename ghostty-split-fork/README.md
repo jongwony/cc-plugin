@@ -40,14 +40,18 @@ no split opens and a toast shows the `osascript` error.
 ## Outside Ghostty
 
 The mod only acts in a session whose terminal is Ghostty on macOS
-(`TERM_PROGRAM=ghostty`), checked once per load. Anywhere else both commands pass straight through: no
-split, no toast, no extra delay. Inside a multiplexer running in Ghostty (tmux,
-zellij), no Ghostty terminal owns the session's tty, so nothing happens either.
+(`TERM_PROGRAM=ghostty`) and that has a tty of its own. That is probed once per
+load; anywhere else both commands pass straight through: no split, no toast, no
+extra delay. A probe that fails, even for a passing reason, leaves the mod inert
+until the next reload (`/reload-plugins` or a restart). Inside a multiplexer
+running in Ghostty (tmux, zellij), no Ghostty terminal owns the session's tty,
+so nothing happens either.
 
 ## How it finds the session
 
 - `/branch` switches the running session to a new session id in place, so the mod
-  reads the id before and after the command and resumes the original in the split.
+  reads the id before and after the command and resumes the original in the split,
+  started from the session's project root.
 - `/fork` does not hand its new session id to the mod. Its confirmation line is
   the trigger instead: when the conversation keeps a line
   `session running · <name> · <id>` or `session waiting for a prompt · <id>`
@@ -56,7 +60,7 @@ zellij), no Ghostty terminal owns the session's tty, so nothing happens either.
   lands in the conversation, no pane opens and nothing is shown.
 - The split is made from the Ghostty terminal whose `tty` matches the session. A
   session with no tty of its own, such as the background session inside an
-  attach pane, opens nothing.
+  attach pane, is outside the mod's domain and opens nothing.
 - The new pane starts in Ghostty's own shell environment, not the environment
   the session was launched with.
 
@@ -68,6 +72,12 @@ zellij), no Ghostty terminal owns the session's tty, so nothing happens either.
   `CLAUDE_CONFIG_DIR`, provider or base-URL variables) is outside what the mod
   reproduces: `claude --resume` and `claude attach` in the new pane run without
   them.
+- After `/cd` or a worktree move, the original transcript can be filed under a
+  different directory than the session root. The left pane then shows Claude's
+  own hint, `cd … && claude --resume …`; follow it there.
+- If `/fork` prints no short id and the session name is itself 8 hex digits, that
+  name is taken as the id. Claude Code's own reading of the line has the same
+  ambiguity.
 - With agent view disabled (`CLAUDE_CODE_DISABLE_AGENT_VIEW`), `/fork` runs a
   subagent instead of a background session and prints no such line, so no pane
   opens.

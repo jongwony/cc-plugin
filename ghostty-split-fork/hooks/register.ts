@@ -25,47 +25,27 @@ const SPLIT = `on run argv
   end tell
 end run`
 
-const FORK_OUTPUT_WINDOW_MS = 10_000
+const FORK_STATES = ['session running', 'session waiting for a prompt']
 
-// The id in /fork's confirmation, `session <state> · [<name> · ]<8 hex>[ · <chip>]`, or undefined.
+// The id in /fork's confirmation, `<state> · [<name> · ]<8 hex>[ · <chip>]`, or undefined.
 const forkId = (text: string) => {
   const body = text.match(/<local-command-stdout>([\s\S]*?)<\/local-command-stdout>/)?.[1] ?? text
   const segments = body.trim().split(' · ')
-  if (!segments[0]?.startsWith('session ')) return undefined
+  if (!FORK_STATES.includes(segments[0] ?? '')) return undefined
   return segments.slice(1).filter(segment => /^[0-9a-f]{8}$/.test(segment)).pop()
 }
 
 const textOf = (content: readonly { type: string; text?: unknown }[]) =>
   content.map(block => (block.type === 'text' && typeof block.text === 'string' ? block.text : '')).join('')
 
-type Claim = { cwd: string }
-
-// /fork runs waiting for their confirmation rows, oldest first. A row consumes the oldest claim;
-// otherwise the claim's own timer, or its abandoned or failed dispatch, removes it.
-const claims: Claim[] = []
-
-// Removes `claim` if it is still queued; true when it was.
-const release = (claim: Claim) => {
-  const at = claims.indexOf(claim)
-  if (at < 0) return false
-  claims.splice(at, 1)
-  return true
-}
-
-// True only in a session drawn by Ghostty on macOS. A completed probe (true or false) is cached per load;
-// one that throws or whose uname exits nonzero is retried.
-let inGhostty: boolean | undefined
-const ghostty = async ($: EngineInterface) => {
-  if (inGhostty !== undefined) return inGhostty
-  try {
-    if ((await $.env.get('TERM_PROGRAM')) !== 'ghostty') return (inGhostty = false)
+// True only in a session drawn by Ghostty on macOS; probed once per load.
+let inGhostty: Promise<boolean> | undefined
+const ghostty = ($: EngineInterface) =>
+  (inGhostty ??= (async () => {
+    if ((await $.env.get('TERM_PROGRAM')) !== 'ghostty') return false
     const os = await $.process.run(['uname', '-s'])
-    if (os.exitCode !== 0) return false
-    return (inGhostty = os.stdout.trim() === 'Darwin')
-  } catch {
-    return false
-  }
-}
+    return os.stdout.trim() === 'Darwin'
+  })().catch(() => false))
 
 // Splits the Ghostty terminal whose tty is this session's and types `command` into the new pane.
 // No Ghostty terminal with that tty: nothing happens. Other failures toast.
@@ -84,19 +64,18 @@ const split = async ($: EngineInterface, cwd: string, direction: Direction, comm
 }
 
 export const register: Register = on => {
-  // Passes every row through unchanged; a main-loop local_command row carrying /fork's id starts the right split.
+  // Passes every row through unchanged. A main-loop local_command row in /fork's confirmation grammar,
+  // in a Ghostty session, starts a right split attached to the session it names.
   on('session.append', async ($, e, next) => {
-    if (claims.length === 0) return next(e)
     if (e.message.type !== 'system' || e.message.name !== 'local_command' || e.agentId) return next(e)
     const id = forkId(textOf(e.message.content))
-    const claim = id ? claims.shift() : undefined
-    if (id && claim) void split($, claim.cwd, 'right', `claude attach ${id}`)
+    if (id && (await ghostty($))) void split($, await $.session.cwd(), 'right', `claude attach ${id}`)
     return next(e)
   }).catch(($, e, next) => next(e))
 
   // Starts the left split with the original session once /branch has moved this process onto the branch.
   on('command.run', { command: 'branch' }, async ($, e, next) => {
-    if (e.origin.kind !== 'composer' || !(await ghostty($))) return next(e)
+    if (!(await ghostty($))) return next(e)
     const cwd = await $.session.cwd()
     const before = await $.session.id()
     const ran = await next(e)
@@ -104,28 +83,5 @@ export const register: Register = on => {
       void split($, cwd, 'left', `claude --resume ${before}`)
     }
     return ran
-  }).catch(($, e, next) => next(e))
-
-  // Queues a claim for /fork's confirmation row and returns the command's result at once.
-  // The claim's timer, started at arming, removes it after the window and toasts if no row consumed it;
-  // an abandoned or failed dispatch removes it without a toast.
-  on('command.run', { command: 'fork' }, async ($, e, next) => {
-    if (e.origin.kind !== 'composer' || !(await ghostty($))) return next(e)
-    const claim: Claim = { cwd: await $.session.cwd() }
-    claims.push(claim)
-    void $.process
-      .run(['sleep', String(FORK_OUTPUT_WINDOW_MS / 1000)], { timeoutMs: FORK_OUTPUT_WINDOW_MS + 5_000 })
-      .then(
-        () => release(claim) && $.ui.toast(`no session id in /fork's output`),
-        () => release(claim),
-      )
-    try {
-      const ran = await next(e)
-      if (next.signal.aborted) release(claim)
-      return ran
-    } catch (err) {
-      release(claim)
-      throw err
-    }
   }).catch(($, e, next) => next(e))
 }

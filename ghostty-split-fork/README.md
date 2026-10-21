@@ -1,9 +1,8 @@
 # ghostty-split-fork
 
 A Claude Code mod that opens the other side of `/branch` and `/fork` in a new
-Ghostty split beside the session you typed the command in. The built-in commands
-run unchanged; the split opens once they finish, and nothing extra is added to the
-conversation.
+Ghostty split beside the session that ran the command. The built-in commands run
+unchanged, and nothing extra is added to the conversation.
 
 The original conversation always ends up on the left:
 
@@ -12,8 +11,8 @@ The original conversation always ends up on the left:
 | `/branch` | on the **left**: `claude --resume <original session id>`, the conversation as it was before the branch | on the right, moved onto the new branch (built-in behaviour) |
 | `/fork` | on the **right**: `claude attach <id>`, the new background session `/fork` started | on the left, still the original conversation |
 
-Only a command you type at the prompt opens a split; one sent from Remote Control,
-the SDK or another plugin runs the built-in alone.
+This holds however the command reached the session: typed at the prompt, or sent
+from Remote Control, the SDK or another plugin to a session running in Ghostty.
 
 ## Requirements
 
@@ -41,8 +40,7 @@ no split opens and a toast shows the `osascript` error.
 ## Outside Ghostty
 
 The mod only acts in a session whose terminal is Ghostty on macOS
-(`TERM_PROGRAM=ghostty`), checked at the first `/branch` or `/fork` and remembered
-for the rest of the load. Anywhere else both commands pass straight through: no
+(`TERM_PROGRAM=ghostty`), checked once per load. Anywhere else both commands pass straight through: no
 split, no toast, no extra delay. Inside a multiplexer running in Ghostty (tmux,
 zellij), no Ghostty terminal owns the session's tty, so nothing happens either.
 
@@ -50,14 +48,13 @@ zellij), no Ghostty terminal owns the session's tty, so nothing happens either.
 
 - `/branch` switches the running session to a new session id in place, so the mod
   reads the id before and after the command and resumes the original in the split.
-- `/fork` does not hand its new session id to the mod, so the mod reads the
-  confirmation line `/fork` prints, as the conversation keeps it:
-  `session running · <name> · <id>` or `session waiting for a prompt · <id>`,
-  optionally followed by a note such as `edits this checkout`. `/fork` itself
-  returns at once; the split opens when that line arrives. One timer per `/fork`
-  runs for about 10 seconds from Enter: if no line has arrived by then, a toast
-  says so and no split opens. Several `/fork`s in a row each get their own pane,
-  in the order the lines arrive.
+- `/fork` does not hand its new session id to the mod. Its confirmation line is
+  the trigger instead: when the conversation keeps a line
+  `session running · <name> · <id>` or `session waiting for a prompt · <id>`
+  (optionally followed by a note such as `edits this checkout`), the right pane
+  opens with `claude attach <id>`. Only `/fork` prints that line. If it never
+  lands in the conversation, or a release changes its format, nothing happens:
+  no pane and no toast.
 - The split is made from the Ghostty terminal whose `tty` matches the session. If
   the session has no tty, a toast says so and no split opens.
 - When `CLAUDE_CONFIG_DIR` is set, the new pane gets the same value, so
@@ -65,8 +62,8 @@ zellij), no Ghostty terminal owns the session's tty, so nothing happens either.
 
 ## Known limits
 
-- The `/fork` output line is not a documented format. If a release rewords it,
-  `/fork` still runs but no split opens and a toast says so.
+- The `/fork` confirmation line is not a documented format. If a release
+  rewords it, `/fork` still runs and no pane opens.
 - With agent view disabled (`CLAUDE_CODE_DISABLE_AGENT_VIEW`), `/fork` runs a
-  subagent instead of a background session, so no split opens and a toast says
-  so.
+  subagent instead of a background session and prints no such line, so no pane
+  opens.

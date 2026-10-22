@@ -105,36 +105,25 @@ session and returns without waiting. The other headless creators are
 (see *Reaching a cloud session*), `-p --environment <ccpool_…>`, on a
 self-hosted pool only, and a one-shot routine, below.
 
-**From a local session, a one-shot routine is the headless creator.** A local
-CLI session has no `create_session` (see *Reaching a cloud session*) and cannot
-create through `--cloud` without a terminal. At 2.1.308, from a local auto-mode
-session: `create` with `enabled: true`, `persist_session: true` and a
-`job_config.ccr` carrying `environment_id`, `events` and
-`session_context.sources`, then `run`, returned the new session's `session_id`;
-`update` with `enabled: false` then kept the routine from firing again. The
-`environment_id` was copied from an existing routine's body, since
-`list_environments` is out of reach here too. The body set no `model`, and the
-session ran the environment's default (`claude-sonnet-5-5`); setting one in
-`session_context` (below) was not tried on this route.
+**From a local session, a one-shot routine is the headless creator.** `create`
+with `enabled: true`, `persist_session: true` and a `job_config.ccr` carrying
+`environment_id`, `events` and `session_context.sources`, then `run`, returns the
+new session's `session_id`; `update` with `enabled: false` then keeps the routine
+from firing again. Take `environment_id` from an existing routine's
+`job_config.ccr.environment_id` in `RemoteTrigger list`. The session runs the
+environment's default model when the body sets none. Exercised at 2.1.308;
+observed in session c404bd4a-fe13-4e84-9dc6-372e3f4acc8f.
 
-**`claude -p --cloud <id>` carries text, and a leading `-` is an option.** The
-send path takes one prompt string; no flag on it attaches a file. A prompt
-beginning with `-` failed with `error: unknown option`; `--` before the prompt
-sent it. A message sent while the environment's setup script was still running
-was queued and delivered after the script finished.
+**A message to an existing cloud session is `claude -p --cloud <id> -- "<prompt>"`.**
+The `--` ends option parsing, so the prompt is taken whatever it begins with. A
+message sent while the environment's setup script is still running is queued and
+delivered once the script finishes. Exercised at 2.1.308; observed in session
+c404bd4a-fe13-4e84-9dc6-372e3f4acc8f.
 
-**No route was found that carries a creator-local file into a cloud session.**
-Tried at 2.1.308 from a local, non-interactive session. The CLI has no upload
-subcommand: `claude files --help` and `claude upload --help` print the default
-usage. `--file <file_id:relative_path>` downloads a file at startup but needs a
-file id, which the CLI offers no way to obtain, and it would ride on a `--cloud`
-create, which needs a terminal. `session_context.file_mounts` on `create` was
-accepted with HTTP 200 and dropped: the stored routine showed
-`session_request.config.file_mounts: []`. The workaround tried — the file
-gzip+base64-encoded as a second text message — was delivered, and the session
-announced it would decode it; `get_run_log` then showed no further transcript
-event across two reads about two minutes apart, and nothing there told a running
-tool call from a pending dialog.
+**A cloud session's inputs are its sources, its connectors and the text of its
+messages.** Work whose input is a file on the creator's machine goes to a local
+`--bg` Stint. Established at 2.1.308; observed in session
+c404bd4a-fe13-4e84-9dc6-372e3f4acc8f.
 
 **`claude --cloud` sets the session's permission mode at creation.** Without
 `--permission-mode` the session opens in Accept edits, not in the creator's
@@ -327,17 +316,11 @@ file names it `Claude_Code_Remote`, as it appeared where the earlier entries
 were exercised. Look a tool up by its own name (`get_session`), not by the
 server's.
 
-**The server is built in, and a local session does not get it.** The 2.1.308
-binary defines it: name `claude-code-remote`, display name `Claude Code Remote`,
-connector id `bf7c680d-5fdc-5ef4-b4a0-abadb619bf0a`, path
-`/v2/ccr-sessions/-/meta/mcp`, and a config built with `X-MCP-Server-ID` and
-`X-Session-UUID` headers and `alwaysLoad: true`. A routine's `mcp_connections`
-lists the same connector id as `Claude_Code_Remote` at
-`https://api.anthropic.com/v1/code/mcp/meta`. It is no plugin or user-added
-server. On a local CLI session `claude mcp list` showed the account's other
-claude.ai connectors and not this one, so a local session has none of its
-tools; why it is left out there was not established — the per-session header
-suggests it needs a cloud session to bind to.
+**The server is built into Claude Code and attaches to cloud sessions.** A
+routine's `mcp_connections` identifies it by connector id
+`bf7c680d-5fdc-5ef4-b4a0-abadb619bf0a`. A local session reaches cloud sessions
+through `RemoteTrigger` and `claude -p --cloud <id>`. Read at 2.1.308; observed
+in session c404bd4a-fe13-4e84-9dc6-372e3f4acc8f.
 
 **A session id comes from `list_sessions` or `create_session`.** `ListAgents` in
 a cloud session listed no cloud peers, so it supplies none. `list_sessions` with

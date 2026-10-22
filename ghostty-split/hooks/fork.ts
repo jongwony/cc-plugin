@@ -3,7 +3,7 @@ import { forkId } from './fork-id.ts'
 
 type Direction = 'left' | 'right'
 
-const SPLIT = `on run argv
+export const SPLIT = `on run argv
   if application "Ghostty" is not running then return
   set claudePid to (item 1 of argv) as integer
   tell application "Ghostty"
@@ -14,7 +14,7 @@ const SPLIT = `on run argv
       if not frontmost then return
       set t to focused terminal of selected tab of front window
       set viewerPid to (pid of t) as text
-      tell current application to set viewer to do shell script "basename \"$(ps -o comm= -p " & viewerPid & ")\""
+      tell current application to set viewer to do shell script "ps -o comm= -p " & viewerPid & " | sed 's#.*/##'"
       if viewer is not "claude" then return
     end try
     set cfg to new surface configuration

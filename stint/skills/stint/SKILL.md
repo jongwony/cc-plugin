@@ -88,6 +88,8 @@ Independent work needs something to start it. Route to exactly one.
 ```
 
 - It prints `backgrounded · <jobId> · <name>`. Report that back.
+- **A cloud Stint reads what its sources and connectors carry.** Work whose input is a file
+  on this machine takes the local spawn above (`references/harness.md`).
 - **Dropping `--worktree` does not opt out of isolation** — it gives up the named branch. A
   backgrounded session is held out of the shared checkout until it isolates itself under
   `.claude/worktrees/`.

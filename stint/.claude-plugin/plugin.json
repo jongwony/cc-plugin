@@ -1,7 +1,7 @@
 {
   "name": "stint",
   "description": "A bounded delegation that needs a session of its own, or one you ask for: spawn a Stint, or stand up a monitor that wakes on an event, a clock, or its own rounds",
-  "version": "2.0.24",
+  "version": "2.0.27",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

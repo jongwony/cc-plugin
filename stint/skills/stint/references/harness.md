@@ -99,11 +99,31 @@ attaches to a session, and is off under `CLAUDE_CODE_REMOTE`. `claude --cloud`
 creates one session and attaches to it, and creating requires an interactive
 terminal: without one it prints `Error: --cloud requires an interactive
 terminal.`, and combined with `--print` it is refused as interactive-only.
-`claude -p "<msg>" --cloud <session_id|url>` sends one message to an existing
+`claude -p --cloud <session_id|url> -- "<msg>"` sends one message to an existing
 session and returns without waiting. The other headless creators are
 `Claude_Code_Remote`'s `create_session`, run in an Anthropic-hosted environment
-(see *Reaching a cloud session*), and `-p --environment <ccpool_…>`, on a
-self-hosted pool only.
+(see *Reaching a cloud session*), `-p --environment <ccpool_…>`, on a
+self-hosted pool only, and a one-shot routine, below.
+
+**From a local session, a one-shot routine is the headless creator.** `create`
+with `enabled: true`, `persist_session: true` and a `job_config.ccr` carrying
+`environment_id`, `events` and `session_context.sources`, then `run`, returns the
+new session's `session_id`; `update` with `enabled: false` then keeps the routine
+from firing again. Take `environment_id` from an existing routine's
+`job_config.ccr.environment_id` in `RemoteTrigger list`. The session runs the
+environment's default model when the body sets none. Exercised at 2.1.308;
+observed in session c404bd4a-fe13-4e84-9dc6-372e3f4acc8f.
+
+**A message to an existing cloud session is `claude -p --cloud <id> -- "<prompt>"`.**
+The `--` ends option parsing, so the prompt is taken whatever it begins with. A
+message sent while the environment's setup script is still running is queued and
+delivered once the script finishes. Exercised at 2.1.308; observed in session
+c404bd4a-fe13-4e84-9dc6-372e3f4acc8f.
+
+**A cloud session's inputs are its sources, its connectors and the text of its
+messages.** Work whose input is a file on the creator's machine goes to a local
+`--bg` Stint. Established at 2.1.308; observed in session
+c404bd4a-fe13-4e84-9dc6-372e3f4acc8f.
 
 **`claude --cloud` sets the session's permission mode at creation.** Without
 `--permission-mode` the session opens in Accept edits, not in the creator's
@@ -295,6 +315,12 @@ tool description instead says so.
 file names it `Claude_Code_Remote`, as it appeared where the earlier entries
 were exercised. Look a tool up by its own name (`get_session`), not by the
 server's.
+
+**The server is built into Claude Code and attaches to cloud sessions.** A
+routine's `mcp_connections` identifies it by connector id
+`bf7c680d-5fdc-5ef4-b4a0-abadb619bf0a`. A local session reaches cloud sessions
+through `RemoteTrigger` and `claude -p --cloud <id>`. Read at 2.1.308; observed
+in session c404bd4a-fe13-4e84-9dc6-372e3f4acc8f.
 
 **A session id comes from `list_sessions` or `create_session`.** `ListAgents` in
 a cloud session listed no cloud peers, so it supplies none. `list_sessions` with

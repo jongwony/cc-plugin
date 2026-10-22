@@ -20,9 +20,8 @@ moment of the split. After `/fork` focus follows Ghostty's default for a new spl
 - [Ghostty](https://ghostty.org) 1.3 or later with its AppleScript dictionary
   installed (`new surface configuration`, `split`, `focus`, and a terminal's
   `pid`), with AppleScript enabled (`macos-applescript`, on by default); with it
-  off the mod cannot open panes. Tested on Ghostty 1.3.2.
-- Claude Code with function hooks (mods). Tested on Claude Code 2.1.304, 2.1.305
-  and 2.1.307 (a background session viewed in Ghostty); the mod API is early access and may change between releases.
+  off the mod cannot open panes.
+- Claude Code with function hooks (mods).
 - `osascript` on `PATH`, and `claude` on the `PATH` of the shell a new Ghostty pane starts.
 - That shell must not prompt at startup: the mod types the `claude` command into it.
 
@@ -73,9 +72,8 @@ is made from it:
   access to Ghostty is allowed, membership cannot be decided, so such a toast can
   appear in any candidate.
 
-`/fork` detection relies on the confirmation line format of the tested Claude
-Code versions, 2.1.304, 2.1.305 and 2.1.307; other versions are outside the tested domain.
-The signal is that confirmation line exactly as `/fork` produced it: the mod
+`/fork` detection relies on the format of `/fork`'s confirmation line; a Claude
+Code that prints it differently opens no pane. The signal is that confirmation line exactly as `/fork` produced it: the mod
 reads the row before other plugins' hooks on the stored row may rewrite it, so a
 rewrite elsewhere does not change what the mod sees. It also presumes that no
 other command in the session prints a line in that format; if one does, a

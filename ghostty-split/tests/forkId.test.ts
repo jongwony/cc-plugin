@@ -14,7 +14,7 @@ test('an optional name and an optional chip around the id', () => {
   expect(forkId(row('session waiting for a prompt · deadbeef · runs in the origin tree'))).toBe('deadbeef')
 })
 
-test('the confirmation 2.1.307 prints for a fork of a named background session', () => {
+test('a fork of a named background session, with and without a second segment before the id', () => {
   expect(forkId(row('session running · stint::fd-2310-gateway-impl ⑂ artifact 를 ghostty 에서 볼 수 있는 mod가 있는지 찾아봅시다 · 2d0a9d9b'))).toBe('2d0a9d9b')
   expect(forkId(row('session running · stint::fd-2310-gateway-impl ⑂ artifact 를 ghostty 에서 볼 수 있는 mod가 있는지 찾아봅시다 · session test · 4f298746'))).toBe('4f298746')
 })

@@ -99,7 +99,7 @@ attaches to a session, and is off under `CLAUDE_CODE_REMOTE`. `claude --cloud`
 creates one session and attaches to it, and creating requires an interactive
 terminal: without one it prints `Error: --cloud requires an interactive
 terminal.`, and combined with `--print` it is refused as interactive-only.
-`claude -p "<msg>" --cloud <session_id|url>` sends one message to an existing
+`claude -p --cloud <session_id|url> -- "<msg>"` sends one message to an existing
 session and returns without waiting. The other headless creators are
 `Claude_Code_Remote`'s `create_session`, run in an Anthropic-hosted environment
 (see *Reaching a cloud session*), `-p --environment <ccpool_…>`, on a

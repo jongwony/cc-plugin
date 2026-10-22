@@ -21,8 +21,8 @@ moment of the split. After `/fork` focus follows Ghostty's default for a new spl
   installed (`new surface configuration`, `split`, `focus`, and a terminal's
   `pid`), with AppleScript enabled (`macos-applescript`, on by default); with it
   off the mod cannot open panes. Tested on Ghostty 1.3.2.
-- Claude Code with function hooks (mods). Tested on Claude Code 2.1.304 and
-  2.1.305; the mod API is early access and may change between releases.
+- Claude Code with function hooks (mods). Tested on Claude Code 2.1.304, 2.1.305
+  and 2.1.307 (a background session viewed in Ghostty); the mod API is early access and may change between releases.
 - `osascript` on `PATH`, and `claude` on the `PATH` of the shell a new Ghostty pane starts.
 - That shell must not prompt at startup: the mod types the `claude` command into it.
 
@@ -44,12 +44,27 @@ no split opens and a toast shows the `osascript` error.
 
 ## Domain
 
-A **candidate** session runs on macOS with `TERM_PROGRAM=ghostty` while Ghostty
-is running. The **domain** is a candidate where the pid Ghostty reports for one
-of its terminals is this Claude's pid; the split is made from that terminal.
-This rests on a premise: Claude is launched directly in the Ghostty pane, not
-through a launcher that forks it, so it leads the pane's foreground process group
-and Ghostty reports its pid.
+A **candidate** session runs on macOS with `TERM_PROGRAM=ghostty`, or
+`TERM=xterm-ghostty`, while Ghostty is running. The second form admits a
+background session (one `/fork` or `--bg` started) whose Claude daemon was
+launched from Ghostty: the daemon's environment keeps `TERM` but not
+`TERM_PROGRAM`.
+
+The **domain** is a candidate where one of two terminals is found, and the split
+is made from it:
+
+- **Its own terminal**: the Ghostty terminal whose reported pid is this Claude's.
+  This rests on Claude being launched directly in the pane, not through a
+  launcher that forks it, so it leads the pane's foreground process group.
+- **The terminal viewing it**: a background session has no terminal of its own;
+  it runs under the daemon, and the pane showing it runs a `claude` client. When
+  no terminal has this Claude's pid, the split is made from the focused terminal
+  of Ghostty's front window, only while Ghostty is frontmost and that terminal's
+  foreground process is `claude`. That is the pane the command was just typed
+  in. Viewed from the mobile app, Ghostty is not frontmost, so nothing opens.
+  The mod API names no attached client's pid or tty, so focus is the signal: a
+  focus moved to another `claude` pane in the moment before the hook fires puts
+  the split beside that pane.
 
 - A session that is not a candidate is untouched: both commands run as built.
 - Inside a candidate, any `osascript` failure, before or after membership is
@@ -59,7 +74,7 @@ and Ghostty reports its pid.
   appear in any candidate.
 
 `/fork` detection relies on the confirmation line format of the tested Claude
-Code versions, 2.1.304 and 2.1.305; other versions are outside the tested domain.
+Code versions, 2.1.304, 2.1.305 and 2.1.307; other versions are outside the tested domain.
 The signal is that confirmation line exactly as `/fork` produced it: the mod
 reads the row before other plugins' hooks on the stored row may rewrite it, so a
 rewrite elsewhere does not change what the mod sees. It also presumes that no

@@ -16,6 +16,7 @@ test('an optional name and an optional chip around the id', () => {
 
 test('the confirmation 2.1.307 prints for a fork of a named background session', () => {
   expect(forkId(row('session running · stint::fd-2310-gateway-impl ⑂ artifact 를 ghostty 에서 볼 수 있는 mod가 있는지 찾아봅시다 · 2d0a9d9b'))).toBe('2d0a9d9b')
+  expect(forkId(row('session running · stint::fd-2310-gateway-impl ⑂ artifact 를 ghostty 에서 볼 수 있는 mod가 있는지 찾아봅시다 · session test · 4f298746'))).toBe('4f298746')
 })
 
 test('a name that is itself 8 hex digits is followed by the id, which wins', () => {

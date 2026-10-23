@@ -92,7 +92,7 @@
     {
       "name": "ocu-agent",
       "source": "./ocu-agent",
-      "description": "Desktop operator subagent (opus) — delegate macOS app work to Open Computer Use (ocu) in the background, keeping accessibility trees and screenshots out of the main context; writes stop for permission"
+      "description": "Desktop operator subagent (opus) — delegate macOS app work to Open Computer Use (ocu) in the background, keeping accessibility trees and screenshots out of the main context"
     },
     {
       "name": "choi-voice",

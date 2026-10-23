@@ -303,14 +303,16 @@ const erOf = (lines: string[]): Grammar => {
   return { labels: [...entities, ...labels], categories: [], chain: true }
 }
 
-// xychart: `xychart` or `xychart-beta`, upright; a quoted `title`; `x-axis [a, b]`
+// xychart: `xychart` or `xychart-beta`, upright; a quoted `title`; `x-axis [a, "b c"]`
 // with no axis title; `y-axis min --> max` in integers with no axis title; one
 // `line` series of integers. No bars, second series, horizontal orientation,
 // axis title or fractional value.
 const INT = String.raw`-?\d{1,12}`
 const CHART_HEADER = /^xychart(?:-beta)?\s*$/
 const CHART_TITLE = /^title\s+"([^"]+)"$/
-const CHART_X = /^x-axis\s*\[([^\[\]"]*)\]$/
+const CATEGORY = String.raw`(?:${QUOTED}|[^\[\],"]*)`
+const CHART_X = new RegExp(String.raw`^x-axis\s*\[(\s*${CATEGORY}\s*(?:,\s*${CATEGORY}\s*)*)\]$`)
+const CATEGORIES = new RegExp(String.raw`\s*(${QUOTED}|[^,"]*?)\s*(?:,|$)`, 'gy')
 const CHART_Y = new RegExp(String.raw`^y-axis\s+${INT}\s*-->\s*${INT}$`)
 const CHART_LINE = new RegExp(String.raw`^line\s*\[\s*${INT}(?:\s*,\s*${INT})*\s*\]$`)
 
@@ -327,7 +329,7 @@ const chartOf = (lines: string[]): Grammar => {
     }
     const x = CHART_X.exec(line)
     if (x) {
-      categories = x[1]!.split(',').map(c => c.trim())
+      categories = [...x[1]!.matchAll(CATEGORIES)].map(m => unquote(m[1]!)).slice(0, -1)
       if (categories.some(c => c === '')) return outside(line)
       continue
     }

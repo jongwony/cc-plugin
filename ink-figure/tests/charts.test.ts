@@ -58,6 +58,15 @@ test('bars beside a line, a second series, or a horizontal chart keep the fence'
   expect('lines' in renderOf(ONE)).toBe(true)
 })
 
+test('double-quoted category names draw without their quotes, a comma inside one included', () => {
+  const lines = linesOf('xychart-beta\n  x-axis ["10-16", "v1, rc", wed]\n  y-axis 0 --> 4\n  line [1, 3, 2]').map(plainOf)
+  const labels = lines[lines.length - 1]!
+  expect(/10-16 +v1, rc +wed/.test(labels)).toBe(true)
+  expect(labels.includes('"')).toBe(false)
+  expect('error' in renderOf('xychart-beta\n  x-axis ["a, b", c]\n  line [1, 2, 3]')).toBe(true)
+  expect('lines' in renderOf('xychart-beta\n  x-axis [mon, tue]\n  line [1, 2]')).toBe(true)
+})
+
 test('an axis title, whose units the drawing drops, keeps the fence', () => {
   expect('error' in renderOf('xychart-beta\n  x-axis [a, b]\n  y-axis "Latency (ms)" 0 --> 10\n  line [1, 2]')).toBe(true)
   expect('error' in renderOf('xychart-beta\n  x-axis "day" [a, b]\n  line [1, 2]')).toBe(true)

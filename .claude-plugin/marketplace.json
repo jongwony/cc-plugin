@@ -133,6 +133,11 @@
       "name": "ghostty-split",
       "source": "./ghostty-split",
       "description": "Opens the other side of /branch and /fork in a Ghostty split: the original on the left after /branch, the background session on the right after /fork."
+    },
+    {
+      "name": "prdiff",
+      "source": "./prdiff",
+      "description": "A pane that lists the repository's pull requests and shows one PR's cumulative diff (merge-base of its own base branch to its head) as one scrollable stream of files."
     }
   ]
 }

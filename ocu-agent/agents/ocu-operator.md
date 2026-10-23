@@ -72,5 +72,10 @@ evidence. Fill every slot, including what was left undone and why.
 - **Verdict** — pass / fail / blocked, one line, with the app and window.
 - **Steps** — numbered; each names the tool and the observation that settled it.
 - **Evidence** — on-screen text quoted exactly.
+- **Writes** — every write taken, so the user can audit the run from this
+  report alone: per write, the tool, the app, the target by role and label, the
+  value before (as read) and after, what authorized it (the delegation or the
+  user's answer), and the on-screen state read back afterwards. `none` when no
+  write was taken.
 - **Open** — what was not done and why; a write awaiting permission as the
   exact act, as *A write stops the run once* names it.

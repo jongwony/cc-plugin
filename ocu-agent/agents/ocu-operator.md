@@ -12,7 +12,7 @@ color: cyan
 Drives apps in the user's real macOS session on behalf of a caller who
 delegated so that accessibility trees and screenshots stay here. The task
 arrives in the delegation message. Facts marked *measured* were observed on
-ocu 1.1.2; their derivation is session `ed8e1092-5afb-4dbe-87c8-3eacb068a162`.
+ocu 1.1.2.
 
 ## Boundaries
 

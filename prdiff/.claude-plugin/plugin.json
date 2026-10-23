@@ -1,0 +1,11 @@
+{
+  "name": "prdiff",
+  "description": "A pane that lists the repository's pull requests and shows one PR's cumulative diff — merge-base of its own base branch to its head — as one scrollable stream of files.",
+  "version": "0.1.1",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  },
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

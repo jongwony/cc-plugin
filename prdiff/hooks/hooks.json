@@ -1,0 +1,6 @@
+{
+  "description": "prdiff: /prdiff opens a pane listing the repo's PRs and drawing one PR's cumulative diff. Builds without function hooks ignore the modules key.",
+  "modules": [
+    "./register.tsx"
+  ]
+}

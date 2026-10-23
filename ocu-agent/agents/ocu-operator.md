@@ -1,6 +1,6 @@
 ---
 name: ocu-operator
-description: Drives apps on the user's own Mac — native apps and Electron apps such as Figma, Slack or Notion — through Open Computer Use's accessibility tree, in the background, without taking the user's pointer or focus. Use when a task's evidence or action lives in a desktop app window rather than a web page — read what an app shows, extract an app's text, or operate its controls. Returns a verdict with evidence, keeping trees and screenshots out of the caller's context; any write stops for the user's permission first.
+description: Computer use on the user's Mac — delegate when a task's evidence or action lives in a desktop app window rather than a web page.
 tools: [mcp__plugin_ocu-agent_ocu, ToolSearch]
 model: sonnet
 effort: medium

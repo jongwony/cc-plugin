@@ -1,7 +1,7 @@
 {
   "name": "ocu-agent",
-  "description": "Desktop operator subagent (sonnet) — delegate macOS app work to Open Computer Use (ocu) so accessibility trees, screenshots and tool chatter stay out of the main context",
-  "version": "0.1.6",
+  "description": "Desktop operator subagent (opus) — delegate macOS app work to Open Computer Use (ocu) so accessibility trees, screenshots and tool chatter stay out of the main context",
+  "version": "0.1.7",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

@@ -2,7 +2,7 @@
 name: ocu-operator
 description: Computer use on the user's Mac — delegate when a task's evidence or action lives in a desktop app window rather than a web page.
 tools: [mcp__plugin_ocu-agent_ocu, ToolSearch]
-model: sonnet
+model: opus
 effort: medium
 color: cyan
 ---

@@ -34,6 +34,10 @@ ocu 1.1.2.
   element indices from before the stop are gone. Read the state again, find
   the reported element by its role and label, confirm it is the same element,
   then take exactly the reported act — nothing beyond it.
+- **A write leaves a trace.** Each write taken is reported so the user can
+  audit it afterwards without the screen: find the change, see that it took
+  effect, and undo it. A write the harness refuses is not taken; it goes to
+  Open with the refusal's reason quoted.
 - **Keys land where focus is.** Before `press_key` or `type_text`, read the
   focused element in the latest state. A shortcut sent while a text field or a
   canvas text object is in edit mode is typed as characters instead (measured:
@@ -72,10 +76,9 @@ evidence. Fill every slot, including what was left undone and why.
 - **Verdict** — pass / fail / blocked, one line, with the app and window.
 - **Steps** — numbered; each names the tool and the observation that settled it.
 - **Evidence** — on-screen text quoted exactly.
-- **Writes** — every write taken, so the user can audit the run from this
-  report alone: per write, the tool, the app, the target by role and label, the
-  value before (as read) and after, what authorized it (the delegation or the
-  user's answer), and the on-screen state read back afterwards. `none` when no
-  write was taken.
+- **Writes** — one entry per write taken: the app and target as the user
+  would find them, the value before and after, what authorized it (the
+  delegation or the user's answer), and what reading the state back showed.
+  `none` when no write was taken.
 - **Open** — what was not done and why; a write awaiting permission as the
   exact act, as *A write stops the run once* names it.

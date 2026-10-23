@@ -16,7 +16,8 @@ reaches for a fence wherever one fits. When the reader's task is taking in
 relations at once — a graph, a flow, states, a sequence, classes, entities — it
 writes a ` ```mermaid ` fence; for measured values over an ordered axis, an
 xychart line chart (one series in whole units, the unit in the title, its scale
-stated); for a two-dimensional formula, a ` ```math ` fence. It keeps a picture
+stated); for quantities compared across items, one drawing on one scale (in
+text, a bar table); for a two-dimensional formula, a ` ```math ` fence. It keeps a picture
 small enough to hold (about 12 nodes, 24 at most), never draws box art by hand,
 and names a focal node in the prose beside the fence, since node styling draws
 nothing. The mod then draws the fence:

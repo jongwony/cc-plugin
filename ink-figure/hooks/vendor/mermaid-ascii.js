@@ -4880,7 +4880,7 @@ function parseXYChart(lines) {
     const xCatMatch = line.match(/^x-axis\s+(?:"([^"]*)"\s*)?\[([^\]]+)\]\s*$/);
     if (xCatMatch) {
       if (xCatMatch[1]) xAxis.title = xCatMatch[1];
-      xAxis.categories = xCatMatch[2].split(",").map((s) => s.trim());
+      xAxis.categories = [...xCatMatch[2].matchAll(/\s*("[^"]*"|[^,"]*?)\s*(?:,|$)/gy)].slice(0, -1).map((m) => m[1].replace(/^"(.*)"$/, "$1").trim());
       continue;
     }
     const xRangeMatch = line.match(/^x-axis\s+(?:"([^"]*)"\s+)?(-?\d+(?:\.\d+)?)\s*-->\s*(-?\d+(?:\.\d+)?)\s*$/);

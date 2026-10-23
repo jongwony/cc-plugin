@@ -95,7 +95,7 @@ toward it, through a label lying on the edge, and no label sits on a box border.
 | sequence | `participant A`, `participant A as text`; `A->>B: text`, `A-->>B: text`, a self-message included |
 | class | `class A`, `class A { … }`, `A : member`: `Type name`, `name`, `name()`, `name() Type`, each with an optional `+ - # ~`, a name once per class; `<\|--`, `*--`, `o--`, `-->`, `..>`, `..\|>`, optionally `: text`, as chains (no class above two others or below two, no cycle) |
 | ER | `A ‹card›--‹card› B : label` (`--` or `..`); `A { type name … }`; each entity in at most one relationship |
-| xychart | upright `xychart`/`xychart-beta`; `title "text"`; `x-axis [a, b, …]` with unquoted category names (a quoted one is outside the grammar); `y-axis min --> max` in integers; one `line [ … ]` of integers |
+| xychart | upright `xychart`/`xychart-beta`; `title "text"`; `x-axis [a, b, …]` with each category name bare or in double quotes (quoted, it may hold spaces and commas and is drawn without its quotes; single quotes are drawn as written); `y-axis min --> max` in integers; one `line [ … ]` of integers |
 
 A diagram that would stay top to bottom (a `BT` flowchart, a top-down one the
 sideways layout does not take, a state diagram with `direction TB`) is drawn only

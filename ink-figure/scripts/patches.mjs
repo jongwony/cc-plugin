@@ -327,6 +327,15 @@ export const PATCHES = [
       '  }\n\n' +
       '  // Fallback y-axis range\n',
   },
+  // A double-quoted category name keeps its commas and spaces and is drawn without
+  // its quotes; a bare name splits on commas as before.
+  {
+    file: /beautiful-mermaid\/src\/xychart\/parser\.ts$/,
+    find: "      xAxis.categories = xCatMatch[2]!.split(',').map(s => s.trim())\n",
+    replace:
+      '      xAxis.categories = [...xCatMatch[2]!.matchAll(/\\s*("[^"]*"|[^,"]*?)\\s*(?:,|$)/gy)]\n' +
+      "        .slice(0, -1).map(m => m[1]!.replace(/^\"(.*)\"$/, '$1').trim())\n",
+  },
   // Every series holds one value per category (or, with no categories, as many as the
   // first series): the renderer plots that many and drops the rest.
   {

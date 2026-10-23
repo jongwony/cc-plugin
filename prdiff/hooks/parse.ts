@@ -90,6 +90,9 @@ function sections(patch: string): Section[] {
   let hunk: Hunk | undefined
   let oldNo = 0
   let newNo = 0
+  // Lines the hunk header still owes on each side.
+  let oldLeft = 0
+  let newLeft = 0
   for (const raw of patch.split('\n')) {
     const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw
     if (line.startsWith('diff --git ') || line.startsWith('diff --cc ')) {
@@ -103,6 +106,8 @@ function sections(patch: string): Section[] {
     if (m) {
       oldNo = Number(m[1])
       newNo = Number(m[3])
+      oldLeft = m[2] === undefined ? 1 : Number(m[2])
+      newLeft = m[4] === undefined ? 1 : Number(m[4])
       hunk = { header: line.slice(0, line.indexOf(' @@') + 3), section: clean(m[5] ?? ''), lines: [] }
       cur.hunks.push(hunk)
       continue
@@ -113,22 +118,51 @@ function sections(patch: string): Section[] {
       if (line.startsWith('--- ')) cur.minusPath = stripPrefix(line.slice(4))
       continue
     }
-    const mark = line[0]
+    // An empty line inside a hunk that still owes lines on both sides is an
+    // empty context line written without its space; otherwise it is the
+    // patch's trailing newline.
+    const mark = line === '' && oldLeft > 0 && newLeft > 0 ? ' ' : line[0]
     if (mark === ' ' || mark === '+' || mark === '-' || mark === '\\') {
       hunk.lines.push({ mark, text: clean(line.slice(1)), oldNo, newNo })
       if (mark === ' ') {
         oldNo += 1
         newNo += 1
-      } else if (mark === '-') oldNo += 1
-      else if (mark === '+') newNo += 1
+        oldLeft -= 1
+        newLeft -= 1
+      } else if (mark === '-') {
+        oldNo += 1
+        oldLeft -= 1
+      } else if (mark === '+') {
+        newNo += 1
+        newLeft -= 1
+      }
     } else if (line === '') {
-      // A trailing newline of the whole patch; an empty context line keeps its space.
+      // The trailing newline of the whole patch.
     } else {
       hunk = undefined
       cur.headerLines.push(line)
     }
   }
   return out
+}
+
+/**
+ * The path a `diff --git a/X b/X` line names when both sides are one path, the
+ * only form a section without `---`/`+++` (mode-only, binary) can name it in.
+ */
+function gitLinePath(line: string): string | undefined {
+  const rest = line.slice('diff --git '.length)
+  if (rest.startsWith('"')) {
+    const m = /^("(?:[^"\\]|\\.)*") ("(?:[^"\\]|\\.)*")$/.exec(rest)
+    const a = m?.[1] ? stripPrefix(m[1]) : undefined
+    const b = m?.[2] ? stripPrefix(m[2]) : undefined
+    return a !== undefined && a === b ? a : undefined
+  }
+  if (rest.length % 2 === 0) return undefined
+  const half = (rest.length - 1) / 2
+  const a = rest.slice(0, half)
+  const b = rest.slice(half + 1)
+  return a.startsWith('a/') && b.startsWith('b/') && a.slice(2) === b.slice(2) ? a.slice(2) : undefined
 }
 
 function stripPrefix(p: string): string | undefined {
@@ -170,21 +204,22 @@ function describe(s: Section): { kind: FileKind; notes: string[]; isBinary: bool
   }
   if (kind === 'modified' && s.hunks.length === 0 && notes.some(n => n.startsWith('mode '))) kind = 'mode'
   if (isBinary) notes.push('binary file')
-  return { kind, notes: notes.map(clean), isBinary, oldPath, path: path ?? s.plusPath ?? s.minusPath }
+  const named = path ?? s.plusPath ?? s.minusPath ?? (s.headerLines[0] ? gitLinePath(s.headerLines[0]) : undefined)
+  return { kind, notes: notes.map(clean), isBinary, oldPath, path: named }
 }
 
 /**
  * Joins the numstat inventory with the patch. The inventory is authoritative:
- * an entry with no hunks (binary, mode-only, pure rename) stays listed. Both
- * come from one diff invocation's options, so their order agrees; a count
- * mismatch falls back to matching by path.
+ * an entry with no hunks (binary, mode-only, pure rename) stays listed. A
+ * section is paired with the entry at its index only when their paths agree;
+ * otherwise it is found by path.
  */
 export function mergeDiff(numstat: NumstatEntry[], patch: string): FileDiff[] {
   const secs = sections(patch).map(s => ({ ...describe(s), hunks: s.hunks }))
-  const byIndex = secs.length === numstat.length
   const byPath = new Map(secs.map(s => [s.path ?? '', s]))
   return numstat.map((n, i) => {
-    const s = byIndex ? secs[i] : byPath.get(n.path)
+    const at = secs[i]
+    const s = at !== undefined && at.path === n.path ? at : byPath.get(n.path)
     const kind: FileKind = s?.kind ?? (n.oldPath !== undefined ? 'renamed' : 'modified')
     return {
       path: clean(n.path),
@@ -212,9 +247,10 @@ export function untrackedFile(path: string, patch: string | undefined, note?: st
 /**
  * A unified-diff source for a run of one hunk's lines, with a header that
  * numbers that run, so `Code format="diff"` gutters stay true when a window
- * starts mid-hunk.
+ * starts mid-hunk. `\` lines are left out; a run with no content line gives ''.
  */
-export function hunkSource(lines: readonly DiffLine[]): string {
+export function hunkSource(all: readonly DiffLine[]): string {
+  const lines = all.filter(l => l.mark !== '\\')
   const first = lines[0]
   if (!first) return ''
   const oldCount = lines.filter(l => l.mark === ' ' || l.mark === '-').length

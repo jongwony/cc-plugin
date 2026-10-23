@@ -46,7 +46,15 @@ export type DiffData = {
 /** Untracked files read into a worktree diff, at most. */
 export const MAX_UNTRACKED = 200
 
-const GIT = ['git', '--no-optional-locks', '-c', 'core.quotePath=false', '-c', 'diff.relative=false', '-c', 'color.ui=false']
+/** Per-file patch reads (over-4-MiB fallback, untracked files) in flight at once. */
+export const CONCURRENCY = 8
+
+// Pinned so a user's diff settings cannot change the patch format parse.ts reads.
+const GIT = [
+  'git', '--no-optional-locks',
+  '-c', 'core.quotePath=false', '-c', 'diff.relative=false', '-c', 'color.ui=false',
+  '-c', 'diff.suppressBlankEmpty=false', '-c', 'diff.noprefix=false', '-c', 'diff.mnemonicPrefix=false',
+]
 const DIFF = ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--ignore-submodules=dirty', '--submodule=short', '-M']
 
 export class StepError extends Error {
@@ -58,6 +66,21 @@ export class StepError extends Error {
 function firstLine(r: RunResult): string {
   const text = (r.stderr.trim() || r.stdout.trim()).split('\n')[0] ?? ''
   return text === '' ? `exit ${r.exitCode}` : text
+}
+
+/** `fn` over `items` with at most `limit` in flight; results in input order. */
+export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length)
+  let next = 0
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next
+      next += 1
+      out[i] = await fn(items[i] as T)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return out
 }
 
 async function must(run: Run, step: string, argv: string[], timeoutMs?: number): Promise<RunResult> {
@@ -87,20 +110,23 @@ export async function currentPr(run: Run): Promise<number | undefined> {
   }
 }
 
-export async function listPrs(run: Run): Promise<PrList> {
-  const repo = json<{ nameWithOwner: string }>(
+async function repoOf(run: Run): Promise<string> {
+  return json<{ nameWithOwner: string }>(
     'gh repo view',
     (await must(run, 'gh repo view', ['gh', 'repo', 'view', '--json', 'nameWithOwner'])).stdout,
   ).nameWithOwner
-  const raw = json<Array<Omit<PrSummary, 'author'> & { author?: { login?: string } }>>(
-    'gh pr list',
-    (
-      await must(run, 'gh pr list', [
-        'gh', 'pr', 'list', '--limit', '100',
-        '--json', 'number,title,headRefName,baseRefName,author,isDraft',
-      ])
-    ).stdout,
-  )
+}
+
+export async function listPrs(run: Run): Promise<PrList> {
+  const [repo, listed, current] = await Promise.all([
+    repoOf(run),
+    must(run, 'gh pr list', [
+      'gh', 'pr', 'list', '--limit', '100',
+      '--json', 'number,title,headRefName,baseRefName,author,isDraft',
+    ]),
+    currentPr(run),
+  ])
+  const raw = json<Array<Omit<PrSummary, 'author'> & { author?: { login?: string } }>>('gh pr list', listed.stdout)
   const items = raw.map(p => ({
     number: p.number,
     title: p.title,
@@ -109,22 +135,32 @@ export async function listPrs(run: Run): Promise<PrList> {
     author: p.author?.login ?? '',
     isDraft: p.isDraft === true,
   }))
-  return { repo, current: await currentPr(run), items }
+  return { repo, current, items }
 }
 
 /**
  * Working-tree changes belong to the diff only when `gh` itself says the
- * current checkout is this PR; a matching branch name alone is not identity
- * (forks reuse names, a branch can be renamed, HEAD can be detached).
+ * current checkout is this PR; a matching branch name alone is not identity.
  */
 export function decideMode(current: number | undefined, number: number): Mode {
   return current === number ? 'worktree' : 'committed'
 }
 
-/** `owner/repo` from a GitHub remote URL in https, ssh or scp form. */
+/**
+ * `owner/repo`, lowercased, from a remote URL in https, ssh or scp form: the
+ * path's last two segments, whatever the host (an ssh alias, GHE, port 443).
+ */
 export function repoOfUrl(url: string): string | undefined {
-  const m = /github\.com[:/]+([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/i.exec(url.trim())
-  return m ? `${m[1]}/${m[2]}`.toLowerCase() : undefined
+  const u = url.trim()
+  const path = /^[a-z][a-z0-9+.-]*:\/\//i.test(u)
+    ? u.replace(/^[a-z][a-z0-9+.-]*:\/\/[^/]*/i, '')
+    : /^[^/]*:/.test(u)
+      ? u.slice(u.indexOf(':') + 1)
+      : undefined
+  if (path === undefined) return undefined
+  const segs = path.replace(/\/+$/, '').replace(/\.git$/i, '').split('/').filter(s => s !== '')
+  const [owner, repo] = segs.slice(-2)
+  return segs.length >= 2 && owner && repo ? `${owner}/${repo}`.toLowerCase() : undefined
 }
 
 /** The remote whose fetch URL is the repository `gh` resolved; origin first. */
@@ -138,11 +174,33 @@ export function remoteFor(remoteV: string, repo: string): string | undefined {
   return names.includes('origin') ? 'origin' : names[0]
 }
 
-export function isSafeRef(name: string): boolean {
-  return /^[A-Za-z0-9._/-]+$/.test(name) && !name.includes('..') && !name.startsWith('-') && !name.endsWith('.lock')
+/**
+ * A base branch name usable in a refspec: one git itself accepts as a branch
+ * name and prints back unchanged (`@{-1}` and the like expand, so they fail),
+ * never one that reads as an option.
+ */
+export async function isSafeRef(run: Run, name: string): Promise<boolean> {
+  if (name === '' || name.startsWith('-') || name.includes('@{') || name.includes(':')) return false
+  const r = await run([...GIT, 'check-ref-format', '--branch', name])
+  return r.exitCode === 0 && r.stdout.trim() === name
 }
 
-export async function loadDiff(run: Run, number: number): Promise<DiffData> {
+export type Known = {
+  /** The repository `gh` resolved, when the list already asked. */
+  repo?: string
+}
+
+let loads = 0
+
+export async function loadDiff(run: Run, number: number, known: Known = {}): Promise<DiffData> {
+  const [prOut, topOut, repo, current] = await Promise.all([
+    must(run, 'gh pr view', [
+      'gh', 'pr', 'view', String(number), '--json', 'number,title,url,headRefName,headRefOid,baseRefName',
+    ]),
+    must(run, 'git rev-parse', [...GIT, 'rev-parse', '--show-toplevel']),
+    known.repo !== undefined ? Promise.resolve(known.repo) : repoOf(run),
+    currentPr(run),
+  ])
   const pr = json<{
     number: number
     title: string
@@ -150,40 +208,38 @@ export async function loadDiff(run: Run, number: number): Promise<DiffData> {
     headRefName: string
     headRefOid: string
     baseRefName: string
-  }>(
-    'gh pr view',
-    (
-      await must(run, 'gh pr view', [
-        'gh', 'pr', 'view', String(number), '--json', 'number,title,url,headRefName,headRefOid,baseRefName',
-      ])
-    ).stdout,
-  )
-  if (!isSafeRef(pr.baseRefName)) throw new StepError('base', `unusable base branch name ${JSON.stringify(pr.baseRefName)}`)
+  }>('gh pr view', prOut.stdout)
+  if (!(await isSafeRef(run, pr.baseRefName))) {
+    throw new StepError('base', `unusable base branch name ${JSON.stringify(pr.baseRefName)}`)
+  }
 
-  const top = (await must(run, 'git rev-parse', [...GIT, 'rev-parse', '--show-toplevel'])).stdout.trim()
-  const git = [...GIT, '-C', top]
-  const repo = json<{ nameWithOwner: string }>(
-    'gh repo view',
-    (await must(run, 'gh repo view', ['gh', 'repo', 'view', '--json', 'nameWithOwner'])).stdout,
-  ).nameWithOwner
+  const git = [...GIT, '-C', topOut.stdout.trim()]
   const remote = remoteFor((await must(run, 'git remote', [...git, 'remote', '-v'])).stdout, repo)
   if (!remote) throw new StepError('remote', `no git remote points at ${repo}`)
 
-  const mode = decideMode(await currentPr(run), number)
-  const baseRef = `refs/prdiff/${number}/base`
-  const headRef = `refs/prdiff/${number}/head`
-  await must(
-    run,
-    'git fetch',
-    [...git, 'fetch', '--quiet', '--no-tags', '--no-write-fetch-head', remote,
-      `+refs/heads/${pr.baseRefName}:${baseRef}`, `+refs/pull/${number}/head:${headRef}`],
-    120_000,
-  )
-  const oid = async (ref: string) =>
-    (await must(run, `git rev-parse ${ref}`, [...git, 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`])).stdout.trim()
-  const baseOid = await oid(baseRef)
-  const fetchedHead = await oid(headRef)
-  const headOid = mode === 'worktree' ? await oid('HEAD') : fetchedHead
+  const mode = decideMode(current, number)
+  // Each load fetches into refs of its own and deletes them once their commit
+  // ids are read, so concurrent loads of one PR never delete each other's.
+  loads += 1
+  const scratch = `refs/prdiff/${number}/${loads}`
+  const baseRef = `${scratch}/base`
+  const headRef = `${scratch}/head`
+  let baseOid: string
+  let headOid: string
+  try {
+    await must(
+      run,
+      'git fetch',
+      [...git, 'fetch', '--quiet', '--no-tags', '--no-write-fetch-head', remote,
+        `+refs/heads/${pr.baseRefName}:${baseRef}`, `+refs/pull/${number}/head:${headRef}`],
+      120_000,
+    )
+    const oid = async (ref: string) =>
+      (await must(run, `git rev-parse ${ref}`, [...git, 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`])).stdout.trim()
+    ;[baseOid, headOid] = await Promise.all([oid(baseRef), mode === 'worktree' ? oid('HEAD') : oid(headRef)])
+  } finally {
+    await Promise.all([baseRef, headRef].map(ref => run([...git, 'update-ref', '-d', ref])))
+  }
   const mergeBase = (await must(run, 'git merge-base', [...git, 'merge-base', baseOid, headOid])).stdout.trim()
 
   const notes: string[] = []
@@ -194,35 +250,38 @@ export async function loadDiff(run: Run, number: number): Promise<DiffData> {
   // Worktree mode diffs the merge-base against the working tree (no second
   // endpoint), so the inventory and the hunks both include uncommitted edits.
   const ends = mode === 'worktree' ? [mergeBase] : [mergeBase, headOid]
-  const numstat = parseNumstat((await must(run, 'git diff --numstat', [...git, ...DIFF, '--numstat', '-z', ...ends])).stdout)
-  let files: FileDiff[]
-  const whole = await run([...git, ...DIFF, '-p', ...ends])
+  const [numstatOut, whole] = await Promise.all([
+    must(run, 'git diff --numstat', [...git, ...DIFF, '--numstat', '-z', ...ends]),
+    run([...git, ...DIFF, '-p', ...ends]),
+  ])
+  const numstat = parseNumstat(numstatOut.stdout)
   if (whole.exitCode !== 0) throw new StepError('git diff', firstLine(whole))
-  if (!whole.isStdoutTruncated) files = mergeDiff(numstat, whole.stdout)
-  else {
-    files = []
-    for (const n of numstat) {
-      const paths = n.oldPath !== undefined ? [n.oldPath, n.path] : [n.path]
-      const one = await run([...git, ...DIFF, '-p', ...ends, '--', ...paths])
-      const [f] = mergeDiff([n], one.exitCode === 0 && !one.isStdoutTruncated ? one.stdout : '')
-      if (f && (one.exitCode !== 0 || one.isStdoutTruncated)) {
-        f.hunks = []
-        f.notes = [one.isStdoutTruncated ? 'patch over 4 MiB: not drawn' : `git diff failed: ${firstLine(one)}`]
-      }
-      if (f) files.push(f)
-    }
-  }
+  const files: FileDiff[] = !whole.isStdoutTruncated
+    ? mergeDiff(numstat, whole.stdout)
+    : (
+        await mapLimit(numstat, CONCURRENCY, async n => {
+          const paths = n.oldPath !== undefined ? [n.oldPath, n.path] : [n.path]
+          const one = await run([...git, ...DIFF, '-p', ...ends, '--', ...paths])
+          const [f] = mergeDiff([n], one.exitCode === 0 && !one.isStdoutTruncated ? one.stdout : '')
+          if (f && (one.exitCode !== 0 || one.isStdoutTruncated)) {
+            f.hunks = []
+            f.notes = [one.isStdoutTruncated ? 'patch over 4 MiB: not drawn' : `git diff failed: ${firstLine(one)}`]
+          }
+          return f
+        })
+      ).filter((f): f is FileDiff => f !== undefined)
 
   if (mode === 'worktree') {
     const others = (await must(run, 'git ls-files', [...git, 'ls-files', '--others', '--exclude-standard', '-z'])).stdout
       .split('\0')
       .filter(p => p !== '')
-    for (const p of others.slice(0, MAX_UNTRACKED)) {
+    const read = await mapLimit(others.slice(0, MAX_UNTRACKED), CONCURRENCY, async p => {
       // --no-index exits 1 when the files differ, which is the expected case.
       const r = await run([...git, 'diff', '--no-index', '--no-color', '--no-ext-diff', '--', '/dev/null', p])
       const ok = (r.exitCode === 0 || r.exitCode === 1) && !r.isStdoutTruncated
-      files.push(untrackedFile(p, ok ? r.stdout : undefined, ok ? undefined : 'content not read'))
-    }
+      return untrackedFile(p, ok ? r.stdout : undefined, ok ? undefined : 'content not read')
+    })
+    files.push(...read)
     if (others.length > MAX_UNTRACKED) notes.push(`${others.length - MAX_UNTRACKED} more untracked files not listed`)
   }
 

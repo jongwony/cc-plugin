@@ -38,8 +38,25 @@ let diffGen = 0
 // carries the status and that generation. A hot reload empties it, and the
 // pane then offers to load again.
 let held: { gen: number; data: DiffData; layout: Layout } | undefined
-// The window's size as last drawn, for scroll and jump arithmetic.
-let bodyRows = 20
+
+type Held = NonNullable<typeof held>
+
+/** Rows the diff view draws above the body: title, refs line, notes, controls, file line. */
+function headRows(data: DiffData): number {
+  return 4 + data.notes.length
+}
+
+/** The body's window for a pane `paneRows` tall; every surface and event derives its own. */
+function windowRows(paneRows: number, data: DiffData): number {
+  return Math.max(3, paneRows - headRows(data))
+}
+
+/** The diff on screen, only while the load it came from is the one ready for the PR in view. */
+async function ready($: EngineInterface): Promise<Held | undefined> {
+  const [v, d] = await Promise.all([read($, view), read($, diff)])
+  if (v.kind !== 'diff' || d.status !== 'ready' || d.number !== v.number) return undefined
+  return held && held.gen === d.gen ? held : undefined
+}
 
 async function loadList($: EngineInterface): Promise<void> {
   listGen += 1
@@ -63,7 +80,8 @@ async function openDiff($: EngineInterface, number: number): Promise<void> {
   await $.state.set(topRef, 0)
   await $.state.set(diffRef, { status: 'loading', gen, number })
   try {
-    const data = await loadDiff(runner($), number)
+    const l = await read($, list)
+    const data = await loadDiff(runner($), number, { repo: l.status === 'ready' ? l.repo : undefined })
     if (gen !== diffGen) return
     held = { gen, data, layout: layout(data.files) }
     await $.state.set(diffRef, { status: 'ready', gen, number })
@@ -73,11 +91,12 @@ async function openDiff($: EngineInterface, number: number): Promise<void> {
   }
 }
 
-async function moveTop($: EngineInterface, to: (now: number, l: Layout) => number): Promise<void> {
-  if (!held) return
-  const l = held.layout
+async function moveTop($: EngineInterface, paneRows: number, to: (now: number, l: Layout) => number): Promise<void> {
+  const h = await ready($)
+  if (!h) return
+  const l = h.layout
   const now = await read($, top)
-  await $.state.set(topRef, clampTop(to(now, l), l.rows.length, bodyRows))
+  await $.state.set(topRef, clampTop(to(now, l), l.rows.length, windowRows(paneRows, h.data)))
 }
 
 export const register: Register = on => {
@@ -104,11 +123,12 @@ export const register: Register = on => {
   })
 
   on('ui.scroll', { requestId: PANE }, async ($, e, next) => {
-    const v = await read($, view)
-    if (v.kind !== 'diff' || !held) return next(e)
+    const h = await ready($)
+    if (!h) return next(e)
     const by = e.by
-    const step = Math.abs(by) >= e.bodyRows ? Math.max(1, bodyRows - 2) * Math.sign(by) : by * TICK
-    await moveTop($, now => now + step)
+    const rows = windowRows(e.bodyRows, h.data)
+    const step = Math.abs(by) >= e.bodyRows ? Math.max(1, rows - 2) * Math.sign(by) : by * TICK
+    await moveTop($, e.bodyRows, now => now + step)
     return {}
   })
 
@@ -151,12 +171,14 @@ export const register: Register = on => {
     }
 
     const d = await read($, diff)
+    const paneRows = e.props.scroll.bodyRows
+    const half = (data: Held | undefined) => Math.max(1, Math.floor((data ? windowRows(paneRows, data.data) : 3) / 2))
     const controls = (
       <Box flexDirection="row" gap={1}>
-        <Button key="next" plain hotkey="j" label="next file" onPress={() => void moveTop($, (t, l) => jump(l.fileRows, t, 1))} />
-        <Button key="prev" plain hotkey="k" label="prev" onPress={() => void moveTop($, (t, l) => jump(l.fileRows, t, -1))} />
-        <Button key="down" plain hotkey="d" label="down" onPress={() => void moveTop($, t => t + Math.max(1, Math.floor(bodyRows / 2)))} />
-        <Button key="up" plain hotkey="u" label="up" onPress={() => void moveTop($, t => t - Math.max(1, Math.floor(bodyRows / 2)))} />
+        <Button key="next" plain hotkey="j" label="next file" onPress={() => void moveTop($, paneRows, (t, l) => jump(l.fileRows, t, 1))} />
+        <Button key="prev" plain hotkey="k" label="prev" onPress={() => void moveTop($, paneRows, (t, l) => jump(l.fileRows, t, -1))} />
+        <Button key="down" plain hotkey="d" label="down" onPress={() => void moveTop($, paneRows, t => t + half(held))} />
+        <Button key="up" plain hotkey="u" label="up" onPress={() => void moveTop($, paneRows, t => t - half(held))} />
         <Button key="back" plain hotkey="b" label="PRs" onPress={() => void $.state.set(viewRef, { kind: 'list' })} />
         <Button key="reload" plain hotkey="r" label="reload" onPress={() => void openDiff($, v.number)} />
       </Box>
@@ -189,10 +211,11 @@ export const register: Register = on => {
       ...dd.notes.map(n => line(n, { color: 'warning' })),
       controls,
     ]
-    const t = clampTop(await read($, top), lay.rows.length, 1)
+    const bodyRows = windowRows(paneRows, dd)
+    // The file line names the file at the window's own clamped top.
+    const t = clampTop(await read($, top), lay.rows.length, bodyRows)
     const at = fileAt(lay.fileRows, t)
     head.push(line(at < 0 ? 'files' : `file ${at + 1}/${dd.files.length} · ${dd.files[at]?.path ?? ''}`, { dimColor: true }))
-    bodyRows = Math.max(3, e.props.scroll.bodyRows - head.length)
     const clip = cols + 8
     const textOf = (row: Exclude<Row, { kind: 'line' }>): string => {
       switch (row.kind) {
@@ -211,17 +234,18 @@ export const register: Register = on => {
           return '─'.repeat(Math.min(cols, 80))
       }
     }
-    const win = windowOf(dd.files, lay.rows, clampTop(t, lay.rows.length, bodyRows), bodyRows, clip, textOf)
+    const win = windowOf(dd.files, lay.rows, t, bodyRows, clip, textOf)
     const body = win.pieces.map(p => {
       if (p.kind === 'code') {
-        return <Code source={hunkSource(p.lines)} format="diff" path={dd.files[p.file]?.path} wrap="truncate-end" />
+        const source = hunkSource(p.lines)
+        return source === '' ? null : <Code source={source} format="diff" path={dd.files[p.file]?.path} wrap="truncate-end" />
       }
       const row = p.row
       const text = textOf(row).slice(0, clip)
       switch (row.kind) {
         case 'goto':
           return (
-            <Button key={`goto:${row.file}`} plain onPress={() => void moveTop($, (_, l) => l.fileRows[row.file] ?? 0)}>
+            <Button key={`goto:${row.file}`} plain onPress={() => void moveTop($, paneRows, (_, l) => l.fileRows[row.file] ?? 0)}>
               {clean(text)}
             </Button>
           )

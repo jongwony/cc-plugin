@@ -98,3 +98,41 @@ test('an untracked file counts its added lines', () => {
   const f = untrackedFile('notes.md', 'diff --git a/notes.md b/notes.md\nnew file mode 100644\n--- /dev/null\n+++ b/notes.md\n@@ -0,0 +1,2 @@\n+a\n+b\n')
   expect([f.kind, f.added, f.hunks.length]).toEqual(['untracked', 2, 1])
 })
+
+test('an empty context line written without its space still counts as context', () => {
+  // diff.suppressBlankEmpty=true writes a blank context line as ''.
+  const patch = 'diff --git a/e.txt b/e.txt\n--- a/e.txt\n+++ b/e.txt\n@@ -1,3 +1,3 @@\n a\n\n-b\n+B\n'
+  const [f] = mergeDiff(parseNumstat('1\t1\te.txt\0'), patch)
+  expect(f?.hunks[0]?.lines.map(l => `${l.mark}${l.oldNo}/${l.newNo}`)).toEqual([' 1/1', ' 2/2', '-3/3', '+4/3'])
+})
+
+test('a section at the same index but another path is not paired by position', () => {
+  // numstat [a, b], patch [a, c]: the counts agree but b's patch is not c's.
+  const n = parseNumstat(['1\t0\ta.txt', '1\t0\tb.txt', ''].join('\0'))
+  const patch = [
+    'diff --git a/a.txt b/a.txt', '--- a/a.txt', '+++ b/a.txt', '@@ -1 +1,2 @@', ' a', '+a2',
+    'diff --git a/c.txt b/c.txt', '--- a/c.txt', '+++ b/c.txt', '@@ -1 +1,2 @@', ' c', '+c2', '',
+  ].join('\n')
+  const files = mergeDiff(n, patch)
+  expect(files.map(f => [f.path, f.hunks.length])).toEqual([['a.txt', 1], ['b.txt', 0]])
+  expect(files[1]?.notes).toEqual(['no patch text for this file'])
+})
+
+test('a "no newline" marker is never drawn, and a run of only that gives no source', () => {
+  const [, , , r] = mergeDiff(parseNumstat(NUMSTAT), PATCH)
+  const lines = r?.hunks[0]?.lines ?? []
+  expect(lines.at(-1)?.mark).toBe('\\')
+  expect(hunkSource(lines)).toBe('@@ -10,2 +10,4 @@\n keep\n+added one\n+added two\n keep')
+  expect(hunkSource(lines.slice(-1))).toBe('')
+})
+
+test('a section with no ---/+++ lines is named by its diff --git line', () => {
+  const n = parseNumstat(['0\t0\tsp ace/run.sh', '-\t-\tb.bin', ''].join('\0'))
+  const patch = [
+    'diff --git a/sp ace/run.sh b/sp ace/run.sh', 'old mode 100644', 'new mode 100755',
+    'diff --git a/b.bin b/b.bin', 'index 1..2 100644', 'Binary files a/b.bin and b/b.bin differ', '',
+  ].join('\n')
+  // Swapped order defeats pairing by index; only the names can match them.
+  const files = mergeDiff([n[1]!, n[0]!], patch)
+  expect(files.map(f => [f.path, f.kind, f.isBinary])).toEqual([['b.bin', 'modified', true], ['sp ace/run.sh', 'mode', false]])
+})

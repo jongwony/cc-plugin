@@ -35,11 +35,13 @@ export function layout(files: readonly FileDiff[]): Layout {
     let drawn = 0
     let total = 0
     f.hunks.forEach((h, hi) => {
-      total += h.lines.length
+      // `\ No newline at end of file` takes no row: Code draws nothing for it.
+      const shown = h.lines.flatMap((l, li) => (l.mark === '\\' ? [] : [li]))
+      total += shown.length
       if (drawn >= MAX_FILE_LINES) return
       rows.push({ kind: 'hunk', file: i, hunk: hi })
-      const take = Math.min(h.lines.length, MAX_FILE_LINES - drawn)
-      for (let li = 0; li < take; li += 1) rows.push({ kind: 'line', file: i, hunk: hi, line: li })
+      const take = Math.min(shown.length, MAX_FILE_LINES - drawn)
+      for (const li of shown.slice(0, take)) rows.push({ kind: 'line', file: i, hunk: hi, line: li })
       drawn += take
     })
     if (total > drawn) {

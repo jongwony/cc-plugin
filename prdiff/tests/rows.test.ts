@@ -65,3 +65,10 @@ test('the window stays under the character budget whatever the line lengths', ()
   expect(clipped.isCut).toBe(false)
   expect(clipped.pieces.every(p => p.kind !== 'code' || p.lines.every(x => x.text.length <= 120))).toBe(true)
 })
+
+test('a "no newline" marker takes no row in the stream', () => {
+  const f = file('n', 2)
+  f.hunks[0]?.lines.push({ mark: '\\', text: ' No newline at end of file', oldNo: 1, newNo: 3 })
+  const l = layout([f])
+  expect(l.rows.filter(r => r.kind === 'line').length).toBe(2)
+})

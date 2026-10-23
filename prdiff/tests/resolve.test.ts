@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { decideMode, isSafeRef, loadDiff, remoteFor, repoOfUrl, type Run, type RunResult } from '../hooks/git.ts'
+import { decideMode, isSafeRef, loadDiff, mapLimit, remoteFor, repoOfUrl, type Run, type RunResult } from '../hooks/git.ts'
 
 const ok = (stdout: string): RunResult => ({ exitCode: 0, stdout, stderr: '', isStdoutTruncated: false })
 const fail = (stderr: string): RunResult => ({ exitCode: 1, stdout: '', stderr, isStdoutTruncated: false })
@@ -19,9 +19,11 @@ function fakeRepo(current: number | undefined, overrides: Record<string, RunResu
     if (s.startsWith('gh repo view')) return ok(JSON.stringify({ nameWithOwner: 'O/R' }))
     if (s.includes('rev-parse --show-toplevel')) return ok('/repo\n')
     if (s.includes('remote -v')) return ok('fork\tgit@github.com:me/r.git (fetch)\norigin\thttps://github.com/o/r.git (fetch)\n')
+    if (s.includes('check-ref-format --branch')) return ok(`${argv.at(-1)}\n`)
+    if (s.includes('update-ref -d')) return ok('')
     if (s.includes(' fetch ')) return ok('')
-    if (s.includes('rev-parse --verify --quiet refs/prdiff/7/base')) return ok('b'.repeat(40) + '\n')
-    if (s.includes('rev-parse --verify --quiet refs/prdiff/7/head')) return ok('h'.repeat(40) + '\n')
+    if (/rev-parse --verify --quiet refs\/prdiff\/7\/\d+\/base/.test(s)) return ok('b'.repeat(40) + '\n')
+    if (/rev-parse --verify --quiet refs\/prdiff\/7\/\d+\/head/.test(s)) return ok('h'.repeat(40) + '\n')
     if (s.includes('rev-parse --verify --quiet HEAD')) return ok('l'.repeat(40) + '\n')
     if (s.includes('merge-base')) return ok('m'.repeat(40) + '\n')
     if (s.includes('--numstat')) return ok('1\t1\tx\0')
@@ -39,15 +41,50 @@ test('working-tree changes join only when gh names this checkout the same PR', (
   expect(decideMode(undefined, 7)).toBe('committed')
 })
 
-test('the remote is the one whose URL is the repository gh resolved, origin first', () => {
+test('the remote is the one whose URL is the repository gh resolved, origin first, whatever the host', () => {
   expect(repoOfUrl('git@github.com:Me/R.git')).toBe('me/r')
   expect(repoOfUrl('https://github.com/o/r')).toBe('o/r')
+  expect(repoOfUrl('git@github-work:delightroom/app.git')).toBe('delightroom/app')
+  expect(repoOfUrl('ssh://git@ssh.github.com:443/o/r.git')).toBe('o/r')
+  expect(repoOfUrl('https://ghe.corp.com/o/r.git/')).toBe('o/r')
+  expect(repoOfUrl('git@ghe.corp.com:o/r.git')).toBe('o/r')
+  expect(repoOfUrl('/local/path/r')).toBe(undefined)
   const v = 'up\thttps://github.com/o/r (fetch)\norigin\tssh://git@github.com/o/r.git (fetch)\n'
   expect(remoteFor(v, 'O/R')).toBe('origin')
+  expect(remoteFor('work\tgit@github-work:o/r.git (fetch)\n', 'o/r')).toBe('work')
   expect(remoteFor('fork\tgit@github.com:me/r.git (fetch)\n', 'o/r')).toBe(undefined)
-  expect(isSafeRef('feat/a-1.2')).toBe(true)
-  expect(isSafeRef('--upload-pack=x')).toBe(false)
-  expect(isSafeRef('a..b')).toBe(false)
+})
+
+test('a base name is usable when git accepts it as a branch and prints it back unchanged', async () => {
+  const calls: string[][] = []
+  // Stands in for `git check-ref-format --branch`: echoes, expanding @{-1}, refusing `..`.
+  const run: Run = async argv => {
+    calls.push(argv)
+    const name = argv.at(-1) ?? ''
+    if (name.includes('..')) return fail('fatal: not a valid branch name')
+    return ok(name === '@{-1}' ? 'main\n' : `${name}\n`)
+  }
+  for (const name of ['feat/a-1.2', 'release/v2+hotfix', '기능/로그인', 'user@topic', 'fix#12']) {
+    expect(await isSafeRef(run, name)).toBe(true)
+  }
+  for (const name of ['--upload-pack=x', '-x', 'a..b', '@{-1}', 'a:b', '']) {
+    expect(await isSafeRef(run, name)).toBe(false)
+  }
+  expect(calls.every(c => c.includes('check-ref-format') && c.includes('--branch'))).toBe(true)
+})
+
+test('per-file reads keep their order and stay under the concurrency limit', async () => {
+  let live = 0
+  let peak = 0
+  const out = await mapLimit([5, 1, 4, 2, 3, 0, 6, 7, 8, 9], 3, async n => {
+    live += 1
+    peak = Math.max(peak, live)
+    for (let i = 0; i < n; i += 1) await null
+    live -= 1
+    return n * 10
+  })
+  expect(out).toEqual([50, 10, 40, 20, 30, 0, 60, 70, 80, 90])
+  expect(peak).toBe(3)
 })
 
 test('a PR not checked out: both ends fetched into private refs, diffed merge-base..head', async () => {
@@ -57,8 +94,17 @@ test('a PR not checked out: both ends fetched into private refs, diffed merge-ba
   expect(d.baseRefName).toBe('feat/a')
   const fetch = calls.find(c => c.includes('fetch')) ?? []
   expect(fetch).toContain('origin')
-  expect(fetch).toContain('+refs/heads/feat/a:refs/prdiff/7/base')
-  expect(fetch).toContain('+refs/pull/7/head:refs/prdiff/7/head')
+  const baseSpec = fetch.find(a => a.startsWith('+refs/heads/feat/a:')) ?? ''
+  const headSpec = fetch.find(a => a.startsWith('+refs/pull/7/head:')) ?? ''
+  expect(baseSpec).toMatch(/^\+refs\/heads\/feat\/a:refs\/prdiff\/7\/\d+\/base$/)
+  expect(headSpec).toMatch(/^\+refs\/pull\/7\/head:refs\/prdiff\/7\/\d+\/head$/)
+  // The scratch refs are gone once their commit ids are read.
+  const deleted = calls.filter(c => c.includes('update-ref')).map(c => c.at(-1))
+  expect(deleted.sort()).toEqual([baseSpec.split(':')[1], headSpec.split(':')[1]].sort())
+  // The repository the list already resolved is not asked again.
+  const again = fakeRepo(undefined)
+  await loadDiff(again.run, 7, { repo: 'o/r' })
+  expect(again.calls.some(c => c.join(' ').startsWith('gh repo view'))).toBe(false)
   const numstat = calls.find(c => c.includes('--numstat')) ?? []
   expect(numstat.slice(-2)).toEqual(['m'.repeat(40), 'h'.repeat(40)])
   expect(d.files.map(f => f.path)).toEqual(['x'])
@@ -80,6 +126,8 @@ test('the checked-out PR: merge-base against the working tree, untracked files a
 test('a failed fetch or merge-base is reported with its step, not swallowed', async () => {
   const f = fakeRepo(undefined, { ' fetch ': fail("fatal: couldn't find remote ref refs/heads/feat/a") })
   await expect(loadDiff(f.run, 7)).rejects.toThrow("git fetch: fatal: couldn't find remote ref refs/heads/feat/a")
+  // A failed fetch still deletes whatever scratch refs it may have written.
+  expect(f.calls.filter(c => c.includes('update-ref')).length).toBe(2)
   const m = fakeRepo(undefined, { 'merge-base': fail('') })
   await expect(loadDiff(m.run, 7)).rejects.toThrow('git merge-base: exit 1')
 })

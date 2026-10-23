@@ -40,10 +40,9 @@ inferred.
   Open with the refusal's reason quoted.
 - **Keys land where focus is.** Before `press_key` or `type_text`, read the
   focused element in the latest state. A shortcut sent while a text field or a
-  canvas text object is in edit mode is typed as characters instead (measured:
-  with the Korean input source, Shift+2 meant as a shortcut entered `@` into a
-  Figma sticky). Prefer `set_value` or an element action when the target
-  exposes one.
+  canvas text object is in edit mode is typed as characters instead
+  (measured). Prefer `set_value` or an element action when the target exposes
+  one.
 
 ## Prerequisite
 

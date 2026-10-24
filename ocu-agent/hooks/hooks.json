@@ -1,5 +1,5 @@
 {
-  "description": "ocu-agent: deny ocu window tools with the cause while the Mac session is locked and Locked Use cannot serve them; end the ocu session when ocu-operator stops, so a window the run parked on the agent display comes back and element indices do not outlive the run.",
+  "description": "ocu-agent: while the Mac session is locked, deny ocu window tools with the cause when Locked Use cannot serve them and keep the display on when it can; end the ocu session when ocu-operator stops, so a window the run parked on the agent display comes back and element indices do not outlive the run.",
   "hooks": {
     "PreToolUse": [
       {

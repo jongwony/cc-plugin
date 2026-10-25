@@ -331,3 +331,27 @@ test('a nested repository among the untracked files is listed as one, never diff
   ])
   expect(calls.some(c => c.includes('--no-index') && c.at(-1) === 'sub/')).toBe(false)
 })
+
+test('the fetch skips submodules, and every git command from it on runs prompt-free with the diff budget', async () => {
+  const seen: Array<{ s: string; t?: number; env?: Record<string, string> }> = []
+  const record = (run: Run): Run => async (argv, t, env) => {
+    seen.push({ s: argv.join(' '), t, env })
+    return run(argv, t, env)
+  }
+  const big = fakeRepo(7, { '-- x': ok(PATCH) })
+  const cut: Run = async (argv, t, env) => {
+    const s = argv.join(' ')
+    if (s.includes(' -p ') && !s.includes(' -- ')) return { ...ok(''), isStdoutTruncated: true }
+    return big.run(argv, t, env)
+  }
+  await loadDiff(record(cut), 7)
+  const at = seen.findIndex(c => c.s.includes(' fetch '))
+  expect(seen[at]?.s).toContain('--no-recurse-submodules')
+  const after = seen.slice(at).filter(c => c.s.startsWith('git '))
+  expect(after.length).toBeGreaterThan(5)
+  expect(after.every(c => c.env?.GIT_TERMINAL_PROMPT === '0')).toBe(true)
+  const budget = (match: string) => seen.find(c => c.s.includes(match))?.t
+  expect(budget('-- x')).toBe(120_000)
+  expect(budget('ls-files --others')).toBe(120_000)
+  expect(budget('--no-index')).toBe(120_000)
+})

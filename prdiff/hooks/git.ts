@@ -310,24 +310,30 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   const fetched = mode === 'worktree' ? [baseRef] : [baseRef, headRef]
   const specs = [`+refs/heads/${pr.baseRefName}:${baseRef}`, ...(mode === 'worktree' ? [] : [`+refs/pull/${number}/head:${headRef}`])]
   const env = await noPrompts(run, git, known.ownSsh)
+  // Git commands from the fetch on run under `env`.
+  const quiet: Run = (argv, timeoutMs) => run(argv, timeoutMs, env)
   let baseOid: string
   let headOid: string
   const left: string[] = []
   try {
-    const r = await run([...git, 'fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--refmap=', remote, ...specs], 120_000, env)
+    const r = await run(
+      [...git, 'fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--no-recurse-submodules', '--refmap=', remote, ...specs],
+      120_000,
+      env,
+    )
     if (r.exitCode !== 0) throw new StepError('git fetch', firstLine(r))
     const oid = async (ref: string) =>
-      (await must(run, `git rev-parse ${ref}`, [...git, 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`])).stdout.trim()
+      (await must(quiet, `git rev-parse ${ref}`, [...git, 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`])).stdout.trim()
     ;[baseOid, headOid] = await Promise.all([oid(baseRef), mode === 'worktree' ? oid('HEAD') : oid(headRef)])
   } finally {
-    const gone = await Promise.all(fetched.map(ref => run([...git, 'update-ref', '-d', ref])))
+    const gone = await Promise.all(fetched.map(ref => quiet([...git, 'update-ref', '-d', ref])))
     gone.forEach((g, i) => {
       if (g.exitCode !== 0) left.push(fetched[i] ?? '')
     })
   }
-  const based = await run([...git, 'merge-base', baseOid, headOid])
+  const based = await quiet([...git, 'merge-base', baseOid, headOid])
   if (based.exitCode === 1 && based.stdout.trim() === '' && based.stderr.trim() === '') {
-    const shallow = (await run([...git, 'rev-parse', '--is-shallow-repository'])).stdout.trim() === 'true'
+    const shallow = (await quiet([...git, 'rev-parse', '--is-shallow-repository'])).stdout.trim() === 'true'
     throw new StepError(
       'git merge-base',
       `no common ancestor of ${pr.baseRefName} and the PR head${shallow ? ' in this shallow clone; fetch more history (git fetch --unshallow)' : ''}`,
@@ -346,8 +352,8 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   // Worktree mode: the merge-base against the working tree.
   const ends = mode === 'worktree' ? [mergeBase] : [mergeBase, headOid]
   const [numstatOut, whole] = await Promise.all([
-    must(run, 'git diff --numstat', [...git, ...DIFF, '--numstat', '-z', ...ends], 120_000),
-    run([...git, ...DIFF, '-p', ...ends], 120_000),
+    must(quiet, 'git diff --numstat', [...git, ...DIFF, '--numstat', '-z', ...ends], 120_000),
+    quiet([...git, ...DIFF, '-p', ...ends], 120_000),
   ])
   const numstat = parseNumstat(numstatOut.stdout)
   if (whole.exitCode !== 0) throw new StepError('git diff', firstLine(whole))
@@ -356,7 +362,7 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
     : (
         await mapLimit(numstat, CONCURRENCY, async n => {
           const paths = n.oldPath !== undefined ? [n.oldPath, n.path] : [n.path]
-          const one = await run([...git, '--literal-pathspecs', ...DIFF, '-p', ...ends, '--', ...paths])
+          const one = await quiet([...git, '--literal-pathspecs', ...DIFF, '-p', ...ends, '--', ...paths], 120_000)
           const [f] = mergeDiff([n], one.exitCode === 0 && !one.isStdoutTruncated ? one.stdout : '')
           if (f && (one.exitCode !== 0 || one.isStdoutTruncated)) {
             f.hunks = []
@@ -367,7 +373,7 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
       ).filter((f): f is FileDiff => f !== undefined)
 
   if (mode === 'worktree') {
-    const ls = await run([...git, 'ls-files', '--others', '--exclude-standard', '-z'])
+    const ls = await quiet([...git, 'ls-files', '--others', '--exclude-standard', '-z'], 120_000)
     if (ls.exitCode !== 0) throw new StepError('git ls-files', firstLine(ls))
     // A list cut at 4 MiB keeps only its whole names.
     const named = ls.stdout.split('\0')
@@ -376,8 +382,8 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
       // `ls-files --others` names a nested repository as its directory.
       if (p.endsWith('/')) return untrackedFile(p, undefined, 'nested repository, not diffed')
       // Exit 1 is a patch when it wrote one and no `error:`/`fatal:` line.
-      const r = await run([...git, '-c', 'core.autocrlf=false', '-c', 'core.safecrlf=false',
-        'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', p])
+      const r = await quiet([...git, '-c', 'core.autocrlf=false', '-c', 'core.safecrlf=false',
+        'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', p], 120_000)
       const failed = /^(?:error|fatal): /m.test(r.stderr)
       const ok = !r.isStdoutTruncated && (r.exitCode === 0 || (r.exitCode === 1 && r.stdout !== '' && !failed))
       return untrackedFile(p, ok ? r.stdout : undefined, ok ? undefined : 'content not read')

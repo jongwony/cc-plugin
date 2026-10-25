@@ -373,6 +373,8 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
     const named = ls.stdout.split('\0')
     const others = (ls.isStdoutTruncated ? named.slice(0, -1) : named).filter(p => p !== '')
     const read = await mapLimit(others.slice(0, MAX_UNTRACKED), CONCURRENCY, async p => {
+      // `ls-files --others` names a nested repository as its directory.
+      if (p.endsWith('/')) return untrackedFile(p, undefined, 'nested repository, not diffed')
       // Exit 1 is a patch when it wrote one and no `error:`/`fatal:` line.
       const r = await run([...git, '-c', 'core.autocrlf=false', '-c', 'core.safecrlf=false',
         'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', p])

@@ -51,7 +51,12 @@ lines. Fetch, merge-base and `gh` failures show in the pane.
 ## Requirements
 
 - Claude Code with function hooks (mods).
-- `git` and the GitHub CLI `gh`, signed in (`gh auth login`), on `PATH`.
+- `git` 2.29 or newer on `PATH` (`git fetch --no-write-fetch-head` arrived
+  in 2.29). Install it from <https://git-scm.com/downloads>, or with a package
+  manager (`brew install git`, `apt install git`).
+- The GitHub CLI `gh` 2.0 or newer on `PATH`, signed in (`gh auth login`).
+  Install it from <https://cli.github.com> (`brew install gh`, or the
+  packages listed there).
 
 ## Try it from this folder
 

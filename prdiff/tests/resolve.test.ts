@@ -178,11 +178,11 @@ test('a remote still on the URL from before a rename or transfer is found throug
 
 test('an untracked path git cannot read is listed as not read, not as an empty file', async () => {
   const { run } = fakeRepo(7, {
-    'ls-files --others': ok('emb/\0new.txt\0'),
-    '-- /dev/null emb/': { exitCode: 1, stdout: '', stderr: "error: Could not access 'emb/null'", isStdoutTruncated: false },
+    'ls-files --others': ok('locked.txt\0new.txt\0'),
+    '-- /dev/null locked.txt': { exitCode: 128, stdout: '', stderr: 'error: open("locked.txt"): Permission denied\nfatal: cannot hash locked.txt\n', isStdoutTruncated: false },
   })
   const d = await loadDiff(run, 7)
-  const emb = d.files.find(f => f.path === 'emb/')
+  const emb = d.files.find(f => f.path === 'locked.txt')
   expect(emb?.notes).toContain('content not read')
   expect(d.files.find(f => f.path === 'new.txt')?.notes).toEqual(['untracked'])
 })
@@ -320,4 +320,14 @@ test('no merge-base in a shallow clone says so instead of an exit code', async (
   await expect(loadDiff(shallow.run, 7)).rejects.toThrow('git merge-base: no common ancestor of feat/a and the PR head in this shallow clone; fetch more history (git fetch --unshallow)')
   const unrelated = fakeRepo(undefined, { 'merge-base': fail(''), 'is-shallow-repository': ok('false\n') })
   await expect(loadDiff(unrelated.run, 7)).rejects.toThrow('git merge-base: no common ancestor of feat/a and the PR head')
+})
+
+test('a nested repository among the untracked files is listed as one, never diffed', async () => {
+  const { run, calls } = fakeRepo(7, { 'ls-files --others': ok('sub/\0new.txt\0') })
+  const d = await loadDiff(run, 7)
+  expect(d.files.filter(f => f.kind === 'untracked').map(f => [f.path, f.notes])).toEqual([
+    ['sub/', ['untracked', 'nested repository, not diffed']],
+    ['new.txt', ['untracked']],
+  ])
+  expect(calls.some(c => c.includes('--no-index') && c.at(-1) === 'sub/')).toBe(false)
 })

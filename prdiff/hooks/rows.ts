@@ -93,13 +93,22 @@ export const TICK = 3
  */
 export function scrolled(
   now: number,
-  e: { by: number; bodyRows: number; contentRows: number },
+  e: { by: number; bodyRows: number; contentRows: number; pointer?: unknown },
   rows: number,
   rowCount: number,
 ): number {
   const { by, bodyRows, contentRows } = e
+  // A wheel or trackpad move carries its pointer; the scroll keys carry none.
+  if (e.pointer !== undefined) return now + by * TICK
   if (contentRows !== bodyRows && Math.abs(by) === contentRows) return by < 0 ? 0 : rowCount
   return now + (Math.abs(by) >= bodyRows ? Math.max(1, rows - 2) * Math.sign(by) : by * TICK)
+}
+
+/** `text` cut to at most `n` UTF-16 units, never through a surrogate pair. */
+export function clip(text: string, n: number): string {
+  if (text.length <= n) return text
+  const last = text.charCodeAt(n - 1)
+  return text.slice(0, last >= 0xd800 && last <= 0xdbff ? n - 1 : n)
 }
 
 export type Piece =
@@ -116,7 +125,7 @@ export type Window = {
 
 /**
  * The rows from `top`, at most `want` of them, grouped so consecutive lines
- * of one hunk become one Code piece. Each line is clipped to `clip`
+ * of one hunk become one Code piece. Each line is clipped to `width`
  * characters (a row drawn `truncate-end` shows no more), and the whole stays
  * under CHAR_BUDGET.
  */
@@ -125,7 +134,7 @@ export function windowOf(
   rows: readonly Row[],
   top: number,
   want: number,
-  clip: number,
+  width: number,
   textOf: (row: Exclude<Row, { kind: 'line' }>) => string,
 ): Window {
   const pieces: Piece[] = []
@@ -138,7 +147,7 @@ export function windowOf(
     if (row.kind === 'line') {
       const src = files[row.file]?.hunks[row.hunk]?.lines[row.line]
       if (!src) continue
-      const line = src.text.length > clip ? { ...src, text: src.text.slice(0, clip) } : src
+      const line = src.text.length > width ? { ...src, text: clip(src.text, width) } : src
       const cost = line.text.length + 24
       if (chars + cost > CHAR_BUDGET) {
         isCut = true
@@ -149,7 +158,7 @@ export function windowOf(
       if (last?.kind === 'code' && last.file === row.file && last.hunk === row.hunk) last.lines.push(line)
       else pieces.push({ kind: 'code', file: row.file, hunk: row.hunk, lines: [line] })
     } else {
-      const cost = Math.min(textOf(row).length, clip) + 8
+      const cost = Math.min(textOf(row).length, width) + 8
       if (chars + cost > CHAR_BUDGET) {
         isCut = true
         break

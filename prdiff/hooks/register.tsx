@@ -4,7 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { PrdiffDiff, PrdiffList, PrdiffView } from '../types'
 import { listPrs, loadDiff, sharing, type DiffData, type Run } from './git.ts'
 import { clean, hunkSource } from './parse.ts'
-import { clampTop, fileAt, fileLabel, fit, jump, layout, scrolled, windowOf, windowRows as bodyWindow, type Layout, type Row } from './rows.ts'
+import { clampTop, clip as clipText, fileAt, fileLabel, fit, jump, layout, scrolled, windowOf, windowRows as bodyWindow, type Layout, type Row } from './rows.ts'
 
 export const PANE = 'prdiff'
 
@@ -13,7 +13,7 @@ const listRef = { plugin: 'prdiff', key: 'list' } as const
 const diffRef = { plugin: 'prdiff', key: 'diff' } as const
 const topRef = { plugin: 'prdiff', key: 'top' } as const
 const view = atom(viewRef, { kind: 'list' } as PrdiffView)
-const list = atom(listRef, { status: 'idle', gen: 0, items: [] } as PrdiffList)
+const list = atom(listRef, { status: 'idle', items: [] } as PrdiffList)
 const diff = atom(diffRef, { status: 'idle', gen: 0, number: 0 } as PrdiffDiff)
 const top = atom(topRef, 0)
 
@@ -30,7 +30,8 @@ function message(err: unknown): string {
 
 // The newest load of each kind; an older one that finishes later is dropped.
 let listGen = 0
-let diffGen = 0
+// Starts at the clock: above any gen an earlier instance of this module wrote.
+let diffGen = Date.now()
 // The parsed diff lives here, under the generation that loaded it; `$.state`
 // carries the status and that generation. A hot reload empties it, and the
 // pane then offers to load again.
@@ -62,14 +63,14 @@ async function loadList($: EngineInterface, run: Run = runner($)): Promise<void>
   listGen += 1
   const gen = listGen
   const prev = await read($, list)
-  await $.state.set(listRef, { ...prev, status: 'loading', gen, error: undefined })
+  await $.state.set(listRef, { ...prev, status: 'loading', error: undefined })
   try {
     const got = await listPrs(run)
     if (gen !== listGen) return
-    await $.state.set(listRef, { status: 'ready', gen, repo: got.repo, current: got.current, items: got.items })
+    await $.state.set(listRef, { status: 'ready', repo: got.repo, current: got.current, items: got.items })
   } catch (err) {
     if (gen !== listGen) return
-    await $.state.set(listRef, { ...prev, status: 'error', gen, error: message(err) })
+    await $.state.set(listRef, { ...prev, status: 'error', error: message(err) })
   }
 }
 
@@ -245,7 +246,7 @@ export const register: Register = on => {
         return source === '' ? null : <Code source={source} format="diff" path={dd.files[p.file]?.path} wrap="truncate-end" />
       }
       const row = p.row
-      const text = textOf(row).slice(0, clip)
+      const text = clipText(textOf(row), clip)
       switch (row.kind) {
         case 'goto':
           return (

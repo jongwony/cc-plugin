@@ -11,7 +11,6 @@ export type PrdiffPr = {
 
 export type PrdiffList = {
   status: 'idle' | 'loading' | 'ready' | 'error'
-  gen: number
   repo?: string
   current?: number
   items: PrdiffPr[]

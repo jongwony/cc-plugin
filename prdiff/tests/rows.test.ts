@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { FileDiff } from '../hooks/parse.ts'
-import { CHAR_BUDGET, MAX_FILE_LINES, TICK, clampTop, fileAt, fit, jump, layout, scrolled, windowOf, windowRows, type Row } from '../hooks/rows.ts'
+import { CHAR_BUDGET, MAX_FILE_LINES, TICK, clampTop, clip, fileAt, fit, jump, layout, scrolled, windowOf, windowRows, type Row } from '../hooks/rows.ts'
 
 function file(path: string, lineCount: number, width = 10): FileDiff {
   const lines = Array.from({ length: lineCount }, (_, i) => ({
@@ -111,4 +111,27 @@ test('a label is cut to the cells a row has, wide characters counting two', () =
   // Six wide characters take 12 cells; four fit beside the ellipsis (4 × 2 + 1 ≤ 10).
   expect(fit('한국어파일명', 10)).toBe('한국어파…')
   expect(fit('한국어파일', 10)).toBe('한국어파일')
+})
+
+test('a wheel flick summed to contentRows or bodyRows still scrolls by ticks', () => {
+  const pointer = { row: 3, column: 10 }
+  expect(scrolled(500, { by: 29, bodyRows: 30, contentRows: 29, pointer }, 24, 2000)).toBe(500 + 29 * TICK)
+  expect(scrolled(500, { by: -30, bodyRows: 30, contentRows: 29, pointer }, 24, 2000)).toBe(500 - 30 * TICK)
+  // The same distances from the keys (no pointer) stay Home/End and a page.
+  expect(scrolled(500, { by: 29, bodyRows: 30, contentRows: 29 }, 24, 2000)).toBe(2000)
+  expect(scrolled(500, { by: -30, bodyRows: 30, contentRows: 29 }, 24, 2000)).toBe(478)
+})
+
+test('a line clipped next to an astral character never keeps half of it', () => {
+  const text = 'x'.repeat(9) + '😀' + 'tail'
+  const f = { ...file('a', 1), hunks: [{ header: '@@ -0,0 +1 @@', section: '', lines: [{ mark: '+' as const, text, oldNo: 1, newNo: 1 }] }] }
+  const l = layout([f])
+  const w = windowOf([f], l.rows, 0, l.rows.length, 10, textOf)
+  const code = w.pieces.find(p => p.kind === 'code')
+  const got = code?.kind === 'code' ? code.lines[0]?.text ?? '' : ''
+  expect(got).toBe('x'.repeat(9))
+  expect(/[\ud800-\udbff]$/.test(got)).toBe(false)
+  expect(clip('ab😀c', 3)).toBe('ab')
+  expect(clip('ab😀c', 4)).toBe('ab😀')
+  expect(clip('abc', 5)).toBe('abc')
 })

@@ -355,3 +355,17 @@ test('the fetch skips submodules, and every git command from it on runs prompt-f
   expect(budget('ls-files --others')).toBe(120_000)
   expect(budget('--no-index')).toBe(120_000)
 })
+
+test('a checkout gh matches by branch name whose HEAD lacks the PR head gets the PR\'s commits, said so', async () => {
+  const { run, calls } = fakeRepo(7, { '--is-ancestor': fail('') })
+  const d = await loadDiff(run, 7)
+  expect(d.mode).toBe('committed')
+  expect(d.notes).toEqual(["this checkout is matched to #7 by its branch, but its HEAD does not hold the PR head: showing the PR's commits"])
+  expect(calls.some(c => c.includes('ls-files'))).toBe(false)
+  const held = fakeRepo(7, { '--is-ancestor': ok('') })
+  expect((await loadDiff(held.run, 7)).mode).toBe('worktree')
+  // Another PR checked out asks nothing.
+  const other = fakeRepo(8)
+  await loadDiff(other.run, 7)
+  expect(other.calls.some(c => c.includes('--is-ancestor'))).toBe(false)
+})

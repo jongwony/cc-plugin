@@ -2,6 +2,7 @@
 // base being the PR's own baseRefName. Every host command goes through the
 // injected `run`, so tests answer it without a repository.
 
+import type { PrdiffPr } from '../types'
 import { mergeDiff, parseNumstat, untrackedFile, type FileDiff } from './parse.ts'
 
 export type RunResult = {
@@ -13,14 +14,7 @@ export type RunResult = {
 
 export type Run = (argv: string[], timeoutMs?: number, env?: Record<string, string>) => Promise<RunResult>
 
-export type PrSummary = {
-  number: number
-  title: string
-  headRefName: string
-  baseRefName: string
-  author: string
-  isDraft: boolean
-}
+export type PrSummary = PrdiffPr
 
 export type PrList = {
   repo: string
@@ -169,8 +163,8 @@ export async function listPrs(unguarded: Run): Promise<PrList> {
  * Working-tree changes belong to the diff only when `gh` itself says the
  * current checkout is this PR; a matching branch name alone is not identity.
  */
-export function decideMode(current: number | undefined, number: number): Mode {
-  return current === number ? 'worktree' : 'committed'
+export function decideMode(current: number | undefined, number: number, holdsHead = true): Mode {
+  return current === number && holdsHead ? 'worktree' : 'committed'
 }
 
 /**
@@ -301,7 +295,10 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   const remote = remoteFor(remoteV, repo, hostOfUrl(pr.url)) ?? (await renamedRemote(run, remoteV, repo))
   if (!remote) throw new StepError('remote', `no git remote points at ${repo}`)
 
-  const mode = decideMode(current, number)
+  // Worktree mode also needs local HEAD to hold the PR head.
+  const holdsHead =
+    current !== number || (await run([...git, 'merge-base', '--is-ancestor', pr.headRefOid, 'HEAD'])).exitCode === 0
+  const mode = decideMode(current, number, holdsHead)
   loads += 1
   const scratch = `refs/prdiff/${number}/${loads}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
   const baseRef = `${scratch}/base`
@@ -343,6 +340,7 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   const mergeBase = based.stdout.trim()
 
   const notes: string[] = []
+  if (!holdsHead) notes.push(`this checkout is matched to #${number} by its branch, but its HEAD does not hold the PR head: showing the PR's commits`)
   if (left.length > 0) notes.push(`scratch refs not deleted: ${left.join(' ')}`)
   if (mode === 'committed' && mergeBase === headOid) notes.push(`the PR head is already in ${pr.baseRefName}: merged?`)
   if (mode === 'worktree') {

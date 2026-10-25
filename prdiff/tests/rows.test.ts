@@ -73,15 +73,16 @@ test('a "no newline" marker takes no row in the stream', () => {
   expect(l.rows.filter(r => r.kind === 'line').length).toBe(2)
 })
 
-test('Home and End reach the stream\'s edges, a page key moves a page, a wheel tick a few rows', () => {
+test('Home and End reach the stream\'s edges, a page key moves a page, an arrow a row', () => {
   // The drawing is one row shorter than the pane: contentRows 29, bodyRows 30.
   const at = (by: number) => scrolled(500, { by, bodyRows: 30, contentRows: 29 }, 24, 2000)
   expect(at(29)).toBe(2000)
   expect(at(-29)).toBe(0)
   expect(at(30)).toBe(522)
   expect(at(-30)).toBe(478)
-  expect(at(1)).toBe(500 + TICK)
-  expect(at(-2)).toBe(500 - 2 * TICK)
+  // An arrow key moves a row.
+  expect(at(1)).toBe(501)
+  expect(at(-1)).toBe(499)
 })
 
 test('j reaches a last file shorter than the window, and the file line then names it', () => {

@@ -101,7 +101,7 @@ export function scrolled(
   // A wheel or trackpad move carries its pointer; the scroll keys carry none.
   if (e.pointer !== undefined) return now + by * TICK
   if (contentRows !== bodyRows && Math.abs(by) === contentRows) return by < 0 ? 0 : rowCount
-  return now + (Math.abs(by) >= bodyRows ? Math.max(1, rows - 2) * Math.sign(by) : by * TICK)
+  return now + (Math.abs(by) >= bodyRows ? Math.max(1, rows - 2) * Math.sign(by) : by)
 }
 
 /** `text` cut to at most `n` UTF-16 units, never through a surrogate pair. */

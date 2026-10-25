@@ -41,6 +41,8 @@ The pane takes the keyboard after `ctrl+x tab` or a click.
 | `d` / `u` | | half a page down / up |
 | `b` | | back to the list |
 | `Home` / `End` | | top / end of the stream |
+| `↑` / `↓` | | a row up / down |
+| `PgUp` / `PgDn` | | a page up / down |
 | wheel | scroll | scroll the stream |
 
 The top of a diff lists every file; pressing one jumps to it. A file over 3,000

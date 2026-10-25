@@ -198,3 +198,18 @@ test('a change only in line endings is noted, since the drawn texts are identica
   const [g] = mergeDiff(parseNumstat('1\t1\tc.txt\0'), patch.replace('+x\n', '+z\r\n'))
   expect(g?.notes).toEqual([])
 })
+
+test('a side that counts no lines starts the run after the line its header names', () => {
+  // git 2.54 with -U0: inserting A, B after line 5 of 1..10, and deleting lines 5 and 6.
+  const ins = 'diff --git a/n b/n\n--- a/n\n+++ b/n\n@@ -5,0 +6,2 @@\n+A\n+B\n'
+  const del = 'diff --git a/n b/n\n--- a/n\n+++ b/n\n@@ -5,2 +4,0 @@\n-5\n-6\n'
+  const [i] = mergeDiff(parseNumstat('2\t0\tn\0'), ins)
+  const [d] = mergeDiff(parseNumstat('0\t2\tn\0'), del)
+  expect(i?.hunks[0]?.lines.map(l => [l.oldNo, l.newNo])).toEqual([[6, 6], [6, 7]])
+  expect(d?.hunks[0]?.lines.map(l => [l.oldNo, l.newNo])).toEqual([[5, 5], [6, 5]])
+  expect(hunkSource(i?.hunks[0]?.lines ?? []).split('\n')[0]).toBe('@@ -5,0 +6,2 @@')
+  expect(hunkSource(d?.hunks[0]?.lines ?? []).split('\n')[0]).toBe('@@ -5,2 +4,0 @@')
+  // A new file still reads -0,0.
+  const [n] = mergeDiff(parseNumstat('1\t0\tn\0'), 'diff --git a/n b/n\nnew file mode 100644\n--- /dev/null\n+++ b/n\n@@ -0,0 +1 @@\n+x\n')
+  expect(hunkSource(n?.hunks[0]?.lines ?? []).split('\n')[0]).toBe('@@ -0,0 +1,1 @@')
+})

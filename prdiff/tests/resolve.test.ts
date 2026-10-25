@@ -249,3 +249,32 @@ test('a gh command already in flight is answered once; git commands always run',
   await run(['gh', 'repo', 'view'])
   expect(calls.length).toBe(4)
 })
+
+test('the fetch asks nothing on the terminal, and leaves a user\'s own ssh command alone', async () => {
+  const envs: Array<Record<string, string> | undefined> = []
+  const wrap = (run: Run): Run => async (argv, t, env) => {
+    if (argv.includes('fetch')) envs.push(env)
+    return run(argv, t, env)
+  }
+  await loadDiff(wrap(fakeRepo(undefined).run), 7)
+  expect(envs[0]).toEqual({ GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' })
+  await loadDiff(wrap(fakeRepo(undefined, { 'config --get core.sshCommand': ok('ssh -i key\n') }).run), 7)
+  expect(envs[1]).toEqual({ GIT_TERMINAL_PROMPT: '0' })
+  await loadDiff(wrap(fakeRepo(undefined, { 'printenv GIT_SSH_COMMAND': ok('ssh -v\n') }).run), 7)
+  expect(envs[2]).toEqual({ GIT_TERMINAL_PROMPT: '0' })
+})
+
+test('the checked-out PR fetches only its base, so a remote without pull refs still loads', async () => {
+  const { run, calls } = fakeRepo(7, { 'refs/pull/': fail("fatal: couldn't find remote ref refs/pull/7/head") })
+  const d = await loadDiff(run, 7)
+  expect(d.mode).toBe('worktree')
+  const fetch = calls.find(c => c.includes('fetch')) ?? []
+  expect(fetch.some(a => a.includes('refs/pull/'))).toBe(false)
+  expect(calls.filter(c => c.includes('update-ref')).length).toBe(1)
+})
+
+test('a scratch ref that could not be deleted is named in the notes', async () => {
+  const { run } = fakeRepo(undefined, { 'update-ref -d': fail('error: cannot lock ref') })
+  const d = await loadDiff(run, 7)
+  expect(d.notes.some(n => /^scratch refs not deleted: refs\/prdiff\/7\/\S+\/base refs\/prdiff\/7\/\S+\/head$/.test(n))).toBe(true)
+})

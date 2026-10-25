@@ -11,7 +11,7 @@ export type RunResult = {
   isStdoutTruncated: boolean
 }
 
-export type Run = (argv: string[], timeoutMs?: number) => Promise<RunResult>
+export type Run = (argv: string[], timeoutMs?: number, env?: Record<string, string>) => Promise<RunResult>
 
 export type PrSummary = {
   number: number
@@ -72,8 +72,8 @@ function firstLine(r: RunResult): string {
 /** `run` with a `gh` command already in flight answered by that same run. */
 export function sharing(run: Run): Run {
   const flying = new Map<string, Promise<RunResult>>()
-  return (argv, timeoutMs) => {
-    if (argv[0] !== 'gh') return run(argv, timeoutMs)
+  return (argv, timeoutMs, env) => {
+    if (argv[0] !== 'gh' || env !== undefined) return run(argv, timeoutMs, env)
     const key = JSON.stringify(argv)
     const had = flying.get(key)
     if (had) return had
@@ -240,6 +240,22 @@ export async function isSafeRef(run: Run, name: string): Promise<boolean> {
   return r.exitCode === 0 && r.stdout.trim() === name
 }
 
+/**
+ * The environment a fetch runs under so neither git nor ssh asks on the
+ * terminal: no credential prompt, and ssh in batch mode unless the user
+ * names an ssh command of their own (GIT_SSH_COMMAND, GIT_SSH, core.sshCommand).
+ */
+export async function noPrompts(run: Run, git: string[]): Promise<Record<string, string>> {
+  const own = await Promise.all([
+    run(['printenv', 'GIT_SSH_COMMAND']),
+    run(['printenv', 'GIT_SSH']),
+    run([...git, 'config', '--get', 'core.sshCommand']),
+  ])
+  const env: Record<string, string> = { GIT_TERMINAL_PROMPT: '0' }
+  if (!own.some(r => r.exitCode === 0)) env.GIT_SSH_COMMAND = 'ssh -o BatchMode=yes'
+  return env
+}
+
 export type Known = {
   /** The repository `gh` resolved, when the list already asked. */
   repo?: string
@@ -278,25 +294,29 @@ export async function loadDiff(run: Run, number: number, known: Known = {}): Pro
   const scratch = `refs/prdiff/${number}/${loads}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
   const baseRef = `${scratch}/base`
   const headRef = `${scratch}/head`
+  // Worktree mode fetches only the base; its head is local HEAD.
+  const fetched = mode === 'worktree' ? [baseRef] : [baseRef, headRef]
+  const specs = [`+refs/heads/${pr.baseRefName}:${baseRef}`, ...(mode === 'worktree' ? [] : [`+refs/pull/${number}/head:${headRef}`])]
+  const env = await noPrompts(run, git)
   let baseOid: string
   let headOid: string
+  const left: string[] = []
   try {
-    await must(
-      run,
-      'git fetch',
-      [...git, 'fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--refmap=', remote,
-        `+refs/heads/${pr.baseRefName}:${baseRef}`, `+refs/pull/${number}/head:${headRef}`],
-      120_000,
-    )
+    const r = await run([...git, 'fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--refmap=', remote, ...specs], 120_000, env)
+    if (r.exitCode !== 0) throw new StepError('git fetch', firstLine(r))
     const oid = async (ref: string) =>
       (await must(run, `git rev-parse ${ref}`, [...git, 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`])).stdout.trim()
     ;[baseOid, headOid] = await Promise.all([oid(baseRef), mode === 'worktree' ? oid('HEAD') : oid(headRef)])
   } finally {
-    await Promise.all([baseRef, headRef].map(ref => run([...git, 'update-ref', '-d', ref])))
+    const gone = await Promise.all(fetched.map(ref => run([...git, 'update-ref', '-d', ref])))
+    gone.forEach((g, i) => {
+      if (g.exitCode !== 0) left.push(fetched[i] ?? '')
+    })
   }
   const mergeBase = (await must(run, 'git merge-base', [...git, 'merge-base', baseOid, headOid])).stdout.trim()
 
   const notes: string[] = []
+  if (left.length > 0) notes.push(`scratch refs not deleted: ${left.join(' ')}`)
   if (mode === 'committed' && mergeBase === headOid) notes.push(`the PR head is already in ${pr.baseRefName}: merged?`)
   if (mode === 'worktree') {
     notes.push('includes uncommitted changes of this checkout')

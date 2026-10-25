@@ -18,8 +18,8 @@ const diff = atom(diffRef, { status: 'idle', gen: 0, number: 0 } as PrdiffDiff)
 const top = atom(topRef, 0)
 
 function runner($: EngineInterface): Run {
-  return async (argv, timeoutMs) => {
-    const r = await $.process.run(argv, timeoutMs === undefined ? undefined : { timeoutMs })
+  return async (argv, timeoutMs, env) => {
+    const r = await $.process.run(argv, { ...(timeoutMs === undefined ? {} : { timeoutMs }), ...(env === undefined ? {} : { env }) })
     return { exitCode: r.exitCode, stdout: r.stdout, stderr: r.stderr, isStdoutTruncated: r.isStdoutTruncated }
   }
 }
@@ -97,6 +97,7 @@ async function moveTop($: EngineInterface, paneRows: number, to: (now: number, l
   const l = h.layout
   const rows = windowRows(paneRows, h.data)
   const now = clampTop(await read($, top), l.rows.length, rows, l.fileRows)
+  if (h.gen !== diffGen) return
   await $.state.set(topRef, clampTop(to(now, l), l.rows.length, rows, l.fileRows))
 }
 
@@ -120,7 +121,7 @@ export const register: Register = on => {
       return { text: `PR diff pane opened on #${n}.` }
     }
     await $.state.set(viewRef, { kind: 'list' })
-    await loadList($)
+    void loadList($)
     return { text: 'PR diff pane opened.' }
   })
 

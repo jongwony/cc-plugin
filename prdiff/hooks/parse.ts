@@ -108,10 +108,11 @@ function sections(patch: string): Section[] {
     if (!cur) continue
     const m = HUNK.exec(line)
     if (m) {
-      oldNo = Number(m[1])
-      newNo = Number(m[3])
       oldLeft = m[2] === undefined ? 1 : Number(m[2])
       newLeft = m[4] === undefined ? 1 : Number(m[4])
+      // A side that counts 0 lines names the line before the change.
+      oldNo = Number(m[1]) + (oldLeft === 0 ? 1 : 0)
+      newNo = Number(m[3]) + (newLeft === 0 ? 1 : 0)
       hunk = { header: line.slice(0, line.indexOf(' @@') + 3), section: clean(m[5] ?? ''), lines: [] }
       seen = { '-': new Map(), '+': new Map() }
       cur.hunks.push(hunk)

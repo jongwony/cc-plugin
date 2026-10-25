@@ -46,9 +46,9 @@ The pane takes the keyboard after `ctrl+x tab` or a click.
 | wheel | scroll | scroll the stream |
 
 The top of a diff lists every file; pressing one jumps to it. A file over 3,000
-lines is cut and says how many lines were left out. A patch over 4 MiB is
-fetched again file by file, and a single file over that is listed without its
-lines. Fetch, merge-base and `gh` failures show in the pane.
+lines is cut and says how many lines were left out. When the patch passes 4 MiB,
+the files whose patch arrived whole are kept and only the rest are read again
+one by one; a single file over 4 MiB is listed without its lines. Fetch, merge-base and `gh` failures show in the pane.
 
 ## Requirements
 

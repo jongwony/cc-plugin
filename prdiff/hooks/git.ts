@@ -64,20 +64,6 @@ function firstLine(r: RunResult): string {
   return text === undefined ? `exit ${r.exitCode}` : text
 }
 
-/** `run` with a `gh` command already in flight answered by that same run. */
-export function sharing(run: Run): Run {
-  const flying = new Map<string, Promise<RunResult>>()
-  return (argv, timeoutMs, env) => {
-    if (argv[0] !== 'gh' || env !== undefined) return run(argv, timeoutMs, env)
-    const key = JSON.stringify(argv)
-    const had = flying.get(key)
-    if (had) return had
-    const p = run(argv, timeoutMs).finally(() => flying.delete(key))
-    flying.set(key, p)
-    return p
-  }
-}
-
 /** `run` with a rejection (a timeout, a command that cannot start) answered as a failed run whose stderr is the reason. */
 export function guarded(run: Run): Run {
   return async (argv, timeoutMs, env) => {
@@ -241,8 +227,7 @@ async function renamedRemote(run: Run, remoteV: string, repo: string): Promise<s
  * terminal: no credential prompt, and ssh in batch mode unless the user
  * names an ssh command of their own (GIT_SSH_COMMAND, GIT_SSH, core.sshCommand).
  */
-export async function noPrompts(run: Run, git: string[], ownSshSet: boolean | Promise<boolean> = false): Promise<Record<string, string>> {
-  const ownSsh = await ownSshSet
+export async function noPrompts(run: Run, git: string[], ownSsh = false): Promise<Record<string, string>> {
   const configured = !ownSsh && (await run([...git, 'config', '--get', 'core.sshCommand'])).exitCode === 0
   const env: Record<string, string> = { GIT_TERMINAL_PROMPT: '0' }
   if (!ownSsh && !configured) env.GIT_SSH_COMMAND = 'ssh -o BatchMode=yes'
@@ -253,7 +238,7 @@ export type Known = {
   /** The repository `gh` resolved, when the list already asked. */
   repo?: string
   /** GIT_SSH_COMMAND or GIT_SSH is set in the environment. */
-  ownSsh?: boolean | Promise<boolean>
+  ownSsh?: boolean
 }
 
 export async function loadDiff(unguarded: Run, number: number, known: Known = {}): Promise<DiffData> {
@@ -297,7 +282,7 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   const fetchedHead = mode === 'worktree' ? undefined : tip(headName)
   if (mode === 'committed' && !fetchedHead) throw new StepError('git ls-remote', `${remote} has no ${headName}`)
   const fetch = await quiet(
-    [...git, 'fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--no-recurse-submodules', remote, baseOid, ...(fetchedHead ? [fetchedHead] : [])],
+    [...git, 'fetch', '--quiet', '--no-write-fetch-head', '--no-recurse-submodules', remote, baseOid, ...(fetchedHead ? [fetchedHead] : [])],
     120_000,
   )
   if (fetch.exitCode !== 0) throw new StepError('git fetch', firstLine(fetch))

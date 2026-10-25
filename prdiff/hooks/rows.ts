@@ -52,10 +52,7 @@ export function layout(files: readonly FileDiff[]): Layout {
   return { rows, fileRows }
 }
 
-/**
- * `top` within the stream: at most the last full window, or the last file's
- * header when that lies further down, so `j` can reach a short last file.
- */
+/** `top` within the stream: at most the last full window, or the last file's header when that lies further down. */
 export function clampTop(top: number, rowCount: number, bodyRows: number, fileRows: readonly number[] = []): number {
   return Math.max(0, Math.min(top, Math.max(0, rowCount - bodyRows, fileRows.at(-1) ?? 0)))
 }
@@ -77,13 +74,22 @@ export function jump(fileRows: readonly number[], top: number, dir: 1 | -1): num
   return before.at(-1) ?? 0
 }
 
+/**
+ * The body's window under `headRows` rows kept out of a pane `paneRows` tall.
+ * A drawing is `headRows - 1` rows plus the window, shorter than the pane
+ * whenever `paneRows > headRows`.
+ */
+export function windowRows(paneRows: number, headRows: number): number {
+  return Math.max(1, paneRows - headRows)
+}
+
 /** Rows a wheel tick moves the body. */
 export const TICK = 3
 
 /**
  * The top a `ui.scroll` move asks for, the body `rows` tall over `rowCount`
- * rows. Home and End ask for `contentRows`, a page key for `bodyRows`; the
- * drawing stays shorter than the pane, so the two never coincide.
+ * rows. Home and End (`by = ±contentRows`) are told from a page key
+ * (`bodyRows`) only while the drawing is shorter than the pane: see windowRows.
  */
 export function scrolled(
   now: number,

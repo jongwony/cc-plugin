@@ -130,3 +130,51 @@ test('scrolling while another PR loads leaves that PR to open at its top', async
   expect(await ui.find({ type: 'Text', text: /^files$/ })).toBeDefined()
   await ui.unmount()
 })
+
+test('after the pane grows, the first move up starts from the top on screen', async ($, on) => {
+  const lines = Array.from({ length: 200 }, (_, i) => `+l${i}`)
+  on('command.register', () => ({ value: { command: 'prdiff' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('process.run', async (_, e) => {
+    const s = e.argv.join(' ')
+    if (s.includes('--numstat')) return { value: result('200\t0\tlong.txt\0') }
+    if (s.includes(' -p ')) return { value: result(`diff --git a/long.txt b/long.txt\n--- a/long.txt\n+++ b/long.txt\n@@ -0,0 +1,200 @@\n${lines.join('\n')}\n`) }
+    return { value: await answer(e.argv, Promise.resolve()) }
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'prdiff', args: '1', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 160 } })
+  const firstLine = async (ui: { find: (q: { type: string }) => Promise<{ props: Record<string, unknown> } | undefined> }) =>
+    String((await ui.find({ type: 'Code' }))?.props.source ?? '').split('\n')[1]
+  const small = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  for (let i = 0; i < 30; i += 1) await small.press({ key: 'down' })
+  await small.unmount()
+  const tall = await $.ui.mount({ ...PANE, props: { ...PANE.props, scroll: { offset: 0, bodyRows: 120 } }, surface: 'terminal' })
+  const before = await firstLine(tall)
+  await tall.press({ key: 'up' })
+  expect(await firstLine(tall)).not.toBe(before)
+  await tall.unmount()
+})
+
+test('a failed refresh keeps the repository and current PR the list already showed', async ($, on) => {
+  let lists = 0
+  on('command.register', () => ({ value: { command: 'prdiff' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('process.run', async (_, e) => {
+    const s = e.argv.join(' ')
+    if (s.startsWith('gh pr list')) {
+      lists += 1
+      if (lists > 1) return { value: result('', 1) }
+    }
+    return { value: await answer(e.argv, Promise.resolve()) }
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'prdiff', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 160 } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /Pull requests · o\/r/ })).toBeDefined()
+  await ui.press({ key: 'reload' })
+  expect(await ui.find({ type: 'Text', text: /Could not list PRs/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Pull requests · o\/r/ })).toBeDefined()
+  await ui.unmount()
+})

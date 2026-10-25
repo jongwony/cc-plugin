@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { FileDiff } from '../hooks/parse.ts'
-import { CHAR_BUDGET, MAX_FILE_LINES, TICK, clampTop, fileAt, jump, layout, scrolled, windowOf, type Row } from '../hooks/rows.ts'
+import { CHAR_BUDGET, MAX_FILE_LINES, TICK, clampTop, fileAt, jump, layout, scrolled, windowOf, windowRows, type Row } from '../hooks/rows.ts'
 
 function file(path: string, lineCount: number, width = 10): FileDiff {
   const lines = Array.from({ length: lineCount }, (_, i) => ({
@@ -92,4 +92,14 @@ test('j reaches a last file shorter than the window, and the file line then name
   const top = clampTop(jump(l.fileRows, l.fileRows[0] ?? 0, 1), l.rows.length, bodyRows, l.fileRows)
   expect(top).toBe(last)
   expect(fileAt(l.fileRows, top)).toBe(1)
+})
+
+test('a full drawing is shorter than the pane whenever the head fits, small panes included', () => {
+  for (let head = 5; head <= 12; head += 1) {
+    for (let pane = head + 1; pane <= 60; pane += 1) {
+      expect(head - 1 + windowRows(pane, head)).toBeLessThan(pane)
+    }
+  }
+  // A 10-row pane under an 8-row head: a floor of 3 would draw exactly 10.
+  expect(8 - 1 + windowRows(10, 8)).toBe(9)
 })

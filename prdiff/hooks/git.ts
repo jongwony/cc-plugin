@@ -49,7 +49,7 @@ export const MAX_UNTRACKED = 200
 /** Per-file patch reads (over-4-MiB fallback, untracked files) in flight at once. */
 export const CONCURRENCY = 8
 
-// Pinned so a user's diff settings cannot change the patch format parse.ts reads.
+// The pins every git command here runs with.
 const GIT = [
   'git', '--no-optional-locks',
   '-c', 'core.quotePath=false', '-c', 'diff.relative=false', '-c', 'color.ui=false',
@@ -175,7 +175,7 @@ export function hostOfUrl(url: string): string | undefined {
 export function remoteRepos(remoteV: string): Array<{ name: string; repo: string; host?: string }> {
   const out: Array<{ name: string; repo: string; host?: string }> = []
   for (const line of remoteV.split('\n')) {
-    // A partial clone appends its filter: `(fetch) [blob:none]`.
+    // Also a partial clone's `(fetch) [blob:none]`.
     const m = /^(\S+)\s+(\S+)\s+\(fetch\)(?:\s+\[[^\]]*\])?$/.exec(line.trim())
     const repo = m?.[2] ? repoOfUrl(m[2]) : undefined
     if (m?.[1] && m[2] && repo) out.push({ name: m[1], repo, host: hostOfUrl(m[2]) })
@@ -260,9 +260,6 @@ export async function loadDiff(run: Run, number: number, known: Known = {}): Pro
   if (!remote) throw new StepError('remote', `no git remote points at ${repo}`)
 
   const mode = decideMode(current, number)
-  // Each load fetches into refs of its own and deletes them once their commit
-  // ids are read, so concurrent loads of one PR never delete each other's, in
-  // this process or another one sharing the repository.
   loads += 1
   const scratch = `refs/prdiff/${number}/${loads}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
   const baseRef = `${scratch}/base`
@@ -273,7 +270,7 @@ export async function loadDiff(run: Run, number: number, known: Known = {}): Pro
     await must(
       run,
       'git fetch',
-      [...git, 'fetch', '--quiet', '--no-tags', '--no-write-fetch-head', remote,
+      [...git, 'fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--refmap=', remote,
         `+refs/heads/${pr.baseRefName}:${baseRef}`, `+refs/pull/${number}/head:${headRef}`],
       120_000,
     )
@@ -290,8 +287,7 @@ export async function loadDiff(run: Run, number: number, known: Known = {}): Pro
     notes.push('includes uncommitted changes of this checkout')
     if (headOid !== pr.headRefOid) notes.push(`local HEAD ${headOid.slice(0, 7)} differs from the PR head ${pr.headRefOid.slice(0, 7)}`)
   }
-  // Worktree mode diffs the merge-base against the working tree (no second
-  // endpoint), so the inventory and the hunks both include uncommitted edits.
+  // Worktree mode: the merge-base against the working tree.
   const ends = mode === 'worktree' ? [mergeBase] : [mergeBase, headOid]
   const [numstatOut, whole] = await Promise.all([
     must(run, 'git diff --numstat', [...git, ...DIFF, '--numstat', '-z', ...ends]),
@@ -317,16 +313,15 @@ export async function loadDiff(run: Run, number: number, known: Known = {}): Pro
   if (mode === 'worktree') {
     const ls = await run([...git, 'ls-files', '--others', '--exclude-standard', '-z'])
     if (ls.exitCode !== 0) throw new StepError('git ls-files', firstLine(ls))
-    // Over 4 MiB the list is cut, its last name possibly mid-way: only whole
-    // names are kept, and only MAX_UNTRACKED of them are read anyway.
+    // A list cut at 4 MiB keeps only its whole names.
     const named = ls.stdout.split('\0')
     const others = (ls.isStdoutTruncated ? named.slice(0, -1) : named).filter(p => p !== '')
     const read = await mapLimit(others.slice(0, MAX_UNTRACKED), CONCURRENCY, async p => {
-      // --no-index exits 1 when the files differ, the expected case, but also
-      // on an error (an embedded repository, an unreadable file), which writes
-      // to stderr and no patch.
-      const r = await run([...git, 'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', p])
-      const ok = !r.isStdoutTruncated && (r.exitCode === 0 || (r.exitCode === 1 && r.stdout !== '' && r.stderr.trim() === ''))
+      // Exit 1 is a patch when it wrote one and no `error:`/`fatal:` line.
+      const r = await run([...git, '-c', 'core.autocrlf=false', '-c', 'core.safecrlf=false',
+        'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', p])
+      const failed = /^(?:error|fatal): /m.test(r.stderr)
+      const ok = !r.isStdoutTruncated && (r.exitCode === 0 || (r.exitCode === 1 && r.stdout !== '' && !failed))
       return untrackedFile(p, ok ? r.stdout : undefined, ok ? undefined : 'content not read')
     })
     files.push(...read)

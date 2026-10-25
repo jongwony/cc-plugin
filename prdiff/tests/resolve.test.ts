@@ -96,6 +96,8 @@ test('a PR not checked out: both ends fetched into private refs, diffed merge-ba
   expect(d.baseRefName).toBe('feat/a')
   const fetch = calls.find(c => c.includes('fetch')) ?? []
   expect(fetch).toContain('origin')
+  // No remote-tracking ref moves with the explicit refspecs.
+  expect(fetch).toContain('--refmap=')
   const baseSpec = fetch.find(a => a.startsWith('+refs/heads/feat/a:')) ?? ''
   const headSpec = fetch.find(a => a.startsWith('+refs/pull/7/head:')) ?? ''
   expect(baseSpec).toMatch(/^\+refs\/heads\/feat\/a:refs\/prdiff\/7\/\d+-[0-9a-z]+\/base$/)
@@ -183,6 +185,22 @@ test('an untracked path git cannot read is listed as not read, not as an empty f
   const emb = d.files.find(f => f.path === 'emb/')
   expect(emb?.notes).toContain('content not read')
   expect(d.files.find(f => f.path === 'new.txt')?.notes).toEqual(['untracked'])
+})
+
+test('a warning beside an untracked patch, such as a line-ending one, is not a failure', async () => {
+  const warned = fakeRepo(7, {
+    '--no-index': {
+      exitCode: 1,
+      stdout: 'diff --git a/new.txt b/new.txt\n--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1 @@\n+n\n',
+      stderr: "warning: in the working copy of 'new.txt', LF will be replaced by CRLF the next time Git touches it\n",
+      isStdoutTruncated: false,
+    },
+  })
+  const d = await loadDiff(warned.run, 7)
+  expect(d.files.find(f => f.path === 'new.txt')?.notes).toEqual(['untracked'])
+  expect(d.files.find(f => f.path === 'new.txt')?.added).toBe(1)
+  // Line-ending conversion is pinned off for the read itself.
+  expect(warned.calls.find(c => c.includes('--no-index'))?.join(' ')).toContain('-c core.autocrlf=false -c core.safecrlf=false')
 })
 
 test('an untracked list over 4 MiB lists what arrived whole instead of failing the load', async () => {

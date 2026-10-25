@@ -165,10 +165,7 @@ function gitLinePath(line: string): string | undefined {
   return a.startsWith('a/') && b.startsWith('b/') && a.slice(2) === b.slice(2) ? a.slice(2) : undefined
 }
 
-/**
- * The path of a `---`/`+++` line. Git ends it with a tab when an unquoted
- * name holds a space; a name holding a tab is quoted, so the tab is never its.
- */
+/** The path of a `---`/`+++` line, less the tab git ends it with when the name holds a space. */
 function markerPath(line: string): string {
   const p = line.slice(4)
   return p.endsWith('\t') ? p.slice(0, -1) : p

@@ -4,7 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { PrdiffDiff, PrdiffList, PrdiffView } from '../types'
 import { listPrs, loadDiff, type DiffData, type Run } from './git.ts'
 import { clean, hunkSource } from './parse.ts'
-import { clampTop, fileAt, fileLabel, jump, layout, scrolled, windowOf, type Layout, type Row } from './rows.ts'
+import { clampTop, fileAt, fileLabel, jump, layout, scrolled, windowOf, windowRows as bodyWindow, type Layout, type Row } from './rows.ts'
 
 export const PANE = 'prdiff'
 
@@ -48,7 +48,7 @@ function headRows(data: DiffData): number {
 
 /** The body's window for a pane `paneRows` tall; every surface and event derives its own. */
 function windowRows(paneRows: number, data: DiffData): number {
-  return Math.max(3, paneRows - headRows(data))
+  return bodyWindow(paneRows, headRows(data))
 }
 
 /** The diff on screen, only while the load it came from is the one ready for the PR in view. */
@@ -69,7 +69,7 @@ async function loadList($: EngineInterface): Promise<void> {
     await $.state.set(listRef, { status: 'ready', gen, repo: got.repo, current: got.current, items: got.items })
   } catch (err) {
     if (gen !== listGen) return
-    await $.state.set(listRef, { status: 'error', gen, items: prev.items, error: message(err) })
+    await $.state.set(listRef, { ...prev, status: 'error', gen, error: message(err) })
   }
 }
 
@@ -95,8 +95,9 @@ async function moveTop($: EngineInterface, paneRows: number, to: (now: number, l
   const h = await ready($)
   if (!h) return
   const l = h.layout
-  const now = await read($, top)
-  await $.state.set(topRef, clampTop(to(now, l), l.rows.length, windowRows(paneRows, h.data), l.fileRows))
+  const rows = windowRows(paneRows, h.data)
+  const now = clampTop(await read($, top), l.rows.length, rows, l.fileRows)
+  await $.state.set(topRef, clampTop(to(now, l), l.rows.length, rows, l.fileRows))
 }
 
 export const register: Register = on => {

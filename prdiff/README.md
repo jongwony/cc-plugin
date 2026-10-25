@@ -14,13 +14,13 @@ PR's branch. prdiff does both.
 | Step | Where it comes from |
 | --- | --- |
 | The PR list | `gh pr list` for the repository `gh` resolves in the session's directory; `●` marks the PR `gh pr view` associates with the current checkout |
-| The base | the PR's own `baseRefName`, fetched to a scratch ref under `refs/prdiff/<n>/` |
-| The head | the PR head, fetched from `refs/pull/<n>/head` to a scratch ref beside it |
+| The base | the tip of the PR's own `baseRefName` on the remote, read with `git ls-remote` and fetched by its id |
+| The head | the tip of `refs/pull/<n>/head`, read and fetched the same way |
 | The diff | `git diff <merge-base(base, head)> <head>`, with renames, binary files and mode-only changes listed |
 | Uncommitted work | only when `gh` says the current checkout *is* that PR: the merge-base is diffed against the working tree, with untracked files added (mode `worktree`); otherwise mode `committed` |
 
-The fetches write under `refs/prdiff/` only, and each load deletes its scratch
-refs once their commit ids are read. The remote used is the one whose URL path
+The fetch brings in objects only: no ref, branch, tag or `FETCH_HEAD` is
+written. The remote used is the one whose URL path
 names the repository `gh` resolved, whatever the host — an ssh alias or GitHub
 Enterprise included (`origin` first).
 

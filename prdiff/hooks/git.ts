@@ -230,17 +230,6 @@ async function renamedRemote(run: Run, remoteV: string, repo: string): Promise<s
 }
 
 /**
- * A base branch name usable in a refspec: one git itself accepts as a branch
- * name and prints back unchanged (`@{-1}` and the like expand, so they fail),
- * never one that reads as an option.
- */
-export async function isSafeRef(run: Run, name: string): Promise<boolean> {
-  if (name === '' || name.startsWith('-') || name.includes('@{') || name.includes(':')) return false
-  const r = await run([...GIT, 'check-ref-format', '--branch', name])
-  return r.exitCode === 0 && r.stdout.trim() === name
-}
-
-/**
  * The environment a fetch runs under so neither git nor ssh asks on the
  * terminal: no credential prompt, and ssh in batch mode unless the user
  * names an ssh command of their own (GIT_SSH_COMMAND, GIT_SSH, core.sshCommand).
@@ -260,8 +249,6 @@ export type Known = {
   ownSsh?: boolean | Promise<boolean>
 }
 
-let loads = 0
-
 export async function loadDiff(unguarded: Run, number: number, known: Known = {}): Promise<DiffData> {
   const run = guarded(unguarded)
   const [prOut, topOut, repo, current] = await Promise.all([
@@ -280,10 +267,6 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
     headRefOid: string
     baseRefName: string
   }>('gh pr view', prOut.stdout)
-  if (!(await isSafeRef(run, pr.baseRefName))) {
-    throw new StepError('base', `unusable base branch name ${JSON.stringify(pr.baseRefName)}`)
-  }
-
   const git = [...GIT, '-C', topOut.stdout.trim()]
   const remoteV = (await must(run, 'git remote', [...git, 'remote', '-v'])).stdout
   const remote = remoteFor(remoteV, repo, hostOfUrl(pr.url)) ?? (await renamedRemote(run, remoteV, repo))
@@ -293,35 +276,25 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   const holdsHead =
     current !== number || (await run([...git, 'merge-base', '--is-ancestor', pr.headRefOid, 'HEAD'])).exitCode === 0
   const mode = decideMode(current, number, holdsHead)
-  loads += 1
-  const scratch = `refs/prdiff/${number}/${loads}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
-  const baseRef = `${scratch}/base`
-  const headRef = `${scratch}/head`
-  // Worktree mode fetches only the base; its head is local HEAD.
-  const fetched = mode === 'worktree' ? [baseRef] : [baseRef, headRef]
-  const specs = [`+refs/heads/${pr.baseRefName}:${baseRef}`, ...(mode === 'worktree' ? [] : [`+refs/pull/${number}/head:${headRef}`])]
   const env = await noPrompts(run, git, known.ownSsh)
-  // Git commands from the fetch on run under `env`.
+  // Git commands from the listing on run under `env`.
   const quiet: Run = (argv, timeoutMs) => run(argv, timeoutMs, env)
-  let baseOid: string
-  let headOid: string
-  const left: string[] = []
-  try {
-    const r = await run(
-      [...git, 'fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--no-recurse-submodules', '--refmap=', remote, ...specs],
-      120_000,
-      env,
-    )
-    if (r.exitCode !== 0) throw new StepError('git fetch', firstLine(r))
-    const oid = async (ref: string) =>
-      (await must(quiet, `git rev-parse ${ref}`, [...git, 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`])).stdout.trim()
-    ;[baseOid, headOid] = await Promise.all([oid(baseRef), mode === 'worktree' ? oid('HEAD') : oid(headRef)])
-  } finally {
-    const gone = await Promise.all(fetched.map(ref => quiet([...git, 'update-ref', '-d', ref])))
-    gone.forEach((g, i) => {
-      if (g.exitCode !== 0) left.push(fetched[i] ?? '')
-    })
-  }
+  // The tips are read once and fetched by id, so no ref is written; worktree mode needs only the base.
+  const baseName = `refs/heads/${pr.baseRefName}`
+  const headName = `refs/pull/${number}/head`
+  const listed = await quiet([...git, 'ls-remote', remote, baseName, ...(mode === 'worktree' ? [] : [headName])], 120_000)
+  if (listed.exitCode !== 0) throw new StepError('git ls-remote', firstLine(listed))
+  const tip = (name: string) => listed.stdout.split('\n').find(l => l.endsWith(`\t${name}`))?.split('\t')[0]
+  const baseOid = tip(baseName)
+  if (!baseOid) throw new StepError('git ls-remote', `${remote} has no branch ${pr.baseRefName}`)
+  const fetchedHead = mode === 'worktree' ? undefined : tip(headName)
+  if (mode === 'committed' && !fetchedHead) throw new StepError('git ls-remote', `${remote} has no ${headName}`)
+  const fetch = await quiet(
+    [...git, 'fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--no-recurse-submodules', remote, baseOid, ...(fetchedHead ? [fetchedHead] : [])],
+    120_000,
+  )
+  if (fetch.exitCode !== 0) throw new StepError('git fetch', firstLine(fetch))
+  const headOid = fetchedHead ?? (await must(quiet, 'git rev-parse HEAD', [...git, 'rev-parse', '--verify', '--quiet', 'HEAD^{commit}'])).stdout.trim()
   const based = await quiet([...git, 'merge-base', baseOid, headOid])
   if (based.exitCode === 1 && based.stdout.trim() === '' && based.stderr.trim() === '') {
     const shallow = (await quiet([...git, 'rev-parse', '--is-shallow-repository'])).stdout.trim() === 'true'
@@ -335,7 +308,6 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
 
   const notes: string[] = []
   if (!holdsHead) notes.push(`this checkout is matched to #${number} by its branch, but its HEAD does not hold the PR head: showing the PR's commits`)
-  if (left.length > 0) notes.push(`scratch refs not deleted: ${left.join(' ')}`)
   if (mode === 'committed' && mergeBase === headOid) notes.push(`the PR head is already in ${pr.baseRefName}: merged?`)
   if (mode === 'worktree') {
     notes.push('includes uncommitted changes of this checkout')

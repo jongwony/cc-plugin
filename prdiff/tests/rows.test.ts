@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { FileDiff } from '../hooks/parse.ts'
-import { CHAR_BUDGET, MAX_FILE_LINES, TICK, clampTop, fileAt, jump, layout, scrolled, windowOf, windowRows, type Row } from '../hooks/rows.ts'
+import { CHAR_BUDGET, MAX_FILE_LINES, TICK, clampTop, fileAt, fit, jump, layout, scrolled, windowOf, windowRows, type Row } from '../hooks/rows.ts'
 
 function file(path: string, lineCount: number, width = 10): FileDiff {
   const lines = Array.from({ length: lineCount }, (_, i) => ({
@@ -102,4 +102,13 @@ test('a full drawing is shorter than the pane whenever the head fits, small pane
   }
   // A 10-row pane under an 8-row head: a floor of 3 would draw exactly 10.
   expect(8 - 1 + windowRows(10, 8)).toBe(9)
+})
+
+test('a label is cut to the cells a row has, wide characters counting two', () => {
+  expect(fit('M src/a.ts  +1 −0', 40)).toBe('M src/a.ts  +1 −0')
+  expect(fit('abcdefghij', 10)).toBe('abcdefghij')
+  expect(fit('abcdefghijk', 10)).toBe('abcdefghi…')
+  // Six wide characters take 12 cells; four fit beside the ellipsis (4 × 2 + 1 ≤ 10).
+  expect(fit('한국어파일명', 10)).toBe('한국어파…')
+  expect(fit('한국어파일', 10)).toBe('한국어파일')
 })

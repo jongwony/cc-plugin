@@ -83,6 +83,17 @@ export function sharing(run: Run): Run {
   }
 }
 
+/** `run` with a rejection (a timeout, a command that cannot start) answered as a failed run whose stderr is the reason. */
+export function guarded(run: Run): Run {
+  return async (argv, timeoutMs, env) => {
+    try {
+      return await run(argv, timeoutMs, env)
+    } catch (err) {
+      return { exitCode: -1, stdout: '', stderr: err instanceof Error ? err.message : String(err), isStdoutTruncated: false }
+    }
+  }
+}
+
 /** `fn` over `items` with at most `limit` in flight; results in input order. */
 export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length)
@@ -115,7 +126,7 @@ function json<T>(step: string, text: string): T {
 
 /** The PR `gh` associates with the current checkout, if any. */
 export async function currentPr(run: Run): Promise<number | undefined> {
-  const r = await run(['gh', 'pr', 'view', '--json', 'number'])
+  const r = await guarded(run)(['gh', 'pr', 'view', '--json', 'number'])
   if (r.exitCode !== 0) return undefined
   try {
     const n = (JSON.parse(r.stdout) as { number?: unknown }).number
@@ -132,7 +143,8 @@ async function repoOf(run: Run): Promise<string> {
   ).nameWithOwner
 }
 
-export async function listPrs(run: Run): Promise<PrList> {
+export async function listPrs(unguarded: Run): Promise<PrList> {
+  const run = guarded(unguarded)
   const [repo, listed, current] = await Promise.all([
     repoOf(run),
     must(run, 'gh pr list', [
@@ -245,25 +257,25 @@ export async function isSafeRef(run: Run, name: string): Promise<boolean> {
  * terminal: no credential prompt, and ssh in batch mode unless the user
  * names an ssh command of their own (GIT_SSH_COMMAND, GIT_SSH, core.sshCommand).
  */
-export async function noPrompts(run: Run, git: string[]): Promise<Record<string, string>> {
-  const own = await Promise.all([
-    run(['printenv', 'GIT_SSH_COMMAND']),
-    run(['printenv', 'GIT_SSH']),
-    run([...git, 'config', '--get', 'core.sshCommand']),
-  ])
+export async function noPrompts(run: Run, git: string[], ownSshSet: boolean | Promise<boolean> = false): Promise<Record<string, string>> {
+  const ownSsh = await ownSshSet
+  const configured = !ownSsh && (await run([...git, 'config', '--get', 'core.sshCommand'])).exitCode === 0
   const env: Record<string, string> = { GIT_TERMINAL_PROMPT: '0' }
-  if (!own.some(r => r.exitCode === 0)) env.GIT_SSH_COMMAND = 'ssh -o BatchMode=yes'
+  if (!ownSsh && !configured) env.GIT_SSH_COMMAND = 'ssh -o BatchMode=yes'
   return env
 }
 
 export type Known = {
   /** The repository `gh` resolved, when the list already asked. */
   repo?: string
+  /** GIT_SSH_COMMAND or GIT_SSH is set in the environment. */
+  ownSsh?: boolean | Promise<boolean>
 }
 
 let loads = 0
 
-export async function loadDiff(run: Run, number: number, known: Known = {}): Promise<DiffData> {
+export async function loadDiff(unguarded: Run, number: number, known: Known = {}): Promise<DiffData> {
+  const run = guarded(unguarded)
   const [prOut, topOut, repo, current] = await Promise.all([
     must(run, 'gh pr view', [
       'gh', 'pr', 'view', String(number), '--json', 'number,title,url,headRefName,headRefOid,baseRefName',
@@ -297,7 +309,7 @@ export async function loadDiff(run: Run, number: number, known: Known = {}): Pro
   // Worktree mode fetches only the base; its head is local HEAD.
   const fetched = mode === 'worktree' ? [baseRef] : [baseRef, headRef]
   const specs = [`+refs/heads/${pr.baseRefName}:${baseRef}`, ...(mode === 'worktree' ? [] : [`+refs/pull/${number}/head:${headRef}`])]
-  const env = await noPrompts(run, git)
+  const env = await noPrompts(run, git, known.ownSsh)
   let baseOid: string
   let headOid: string
   const left: string[] = []
@@ -313,7 +325,16 @@ export async function loadDiff(run: Run, number: number, known: Known = {}): Pro
       if (g.exitCode !== 0) left.push(fetched[i] ?? '')
     })
   }
-  const mergeBase = (await must(run, 'git merge-base', [...git, 'merge-base', baseOid, headOid])).stdout.trim()
+  const based = await run([...git, 'merge-base', baseOid, headOid])
+  if (based.exitCode === 1 && based.stdout.trim() === '' && based.stderr.trim() === '') {
+    const shallow = (await run([...git, 'rev-parse', '--is-shallow-repository'])).stdout.trim() === 'true'
+    throw new StepError(
+      'git merge-base',
+      `no common ancestor of ${pr.baseRefName} and the PR head${shallow ? ' in this shallow clone; fetch more history (git fetch --unshallow)' : ''}`,
+    )
+  }
+  if (based.exitCode !== 0) throw new StepError('git merge-base', firstLine(based))
+  const mergeBase = based.stdout.trim()
 
   const notes: string[] = []
   if (left.length > 0) notes.push(`scratch refs not deleted: ${left.join(' ')}`)
@@ -325,8 +346,8 @@ export async function loadDiff(run: Run, number: number, known: Known = {}): Pro
   // Worktree mode: the merge-base against the working tree.
   const ends = mode === 'worktree' ? [mergeBase] : [mergeBase, headOid]
   const [numstatOut, whole] = await Promise.all([
-    must(run, 'git diff --numstat', [...git, ...DIFF, '--numstat', '-z', ...ends]),
-    run([...git, ...DIFF, '-p', ...ends]),
+    must(run, 'git diff --numstat', [...git, ...DIFF, '--numstat', '-z', ...ends], 120_000),
+    run([...git, ...DIFF, '-p', ...ends], 120_000),
   ])
   const numstat = parseNumstat(numstatOut.stdout)
   if (whole.exitCode !== 0) throw new StepError('git diff', firstLine(whole))

@@ -56,6 +56,7 @@ async function listedPane<M extends { find(q: { key: string }): Promise<unknown>
 test('the list shows the PRs and a press opens one diff as a stream of files', async ($, on) => {
   on('command.register', () => ({ value: { command: 'prdiff' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('env.get', () => ({ value: undefined }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('process.run', async (_, e) => ({ value: await answer(e.argv, Promise.resolve()) }))
 
@@ -83,6 +84,7 @@ test('a slower earlier load never overwrites the PR asked for later', async ($, 
   })
   on('command.register', () => ({ value: { command: 'prdiff' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('env.get', () => ({ value: undefined }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('process.run', async (_, e) => ({ value: await answer(e.argv, gate) }))
 
@@ -109,6 +111,7 @@ test('scrolling while another PR loads leaves that PR to open at its top', async
   const many = Array.from({ length: 40 }, (_, i) => `f${i}.txt`)
   on('command.register', () => ({ value: { command: 'prdiff' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('env.get', () => ({ value: undefined }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('process.run', async (_, e) => {
     const s = e.argv.join(' ')
@@ -146,6 +149,7 @@ test('after the pane grows, the first move up starts from the top on screen', as
   const lines = Array.from({ length: 200 }, (_, i) => `+l${i}`)
   on('command.register', () => ({ value: { command: 'prdiff' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('env.get', () => ({ value: undefined }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('process.run', async (_, e) => {
     const s = e.argv.join(' ')
@@ -171,6 +175,7 @@ test('a failed refresh keeps the repository and current PR the list already show
   let lists = 0
   on('command.register', () => ({ value: { command: 'prdiff' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('env.get', () => ({ value: undefined }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('process.run', async (_, e) => {
     const s = e.argv.join(' ')
@@ -199,6 +204,7 @@ test('/prdiff N returns while its load is still running, and asks gh each questi
   const asked: string[] = []
   on('command.register', () => ({ value: { command: 'prdiff' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('env.get', () => ({ value: undefined }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('process.run', async (_, e) => {
     asked.push(e.argv.join(' '))
@@ -232,6 +238,7 @@ test('a move still running when another PR opens never writes its top over the n
   const many = Array.from({ length: 40 }, (_, i) => `f${i}.txt`)
   on('command.register', () => ({ value: { command: 'prdiff' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('env.get', () => ({ value: undefined }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('process.run', async (_, e) => {
     const s = e.argv.join(' ')

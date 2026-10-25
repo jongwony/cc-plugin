@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { decideMode, isSafeRef, loadDiff, mapLimit, remoteFor, repoOfUrl, sharing, type Run, type RunResult } from '../hooks/git.ts'
+import { decideMode, isSafeRef, listPrs, loadDiff, mapLimit, remoteFor, repoOfUrl, sharing, type Run, type RunResult } from '../hooks/git.ts'
 
 const ok = (stdout: string): RunResult => ({ exitCode: 0, stdout, stderr: '', isStdoutTruncated: false })
 const fail = (stderr: string): RunResult => ({ exitCode: 1, stdout: '', stderr, isStdoutTruncated: false })
@@ -135,7 +135,7 @@ test('a failed fetch or merge-base is reported with its step, not swallowed', as
   // A failed fetch still deletes whatever scratch refs it may have written.
   expect(f.calls.filter(c => c.includes('update-ref')).length).toBe(2)
   const m = fakeRepo(undefined, { 'merge-base': fail('') })
-  await expect(loadDiff(m.run, 7)).rejects.toThrow('git merge-base: exit 1')
+  await expect(loadDiff(m.run, 7)).rejects.toThrow('git merge-base: no common ancestor of feat/a and the PR head')
 })
 
 test('a patch over 4 MiB is fetched again file by file', async () => {
@@ -260,7 +260,7 @@ test('the fetch asks nothing on the terminal, and leaves a user\'s own ssh comma
   expect(envs[0]).toEqual({ GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' })
   await loadDiff(wrap(fakeRepo(undefined, { 'config --get core.sshCommand': ok('ssh -i key\n') }).run), 7)
   expect(envs[1]).toEqual({ GIT_TERMINAL_PROMPT: '0' })
-  await loadDiff(wrap(fakeRepo(undefined, { 'printenv GIT_SSH_COMMAND': ok('ssh -v\n') }).run), 7)
+  await loadDiff(wrap(fakeRepo(undefined).run), 7, { ownSsh: true })
   expect(envs[2]).toEqual({ GIT_TERMINAL_PROMPT: '0' })
 })
 
@@ -277,4 +277,47 @@ test('a scratch ref that could not be deleted is named in the notes', async () =
   const { run } = fakeRepo(undefined, { 'update-ref -d': fail('error: cannot lock ref') })
   const d = await loadDiff(run, 7)
   expect(d.notes.some(n => /^scratch refs not deleted: refs\/prdiff\/7\/\S+\/base refs\/prdiff\/7\/\S+\/head$/.test(n))).toBe(true)
+})
+
+/** `run`, except that a command whose text holds `match` rejects as a timeout does. */
+function rejecting(run: Run, match: string): Run {
+  return async (argv, t, env) => {
+    if (argv.join(' ').includes(match)) throw new Error('process.run: timed out after 30000 ms')
+    return run(argv, t, env)
+  }
+}
+
+test('a gh lookup of the current PR that never answers leaves it unknown, not the load failed', async () => {
+  const run = rejecting(fakeRepo(7).run, 'gh pr view --json number')
+  const d = await loadDiff(run, 7)
+  expect(d.mode).toBe('committed')
+  const listed = rejecting(async argv => {
+    const s = argv.join(' ')
+    if (s.startsWith('gh repo view')) return ok(JSON.stringify({ nameWithOwner: 'o/r' }))
+    if (s.startsWith('gh pr list')) return ok('[]')
+    return fail(`unexpected: ${s}`)
+  }, 'gh pr view --json number')
+  expect((await listPrs(listed)).current).toBe(undefined)
+})
+
+test('a command that never answers fails the load under its step; one file of the fallback only marks that file', async () => {
+  await expect(loadDiff(rejecting(fakeRepo(undefined).run, '--numstat'), 7)).rejects.toThrow('git diff --numstat: process.run: timed out')
+  await expect(loadDiff(rejecting(fakeRepo(undefined).run, ' -p m'), 7)).rejects.toThrow('git diff: process.run: timed out')
+  const two = fakeRepo(undefined, { '--numstat': ok('1\t1\tx\0' + '1\t1\ty\0'), '-- x': ok(PATCH) })
+  const big: Run = async (argv, t, env) => {
+    const s = argv.join(' ')
+    if (s.includes(' -p ') && !s.includes(' -- ')) return { ...ok(''), isStdoutTruncated: true }
+    if (s.endsWith('-- y')) throw new Error('process.run: timed out after 30000 ms')
+    return two.run(argv, t, env)
+  }
+  const d = await loadDiff(big, 7)
+  expect(d.files.map(f => [f.path, f.hunks.length])).toEqual([['x', 1], ['y', 0]])
+  expect(d.files[1]?.notes).toEqual(['git diff failed: process.run: timed out after 30000 ms'])
+})
+
+test('no merge-base in a shallow clone says so instead of an exit code', async () => {
+  const shallow = fakeRepo(undefined, { 'merge-base': fail(''), 'is-shallow-repository': ok('true\n') })
+  await expect(loadDiff(shallow.run, 7)).rejects.toThrow('git merge-base: no common ancestor of feat/a and the PR head in this shallow clone; fetch more history (git fetch --unshallow)')
+  const unrelated = fakeRepo(undefined, { 'merge-base': fail(''), 'is-shallow-repository': ok('false\n') })
+  await expect(loadDiff(unrelated.run, 7)).rejects.toThrow('git merge-base: no common ancestor of feat/a and the PR head')
 })

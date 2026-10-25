@@ -162,6 +162,39 @@ export function windowOf(
   return { pieces, rows: used, isCut }
 }
 
+/** Terminal cells a code point takes: 2 for East Asian wide and emoji, 0 for combining marks, else 1. */
+function cells(cp: number): number {
+  if ((cp >= 0x0300 && cp <= 0x036f) || (cp >= 0x200b && cp <= 0x200f) || (cp >= 0xfe00 && cp <= 0xfe0f)) return 0
+  if (
+    (cp >= 0x1100 && cp <= 0x115f) ||
+    (cp >= 0x2e80 && cp <= 0xa4cf) ||
+    (cp >= 0xac00 && cp <= 0xd7a3) ||
+    (cp >= 0xf900 && cp <= 0xfaff) ||
+    (cp >= 0xfe30 && cp <= 0xfe4f) ||
+    (cp >= 0xff00 && cp <= 0xff60) ||
+    (cp >= 0xffe0 && cp <= 0xffe6) ||
+    (cp >= 0x1f300 && cp <= 0x1faff) ||
+    (cp >= 0x20000 && cp <= 0x3fffd)
+  ) return 2
+  return 1
+}
+
+/** `text` cut to at most `width` cells, ending in `…` when cut. */
+export function fit(text: string, width: number): string {
+  const chars = Array.from(text)
+  const widths = chars.map(ch => cells(ch.codePointAt(0) ?? 0))
+  if (widths.reduce((n, w) => n + w, 0) <= width) return text
+  let used = 0
+  let out = ''
+  for (const [i, ch] of chars.entries()) {
+    const w = widths[i] ?? 1
+    if (used + w > width - 1) break
+    out += ch
+    used += w
+  }
+  return `${out}…`
+}
+
 export function kindMark(kind: FileDiff['kind']): string {
   switch (kind) {
     case 'added':

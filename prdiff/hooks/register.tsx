@@ -4,7 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { PrdiffDiff, PrdiffList, PrdiffView } from '../types'
 import { listPrs, loadDiff, sharing, type DiffData, type Run } from './git.ts'
 import { clean, hunkSource } from './parse.ts'
-import { clampTop, fileAt, fileLabel, jump, layout, scrolled, windowOf, windowRows as bodyWindow, type Layout, type Row } from './rows.ts'
+import { clampTop, fileAt, fileLabel, fit, jump, layout, scrolled, windowOf, windowRows as bodyWindow, type Layout, type Row } from './rows.ts'
 
 export const PANE = 'prdiff'
 
@@ -81,7 +81,10 @@ async function openDiff($: EngineInterface, number: number, run: Run = runner($)
   await $.state.set(diffRef, { status: 'loading', gen, number })
   try {
     const l = await read($, list)
-    const data = await loadDiff(run, number, { repo: l.status === 'ready' ? l.repo : undefined })
+    const ownSsh = Promise.all([$.env.get('GIT_SSH_COMMAND'), $.env.get('GIT_SSH')])
+      .then(vs => vs.some(v => v !== undefined))
+      .catch(() => false)
+    const data = await loadDiff(run, number, { repo: l.status === 'ready' ? l.repo : undefined, ownSsh })
     if (gen !== diffGen) return
     held = { gen, data, layout: layout(data.files) }
     await $.state.set(diffRef, { status: 'ready', gen, number })
@@ -247,7 +250,7 @@ export const register: Register = on => {
         case 'goto':
           return (
             <Button key={`goto:${row.file}`} plain onPress={() => void moveTop($, paneRows, (_, l) => l.fileRows[row.file] ?? 0)}>
-              {clean(text)}
+              {fit(clean(textOf(row)), cols)}
             </Button>
           )
         case 'file':

@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# PreToolUse guard for ocu GUI tools while the macOS session is locked.
+# PreToolUse guard for every ocu tool while the macOS session is locked;
+# list_apps reads no window and passes straight through.
 # Locked Use unavailable: deny with the cause. Locked Use available: keep the
 # display on for the run (Guardian cannot observe input with it off) and, if it
 # was off, give it time to come up before the call. Any other state, or a
 # status that cannot be read, lets the call through.
+tool=$(plutil -extract tool_name raw -o - - 2>/dev/null) || tool=""
+[ "$tool" = "mcp__plugin_ocu-agent_ocu__list_apps" ] && exit 0
 status=$(open-computer-use locked-use status --json 2>/dev/null) || exit 0
 field() { printf '%s' "$status" | plutil -extract "$1" raw -o - - 2>/dev/null; }
 state=$(field session.state) || exit 0

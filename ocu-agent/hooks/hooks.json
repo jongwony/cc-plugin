@@ -1,9 +1,9 @@
 {
-  "description": "ocu-agent: while the Mac session is locked, deny ocu window tools with the cause when Locked Use cannot serve them and keep the display on when it can; end the ocu session when ocu-operator stops, so a window the run parked on the agent display comes back and element indices do not outlive the run.",
+  "description": "ocu-agent: while the Mac session is locked, deny ocu tools that read a window with the cause when Locked Use cannot serve them and keep the display on when it can; end the ocu session when ocu-operator stops, so a window the run parked on the agent display comes back and element indices do not outlive the run.",
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "mcp__plugin_ocu-agent_ocu__(get_app_state|click|perform_secondary_action|scroll|drag|type_text|press_key|set_value)",
+        "matcher": "mcp__plugin_ocu-agent_ocu__.",
         "hooks": [
           {
             "type": "command",

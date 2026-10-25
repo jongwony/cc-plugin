@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { decideMode, isSafeRef, loadDiff, mapLimit, remoteFor, repoOfUrl, type Run, type RunResult } from '../hooks/git.ts'
+import { decideMode, isSafeRef, loadDiff, mapLimit, remoteFor, repoOfUrl, sharing, type Run, type RunResult } from '../hooks/git.ts'
 
 const ok = (stdout: string): RunResult => ({ exitCode: 0, stdout, stderr: '', isStdoutTruncated: false })
 const fail = (stderr: string): RunResult => ({ exitCode: 1, stdout: '', stderr, isStdoutTruncated: false })
@@ -219,4 +219,33 @@ test('with one owner/repo on two hosts, the remote on the PR\'s host is used', a
   // A host no remote URL names (an ssh alias) falls back to the path match.
   expect(remoteFor('work\tgit@github-work:o/r.git (fetch)\n', 'o/r', 'github.com')).toBe('work')
   expect(remoteFor(v, 'o/r')).toBe('origin')
+})
+
+test('a PR whose head is already in its base says so instead of showing nothing', async () => {
+  const { run } = fakeRepo(undefined, { 'merge-base': ok('h'.repeat(40) + '\n'), '--numstat': ok(''), ' -p ': ok('') })
+  const d = await loadDiff(run, 7)
+  expect(d.files).toEqual([])
+  expect(d.notes).toEqual(['the PR head is already in feat/a: merged?'])
+  const { run: open } = fakeRepo(undefined)
+  expect((await loadDiff(open, 7)).notes).toEqual([])
+})
+
+test('a gh command already in flight is answered once; git commands always run', async () => {
+  const calls: string[] = []
+  let release = () => {}
+  const gate = new Promise<void>(r => {
+    release = r
+  })
+  const run = sharing(async argv => {
+    calls.push(argv.join(' '))
+    await gate
+    return ok(argv.join(' '))
+  })
+  const all = Promise.all([run(['gh', 'repo', 'view']), run(['gh', 'repo', 'view']), run(['git', 'status']), run(['git', 'status'])])
+  release()
+  expect((await all).map(r => r.stdout)).toEqual(['gh repo view', 'gh repo view', 'git status', 'git status'])
+  expect(calls).toEqual(['gh repo view', 'git status', 'git status'])
+  // Once settled, the same command runs again.
+  await run(['gh', 'repo', 'view'])
+  expect(calls.length).toBe(4)
 })

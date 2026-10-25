@@ -178,3 +178,36 @@ test('a failed refresh keeps the repository and current PR the list already show
   expect(await ui.find({ type: 'Text', text: /Pull requests · o\/r/ })).toBeDefined()
   await ui.unmount()
 })
+
+test('/prdiff N returns while its load is still running, and asks gh each question once', async ($, on) => {
+  let release = () => {}
+  const gate = new Promise<void>(r => {
+    release = r
+  })
+  const asked: string[] = []
+  on('command.register', () => ({ value: { command: 'prdiff' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('process.run', async (_, e) => {
+    asked.push(e.argv.join(' '))
+    return { value: await answer(e.argv, gate) }
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  let returned = false
+  const ran = $.command
+    .run({ command: 'prdiff', args: '1', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 160 } })
+    .then(r => {
+      returned = true
+      return r
+    })
+  for (let i = 0; i < 200 && !returned; i += 1) await null
+  expect(returned).toBe(true)
+  release()
+  await ran
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  for (let i = 0; i < 200 && !(await ui.find({ type: 'Text', text: /#1 Title 1/ })); i += 1) await null
+  expect(await ui.find({ type: 'Text', text: /#1 Title 1/ })).toBeDefined()
+  expect(asked.filter(a => a === 'gh repo view --json nameWithOwner').length).toBe(1)
+  expect(asked.filter(a => a === 'gh pr view --json number').length).toBe(1)
+  await ui.unmount()
+})

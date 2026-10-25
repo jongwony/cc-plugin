@@ -187,3 +187,14 @@ test('a name with a space is matched though git ends its ---/+++ lines with a ta
   const [one] = mergeDiff(parseNumstat('1\t0\twith space.txt\0'), patch.slice(patch.indexOf('diff --git a/with')))
   expect(one?.hunks.length).toBe(1)
 })
+
+test('a change only in line endings is noted, since the drawn texts are identical', () => {
+  // `git diff` of `x\r\ny\n` to `x\ny\n`, as git 2.54 writes it.
+  const patch = 'diff --git a/c.txt b/c.txt\nindex 1111111..2222222 100644\n--- a/c.txt\n+++ b/c.txt\n@@ -1,2 +1,2 @@\n-x\r\n+x\n y\n'
+  const [f] = mergeDiff(parseNumstat('1\t1\tc.txt\0'), patch)
+  expect(f?.notes).toEqual(['line endings changed'])
+  expect(f?.hunks[0]?.lines.map(l => l.mark + l.text)).toEqual(['-x', '+x', ' y'])
+  // A real edit inside a CRLF file is not one.
+  const [g] = mergeDiff(parseNumstat('1\t1\tc.txt\0'), patch.replace('+x\n', '+z\r\n'))
+  expect(g?.notes).toEqual([])
+})

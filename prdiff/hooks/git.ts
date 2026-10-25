@@ -69,6 +69,20 @@ function firstLine(r: RunResult): string {
   return text === '' ? `exit ${r.exitCode}` : text
 }
 
+/** `run` with a `gh` command already in flight answered by that same run. */
+export function sharing(run: Run): Run {
+  const flying = new Map<string, Promise<RunResult>>()
+  return (argv, timeoutMs) => {
+    if (argv[0] !== 'gh') return run(argv, timeoutMs)
+    const key = JSON.stringify(argv)
+    const had = flying.get(key)
+    if (had) return had
+    const p = run(argv, timeoutMs).finally(() => flying.delete(key))
+    flying.set(key, p)
+    return p
+  }
+}
+
 /** `fn` over `items` with at most `limit` in flight; results in input order. */
 export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length)
@@ -283,6 +297,7 @@ export async function loadDiff(run: Run, number: number, known: Known = {}): Pro
   const mergeBase = (await must(run, 'git merge-base', [...git, 'merge-base', baseOid, headOid])).stdout.trim()
 
   const notes: string[] = []
+  if (mode === 'committed' && mergeBase === headOid) notes.push(`the PR head is already in ${pr.baseRefName}: merged?`)
   if (mode === 'worktree') {
     notes.push('includes uncommitted changes of this checkout')
     if (headOid !== pr.headRefOid) notes.push(`local HEAD ${headOid.slice(0, 7)} differs from the PR head ${pr.headRefOid.slice(0, 7)}`)

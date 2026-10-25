@@ -81,6 +81,8 @@ type Section = {
   hunks: Hunk[]
   plusPath?: string
   minusPath?: string
+  /** A removed and an added line of one hunk differ only in a trailing CR. */
+  eol?: boolean
 }
 
 /** Splits a patch into per-file sections at each `diff --git` line. */
@@ -93,6 +95,8 @@ function sections(patch: string): Section[] {
   // Lines the hunk header still owes on each side.
   let oldLeft = 0
   let newLeft = 0
+  // The current hunk's removed and added texts, each with whether it ended in CR.
+  let seen = { '-': new Map<string, Set<boolean>>(), '+': new Map<string, Set<boolean>>() }
   for (const raw of patch.split('\n')) {
     const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw
     if (line.startsWith('diff --git ') || line.startsWith('diff --cc ')) {
@@ -109,6 +113,7 @@ function sections(patch: string): Section[] {
       oldLeft = m[2] === undefined ? 1 : Number(m[2])
       newLeft = m[4] === undefined ? 1 : Number(m[4])
       hunk = { header: line.slice(0, line.indexOf(' @@') + 3), section: clean(m[5] ?? ''), lines: [] }
+      seen = { '-': new Map(), '+': new Map() }
       cur.hunks.push(hunk)
       continue
     }
@@ -124,6 +129,12 @@ function sections(patch: string): Section[] {
     const mark = line === '' && oldLeft > 0 && newLeft > 0 ? ' ' : line[0]
     if (mark === ' ' || mark === '+' || mark === '-' || mark === '\\') {
       hunk.lines.push({ mark, text: clean(line.slice(1)), oldNo, newNo })
+      if (mark === '-' || mark === '+') {
+        const cr = raw.endsWith('\r')
+        const text = line.slice(1)
+        if (seen[mark === '-' ? '+' : '-'].get(text)?.has(!cr)) cur.eol = true
+        seen[mark].set(text, (seen[mark].get(text) ?? new Set<boolean>()).add(cr))
+      }
       if (mark === ' ') {
         oldNo += 1
         newNo += 1
@@ -217,6 +228,7 @@ function describe(s: Section): { kind: FileKind; notes: string[]; isBinary: bool
   }
   if (kind === 'modified' && s.hunks.length === 0 && notes.some(n => n.startsWith('mode '))) kind = 'mode'
   if (isBinary) notes.push('binary file')
+  if (s.eol) notes.push('line endings changed')
   const named = path ?? s.plusPath ?? s.minusPath ?? (s.headerLines[0] ? gitLinePath(s.headerLines[0]) : undefined)
   return { kind, notes: notes.map(clean), isBinary, oldPath, path: named }
 }

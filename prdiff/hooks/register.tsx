@@ -2,7 +2,7 @@ import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { PrdiffDiff, PrdiffList, PrdiffView } from '../types'
-import { listPrs, loadDiff, type DiffData, type Run } from './git.ts'
+import { listPrs, loadDiff, sharing, type DiffData, type Run } from './git.ts'
 import { clean, hunkSource } from './parse.ts'
 import { clampTop, fileAt, fileLabel, jump, layout, scrolled, windowOf, windowRows as bodyWindow, type Layout, type Row } from './rows.ts'
 
@@ -58,13 +58,13 @@ async function ready($: EngineInterface): Promise<Held | undefined> {
   return held && held.gen === d.gen ? held : undefined
 }
 
-async function loadList($: EngineInterface): Promise<void> {
+async function loadList($: EngineInterface, run: Run = runner($)): Promise<void> {
   listGen += 1
   const gen = listGen
   const prev = await read($, list)
   await $.state.set(listRef, { ...prev, status: 'loading', gen, error: undefined })
   try {
-    const got = await listPrs(runner($))
+    const got = await listPrs(run)
     if (gen !== listGen) return
     await $.state.set(listRef, { status: 'ready', gen, repo: got.repo, current: got.current, items: got.items })
   } catch (err) {
@@ -73,7 +73,7 @@ async function loadList($: EngineInterface): Promise<void> {
   }
 }
 
-async function openDiff($: EngineInterface, number: number): Promise<void> {
+async function openDiff($: EngineInterface, number: number, run: Run = runner($)): Promise<void> {
   diffGen += 1
   const gen = diffGen
   await $.state.set(viewRef, { kind: 'diff', number })
@@ -81,7 +81,7 @@ async function openDiff($: EngineInterface, number: number): Promise<void> {
   await $.state.set(diffRef, { status: 'loading', gen, number })
   try {
     const l = await read($, list)
-    const data = await loadDiff(runner($), number, { repo: l.status === 'ready' ? l.repo : undefined })
+    const data = await loadDiff(run, number, { repo: l.status === 'ready' ? l.repo : undefined })
     if (gen !== diffGen) return
     held = { gen, data, layout: layout(data.files) }
     await $.state.set(diffRef, { status: 'ready', gen, number })
@@ -114,8 +114,9 @@ export const register: Register = on => {
     await $.ui.open({ id: PANE, title: 'PR diff', focus: true })
     const n = Number.parseInt(e.args.trim().replace(/^#/, ''), 10)
     if (Number.isInteger(n) && n > 0) {
-      void loadList($)
-      await openDiff($, n)
+      const run = sharing(runner($))
+      void loadList($, run)
+      void openDiff($, n, run)
       return { text: `PR diff pane opened on #${n}.` }
     }
     await $.state.set(viewRef, { kind: 'list' })

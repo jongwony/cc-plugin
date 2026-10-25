@@ -73,6 +73,25 @@ export function jump(fileRows: readonly number[], top: number, dir: 1 | -1): num
   return before.at(-1) ?? 0
 }
 
+/** Rows a wheel tick moves the body. */
+export const TICK = 3
+
+/**
+ * The top a `ui.scroll` move asks for, the body `rows` tall over `rowCount`
+ * rows. Home and End ask for `contentRows`, a page key for `bodyRows`; the
+ * drawing stays shorter than the pane, so the two never coincide.
+ */
+export function scrolled(
+  now: number,
+  e: { by: number; bodyRows: number; contentRows: number },
+  rows: number,
+  rowCount: number,
+): number {
+  const { by, bodyRows, contentRows } = e
+  if (contentRows !== bodyRows && Math.abs(by) === contentRows) return by < 0 ? 0 : rowCount
+  return now + (Math.abs(by) >= bodyRows ? Math.max(1, rows - 2) * Math.sign(by) : by * TICK)
+}
+
 export type Piece =
   | { kind: 'row'; row: Exclude<Row, { kind: 'line' }> }
   | { kind: 'code'; file: number; hunk: number; lines: DiffLine[] }
@@ -144,6 +163,7 @@ export function kindMark(kind: FileDiff['kind']): string {
     case 'copied':
       return 'C'
     case 'mode':
+    case 'typechange':
       return 'T'
     case 'untracked':
       return '?'

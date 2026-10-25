@@ -40,6 +40,7 @@ The pane takes the keyboard after `ctrl+x tab` or a click.
 | `j` / `k` | | next / previous file |
 | `d` / `u` | | half a page down / up |
 | `b` | | back to the list |
+| `Home` / `End` | | top / end of the stream |
 | wheel | scroll | scroll the stream |
 
 The top of a diff lists every file; pressing one jumps to it. A file over 3,000

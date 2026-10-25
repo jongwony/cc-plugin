@@ -4,7 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { PrdiffDiff, PrdiffList, PrdiffView } from '../types'
 import { listPrs, loadDiff, type DiffData, type Run } from './git.ts'
 import { clean, hunkSource } from './parse.ts'
-import { clampTop, fileAt, fileLabel, jump, layout, windowOf, type Layout, type Row } from './rows.ts'
+import { clampTop, fileAt, fileLabel, jump, layout, scrolled, windowOf, type Layout, type Row } from './rows.ts'
 
 export const PANE = 'prdiff'
 
@@ -16,9 +16,6 @@ const view = atom(viewRef, { kind: 'list' } as PrdiffView)
 const list = atom(listRef, { status: 'idle', gen: 0, items: [] } as PrdiffList)
 const diff = atom(diffRef, { status: 'idle', gen: 0, number: 0 } as PrdiffDiff)
 const top = atom(topRef, 0)
-
-/** Rows a wheel tick moves the body. */
-const TICK = 3
 
 function runner($: EngineInterface): Run {
   return async (argv, timeoutMs) => {
@@ -41,9 +38,12 @@ let held: { gen: number; data: DiffData; layout: Layout } | undefined
 
 type Held = NonNullable<typeof held>
 
-/** Rows the diff view draws above the body: title, refs line, notes, controls, file line. */
+/**
+ * Rows the diff view keeps out of the body: title, refs line, notes, controls,
+ * file line, and one left empty so a full drawing is never `bodyRows` tall.
+ */
 function headRows(data: DiffData): number {
-  return 4 + data.notes.length
+  return 5 + data.notes.length
 }
 
 /** The body's window for a pane `paneRows` tall; every surface and event derives its own. */
@@ -125,10 +125,8 @@ export const register: Register = on => {
   on('ui.scroll', { requestId: PANE }, async ($, e, next) => {
     const h = await ready($)
     if (!h) return next(e)
-    const by = e.by
     const rows = windowRows(e.bodyRows, h.data)
-    const step = Math.abs(by) >= e.bodyRows ? Math.max(1, rows - 2) * Math.sign(by) : by * TICK
-    await moveTop($, e.bodyRows, now => now + step)
+    await moveTop($, e.bodyRows, (now, l) => scrolled(now, e, rows, l.rows.length))
     return {}
   })
 
@@ -183,7 +181,7 @@ export const register: Register = on => {
         <Button key="reload" plain hotkey="r" label="reload" onPress={() => void openDiff($, v.number)} />
       </Box>
     )
-    const data = held && held.gen === d.gen && d.status === 'ready' ? held : undefined
+    const data = held && held.gen === d.gen && d.status === 'ready' && d.number === v.number ? held : undefined
     if (!data) {
       const status =
         d.status === 'loading' && d.number === v.number

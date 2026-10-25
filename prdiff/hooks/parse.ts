@@ -1,7 +1,7 @@
 // Parsers for `git diff --numstat -z` and `git diff -p`, and the merge of the
 // two into one inventory. Pure: no `$`.
 
-export type FileKind = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'mode' | 'untracked'
+export type FileKind = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'mode' | 'typechange' | 'untracked'
 
 export type DiffLine = {
   /** ' ', '+', '-' or '\\' (no newline at end of file). */
@@ -171,12 +171,19 @@ function stripPrefix(p: string): string | undefined {
   return unq.replace(/^[abciwo]\//, '')
 }
 
+const ESCAPES: Record<string, string> = { a: '\x07', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v' }
+
 /** Git's C-style quoting of a path with special characters. */
 function unquote(p: string): string {
   const body = p.slice(1, p.endsWith('"') ? -1 : undefined)
-  return body.replace(/\\(["\\tn]|[0-7]{3})/g, (_, c: string) =>
-    c === 't' ? '\t' : c === 'n' ? '\n' : c.length === 3 ? String.fromCharCode(parseInt(c, 8)) : c,
+  return body.replace(/\\(["\\abfnrtv]|[0-7]{3})/g, (_, c: string) =>
+    c.length === 3 ? String.fromCharCode(parseInt(c, 8)) : (ESCAPES[c] ?? c),
   )
+}
+
+/** A path as a `rename`/`copy` header line writes it: C-quoted when special. */
+function headerPath(p: string): string {
+  return p.startsWith('"') ? unquote(p) : p
 }
 
 function describe(s: Section): { kind: FileKind; notes: string[]; isBinary: boolean; oldPath?: string; path?: string } {
@@ -191,12 +198,12 @@ function describe(s: Section): { kind: FileKind; notes: string[]; isBinary: bool
     else if (l.startsWith('deleted file mode')) kind = 'deleted'
     else if (l.startsWith('rename from ')) {
       kind = 'renamed'
-      oldPath = l.slice('rename from '.length)
-    } else if (l.startsWith('rename to ')) path = l.slice('rename to '.length)
+      oldPath = headerPath(l.slice('rename from '.length))
+    } else if (l.startsWith('rename to ')) path = headerPath(l.slice('rename to '.length))
     else if (l.startsWith('copy from ')) {
       kind = 'copied'
-      oldPath = l.slice('copy from '.length)
-    } else if (l.startsWith('copy to ')) path = l.slice('copy to '.length)
+      oldPath = headerPath(l.slice('copy from '.length))
+    } else if (l.startsWith('copy to ')) path = headerPath(l.slice('copy to '.length))
     else if (l.startsWith('old mode ')) oldMode = l.slice('old mode '.length)
     else if (l.startsWith('new mode ')) notes.push(`mode ${oldMode ?? '?'} → ${l.slice('new mode '.length)}`)
     else if (l.startsWith('Binary files ') || l === 'GIT binary patch') isBinary = true
@@ -208,6 +215,29 @@ function describe(s: Section): { kind: FileKind; notes: string[]; isBinary: bool
   return { kind, notes: notes.map(clean), isBinary, oldPath, path: named }
 }
 
+type Described = ReturnType<typeof describe> & { hunks: Hunk[] }
+
+/**
+ * A file whose type changes (regular file to symlink, or back) is one numstat
+ * entry but two sections, deleted then added; they become one section.
+ */
+function typechanges(secs: Described[]): Described[] {
+  const out: Described[] = []
+  for (const s of secs) {
+    const prev = out.at(-1)
+    if (prev && prev.kind === 'deleted' && s.kind === 'added' && prev.path !== undefined && prev.path === s.path) {
+      out[out.length - 1] = {
+        kind: 'typechange',
+        notes: ['file type changed', ...[...prev.notes, ...s.notes].filter((n, i, all) => all.indexOf(n) === i)],
+        isBinary: prev.isBinary || s.isBinary,
+        path: s.path,
+        hunks: [...prev.hunks, ...s.hunks],
+      }
+    } else out.push(s)
+  }
+  return out
+}
+
 /**
  * Joins the numstat inventory with the patch. The inventory is authoritative:
  * an entry with no hunks (binary, mode-only, pure rename) stays listed. A
@@ -215,7 +245,7 @@ function describe(s: Section): { kind: FileKind; notes: string[]; isBinary: bool
  * otherwise it is found by path.
  */
 export function mergeDiff(numstat: NumstatEntry[], patch: string): FileDiff[] {
-  const secs = sections(patch).map(s => ({ ...describe(s), hunks: s.hunks }))
+  const secs = typechanges(sections(patch).map(s => ({ ...describe(s), hunks: s.hunks })))
   const byPath = new Map(secs.map(s => [s.path ?? '', s]))
   return numstat.map((n, i) => {
     const at = secs[i]

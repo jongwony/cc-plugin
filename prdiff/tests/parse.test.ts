@@ -136,3 +136,30 @@ test('a section with no ---/+++ lines is named by its diff --git line', () => {
   const files = mergeDiff([n[1]!, n[0]!], patch)
   expect(files.map(f => [f.path, f.kind, f.isBinary])).toEqual([['b.bin', 'modified', true], ['sp ace/run.sh', 'mode', false]])
 })
+
+test('a file that becomes a symlink is one entry with both halves of its patch', () => {
+  const patch = [
+    'diff --git a/f b/f', 'deleted file mode 100644', 'index 1111111..0000000', '--- a/f', '+++ /dev/null', '@@ -1 +0,0 @@', '-x',
+    'diff --git a/f b/f', 'new file mode 120000', 'index 0000000..2222222', '--- /dev/null', '+++ b/f', '@@ -0,0 +1 @@', '+a',
+    '\\ No newline at end of file',
+    'diff --git a/g b/g', '--- a/g', '+++ b/g', '@@ -1 +1 @@', '-1', '+2', '',
+  ].join('\n')
+  const files = mergeDiff(parseNumstat('1\t1\tf\0' + '1\t1\tg\0'), patch)
+  expect(files.map(f => [f.path, f.kind])).toEqual([['f', 'typechange'], ['g', 'modified']])
+  expect(files[0]?.hunks.flatMap(h => h.lines.map(l => l.mark + l.text))).toEqual(['-x', '+a', '\\ No newline at end of file'])
+  expect(files[0]?.notes).toContain('file type changed')
+})
+
+test('a rename to a name git quotes is matched under its real name', () => {
+  const patch = [
+    'diff --git a/a.txt "b/say \\"hi\\".txt"', 'similarity index 80%', 'rename from a.txt', 'rename to "say \\"hi\\".txt"',
+    '--- a/a.txt', '+++ "b/say \\"hi\\".txt"', '@@ -1 +1 @@', '-a', '+b', '',
+  ].join('\n')
+  const [f] = mergeDiff(parseNumstat('1\t1\t\0a.txt\0say "hi".txt\0'), patch)
+  expect(f?.path).toBe('say "hi".txt')
+  expect(f?.kind).toBe('renamed')
+  expect(f?.hunks.length).toBe(1)
+  // Every C escape git writes is read back, carriage return included.
+  const [g] = mergeDiff(parseNumstat('1\t1\ta\rb\0'), 'diff --git "a/a\\rb" "b/a\\rb"\n--- "a/a\\rb"\n+++ "b/a\\rb"\n@@ -1 +1 @@\n-a\n+b\n')
+  expect(g?.hunks.length).toBe(1)
+})

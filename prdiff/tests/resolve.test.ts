@@ -22,8 +22,8 @@ function fakeRepo(current: number | undefined, overrides: Record<string, RunResu
     if (s.includes('check-ref-format --branch')) return ok(`${argv.at(-1)}\n`)
     if (s.includes('update-ref -d')) return ok('')
     if (s.includes(' fetch ')) return ok('')
-    if (/rev-parse --verify --quiet refs\/prdiff\/7\/\d+\/base/.test(s)) return ok('b'.repeat(40) + '\n')
-    if (/rev-parse --verify --quiet refs\/prdiff\/7\/\d+\/head/.test(s)) return ok('h'.repeat(40) + '\n')
+    if (/rev-parse --verify --quiet refs\/prdiff\/7\/[^/]+\/base/.test(s)) return ok('b'.repeat(40) + '\n')
+    if (/rev-parse --verify --quiet refs\/prdiff\/7\/[^/]+\/head/.test(s)) return ok('h'.repeat(40) + '\n')
     if (s.includes('rev-parse --verify --quiet HEAD')) return ok('l'.repeat(40) + '\n')
     if (s.includes('merge-base')) return ok('m'.repeat(40) + '\n')
     if (s.includes('--numstat')) return ok('1\t1\tx\0')
@@ -96,8 +96,8 @@ test('a PR not checked out: both ends fetched into private refs, diffed merge-ba
   expect(fetch).toContain('origin')
   const baseSpec = fetch.find(a => a.startsWith('+refs/heads/feat/a:')) ?? ''
   const headSpec = fetch.find(a => a.startsWith('+refs/pull/7/head:')) ?? ''
-  expect(baseSpec).toMatch(/^\+refs\/heads\/feat\/a:refs\/prdiff\/7\/\d+\/base$/)
-  expect(headSpec).toMatch(/^\+refs\/pull\/7\/head:refs\/prdiff\/7\/\d+\/head$/)
+  expect(baseSpec).toMatch(/^\+refs\/heads\/feat\/a:refs\/prdiff\/7\/\d+-[0-9a-z]+\/base$/)
+  expect(headSpec).toMatch(/^\+refs\/pull\/7\/head:refs\/prdiff\/7\/\d+-[0-9a-z]+\/head$/)
   // The scratch refs are gone once their commit ids are read.
   const deleted = calls.filter(c => c.includes('update-ref')).map(c => c.at(-1))
   expect(deleted.sort()).toEqual([baseSpec.split(':')[1], headSpec.split(':')[1]].sort())
@@ -144,4 +144,28 @@ test('a patch over 4 MiB is fetched again file by file', async () => {
   const d = await loadDiff(big, 7)
   expect(d.files[0]?.hunks.length).toBe(1)
   expect(calls.some(c => c.at(-2) === '--' && c.at(-1) === 'x')).toBe(true)
+  // File names are never read as pathspec magic or globs.
+  expect(calls.find(c => c.at(-1) === 'x' && c.at(-2) === '--')).toContain('--literal-pathspecs')
+})
+
+test("the patch prefixes are pinned whatever the user's diff prefix settings", async () => {
+  const { run, calls } = fakeRepo(undefined)
+  await loadDiff(run, 7)
+  const patch = calls.find(c => c.includes('-p')) ?? []
+  expect(patch.join(' ')).toContain('-c diff.srcPrefix=a/ -c diff.dstPrefix=b/')
+})
+
+test('a remote still on the URL from before a rename or transfer is found through gh', async () => {
+  const { run, calls } = fakeRepo(undefined, {
+    'remote -v': ok('origin\tgit@github.com:old-org/r.git (fetch)\nfork\tgit@github.com:me/r.git (fetch)\n'),
+    'gh repo view old-org/r': ok(JSON.stringify({ nameWithOwner: 'O/R' })),
+    'gh repo view me/r': ok(JSON.stringify({ nameWithOwner: 'me/r' })),
+  })
+  await loadDiff(run, 7)
+  expect(calls.find(c => c.includes('fetch'))).toContain('origin')
+  const none = fakeRepo(undefined, {
+    'remote -v': ok('fork\tgit@github.com:me/r.git (fetch)\n'),
+    'gh repo view me/r': ok(JSON.stringify({ nameWithOwner: 'me/r' })),
+  })
+  await expect(loadDiff(none.run, 7)).rejects.toThrow('remote: no git remote points at O/R')
 })

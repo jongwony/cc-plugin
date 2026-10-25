@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { FileDiff } from '../hooks/parse.ts'
-import { CHAR_BUDGET, MAX_FILE_LINES, clampTop, fileAt, jump, layout, windowOf, type Row } from '../hooks/rows.ts'
+import { CHAR_BUDGET, MAX_FILE_LINES, TICK, clampTop, fileAt, jump, layout, scrolled, windowOf, type Row } from '../hooks/rows.ts'
 
 function file(path: string, lineCount: number, width = 10): FileDiff {
   const lines = Array.from({ length: lineCount }, (_, i) => ({
@@ -71,4 +71,15 @@ test('a "no newline" marker takes no row in the stream', () => {
   f.hunks[0]?.lines.push({ mark: '\\', text: ' No newline at end of file', oldNo: 1, newNo: 3 })
   const l = layout([f])
   expect(l.rows.filter(r => r.kind === 'line').length).toBe(2)
+})
+
+test('Home and End reach the stream\'s edges, a page key moves a page, a wheel tick a few rows', () => {
+  // The drawing is one row shorter than the pane: contentRows 29, bodyRows 30.
+  const at = (by: number) => scrolled(500, { by, bodyRows: 30, contentRows: 29 }, 24, 2000)
+  expect(at(29)).toBe(2000)
+  expect(at(-29)).toBe(0)
+  expect(at(30)).toBe(522)
+  expect(at(-30)).toBe(478)
+  expect(at(1)).toBe(500 + TICK)
+  expect(at(-2)).toBe(500 - 2 * TICK)
 })

@@ -54,6 +54,7 @@ const GIT = [
   'git', '--no-optional-locks',
   '-c', 'core.quotePath=false', '-c', 'diff.relative=false', '-c', 'color.ui=false',
   '-c', 'diff.suppressBlankEmpty=false', '-c', 'diff.noprefix=false', '-c', 'diff.mnemonicPrefix=false',
+  '-c', 'diff.srcPrefix=a/', '-c', 'diff.dstPrefix=b/',
 ]
 const DIFF = ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--ignore-submodules=dirty', '--submodule=short', '-M']
 
@@ -163,13 +164,40 @@ export function repoOfUrl(url: string): string | undefined {
   return segs.length >= 2 && owner && repo ? `${owner}/${repo}`.toLowerCase() : undefined
 }
 
+/** Each fetch remote of `git remote -v` with the `owner/repo` its URL names. */
+export function remoteRepos(remoteV: string): Array<{ name: string; repo: string }> {
+  const out: Array<{ name: string; repo: string }> = []
+  for (const line of remoteV.split('\n')) {
+    const m = /^(\S+)\s+(\S+)\s+\(fetch\)$/.exec(line.trim())
+    const repo = m?.[2] ? repoOfUrl(m[2]) : undefined
+    if (m?.[1] && repo) out.push({ name: m[1], repo })
+  }
+  return out
+}
+
 /** The remote whose fetch URL is the repository `gh` resolved; origin first. */
 export function remoteFor(remoteV: string, repo: string): string | undefined {
   const want = repo.toLowerCase()
+  const names = remoteRepos(remoteV).filter(r => r.repo === want).map(r => r.name)
+  return names.includes('origin') ? 'origin' : names[0]
+}
+
+/**
+ * The remote for `repo` when no URL names it as written: a remote whose
+ * `owner/repo` `gh` resolves to `repo`, as it does across a rename or transfer.
+ */
+async function renamedRemote(run: Run, remoteV: string, repo: string): Promise<string | undefined> {
+  const want = repo.toLowerCase()
   const names: string[] = []
-  for (const line of remoteV.split('\n')) {
-    const m = /^(\S+)\s+(\S+)\s+\(fetch\)$/.exec(line.trim())
-    if (m && m[1] && m[2] && repoOfUrl(m[2]) === want) names.push(m[1])
+  for (const r of remoteRepos(remoteV)) {
+    const v = await run(['gh', 'repo', 'view', r.repo, '--json', 'nameWithOwner'])
+    if (v.exitCode !== 0) continue
+    try {
+      const got = (JSON.parse(v.stdout) as { nameWithOwner?: unknown }).nameWithOwner
+      if (typeof got === 'string' && got.toLowerCase() === want) names.push(r.name)
+    } catch {
+      // Not this remote.
+    }
   }
   return names.includes('origin') ? 'origin' : names[0]
 }
@@ -214,14 +242,16 @@ export async function loadDiff(run: Run, number: number, known: Known = {}): Pro
   }
 
   const git = [...GIT, '-C', topOut.stdout.trim()]
-  const remote = remoteFor((await must(run, 'git remote', [...git, 'remote', '-v'])).stdout, repo)
+  const remoteV = (await must(run, 'git remote', [...git, 'remote', '-v'])).stdout
+  const remote = remoteFor(remoteV, repo) ?? (await renamedRemote(run, remoteV, repo))
   if (!remote) throw new StepError('remote', `no git remote points at ${repo}`)
 
   const mode = decideMode(current, number)
   // Each load fetches into refs of its own and deletes them once their commit
-  // ids are read, so concurrent loads of one PR never delete each other's.
+  // ids are read, so concurrent loads of one PR never delete each other's, in
+  // this process or another one sharing the repository.
   loads += 1
-  const scratch = `refs/prdiff/${number}/${loads}`
+  const scratch = `refs/prdiff/${number}/${loads}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
   const baseRef = `${scratch}/base`
   const headRef = `${scratch}/head`
   let baseOid: string
@@ -261,7 +291,7 @@ export async function loadDiff(run: Run, number: number, known: Known = {}): Pro
     : (
         await mapLimit(numstat, CONCURRENCY, async n => {
           const paths = n.oldPath !== undefined ? [n.oldPath, n.path] : [n.path]
-          const one = await run([...git, ...DIFF, '-p', ...ends, '--', ...paths])
+          const one = await run([...git, '--literal-pathspecs', ...DIFF, '-p', ...ends, '--', ...paths])
           const [f] = mergeDiff([n], one.exitCode === 0 && !one.isStdoutTruncated ? one.stdout : '')
           if (f && (one.exitCode !== 0 || one.isStdoutTruncated)) {
             f.hunks = []

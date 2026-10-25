@@ -3,7 +3,7 @@
 // injected `run`, so tests answer it without a repository.
 
 import type { PrdiffPr } from '../types'
-import { mergeDiff, parseNumstat, untrackedFile, type FileDiff } from './parse.ts'
+import { fileFor, filesOf, parseDiff, untrackedFile, type FileDiff } from './parse.ts'
 
 export type RunResult = {
   exitCode: number
@@ -43,13 +43,7 @@ export const MAX_UNTRACKED = 200
 /** Per-file patch reads (over-4-MiB fallback, untracked files) in flight at once. */
 export const CONCURRENCY = 8
 
-// The pins every git command here runs with.
-const GIT = [
-  'git', '--no-optional-locks',
-  '-c', 'core.quotePath=false', '-c', 'diff.relative=false', '-c', 'color.ui=false',
-  '-c', 'diff.suppressBlankEmpty=false', '-c', 'diff.noprefix=false', '-c', 'diff.mnemonicPrefix=false',
-  '-c', 'diff.srcPrefix=a/', '-c', 'diff.dstPrefix=b/',
-]
+const GIT = ['git', '--no-optional-locks']
 const DIFF = ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--ignore-submodules=dirty', '--submodule=short', '-M']
 
 export class StepError extends Error {
@@ -89,14 +83,14 @@ export function guarded(run: Run): Run {
 }
 
 /** `fn` over `items` with at most `limit` in flight; results in input order. */
-export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length)
   let next = 0
   const worker = async () => {
     while (next < items.length) {
       const i = next
       next += 1
-      out[i] = await fn(items[i] as T)
+      out[i] = await fn(items[i] as T, i)
     }
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
@@ -349,26 +343,24 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   }
   // Worktree mode: the merge-base against the working tree.
   const ends = mode === 'worktree' ? [mergeBase] : [mergeBase, headOid]
-  const [numstatOut, whole] = await Promise.all([
-    must(quiet, 'git diff --numstat', [...git, ...DIFF, '--numstat', '-z', ...ends], 120_000),
-    quiet([...git, ...DIFF, '-p', ...ends], 120_000),
-  ])
-  const numstat = parseNumstat(numstatOut.stdout)
+  const whole = await quiet([...git, ...DIFF, '--raw', '--numstat', '-p', '-z', ...ends], 120_000)
   if (whole.exitCode !== 0) throw new StepError('git diff', firstLine(whole))
-  const files: FileDiff[] = !whole.isStdoutTruncated
-    ? mergeDiff(numstat, whole.stdout)
-    : (
-        await mapLimit(numstat, CONCURRENCY, async n => {
-          const paths = n.oldPath !== undefined ? [n.oldPath, n.path] : [n.path]
-          const one = await quiet([...git, '--literal-pathspecs', ...DIFF, '-p', ...ends, '--', ...paths], 120_000)
-          const [f] = mergeDiff([n], one.exitCode === 0 && !one.isStdoutTruncated ? one.stdout : '')
-          if (f && (one.exitCode !== 0 || one.isStdoutTruncated)) {
-            f.hunks = []
-            f.notes = [one.isStdoutTruncated ? 'patch over 4 MiB: not drawn' : `git diff failed: ${firstLine(one)}`]
-          }
-          return f
-        })
-      ).filter((f): f is FileDiff => f !== undefined)
+  const { entries, patch, isWhole } = parseDiff(whole.stdout)
+  if (!isWhole) throw new StepError('git diff', 'file list over 4 MiB was cut')
+  const got = filesOf(entries, patch, whole.isStdoutTruncated)
+  // Files whose patch did not arrive whole are read one at a time.
+  const files = await mapLimit(entries, CONCURRENCY, async (e, i) => {
+    const had = got[i]
+    if (had) return had
+    const paths = e.oldPath !== undefined ? [e.oldPath, e.path] : [e.path]
+    const one = await quiet([...git, '--literal-pathspecs', ...DIFF, '-p', ...ends, '--', ...paths], 120_000)
+    const f = fileFor(e, one.exitCode === 0 && !one.isStdoutTruncated ? one.stdout : '')
+    if (one.exitCode !== 0 || one.isStdoutTruncated) {
+      f.hunks = []
+      f.notes = [one.isStdoutTruncated ? 'patch over 4 MiB: not drawn' : `git diff failed: ${firstLine(one)}`]
+    }
+    return f
+  })
 
   if (mode === 'worktree') {
     const ls = await quiet([...git, 'ls-files', '--others', '--exclude-standard', '-z'], 120_000)

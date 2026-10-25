@@ -14,6 +14,10 @@ const PANE = {
   },
 } as const
 
+/** The `--raw --numstat -z` records of `paths`, each added or changed by `added`/`deleted` lines. */
+const inv = (paths: string[], added = 1, deleted = 0) =>
+  paths.map(p => `:100644 100644 1111111 2222222 M\0${p}\0`).join('') + paths.map(p => `${added}\t${deleted}\t${p}\0`).join('') + '\0'
+
 const result = (stdout: string, exitCode = 0) => ({ exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false })
 
 function pr(n: number) {
@@ -37,8 +41,7 @@ function answer(argv: readonly string[], gate: Promise<void>): Promise<ReturnTyp
   if (s.includes(' fetch ')) return result('')
   if (s.includes('rev-parse --verify')) return result('c'.repeat(40))
   if (s.includes('merge-base')) return result('m'.repeat(40))
-  if (s.includes('--numstat')) return result('1\t1\tsrc/one.ts\0')
-  if (s.includes(' -p ')) return result('diff --git a/src/one.ts b/src/one.ts\n--- a/src/one.ts\n+++ b/src/one.ts\n@@ -1 +1 @@\n-old\n+new\n')
+  if (s.includes('--raw')) return result(inv(['src/one.ts'], 1, 1) + 'diff --git a/src/one.ts b/src/one.ts\n--- a/src/one.ts\n+++ b/src/one.ts\n@@ -1 +1 @@\n-old\n+new\n')
   return result(`unexpected ${s}`, 2)
 }
 
@@ -117,9 +120,8 @@ test('scrolling while another PR loads leaves that PR to open at its top', async
     const s = e.argv.join(' ')
     // PR 1 is long and loads at once; PR 2 waits on the gate.
     if (s.startsWith('gh pr view 2 ')) await gate
-    if (s.includes('--numstat')) return { value: result(many.map(f => `1\t0\t${f}\0`).join('')) }
-    if (s.includes(' -p ')) {
-      return { value: result(many.map(f => `diff --git a/${f} b/${f}\n--- a/${f}\n+++ b/${f}\n@@ -1 +1,2 @@\n x\n+y\n`).join('')) }
+    if (s.includes('--raw')) {
+      return { value: result(inv(many) + many.map(f => `diff --git a/${f} b/${f}\n--- a/${f}\n+++ b/${f}\n@@ -1 +1,2 @@\n x\n+y\n`).join('')) }
     }
     return { value: await answer(e.argv, Promise.resolve()) }
   })
@@ -153,8 +155,7 @@ test('after the pane grows, the first move up starts from the top on screen', as
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('process.run', async (_, e) => {
     const s = e.argv.join(' ')
-    if (s.includes('--numstat')) return { value: result('200\t0\tlong.txt\0') }
-    if (s.includes(' -p ')) return { value: result(`diff --git a/long.txt b/long.txt\n--- a/long.txt\n+++ b/long.txt\n@@ -0,0 +1,200 @@\n${lines.join('\n')}\n`) }
+    if (s.includes('--raw')) return { value: result(inv(['long.txt'], 200) + `diff --git a/long.txt b/long.txt\n--- a/long.txt\n+++ b/long.txt\n@@ -0,0 +1,200 @@\n${lines.join('\n')}\n`) }
     return { value: await answer(e.argv, Promise.resolve()) }
   })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
@@ -243,9 +244,8 @@ test('a move still running when another PR opens never writes its top over the n
   on('process.run', async (_, e) => {
     const s = e.argv.join(' ')
     if (s.startsWith('gh pr view 2 ')) await gate
-    if (s.includes('--numstat')) return { value: result(many.map(f => `1\t0\t${f}\0`).join('')) }
-    if (s.includes(' -p ')) {
-      return { value: result(many.map(f => `diff --git a/${f} b/${f}\n--- a/${f}\n+++ b/${f}\n@@ -1 +1,2 @@\n x\n+y\n`).join('')) }
+    if (s.includes('--raw')) {
+      return { value: result(inv(many) + many.map(f => `diff --git a/${f} b/${f}\n--- a/${f}\n+++ b/${f}\n@@ -1 +1,2 @@\n x\n+y\n`).join('')) }
     }
     return { value: await answer(e.argv, Promise.resolve()) }
   })

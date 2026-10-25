@@ -29,14 +29,6 @@ export type FileDiff = {
   hunks: Hunk[]
 }
 
-export type NumstatEntry = {
-  path: string
-  oldPath?: string
-  added: number
-  deleted: number
-  isBinary: boolean
-}
-
 /** Characters a Text or Code refuses: every control character but tab. */
 const CONTROL = /[\u0000-\u0008\u000a-\u001f\u007f-\u009f]/g
 
@@ -44,48 +36,16 @@ export function clean(text: string): string {
   return text.replace(CONTROL, '\ufffd')
 }
 
-/**
- * `git diff --numstat -z`: `added\tdeleted\tpath\0`, or for a rename or copy
- * `added\tdeleted\t\0old\0new\0`; binary files count `-\t-`.
- */
-export function parseNumstat(z: string): NumstatEntry[] {
-  const parts = z.split('\0')
-  const out: NumstatEntry[] = []
-  let i = 0
-  while (i < parts.length) {
-    const head = parts[i]
-    i += 1
-    if (head === undefined || head === '') continue
-    const m = /^(-|\d+)\t(-|\d+)\t(.*)$/s.exec(head)
-    if (!m) continue
-    const [, a = '0', d = '0', rest = ''] = m
-    const isBinary = a === '-' && d === '-'
-    const added = isBinary ? 0 : Number(a)
-    const deleted = isBinary ? 0 : Number(d)
-    if (rest === '') {
-      const oldPath = parts[i] ?? ''
-      const path = parts[i + 1] ?? ''
-      i += 2
-      out.push({ path, oldPath, added, deleted, isBinary })
-    } else {
-      out.push({ path: rest, added, deleted, isBinary })
-    }
-  }
-  return out
-}
-
 const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$/
 
 type Section = {
-  headerLines: string[]
   hunks: Hunk[]
-  plusPath?: string
-  minusPath?: string
+  isBinary: boolean
   /** A removed and an added line of one hunk differ only in a trailing CR. */
-  eol?: boolean
+  eol: boolean
 }
 
-/** Splits a patch into per-file sections at each `diff --git` line. */
+/** Splits a patch into per-file sections at each `diff --git` line, in the order git wrote them. */
 function sections(patch: string): Section[] {
   const out: Section[] = []
   let cur: Section | undefined
@@ -100,7 +60,7 @@ function sections(patch: string): Section[] {
   for (const raw of patch.split('\n')) {
     const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw
     if (line.startsWith('diff --git ') || line.startsWith('diff --cc ')) {
-      cur = { headerLines: [line], hunks: [] }
+      cur = { hunks: [], isBinary: false, eol: false }
       hunk = undefined
       out.push(cur)
       continue
@@ -119,9 +79,7 @@ function sections(patch: string): Section[] {
       continue
     }
     if (!hunk) {
-      cur.headerLines.push(line)
-      if (line.startsWith('+++ ')) cur.plusPath = stripPrefix(markerPath(line))
-      if (line.startsWith('--- ')) cur.minusPath = stripPrefix(markerPath(line))
+      if (line.startsWith('Binary files ') || line === 'GIT binary patch') cur.isBinary = true
       continue
     }
     // An empty line inside a hunk that still owes lines on both sides is an
@@ -152,135 +110,136 @@ function sections(patch: string): Section[] {
       // The trailing newline of the whole patch.
     } else {
       hunk = undefined
-      cur.headerLines.push(line)
     }
   }
   return out
 }
 
-/**
- * The path a `diff --git a/X b/X` line names when both sides are one path, the
- * only form a section without `---`/`+++` (mode-only, binary) can name it in.
- */
-function gitLinePath(line: string): string | undefined {
-  const rest = line.slice('diff --git '.length)
-  if (rest.startsWith('"')) {
-    const m = /^("(?:[^"\\]|\\.)*") ("(?:[^"\\]|\\.)*")$/.exec(rest)
-    const a = m?.[1] ? stripPrefix(m[1]) : undefined
-    const b = m?.[2] ? stripPrefix(m[2]) : undefined
-    return a !== undefined && a === b ? a : undefined
-  }
-  if (rest.length % 2 === 0) return undefined
-  const half = (rest.length - 1) / 2
-  const a = rest.slice(0, half)
-  const b = rest.slice(half + 1)
-  return a.startsWith('a/') && b.startsWith('b/') && a.slice(2) === b.slice(2) ? a.slice(2) : undefined
-}
-
-/** The path of a `---`/`+++` line, less the tab git ends it with when the name holds a space. */
-function markerPath(line: string): string {
-  const p = line.slice(4)
-  return p.endsWith('\t') ? p.slice(0, -1) : p
-}
-
-function stripPrefix(p: string): string | undefined {
-  if (p === '/dev/null') return undefined
-  const unq = p.startsWith('"') ? unquote(p) : p
-  return unq.replace(/^[abciwo]\//, '')
-}
-
-const ESCAPES: Record<string, string> = { a: '\x07', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v' }
-
-/** Git's C-style quoting of a path with special characters. */
-function unquote(p: string): string {
-  const body = p.slice(1, p.endsWith('"') ? -1 : undefined)
-  return body.replace(/\\(["\\abfnrtv]|[0-7]{3})/g, (_, c: string) =>
-    c.length === 3 ? String.fromCharCode(parseInt(c, 8)) : (ESCAPES[c] ?? c),
-  )
-}
-
-/** A path as a `rename`/`copy` header line writes it: C-quoted when special. */
-function headerPath(p: string): string {
-  return p.startsWith('"') ? unquote(p) : p
-}
-
-function describe(s: Section): { kind: FileKind; notes: string[]; isBinary: boolean; oldPath?: string; path?: string } {
-  const notes: string[] = []
-  let kind: FileKind = 'modified'
-  let isBinary = false
-  let oldPath: string | undefined
-  let path: string | undefined
-  let oldMode: string | undefined
-  for (const l of s.headerLines) {
-    if (l.startsWith('new file mode')) kind = 'added'
-    else if (l.startsWith('deleted file mode')) kind = 'deleted'
-    else if (l.startsWith('rename from ')) {
-      kind = 'renamed'
-      oldPath = headerPath(l.slice('rename from '.length))
-    } else if (l.startsWith('rename to ')) path = headerPath(l.slice('rename to '.length))
-    else if (l.startsWith('copy from ')) {
-      kind = 'copied'
-      oldPath = headerPath(l.slice('copy from '.length))
-    } else if (l.startsWith('copy to ')) path = headerPath(l.slice('copy to '.length))
-    else if (l.startsWith('old mode ')) oldMode = l.slice('old mode '.length)
-    else if (l.startsWith('new mode ')) notes.push(`mode ${oldMode ?? '?'} → ${l.slice('new mode '.length)}`)
-    else if (l.startsWith('Binary files ') || l === 'GIT binary patch') isBinary = true
-    else if (l.startsWith('similarity index ')) notes.push(l)
-  }
-  if (kind === 'modified' && s.hunks.length === 0 && notes.some(n => n.startsWith('mode '))) kind = 'mode'
-  if (isBinary) notes.push('binary file')
-  if (s.eol) notes.push('line endings changed')
-  const named = path ?? s.plusPath ?? s.minusPath ?? (s.headerLines[0] ? gitLinePath(s.headerLines[0]) : undefined)
-  return { kind, notes: notes.map(clean), isBinary, oldPath, path: named }
-}
-
-type Described = ReturnType<typeof describe> & { hunks: Hunk[] }
-
-/**
- * A file whose type changes (regular file to symlink, or back) is one numstat
- * entry but two sections, deleted then added; they become one section.
- */
-function typechanges(secs: Described[]): Described[] {
-  const out: Described[] = []
-  for (const s of secs) {
-    const prev = out.at(-1)
-    if (prev && prev.kind === 'deleted' && s.kind === 'added' && prev.path !== undefined && prev.path === s.path) {
-      out[out.length - 1] = {
-        kind: 'typechange',
-        notes: ['file type changed', ...[...prev.notes, ...s.notes].filter((n, i, all) => all.indexOf(n) === i)],
-        isBinary: prev.isBinary || s.isBinary,
-        path: s.path,
-        hunks: [...prev.hunks, ...s.hunks],
-      }
-    } else out.push(s)
-  }
-  return out
+/** One file of `git diff --raw --numstat -z`: its raw record and its numstat counts. */
+export type Entry = {
+  /** The raw status letter: A, C, D, M, R, T, U or X. */
+  status: string
+  /** Similarity of a rename or copy, in percent. */
+  score?: number
+  oldMode: string
+  newMode: string
+  path: string
+  oldPath?: string
+  added: number
+  deleted: number
+  isBinary: boolean
 }
 
 /**
- * Joins the numstat inventory with the patch. The inventory is authoritative:
- * an entry with no hunks (binary, mode-only, pure rename) stays listed. A
- * section is paired with the entry at its index only when their paths agree;
- * otherwise it is found by path.
+ * `git diff --raw --numstat -p -z`: every raw record, then every numstat
+ * record in the same order, then the patch. `isWhole` is false when the
+ * output stops inside the records.
  */
-export function mergeDiff(numstat: NumstatEntry[], patch: string): FileDiff[] {
-  const secs = typechanges(sections(patch).map(s => ({ ...describe(s), hunks: s.hunks })))
-  const byPath = new Map(secs.map(s => [s.path ?? '', s]))
-  return numstat.map((n, i) => {
-    const at = secs[i]
-    const s = at !== undefined && at.path === n.path ? at : byPath.get(n.path)
-    const kind: FileKind = s?.kind ?? (n.oldPath !== undefined ? 'renamed' : 'modified')
-    return {
-      path: clean(n.path),
-      oldPath: n.oldPath === undefined ? undefined : clean(n.oldPath),
-      kind,
-      added: n.added,
-      deleted: n.deleted,
-      isBinary: n.isBinary || (s?.isBinary ?? false),
-      notes: s ? s.notes : ['no patch text for this file'],
-      hunks: s?.hunks ?? [],
-    }
+export function parseDiff(z: string): { entries: Entry[]; patch: string; isWhole: boolean } {
+  const parts = z.split('\0')
+  const entries: Entry[] = []
+  let i = 0
+  while (parts[i]?.startsWith(':')) {
+    const m = /^:(\d+) (\d+) \S+ \S+ ([A-Z])(\d*)$/.exec(parts[i] ?? '')
+    if (!m) return { entries, patch: '', isWhole: false }
+    const status = m[3] ?? 'M'
+    const two = status === 'R' || status === 'C'
+    const first = parts[i + 1]
+    const second = two ? parts[i + 2] : undefined
+    if (first === undefined || (two && second === undefined)) return { entries, patch: '', isWhole: false }
+    entries.push({
+      status,
+      score: m[4] ? Number(m[4]) : undefined,
+      oldMode: m[1] ?? '',
+      newMode: m[2] ?? '',
+      path: second ?? first,
+      oldPath: two ? first : undefined,
+      added: 0,
+      deleted: 0,
+      isBinary: false,
+    })
+    i += two ? 3 : 2
+  }
+  for (const e of entries) {
+    const m = /^(-|\d+)\t(-|\d+)\t/.exec(parts[i] ?? '')
+    if (!m) return { entries, patch: '', isWhole: false }
+    e.isBinary = m[1] === '-' && m[2] === '-'
+    e.added = e.isBinary ? 0 : Number(m[1])
+    e.deleted = e.isBinary ? 0 : Number(m[2])
+    i += parts[i]?.length === m[0].length ? 3 : 1
+  }
+  if (parts[i] === '') i += 1
+  return { entries, patch: parts.slice(i).join('\0'), isWhole: true }
+}
+
+function kindOf(e: Entry, hunks: number): FileKind {
+  switch (e.status) {
+    case 'A':
+      return 'added'
+    case 'D':
+      return 'deleted'
+    case 'R':
+      return 'renamed'
+    case 'C':
+      return 'copied'
+    case 'T':
+      return 'typechange'
+    default:
+      return e.oldMode !== e.newMode && hunks === 0 ? 'mode' : 'modified'
+  }
+}
+
+/** Sections an entry takes in the patch: a type change is written as a deletion and an addition. */
+function sectionCount(e: Entry): number {
+  return e.status === 'T' ? 2 : 1
+}
+
+/** One file from its entry and the patch sections git wrote for it. */
+function fileOf(e: Entry, secs: readonly Section[]): FileDiff {
+  const hunks = secs.flatMap(s => s.hunks)
+  const kind = kindOf(e, hunks.length)
+  const isBinary = e.isBinary || secs.some(s => s.isBinary)
+  const notes = [
+    ...(kind === 'typechange' ? ['file type changed'] : []),
+    ...(e.status === 'M' && e.oldMode !== e.newMode ? [`mode ${e.oldMode} → ${e.newMode}`] : []),
+    ...(e.score !== undefined && (kind === 'renamed' || kind === 'copied') ? [`similarity index ${e.score}%`] : []),
+    ...(isBinary ? ['binary file'] : []),
+    ...(secs.some(s => s.eol) ? ['line endings changed'] : []),
+  ]
+  return {
+    path: clean(e.path),
+    oldPath: e.oldPath === undefined ? undefined : clean(e.oldPath),
+    kind,
+    added: e.added,
+    deleted: e.deleted,
+    isBinary,
+    notes,
+    hunks,
+  }
+}
+
+/**
+ * The files of a parsed diff, its patch sections taken in entry order. With
+ * `isCut` the patch stopped early: the last section may be partial, so it
+ * and every entry after it come back `undefined`, to be read again.
+ */
+export function filesOf(entries: readonly Entry[], patch: string, isCut = false): Array<FileDiff | undefined> {
+  const secs = sections(patch)
+  if (isCut) secs.pop()
+  // Pairing by order holds only while git wrote the sections the entries call for.
+  if (!isCut && secs.length !== entries.reduce((n, e) => n + sectionCount(e), 0)) return entries.map(() => undefined)
+  let at = 0
+  return entries.map(e => {
+    const n = sectionCount(e)
+    const mine = secs.slice(at, at + n)
+    at += n
+    return mine.length === n ? fileOf(e, mine) : undefined
   })
+}
+
+/** One entry's file from a patch read for that entry alone. */
+export function fileFor(e: Entry, patch: string): FileDiff {
+  return fileOf(e, sections(patch))
 }
 
 /** A file the working tree holds that git does not track, shown as added. */
@@ -288,7 +247,7 @@ export function untrackedFile(path: string, patch: string | undefined, note?: st
   const secs = patch ? sections(patch) : []
   const hunks = secs[0]?.hunks ?? []
   const added = hunks.reduce((n, h) => n + h.lines.filter(l => l.mark === '+').length, 0)
-  const isBinary = secs[0] ? describe(secs[0]).isBinary : false
+  const isBinary = secs[0]?.isBinary ?? false
   const notes = ['untracked', ...(isBinary ? ['binary file'] : []), ...(note ? [note] : [])]
   return { path: clean(path), kind: 'untracked', added, deleted: 0, isBinary, notes, hunks }
 }

@@ -7,6 +7,10 @@ const fail = (stderr: string): RunResult => ({ exitCode: 1, stdout: '', stderr, 
 const PR = { number: 7, title: 'Stacked', url: 'https://github.com/o/r/pull/7', headRefName: 'feat/b', headRefOid: 'h'.repeat(40), baseRefName: 'feat/a' }
 const PATCH = 'diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n'
 
+/** The `--raw --numstat -z` records of modified `paths`, as git writes them ahead of the patch. */
+const inv = (paths: string[]) =>
+  paths.map(p => `:100644 100644 1111111 2222222 M\0${p}\0`).join('') + paths.map(p => `1\t1\t${p}\0`).join('') + '\0'
+
 /** A repository that answers by the command's shape; records every argv. */
 function fakeRepo(current: number | undefined, overrides: Record<string, RunResult> = {}) {
   const calls: string[][] = []
@@ -26,7 +30,7 @@ function fakeRepo(current: number | undefined, overrides: Record<string, RunResu
     if (/rev-parse --verify --quiet refs\/prdiff\/7\/[^/]+\/head/.test(s)) return ok('h'.repeat(40) + '\n')
     if (s.includes('rev-parse --verify --quiet HEAD')) return ok('l'.repeat(40) + '\n')
     if (s.includes('merge-base')) return ok('m'.repeat(40) + '\n')
-    if (s.includes('--numstat')) return ok('1\t1\tx\0')
+    if (s.includes('--raw')) return ok(inv(['x']) + PATCH)
     if (s.includes(' -p ')) return ok(PATCH)
     if (s.includes('ls-files --others')) return ok('new.txt\0')
     if (s.includes('--no-index')) return { ...ok('diff --git a/new.txt b/new.txt\n--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1 @@\n+n\n'), exitCode: 1 }
@@ -109,8 +113,8 @@ test('a PR not checked out: both ends fetched into private refs, diffed merge-ba
   const again = fakeRepo(undefined)
   await loadDiff(again.run, 7, { repo: 'o/r' })
   expect(again.calls.some(c => c.join(' ').startsWith('gh repo view'))).toBe(false)
-  const numstat = calls.find(c => c.includes('--numstat')) ?? []
-  expect(numstat.slice(-2)).toEqual(['m'.repeat(40), 'h'.repeat(40)])
+  const diffed = calls.find(c => c.includes('--raw')) ?? []
+  expect(diffed.slice(-2)).toEqual(['m'.repeat(40), 'h'.repeat(40)])
   expect(d.files.map(f => f.path)).toEqual(['x'])
   expect(calls.some(c => c.includes('ls-files'))).toBe(false)
 })
@@ -119,10 +123,8 @@ test('the checked-out PR: merge-base against the working tree, untracked files a
   const { run, calls } = fakeRepo(7)
   const d = await loadDiff(run, 7)
   expect(d.mode).toBe('worktree')
-  const numstat = calls.find(c => c.includes('--numstat')) ?? []
-  const patch = calls.find(c => c.includes('-p') && !c.includes('--no-index')) ?? []
-  expect(numstat.at(-1)).toBe('m'.repeat(40))
-  expect(patch.at(-1)).toBe('m'.repeat(40))
+  const diffed = calls.find(c => c.includes('--raw')) ?? []
+  expect(diffed.at(-1)).toBe('m'.repeat(40))
   expect(d.files.map(f => [f.path, f.kind])).toEqual([['x', 'modified'], ['new.txt', 'untracked']])
   expect(d.notes.some(n => n.includes('differs from the PR head'))).toBe(true)
   // An untracked file is read as its bytes, never through a textconv filter.
@@ -144,7 +146,7 @@ test('a patch over 4 MiB is fetched again file by file', async () => {
   })
   const big: Run = async (argv, t) => {
     const s = argv.join(' ')
-    if (s.includes(' -p ') && !s.includes(' -- ')) return { ...ok(''), isStdoutTruncated: true }
+    if (s.includes('--raw')) return { ...ok(inv(['x'])), isStdoutTruncated: true }
     return run(argv, t)
   }
   const d = await loadDiff(big, 7)
@@ -152,13 +154,6 @@ test('a patch over 4 MiB is fetched again file by file', async () => {
   expect(calls.some(c => c.at(-2) === '--' && c.at(-1) === 'x')).toBe(true)
   // File names are never read as pathspec magic or globs.
   expect(calls.find(c => c.at(-1) === 'x' && c.at(-2) === '--')).toContain('--literal-pathspecs')
-})
-
-test("the patch prefixes are pinned whatever the user's diff prefix settings", async () => {
-  const { run, calls } = fakeRepo(undefined)
-  await loadDiff(run, 7)
-  const patch = calls.find(c => c.includes('-p')) ?? []
-  expect(patch.join(' ')).toContain('-c diff.srcPrefix=a/ -c diff.dstPrefix=b/')
 })
 
 test('a remote still on the URL from before a rename or transfer is found through gh', async () => {
@@ -222,7 +217,7 @@ test('with one owner/repo on two hosts, the remote on the PR\'s host is used', a
 })
 
 test('a PR whose head is already in its base says so instead of showing nothing', async () => {
-  const { run } = fakeRepo(undefined, { 'merge-base': ok('h'.repeat(40) + '\n'), '--numstat': ok(''), ' -p ': ok('') })
+  const { run } = fakeRepo(undefined, { 'merge-base': ok('h'.repeat(40) + '\n'), '--raw': ok('') })
   const d = await loadDiff(run, 7)
   expect(d.files).toEqual([])
   expect(d.notes).toEqual(['the PR head is already in feat/a: merged?'])
@@ -301,12 +296,11 @@ test('a gh lookup of the current PR that never answers leaves it unknown, not th
 })
 
 test('a command that never answers fails the load under its step; one file of the fallback only marks that file', async () => {
-  await expect(loadDiff(rejecting(fakeRepo(undefined).run, '--numstat'), 7)).rejects.toThrow('git diff --numstat: process.run: timed out')
-  await expect(loadDiff(rejecting(fakeRepo(undefined).run, ' -p m'), 7)).rejects.toThrow('git diff: process.run: timed out')
-  const two = fakeRepo(undefined, { '--numstat': ok('1\t1\tx\0' + '1\t1\ty\0'), '-- x': ok(PATCH) })
+  await expect(loadDiff(rejecting(fakeRepo(undefined).run, '--raw'), 7)).rejects.toThrow('git diff: process.run: timed out')
+  const two = fakeRepo(undefined, { '-- x': ok(PATCH) })
   const big: Run = async (argv, t, env) => {
     const s = argv.join(' ')
-    if (s.includes(' -p ') && !s.includes(' -- ')) return { ...ok(''), isStdoutTruncated: true }
+    if (s.includes('--raw')) return { ...ok(inv(['x', 'y'])), isStdoutTruncated: true }
     if (s.endsWith('-- y')) throw new Error('process.run: timed out after 30000 ms')
     return two.run(argv, t, env)
   }
@@ -341,7 +335,7 @@ test('the fetch skips submodules, and every git command from it on runs prompt-f
   const big = fakeRepo(7, { '-- x': ok(PATCH) })
   const cut: Run = async (argv, t, env) => {
     const s = argv.join(' ')
-    if (s.includes(' -p ') && !s.includes(' -- ')) return { ...ok(''), isStdoutTruncated: true }
+    if (s.includes('--raw')) return { ...ok(inv(['x'])), isStdoutTruncated: true }
     return big.run(argv, t, env)
   }
   await loadDiff(record(cut), 7)

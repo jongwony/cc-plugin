@@ -83,3 +83,13 @@ test('Home and End reach the stream\'s edges, a page key moves a page, a wheel t
   expect(at(1)).toBe(500 + TICK)
   expect(at(-2)).toBe(500 - 2 * TICK)
 })
+
+test('j reaches a last file shorter than the window, and the file line then names it', () => {
+  const files = [file('a', 40), file('b', 2)]
+  const l = layout(files)
+  const bodyRows = 20
+  const last = l.fileRows[1] ?? 0
+  const top = clampTop(jump(l.fileRows, l.fileRows[0] ?? 0, 1), l.rows.length, bodyRows, l.fileRows)
+  expect(top).toBe(last)
+  expect(fileAt(l.fileRows, top)).toBe(1)
+})

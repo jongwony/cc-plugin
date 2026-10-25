@@ -52,8 +52,12 @@ export function layout(files: readonly FileDiff[]): Layout {
   return { rows, fileRows }
 }
 
-export function clampTop(top: number, rowCount: number, bodyRows: number): number {
-  return Math.max(0, Math.min(top, Math.max(0, rowCount - bodyRows)))
+/**
+ * `top` within the stream: at most the last full window, or the last file's
+ * header when that lies further down, so `j` can reach a short last file.
+ */
+export function clampTop(top: number, rowCount: number, bodyRows: number, fileRows: readonly number[] = []): number {
+  return Math.max(0, Math.min(top, Math.max(0, rowCount - bodyRows, fileRows.at(-1) ?? 0)))
 }
 
 /** The file whose section holds row `top`, or -1 above the first file. */

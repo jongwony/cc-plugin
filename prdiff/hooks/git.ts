@@ -164,22 +164,34 @@ export function repoOfUrl(url: string): string | undefined {
   return segs.length >= 2 && owner && repo ? `${owner}/${repo}`.toLowerCase() : undefined
 }
 
-/** Each fetch remote of `git remote -v` with the `owner/repo` its URL names. */
-export function remoteRepos(remoteV: string): Array<{ name: string; repo: string }> {
-  const out: Array<{ name: string; repo: string }> = []
+/** The host a remote URL names, lowercased, in https, ssh or scp form. */
+export function hostOfUrl(url: string): string | undefined {
+  const u = url.trim()
+  const m = /^[a-z][a-z0-9+.-]*:\/\/(?:[^@/]*@)?([^/:]+)/i.exec(u) ?? /^(?:[^@/:]*@)?([^/:]+):/.exec(u)
+  return m?.[1]?.toLowerCase()
+}
+
+/** Each fetch remote of `git remote -v` with the `owner/repo` and host its URL names. */
+export function remoteRepos(remoteV: string): Array<{ name: string; repo: string; host?: string }> {
+  const out: Array<{ name: string; repo: string; host?: string }> = []
   for (const line of remoteV.split('\n')) {
     // A partial clone appends its filter: `(fetch) [blob:none]`.
     const m = /^(\S+)\s+(\S+)\s+\(fetch\)(?:\s+\[[^\]]*\])?$/.exec(line.trim())
     const repo = m?.[2] ? repoOfUrl(m[2]) : undefined
-    if (m?.[1] && repo) out.push({ name: m[1], repo })
+    if (m?.[1] && m[2] && repo) out.push({ name: m[1], repo, host: hostOfUrl(m[2]) })
   }
   return out
 }
 
-/** The remote whose fetch URL is the repository `gh` resolved; origin first. */
-export function remoteFor(remoteV: string, repo: string): string | undefined {
+/**
+ * The remote whose fetch URL is the repository `gh` resolved; on `host` when
+ * a remote URL names that host, else on any; origin first.
+ */
+export function remoteFor(remoteV: string, repo: string, host?: string): string | undefined {
   const want = repo.toLowerCase()
-  const names = remoteRepos(remoteV).filter(r => r.repo === want).map(r => r.name)
+  const all = remoteRepos(remoteV).filter(r => r.repo === want)
+  const onHost = host === undefined ? [] : all.filter(r => r.host === host.toLowerCase())
+  const names = (onHost.length > 0 ? onHost : all).map(r => r.name)
   return names.includes('origin') ? 'origin' : names[0]
 }
 
@@ -244,7 +256,7 @@ export async function loadDiff(run: Run, number: number, known: Known = {}): Pro
 
   const git = [...GIT, '-C', topOut.stdout.trim()]
   const remoteV = (await must(run, 'git remote', [...git, 'remote', '-v'])).stdout
-  const remote = remoteFor(remoteV, repo) ?? (await renamedRemote(run, remoteV, repo))
+  const remote = remoteFor(remoteV, repo, hostOfUrl(pr.url)) ?? (await renamedRemote(run, remoteV, repo))
   if (!remote) throw new StepError('remote', `no git remote points at ${repo}`)
 
   const mode = decideMode(current, number)
@@ -303,17 +315,23 @@ export async function loadDiff(run: Run, number: number, known: Known = {}): Pro
       ).filter((f): f is FileDiff => f !== undefined)
 
   if (mode === 'worktree') {
-    const others = (await must(run, 'git ls-files', [...git, 'ls-files', '--others', '--exclude-standard', '-z'])).stdout
-      .split('\0')
-      .filter(p => p !== '')
+    const ls = await run([...git, 'ls-files', '--others', '--exclude-standard', '-z'])
+    if (ls.exitCode !== 0) throw new StepError('git ls-files', firstLine(ls))
+    // Over 4 MiB the list is cut, its last name possibly mid-way: only whole
+    // names are kept, and only MAX_UNTRACKED of them are read anyway.
+    const named = ls.stdout.split('\0')
+    const others = (ls.isStdoutTruncated ? named.slice(0, -1) : named).filter(p => p !== '')
     const read = await mapLimit(others.slice(0, MAX_UNTRACKED), CONCURRENCY, async p => {
-      // --no-index exits 1 when the files differ, which is the expected case.
+      // --no-index exits 1 when the files differ, the expected case, but also
+      // on an error (an embedded repository, an unreadable file), which writes
+      // to stderr and no patch.
       const r = await run([...git, 'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', p])
-      const ok = (r.exitCode === 0 || r.exitCode === 1) && !r.isStdoutTruncated
+      const ok = !r.isStdoutTruncated && (r.exitCode === 0 || (r.exitCode === 1 && r.stdout !== '' && r.stderr.trim() === ''))
       return untrackedFile(p, ok ? r.stdout : undefined, ok ? undefined : 'content not read')
     })
     files.push(...read)
-    if (others.length > MAX_UNTRACKED) notes.push(`${others.length - MAX_UNTRACKED} more untracked files not listed`)
+    if (others.length > MAX_UNTRACKED) notes.push(`${others.length - MAX_UNTRACKED}${ls.isStdoutTruncated ? '+' : ''} more untracked files not listed`)
+    else if (ls.isStdoutTruncated) notes.push('more untracked files not listed: their list is over 4 MiB')
   }
 
   return {

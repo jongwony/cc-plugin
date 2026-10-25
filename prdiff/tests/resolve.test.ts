@@ -173,3 +173,32 @@ test('a remote still on the URL from before a rename or transfer is found throug
   })
   await expect(loadDiff(none.run, 7)).rejects.toThrow('remote: no git remote points at O/R')
 })
+
+test('an untracked path git cannot read is listed as not read, not as an empty file', async () => {
+  const { run } = fakeRepo(7, {
+    'ls-files --others': ok('emb/\0new.txt\0'),
+    '-- /dev/null emb/': { exitCode: 1, stdout: '', stderr: "error: Could not access 'emb/null'", isStdoutTruncated: false },
+  })
+  const d = await loadDiff(run, 7)
+  const emb = d.files.find(f => f.path === 'emb/')
+  expect(emb?.notes).toContain('content not read')
+  expect(d.files.find(f => f.path === 'new.txt')?.notes).toEqual(['untracked'])
+})
+
+test('an untracked list over 4 MiB lists what arrived whole instead of failing the load', async () => {
+  const { run } = fakeRepo(7, {
+    'ls-files --others': { exitCode: 0, stdout: 'a.txt\0b.txt\0c.t', stderr: '', isStdoutTruncated: true },
+  })
+  const d = await loadDiff(run, 7)
+  expect(d.files.filter(f => f.kind === 'untracked').map(f => f.path)).toEqual(['a.txt', 'b.txt'])
+  expect(d.notes.some(n => n.includes('more untracked files not listed'))).toBe(true)
+})
+
+test('with one owner/repo on two hosts, the remote on the PR\'s host is used', async () => {
+  const v = 'origin\thttps://github.com/o/r.git (fetch)\nwork\tgit@ghe.corp.com:o/r.git (fetch)\n'
+  expect(remoteFor(v, 'o/r', 'ghe.corp.com')).toBe('work')
+  expect(remoteFor(v, 'o/r', 'github.com')).toBe('origin')
+  // A host no remote URL names (an ssh alias) falls back to the path match.
+  expect(remoteFor('work\tgit@github-work:o/r.git (fetch)\n', 'o/r', 'github.com')).toBe('work')
+  expect(remoteFor(v, 'o/r')).toBe('origin')
+})

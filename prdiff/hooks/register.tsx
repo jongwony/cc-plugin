@@ -96,7 +96,7 @@ async function moveTop($: EngineInterface, paneRows: number, to: (now: number, l
   if (!h) return
   const l = h.layout
   const now = await read($, top)
-  await $.state.set(topRef, clampTop(to(now, l), l.rows.length, windowRows(paneRows, h.data)))
+  await $.state.set(topRef, clampTop(to(now, l), l.rows.length, windowRows(paneRows, h.data), l.fileRows))
 }
 
 export const register: Register = on => {
@@ -211,7 +211,7 @@ export const register: Register = on => {
     ]
     const bodyRows = windowRows(paneRows, dd)
     // The file line names the file at the window's own clamped top.
-    const t = clampTop(await read($, top), lay.rows.length, bodyRows)
+    const t = clampTop(await read($, top), lay.rows.length, bodyRows, lay.fileRows)
     const at = fileAt(lay.fileRows, t)
     head.push(line(at < 0 ? 'files' : `file ${at + 1}/${dd.files.length} · ${dd.files[at]?.path ?? ''}`, { dimColor: true }))
     const clip = cols + 8

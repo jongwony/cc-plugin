@@ -47,6 +47,20 @@ arrives in the delegation message.
   Open Computer Use lacks Accessibility or Screen Recording. Granting them is
   the user's act in System Settings (`open-computer-use doctor` shows which);
   stop and report it.
+- **Locked session.** Window tools reach a locked Mac only through Locked Use,
+  which `ocu locked-use status` reports as available; enabling it is the
+  user's act. This plugin's PreToolUse hook covers the window tools: while the
+  session is locked it keeps the display on when Locked Use is available and
+  denies the call with the cause when it is not.
+
+## Locked session
+
+- **A hook denial ends GUI work.** Report its reason verbatim and stop.
+- **"Locked Use could not observe a protected GUI session becoming unlocked."**
+  means the display went off. Retry that call once: the hook wakes the display
+  again when its previous 120 s wake has ended, which a long gap between calls
+  outlasts. The same failure on the retry is the finding; report it with that
+  cause.
 
 ## Background
 

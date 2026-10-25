@@ -114,8 +114,8 @@ function sections(patch: string): Section[] {
     }
     if (!hunk) {
       cur.headerLines.push(line)
-      if (line.startsWith('+++ ')) cur.plusPath = stripPrefix(line.slice(4))
-      if (line.startsWith('--- ')) cur.minusPath = stripPrefix(line.slice(4))
+      if (line.startsWith('+++ ')) cur.plusPath = stripPrefix(markerPath(line))
+      if (line.startsWith('--- ')) cur.minusPath = stripPrefix(markerPath(line))
       continue
     }
     // An empty line inside a hunk that still owes lines on both sides is an
@@ -163,6 +163,15 @@ function gitLinePath(line: string): string | undefined {
   const a = rest.slice(0, half)
   const b = rest.slice(half + 1)
   return a.startsWith('a/') && b.startsWith('b/') && a.slice(2) === b.slice(2) ? a.slice(2) : undefined
+}
+
+/**
+ * The path of a `---`/`+++` line. Git ends it with a tab when an unquoted
+ * name holds a space; a name holding a tab is quoted, so the tab is never its.
+ */
+function markerPath(line: string): string {
+  const p = line.slice(4)
+  return p.endsWith('\t') ? p.slice(0, -1) : p
 }
 
 function stripPrefix(p: string): string | undefined {

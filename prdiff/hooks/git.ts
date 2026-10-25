@@ -168,7 +168,8 @@ export function repoOfUrl(url: string): string | undefined {
 export function remoteRepos(remoteV: string): Array<{ name: string; repo: string }> {
   const out: Array<{ name: string; repo: string }> = []
   for (const line of remoteV.split('\n')) {
-    const m = /^(\S+)\s+(\S+)\s+\(fetch\)$/.exec(line.trim())
+    // A partial clone appends its filter: `(fetch) [blob:none]`.
+    const m = /^(\S+)\s+(\S+)\s+\(fetch\)(?:\s+\[[^\]]*\])?$/.exec(line.trim())
     const repo = m?.[2] ? repoOfUrl(m[2]) : undefined
     if (m?.[1] && repo) out.push({ name: m[1], repo })
   }
@@ -307,7 +308,7 @@ export async function loadDiff(run: Run, number: number, known: Known = {}): Pro
       .filter(p => p !== '')
     const read = await mapLimit(others.slice(0, MAX_UNTRACKED), CONCURRENCY, async p => {
       // --no-index exits 1 when the files differ, which is the expected case.
-      const r = await run([...git, 'diff', '--no-index', '--no-color', '--no-ext-diff', '--', '/dev/null', p])
+      const r = await run([...git, 'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', p])
       const ok = (r.exitCode === 0 || r.exitCode === 1) && !r.isStdoutTruncated
       return untrackedFile(p, ok ? r.stdout : undefined, ok ? undefined : 'content not read')
     })

@@ -163,3 +163,27 @@ test('a rename to a name git quotes is matched under its real name', () => {
   const [g] = mergeDiff(parseNumstat('1\t1\ta\rb\0'), 'diff --git "a/a\\rb" "b/a\\rb"\n--- "a/a\\rb"\n+++ "b/a\\rb"\n@@ -1 +1 @@\n-a\n+b\n')
   expect(g?.hunks.length).toBe(1)
 })
+
+test('a name with a space is matched though git ends its ---/+++ lines with a tab', () => {
+  const patch = [
+    'diff --git a/del me.txt b/del me.txt', 'deleted file mode 100644', 'index 1111111..0000000',
+    '--- a/del me.txt\t', '+++ /dev/null', '@@ -1 +0,0 @@', '-d',
+    'diff --git a/new one.txt b/new one.txt', 'new file mode 100644', 'index 0000000..2222222',
+    '--- /dev/null', '+++ b/new one.txt\t', '@@ -0,0 +1 @@', '+n',
+    'diff --git a/with space.txt b/with space.txt', 'index 3333333..4444444 100644',
+    '--- a/with space.txt\t', '+++ b/with space.txt\t', '@@ -1 +1,2 @@', ' a', '+b',
+    'diff --git "a/say \\"hi\\".txt" "b/say \\"hi\\".txt"', 'index 5555555..6666666 100644',
+    '--- "a/say \\"hi\\".txt"\t', '+++ "b/say \\"hi\\".txt"\t', '@@ -1 +1 @@', '-x', '+y', '',
+  ].join('\n')
+  const numstat = ['0\t1\tdel me.txt', '1\t0\tnew one.txt', '1\t0\twith space.txt', '1\t1\tsay "hi".txt', ''].join('\0')
+  const files = mergeDiff(parseNumstat(numstat), patch)
+  expect(files.map(f => [f.path, f.kind, f.hunks.length])).toEqual([
+    ['del me.txt', 'deleted', 1],
+    ['new one.txt', 'added', 1],
+    ['with space.txt', 'modified', 1],
+    ['say "hi".txt', 'modified', 1],
+  ])
+  // The per-file fallback reads one section at a time through the same path.
+  const [one] = mergeDiff(parseNumstat('1\t0\twith space.txt\0'), patch.slice(patch.indexOf('diff --git a/with')))
+  expect(one?.hunks.length).toBe(1)
+})

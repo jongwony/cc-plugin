@@ -53,6 +53,8 @@ test('the remote is the one whose URL is the repository gh resolved, origin firs
   expect(remoteFor(v, 'O/R')).toBe('origin')
   expect(remoteFor('work\tgit@github-work:o/r.git (fetch)\n', 'o/r')).toBe('work')
   expect(remoteFor('fork\tgit@github.com:me/r.git (fetch)\n', 'o/r')).toBe(undefined)
+  // A partial clone writes its filter after the fetch URL.
+  expect(remoteFor('origin\thttps://github.com/o/r.git (fetch) [blob:none]\norigin\thttps://github.com/o/r.git (push)\n', 'o/r')).toBe('origin')
 })
 
 test('a base name is usable when git accepts it as a branch and prints it back unchanged', async () => {
@@ -121,6 +123,8 @@ test('the checked-out PR: merge-base against the working tree, untracked files a
   expect(patch.at(-1)).toBe('m'.repeat(40))
   expect(d.files.map(f => [f.path, f.kind])).toEqual([['x', 'modified'], ['new.txt', 'untracked']])
   expect(d.notes.some(n => n.includes('differs from the PR head'))).toBe(true)
+  // An untracked file is read as its bytes, never through a textconv filter.
+  expect(calls.find(c => c.includes('--no-index'))).toContain('--no-textconv')
 })
 
 test('a failed fetch or merge-base is reported with its step, not swallowed', async () => {

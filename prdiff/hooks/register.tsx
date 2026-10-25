@@ -67,7 +67,7 @@ async function loadList($: EngineInterface, run: Run = runner($)): Promise<void>
   try {
     const got = await listPrs(run)
     if (gen !== listGen) return
-    await $.state.set(listRef, { status: 'ready', repo: got.repo, current: got.current, items: got.items })
+    await $.state.set(listRef, { status: 'ready', repo: got.repo, current: got.current, items: got.items, isCut: got.isCut })
   } catch (err) {
     if (gen !== listGen) return
     await $.state.set(listRef, { ...prev, status: 'error', error: message(err) })
@@ -117,8 +117,9 @@ export const register: Register = on => {
 
   on('command.run', { command: 'prdiff' }, async ($, e) => {
     await $.ui.open({ id: PANE, title: 'PR diff', focus: true })
-    const n = Number.parseInt(e.args.trim().replace(/^#/, ''), 10)
-    if (Number.isInteger(n) && n > 0) {
+    const arg = /^#?(\d+)$/.exec(e.args.trim())?.[1]
+    const n = arg === undefined ? 0 : Number(arg)
+    if (n > 0) {
       const run = sharing(runner($))
       void loadList($, run)
       void openDiff($, n, run)
@@ -126,7 +127,8 @@ export const register: Register = on => {
     }
     await $.state.set(viewRef, { kind: 'list' })
     void loadList($)
-    return { text: 'PR diff pane opened.' }
+    const asked = e.args.trim()
+    return { text: asked === '' ? 'PR diff pane opened.' : `PR diff pane opened on the list: ${JSON.stringify(asked)} is not a PR number.` }
   })
 
   on('ui.scroll', { requestId: PANE }, async ($, e, next) => {
@@ -160,6 +162,7 @@ export const register: Register = on => {
           {l.status === 'loading' && line('Loading…', { dimColor: true })}
           {l.status === 'error' && line(`Could not list PRs: ${l.error ?? ''}`, { color: 'error' })}
           {l.status === 'ready' && l.items.length === 0 && line('No open pull requests.', { dimColor: true })}
+          {l.isCut === true && line(`The first ${l.items.length} open PRs; open another with /prdiff <number>.`, { dimColor: true })}
           {l.items.map((p, i) => (
             <Button
               key={`pr:${p.number}`}

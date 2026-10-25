@@ -263,3 +263,17 @@ test('a move still running when another PR opens never writes its top over the n
   expect(fl?.text).toBe('files')
   await ui.unmount()
 })
+
+test('/prdiff with an argument that is not a PR number opens the list and says so', async ($, on) => {
+  on('command.register', () => ({ value: { command: 'prdiff' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('env.get', () => ({ value: undefined }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('process.run', async (_, e) => ({ value: await answer(e.argv, Promise.resolve()) }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const r = await $.command.run({ command: 'prdiff', args: '12abc', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 160 } })
+  expect(r.text).toBe('PR diff pane opened on the list: "12abc" is not a PR number.')
+  const ui = await listedPane(() => $.ui.mount({ ...PANE, surface: 'terminal' }))
+  expect(await ui.find({ key: 'pr:1' })).toBeDefined()
+  await ui.unmount()
+})

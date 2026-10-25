@@ -20,7 +20,12 @@ export type PrList = {
   repo: string
   current?: number
   items: PrSummary[]
+  /** The list stopped at LIST_LIMIT; more open PRs may exist. */
+  isCut: boolean
 }
+
+/** Open PRs listed, at most. */
+export const LIST_LIMIT = 100
 
 export type Mode = 'worktree' | 'committed'
 
@@ -52,9 +57,11 @@ export class StepError extends Error {
   }
 }
 
+/** A failed run's reason: its first `fatal:`/`error:` line, else its first line that is no warning or hint. */
 function firstLine(r: RunResult): string {
-  const text = (r.stderr.trim() || r.stdout.trim()).split('\n')[0] ?? ''
-  return text === '' ? `exit ${r.exitCode}` : text
+  const lines = (r.stderr.trim() || r.stdout.trim()).split('\n').map(l => l.trim()).filter(l => l !== '')
+  const text = lines.find(l => /^(?:fatal|error): /.test(l)) ?? lines.find(l => !/^(?:warning|hint):/i.test(l)) ?? lines[0]
+  return text === undefined ? `exit ${r.exitCode}` : text
 }
 
 /** `run` with a `gh` command already in flight answered by that same run. */
@@ -136,7 +143,7 @@ export async function listPrs(unguarded: Run): Promise<PrList> {
   const [repo, listed, current] = await Promise.all([
     repoOf(run),
     must(run, 'gh pr list', [
-      'gh', 'pr', 'list', '--limit', '100',
+      'gh', 'pr', 'list', '--limit', String(LIST_LIMIT),
       '--json', 'number,title,headRefName,baseRefName,author,isDraft',
     ]),
     currentPr(run),
@@ -150,7 +157,7 @@ export async function listPrs(unguarded: Run): Promise<PrList> {
     author: p.author?.login ?? '',
     isDraft: p.isDraft === true,
   }))
-  return { repo, current, items }
+  return { repo, current, items, isCut: items.length >= LIST_LIMIT }
 }
 
 /**

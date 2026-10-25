@@ -14,6 +14,8 @@ export type PrdiffList = {
   repo?: string
   current?: number
   items: PrdiffPr[]
+  /** The list stopped at its limit; more open PRs may exist. */
+  isCut?: boolean
   error?: string
 }
 

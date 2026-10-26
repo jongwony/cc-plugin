@@ -53,8 +53,8 @@ the pane's width, and while the open file is drawn 20,000 characters stay
 for the list. What does not fit is counted, not dropped silently ("N more
 files", "N more lines of this file are not drawn"). A single file's patch
 over 4 MiB is read as far as it arrived, and the pane says so. Fetch,
-merge-base and `gh` failures show in the pane, and so does the failure of
-any key.
+merge-base and `gh` failures show in the pane as the load's; a file's read
+error, or a scroll the engine rejects, shows under that file.
 
 ## Requirements
 

@@ -69,13 +69,6 @@ function json<T>(step: string, text: string): T {
   }
 }
 
-async function repoOf(run: Run): Promise<string> {
-  return json<{ nameWithOwner: string }>(
-    'gh repo view',
-    (await must(run, 'gh repo view', ['gh', 'repo', 'view', '--json', 'nameWithOwner'])).stdout,
-  ).nameWithOwner
-}
-
 /**
  * `owner/repo`, lowercased, from a remote URL in https, ssh or scp form: the
  * path's last two segments, whatever the host (an ssh alias, GHE, port 443).
@@ -143,12 +136,11 @@ export type Known = {
 
 export async function loadDiff(unguarded: Run, number: number, known: Known = {}): Promise<DiffData> {
   const run = guarded(unguarded)
-  const [prOut, topOut, repo] = await Promise.all([
+  const [prOut, topOut] = await Promise.all([
     must(run, 'gh pr view', [
       'gh', 'pr', 'view', String(number), '--json', 'number,title,url,headRefName,baseRefName',
     ]),
     must(run, 'git rev-parse', [...GIT, 'rev-parse', '--show-toplevel']),
-    repoOf(run),
   ])
   const pr = json<{
     number: number
@@ -157,6 +149,9 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
     headRefName: string
     baseRefName: string
   }>('gh pr view', prOut.stdout)
+  // The PR's own URL names its repository and host: https://<host>/<owner>/<repo>/pull/<n>.
+  const repo = /^[a-z]+:\/\/[^/]+\/([^/]+\/[^/]+)\/pull\/\d+$/i.exec(pr.url)?.[1]
+  if (!repo) throw new StepError('gh pr view', `unreadable PR URL ${JSON.stringify(pr.url)}`)
   const git = [...GIT, '-C', topOut.stdout.trim()]
   const remoteV = (await must(run, 'git remote', [...git, 'remote', '-v'])).stdout
   const remote = remoteFor(remoteV, repo, hostOfUrl(pr.url))

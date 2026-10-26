@@ -39,7 +39,6 @@ function answer(argv: readonly string[], gate: Promise<void>): Promise<ReturnTyp
   if (s.startsWith('gh pr view 1 ')) return gate.then(() => result(JSON.stringify(pr(1))))
   if (s.startsWith('gh pr view 2 ')) return result(JSON.stringify(pr(2)))
   if (s.startsWith('gh pr view 3 ')) return result(JSON.stringify(pr(3)))
-  if (s.startsWith('gh repo view')) return result(JSON.stringify({ nameWithOwner: 'o/r' }))
   if (s.includes('--show-toplevel')) return result('/repo')
   if (s.includes('remote -v')) return result('origin\thttps://github.com/o/r.git (fetch)\n')
   if (s.includes(' ls-remote ')) return result(argv.slice(argv.indexOf('ls-remote') + 2).map(n => `${'c'.repeat(40)}\t${n}`).join('\n'))

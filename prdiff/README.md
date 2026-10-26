@@ -21,9 +21,9 @@ so uncommitted work stays `/diff`'s.
 | One file's lines | `git diff <merge-base>:<old path> <head>:<path>`, each side named by revision and path (the empty blob for an added or deleted file's missing side, stored if the repository lacks it), read when the file is opened; binary files, submodules and mode-only changes have none to read. Naming the path keeps `.gitattributes` in force, as it is for the file list |
 
 The fetch brings in objects only: no ref, branch, tag or `FETCH_HEAD` is
-written. The remote used is the one whose URL path
-names the repository `gh` resolved, whatever the host — an ssh alias or GitHub
-Enterprise included (`origin` first).
+written. The remote used is the one whose URL path names the repository in
+the PR's own URL, preferring one on that URL's host, whatever its form — an
+ssh alias or GitHub Enterprise included (`origin` first).
 
 ## Use
 

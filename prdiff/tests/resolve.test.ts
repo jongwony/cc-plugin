@@ -21,7 +21,6 @@ function fakeRepo(overrides: Record<string, RunResult> = {}) {
     const s = argv.join(' ')
     for (const [k, v] of Object.entries(overrides)) if (s.includes(k)) return v
     if (s.startsWith('gh pr view 7')) return ok(JSON.stringify(PR))
-    if (s.startsWith('gh repo view')) return ok(JSON.stringify({ nameWithOwner: 'O/R' }))
     if (s.includes('rev-parse --show-toplevel')) return ok('/repo\n')
     if (s.includes('remote -v')) return ok('fork\tgit@github.com:me/r.git (fetch)\norigin\thttps://github.com/o/r.git (fetch)\n')
     if (s.includes(' ls-remote ')) {
@@ -248,4 +247,17 @@ test('a type change is read by path and drawn in its two halves', async () => {
   if (!e) throw new Error('no entry')
   const { file } = await d.readFile(e)
   expect(file.hunks.flatMap(h => h.lines.map(l => l.mark + l.text))).toEqual(['-x', '+m.txt'])
+})
+
+test('the PR URL names the repository and host; gh is asked nothing else about the repository', async () => {
+  const ghe = { ...PR, url: 'https://ghe.corp.com/o/r/pull/7' }
+  const { run, calls } = fakeRepo({
+    'gh pr view 7': ok(JSON.stringify(ghe)),
+    'remote -v': ok('origin\thttps://github.com/o/r.git (fetch)\nwork\tgit@ghe.corp.com:o/r.git (fetch)\n'),
+  })
+  await loadDiff(run, 7)
+  expect(calls.find(c => c.includes('ls-remote'))?.at(-3)).toBe('work')
+  expect(calls.some(c => c[0] === 'gh' && c[1] === 'repo')).toBe(false)
+  const odd = fakeRepo({ 'gh pr view 7': ok(JSON.stringify({ ...PR, url: 'not a url' })) })
+  await expect(loadDiff(odd.run, 7)).rejects.toThrow('gh pr view: unreadable PR URL "not a url"')
 })

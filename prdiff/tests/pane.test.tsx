@@ -46,10 +46,10 @@ function answer(argv: readonly string[], gate: Promise<void>): Promise<ReturnTyp
   if (s.includes(' fetch ')) return result('')
   if (s.includes('merge-base')) return result('m'.repeat(40))
   if (s.includes('--raw')) return result(state.files === 0 ? '' : inv(['src/one.ts', 'src/two.ts'], 1, 1))
-  if (state.failRead && s.endsWith('new-src/one.ts')) return result(typeof state.failRead === 'string' ? state.failRead : 'fatal: bad object', 128)
-  if (state.readGate && s.includes(' new-src/')) return state.readGate.then(() => answer(argv, gate))
-  if (s.endsWith('old-src/one.ts new-src/one.ts')) return result('diff --git a/old-src/one.ts b/new-src/one.ts\n--- a/old-src/one.ts\n+++ b/new-src/one.ts\n@@ -1 +1 @@\n-old\n+new\n')
-  if (s.endsWith('old-src/two.ts new-src/two.ts')) return result('diff --git a/old-src/two.ts b/new-src/two.ts\n--- a/old-src/two.ts\n+++ b/new-src/two.ts\n@@ -1 +1 @@\n-two\n+TWO\n')
+  if (state.failRead && s.endsWith(':src/one.ts')) return result(typeof state.failRead === 'string' ? state.failRead : 'fatal: bad object', 128)
+  if (state.readGate && s.endsWith('.ts') && s.includes(':src/')) return state.readGate.then(() => answer(argv, gate))
+  if (s.endsWith(':src/one.ts')) return result('diff --git a/old-src/one.ts b/new-src/one.ts\n--- a/old-src/one.ts\n+++ b/new-src/one.ts\n@@ -1 +1 @@\n-old\n+new\n')
+  if (s.endsWith(':src/two.ts')) return result('diff --git a/old-src/two.ts b/new-src/two.ts\n--- a/old-src/two.ts\n+++ b/new-src/two.ts\n@@ -1 +1 @@\n-two\n+TWO\n')
   return result(`unexpected ${s}`, 2)
 }
 
@@ -104,7 +104,7 @@ test('/prdiff N lists the PR\'s files and draws the first one', async ($, on) =>
 test('j and a file in the list each draw that file, read only when it is opened', async ($, on) => {
   const reads: string[] = []
   engine(on, Promise.resolve(), argv => {
-    if (String(argv.at(-1)).startsWith('new-')) reads.push(String(argv.at(-1)).slice(4))
+    if (/^[0-9a-f]{40}:/.test(String(argv.at(-1)))) reads.push(String(argv.at(-1)).slice(41))
   })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await $.command.run(args('2'))
@@ -211,7 +211,7 @@ test('a file whose read failed is read again when picked again', async ($, on) =
   const reads: string[] = []
   state.failRead = true
   engine(on, Promise.resolve(), argv => {
-    if (String(argv.at(-1)).startsWith('new-')) reads.push(String(argv.at(-1)).slice(4))
+    if (/^[0-9a-f]{40}:/.test(String(argv.at(-1)))) reads.push(String(argv.at(-1)).slice(41))
   })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await $.command.run(args('2'))
@@ -230,7 +230,7 @@ test('picking a file whose read is still running does not read it again', async 
     open = r
   })
   engine(on, Promise.resolve(), argv => {
-    if (String(argv.at(-1)).startsWith('new-')) reads.push(String(argv.at(-1)).slice(4))
+    if (/^[0-9a-f]{40}:/.test(String(argv.at(-1)))) reads.push(String(argv.at(-1)).slice(41))
   })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await $.command.run(args('2'))

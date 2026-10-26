@@ -205,8 +205,9 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   }
   const readFile = async (e: Entry) => {
     if (!hasLines(e)) return { file: summaryOf(e), isCut: false }
-    const old = e.status === 'A' ? await blank() : e.oldId
-    const now = e.status === 'D' ? await blank() : e.newId
+    // `<rev>:<path>` names each side by its path too, so the path's attributes apply as in the inventory.
+    const old = e.status === 'A' ? await blank() : `${mergeBase}:${e.oldPath ?? e.path}`
+    const now = e.status === 'D' ? await blank() : `${headOid}:${e.path}`
     const r = await must(quiet, 'git diff', [...git, ...DIFF, old, now], 120_000)
     return { file: fileFor(e, r.stdout, r.isStdoutTruncated), isCut: r.isStdoutTruncated }
   }

@@ -23,7 +23,9 @@ so uncommitted work stays `/diff`'s.
 The fetch brings in objects only: no ref, branch, tag or `FETCH_HEAD` is
 written, and it starts no automatic maintenance (`gc --auto`). The remote used is the one whose URL path names the repository in
 the PR's own URL, preferring one on that URL's host, whatever its form — an
-ssh alias or GitHub Enterprise included (`origin` first).
+ssh alias or GitHub Enterprise included (`origin` first). The chosen
+remote's `refs/pull/<n>/head` must be the head `gh` reports for the PR, or the
+load stops and says so.
 
 ## Use
 

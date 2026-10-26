@@ -32,7 +32,8 @@ let picked: { gen: number; index: number } | undefined
 // The PR's inventory and the files read so far live here, under the load that
 // read them; `$.state` carries the status. A hot reload empties it, and the
 // pane then offers to load again.
-let held: { gen: number; data: DiffData; files: Map<number, { file: FileDiff; isCut: boolean }> } | undefined
+// A file's entry is its read: in flight until `got` is set; a failed read leaves no entry.
+let held: { gen: number; data: DiffData; files: Map<number, { read: Promise<void>; got?: { file: FileDiff; isCut: boolean } }> } | undefined
 
 /** Runs what a command or a press asks for; its failure, whatever step it came from, is drawn in the pane. */
 async function act($: EngineInterface, fn: () => Promise<void>): Promise<void> {
@@ -62,26 +63,43 @@ async function openDiff($: EngineInterface, number: number): Promise<void> {
 }
 
 /**
- * Opens a file of the newest load. A pick of the file already open does
- * nothing; a person's pick that changes it also brings the pane to its top,
- * where the file is drawn.
+ * Opens a file of the newest load. A pick of the file already open or being
+ * read does nothing; a person's pick that changes it also brings the pane to
+ * its top, where the file is drawn.
  */
 async function openFile($: EngineInterface, index: number, byPerson = false): Promise<void> {
   const cur = held
   const e = cur?.data.entries[index]
   if (!cur || cur.gen !== diffGen || !e) return
   const gen = cur.gen
-  if (picked?.gen === gen && picked.index === index) return
+  if (picked?.gen === gen && picked.index === index && cur.files.has(index)) return
   picked = { gen, index }
+  let entry = cur.files.get(index)
+  if (!entry) {
+    const made: { read: Promise<void>; got?: { file: FileDiff; isCut: boolean } } = {
+      read: cur.data.readFile(e).then(
+        got => {
+          made.got = got
+        },
+        err => {
+          cur.files.delete(index)
+          throw err
+        },
+      ),
+    }
+    cur.files.set(index, made)
+    entry = made
+  }
+  const reading = entry
   const show = async (file: NonNullable<PrdiffDiff['file']>) => {
     if (diffGen !== gen || picked?.gen !== gen || picked.index !== index) return
     await $.state.set(diffRef, { status: 'ready', gen, number: cur.data.number, file })
   }
   const read = async () => {
-    if (cur.files.has(index)) return show({ index, status: 'ready' })
+    if (reading.got) return show({ index, status: 'ready' })
     await show({ index, status: 'loading' })
     try {
-      cur.files.set(index, await cur.data.readFile(e))
+      await reading.read
       await show({ index, status: 'ready' })
     } catch (err) {
       await show({ index, status: 'error', error: message(err) })
@@ -157,7 +175,7 @@ export const register: Register = on => {
     const deleted = summaries.reduce((n, s) => n + s.deleted, 0)
     const labels = summaries.map((s, i) => `${i === at ? '▸ ' : '  '}${clip(fileLabel(s), cols + 8)}`)
     const listed = fitting(labels, LIST_BUDGET)
-    const got = at >= 0 ? cur.files.get(at) : undefined
+    const got = at >= 0 ? cur.files.get(at)?.got : undefined
     const shown = got?.file ?? (at >= 0 ? summaries[at] : undefined)
     const body = got ? drawn(got.file, cols + 8, CHAR_BUDGET - LIST_BUDGET) : undefined
     return (

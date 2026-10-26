@@ -31,7 +31,7 @@ function pr(n: number) {
 }
 
 /** What the next answers hold: how many files a PR has, and whether a file read fails. */
-const state = { files: 2, failRead: false }
+const state: { files: number; failRead: boolean; readGate?: Promise<void> } = { files: 2, failRead: false }
 
 /** Answers the host commands loadDiff makes; PR 1's view waits on `gate`. */
 function answer(argv: readonly string[], gate: Promise<void>): Promise<ReturnType<typeof result>> | ReturnType<typeof result> {
@@ -47,6 +47,7 @@ function answer(argv: readonly string[], gate: Promise<void>): Promise<ReturnTyp
   if (s.includes('merge-base')) return result('m'.repeat(40))
   if (s.includes('--raw')) return result(state.files === 0 ? '' : inv(['src/one.ts', 'src/two.ts'], 1, 1))
   if (state.failRead && s.endsWith('new-src/one.ts')) return result('fatal: bad object', 128)
+  if (state.readGate && s.includes(' new-src/')) return state.readGate.then(() => answer(argv, gate))
   if (s.endsWith('old-src/one.ts new-src/one.ts')) return result('diff --git a/old-src/one.ts b/new-src/one.ts\n--- a/old-src/one.ts\n+++ b/new-src/one.ts\n@@ -1 +1 @@\n-old\n+new\n')
   if (s.endsWith('old-src/two.ts new-src/two.ts')) return result('diff --git a/old-src/two.ts b/new-src/two.ts\n--- a/old-src/two.ts\n+++ b/new-src/two.ts\n@@ -1 +1 @@\n-two\n+TWO\n')
   return result(`unexpected ${s}`, 2)
@@ -203,5 +204,42 @@ test('before any PR is open the pane offers no keys', async ($, on) => {
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /Run \/prdiff <PR number>/ })).toBeDefined()
   expect(await ui.findAll({ type: 'Button' })).toEqual([])
+  await ui.unmount()
+})
+
+test('a file whose read failed is read again when picked again', async ($, on) => {
+  const reads: string[] = []
+  state.failRead = true
+  engine(on, Promise.resolve(), argv => {
+    if (String(argv.at(-1)).startsWith('new-')) reads.push(String(argv.at(-1)).slice(4))
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run(args('2'))
+  const ui = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /fatal: bad object/)
+  state.failRead = false
+  await ui.press({ key: 'goto:0' })
+  expect(reads).toEqual(['src/one.ts', 'src/one.ts'])
+  expect(String((await ui.find({ type: 'Code' }))?.props.source)).toContain('+new')
+  await ui.unmount()
+})
+
+test('picking a file whose read is still running does not read it again', async ($, on) => {
+  const reads: string[] = []
+  let open = () => {}
+  state.readGate = new Promise<void>(r => {
+    open = r
+  })
+  engine(on, Promise.resolve(), argv => {
+    if (String(argv.at(-1)).startsWith('new-')) reads.push(String(argv.at(-1)).slice(4))
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run(args('2'))
+  const ui = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /^1\/2 /)
+  const picks = [ui.press({ key: 'goto:1' }), ui.press({ key: 'goto:0' }), ui.press({ key: 'goto:1' })]
+  for (let i = 0; i < 50; i += 1) await null
+  state.readGate = undefined
+  open()
+  await Promise.all(picks)
+  expect([...reads].sort()).toEqual(['src/one.ts', 'src/two.ts'])
   await ui.unmount()
 })

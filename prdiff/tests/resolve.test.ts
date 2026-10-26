@@ -108,21 +108,6 @@ test('a patch over 4 MiB is fetched again file by file', async () => {
   expect(calls.find(c => c.at(-1) === 'x' && c.at(-2) === '--')).toContain('--literal-pathspecs')
 })
 
-test('a remote still on the URL from before a rename or transfer is found through gh', async () => {
-  const { run, calls } = fakeRepo(undefined, {
-    'remote -v': ok('origin\tgit@github.com:old-org/r.git (fetch)\nfork\tgit@github.com:me/r.git (fetch)\n'),
-    'gh repo view old-org/r': ok(JSON.stringify({ nameWithOwner: 'O/R' })),
-    'gh repo view me/r': ok(JSON.stringify({ nameWithOwner: 'me/r' })),
-  })
-  await loadDiff(run, 7)
-  expect(calls.find(c => c.includes('fetch'))).toContain('origin')
-  const none = fakeRepo(undefined, {
-    'remote -v': ok('fork\tgit@github.com:me/r.git (fetch)\n'),
-    'gh repo view me/r': ok(JSON.stringify({ nameWithOwner: 'me/r' })),
-  })
-  await expect(loadDiff(none.run, 7)).rejects.toThrow('remote: no git remote points at O/R')
-})
-
 test('with one owner/repo on two hosts, the remote on the PR\'s host is used', async () => {
   const v = 'origin\thttps://github.com/o/r.git (fetch)\nwork\tgit@ghe.corp.com:o/r.git (fetch)\n'
   expect(remoteFor(v, 'o/r', 'ghe.corp.com')).toBe('work')

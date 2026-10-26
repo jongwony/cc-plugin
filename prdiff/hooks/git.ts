@@ -189,26 +189,6 @@ export function remoteFor(remoteV: string, repo: string, host?: string): string 
 }
 
 /**
- * The remote for `repo` when no URL names it as written: a remote whose
- * `owner/repo` `gh` resolves to `repo`, as it does across a rename or transfer.
- */
-async function renamedRemote(run: Run, remoteV: string, repo: string): Promise<string | undefined> {
-  const want = repo.toLowerCase()
-  const names: string[] = []
-  for (const r of remoteRepos(remoteV)) {
-    const v = await run(['gh', 'repo', 'view', r.repo, '--json', 'nameWithOwner'])
-    if (v.exitCode !== 0) continue
-    try {
-      const got = (JSON.parse(v.stdout) as { nameWithOwner?: unknown }).nameWithOwner
-      if (typeof got === 'string' && got.toLowerCase() === want) names.push(r.name)
-    } catch {
-      // Not this remote.
-    }
-  }
-  return names.includes('origin') ? 'origin' : names[0]
-}
-
-/**
  * The environment a fetch runs under so neither git nor ssh asks on the
  * terminal: no credential prompt, and ssh in batch mode unless the user
  * names an ssh command of their own (GIT_SSH_COMMAND, GIT_SSH, core.sshCommand).
@@ -246,7 +226,7 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   }>('gh pr view', prOut.stdout)
   const git = [...GIT, '-C', topOut.stdout.trim()]
   const remoteV = (await must(run, 'git remote', [...git, 'remote', '-v'])).stdout
-  const remote = remoteFor(remoteV, repo, hostOfUrl(pr.url)) ?? (await renamedRemote(run, remoteV, repo))
+  const remote = remoteFor(remoteV, repo, hostOfUrl(pr.url))
   if (!remote) throw new StepError('remote', `no git remote points at ${repo}`)
 
   const env = await noPrompts(run, git, known.ownSsh)

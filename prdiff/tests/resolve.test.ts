@@ -308,3 +308,23 @@ test('attributes are read from the PR head, in the file list and in each file re
   expect(diffs.length).toBe(2)
   expect(diffs.every(c => c.includes(`--attr-source=${'h'.repeat(40)}`))).toBe(true)
 })
+
+test('remotes are asked at once, so a slow one ranked first does not hold the others back', async () => {
+  let release = () => {}
+  const askedSecond = new Promise<void>(r => {
+    release = r
+  })
+  const both = fakeRepo({ 'remote -v': ok('origin\tgit@github.com:o/r.git (fetch)\nmirror\t/srv/mirror (fetch)\n') })
+  const run: Run = async (argv, t, env) => {
+    const at = argv.indexOf('ls-remote')
+    if (at >= 0 && argv[at + 2] === 'origin') {
+      // origin answers only once mirror has been asked: one at a time, this would never return.
+      await askedSecond
+      return fail('fatal: unable to access: Connection timed out')
+    }
+    if (at >= 0 && argv[at + 2] === 'mirror') release()
+    return both.run(argv, t, env)
+  }
+  await loadDiff(run, 7)
+  expect(both.calls.find(c => c.includes('fetch'))?.slice(-3, -2)).toEqual(['mirror'])
+})

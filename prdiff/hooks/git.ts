@@ -166,18 +166,18 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   // The PR's remote is the first whose `refs/pull/<n>/head` is the head gh reports.
   const baseName = `refs/heads/${pr.baseRefName}`
   const headName = `refs/pull/${number}/head`
-  const seen: string[] = []
-  let found: { remote: string; baseOid?: string } | undefined
-  for (const remote of tried) {
-    const listed = await quiet([...git, 'ls-remote', '--', remote, baseName, headName], 120_000)
-    const tip = (name: string) => listed.stdout.split('\n').find(l => l.endsWith(`\t${name}`))?.split('\t')[0]
-    const head = listed.exitCode === 0 ? tip(headName) : undefined
-    seen.push(`${remote} ${listed.exitCode !== 0 ? `failed: ${firstLine(listed)}` : head === undefined ? 'has none' : `has ${head.slice(0, 7)}`}`)
-    if (head === pr.headRefOid) {
-      found = { remote, baseOid: tip(baseName) }
-      break
-    }
-  }
+  // All candidates are asked at once; the first in rank order whose pull head is gh's head is taken.
+  const probes = await Promise.all(
+    tried.map(async remote => {
+      const listed = await quiet([...git, 'ls-remote', '--', remote, baseName, headName], 120_000)
+      const tip = (name: string) => listed.stdout.split('\n').find(l => l.endsWith(`\t${name}`))?.split('\t')[0]
+      const head = listed.exitCode === 0 ? tip(headName) : undefined
+      const said = listed.exitCode !== 0 ? `failed: ${firstLine(listed)}` : head === undefined ? 'has none' : `has ${head.slice(0, 7)}`
+      return { remote, head, baseOid: tip(baseName), said: `${remote} ${said}` }
+    }),
+  )
+  const found = probes.find(p => p.head === pr.headRefOid)
+  const seen = probes.map(p => p.said)
   if (!found) throw new StepError('remote', `gh reports PR #${number} at ${pr.headRefOid.slice(0, 7)}; ${headName} on ${seen.join(', ')}`)
   const { remote, baseOid } = found
   if (!baseOid) throw new StepError('git ls-remote', `${remote} has no branch ${pr.baseRefName}`)

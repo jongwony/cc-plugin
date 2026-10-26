@@ -326,3 +326,16 @@ test('remotes are asked at once, so a slow one ranked first does not hold the ot
   await loadDiff(run, 7)
   expect(both.calls.find(c => c.includes('fetch'))?.slice(-3, -2)).toEqual(['mirror'])
 })
+
+test('the first match in rank order is taken without waiting for remotes ranked below it', async () => {
+  const never = new Promise<RunResult>(() => {})
+  const both = fakeRepo({ 'remote -v': ok('origin\tgit@github.com:o/r.git (fetch)\nmirror\t/srv/mirror (fetch)\n') })
+  const run: Run = async (argv, t, env) => {
+    const at = argv.indexOf('ls-remote')
+    // mirror, ranked below origin, never answers.
+    if (at >= 0 && argv[at + 2] === 'mirror') return never
+    return both.run(argv, t, env)
+  }
+  await loadDiff(run, 7)
+  expect(both.calls.find(c => c.includes('fetch'))?.slice(-3, -2)).toEqual(['origin'])
+})

@@ -27,19 +27,29 @@ function message(err: unknown): string {
 // The newest load; an older one that finishes later is dropped. Starts at the
 // clock: above any gen an earlier instance of this module wrote.
 let diffGen = Date.now()
-// The file last picked, under the load it belongs to; a read for any other is not shown.
-let picked: { gen: number; index: number } | undefined
 // The PR's inventory and the files read so far live here, under the load that
 // read them; `$.state` carries the status. A hot reload empties it, and the
 // pane then offers to load again.
 // A file's entry is its read: in flight until `got` is set; a failed read leaves no entry.
 let held: { gen: number; data: DiffData; files: Map<number, { read: Promise<void>; got?: { file: FileDiff; isCut: boolean } }> } | undefined
 
-/** Writes the diff state for load `gen`, only while the stored state is still that load's; false when another load wrote since. */
-async function putFor($: EngineInterface, gen: number, value: PrdiffDiff): Promise<boolean> {
-  const now = await $.state.get(diffRef)
-  if (now.value?.gen !== gen) return false
-  return (await $.state.set(diffRef, value, { ifVersion: now.version })).isSet
+/**
+ * Rewrites the stored diff state with `fn(now)`, only over the `now` it was
+ * computed from (`ifVersion`); a write another one beat is computed again on
+ * what that one stored. `fn` returns undefined to write nothing.
+ */
+async function update($: EngineInterface, fn: (now: PrdiffDiff) => PrdiffDiff | undefined): Promise<PrdiffDiff | undefined> {
+  for (;;) {
+    const now = await $.state.get(diffRef)
+    const next = fn(now.value ?? { status: 'idle', gen: 0, number: 0 })
+    if (next === undefined) return undefined
+    if ((await $.state.set(diffRef, next, { ifVersion: now.version })).isSet) return next
+  }
+}
+
+/** Writes the diff state for load `gen` while the stored state is still that load's. */
+function putFor($: EngineInterface, gen: number, value: PrdiffDiff): Promise<PrdiffDiff | undefined> {
+  return update($, now => (now.gen === gen ? value : undefined))
 }
 
 /** Runs what a command or a press asks for; its failure, whatever step it came from, is drawn in the pane. */
@@ -62,7 +72,7 @@ async function openDiff($: EngineInterface, number: number, byPerson = false): P
     const data = await loadDiff(runner($), number, { ownSsh })
     if (gen !== diffGen) return
     held = { gen, data, files: new Map() }
-    if (!(await putFor($, gen, { status: 'ready', gen, number }))) return
+    if ((await putFor($, gen, { status: 'ready', gen, number })) === undefined) return
     if (data.entries.length > 0) await openFile($, 0, byPerson)
   } catch (err) {
     await putFor($, gen, { status: 'error', gen, number, error: message(err) })
@@ -79,8 +89,15 @@ async function openFile($: EngineInterface, index: number, byPerson = false): Pr
   const e = cur?.data.entries[index]
   if (!cur || cur.gen !== diffGen || !e) return
   const gen = cur.gen
-  if (picked?.gen === gen && picked.index === index && cur.files.has(index)) return
-  picked = { gen, index }
+  const had = cur.files.get(index)
+  // The pick is stored with the state it changes: a pick of the file already open or being read changes nothing.
+  const started = await update($, now => {
+    if (now.gen !== gen || now.status !== 'ready') return undefined
+    if (now.file?.index === index && now.file.status !== 'error' && cur.files.has(index)) return undefined
+    return { ...now, file: { index, pick: (now.file?.pick ?? 0) + 1, status: had?.got ? 'ready' : 'loading' } }
+  })
+  const pick = started?.file?.pick
+  if (pick === undefined) return
   let entry = cur.files.get(index)
   if (!entry) {
     const made: { read: Promise<void>; got?: { file: FileDiff; isCut: boolean } } = {
@@ -98,18 +115,16 @@ async function openFile($: EngineInterface, index: number, byPerson = false): Pr
     entry = made
   }
   const reading = entry
-  const show = async (file: NonNullable<PrdiffDiff['file']>) => {
-    if (picked?.gen !== gen || picked.index !== index) return
-    await putFor($, gen, { status: 'ready', gen, number: cur.data.number, file })
-  }
+  // What a read ends in is shown only while its pick is still the stored one.
+  const settle = (file: NonNullable<PrdiffDiff['file']>) =>
+    update($, now => (now.gen === gen && now.file?.pick === pick ? { ...now, file } : undefined))
   const read = async () => {
-    if (reading.got) return show({ index, status: 'ready' })
-    await show({ index, status: 'loading' })
+    if (reading.got) return
     try {
       await reading.read
-      await show({ index, status: 'ready' })
+      await settle({ index, pick, status: 'ready' })
     } catch (err) {
-      await show({ index, status: 'error', error: message(err) })
+      await settle({ index, pick, status: 'error', error: message(err) })
     }
   }
   await Promise.all([read(), byPerson ? $.ui.scroll({ in: PANE, to: 'start' }) : undefined])

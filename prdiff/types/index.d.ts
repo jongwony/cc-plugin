@@ -4,8 +4,8 @@ export type PrdiffDiff = {
   gen: number
   number: number
   error?: string
-  /** The open file of this load: its index in the inventory and its read. */
-  file?: { index: number; status: 'loading' | 'ready' | 'error'; error?: string }
+  /** The open file of this load: its index in the inventory, the pick that opened it (counting up within the load), and its read. */
+  file?: { index: number; pick: number; status: 'loading' | 'ready' | 'error'; error?: string }
 }
 
 declare module 'claude-code' {

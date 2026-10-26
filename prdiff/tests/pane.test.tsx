@@ -276,3 +276,29 @@ test('a file of many tiny hunks leaves the list its share: each drawn string is 
   state.files = 2
   state.patch = undefined
 })
+
+test('the newest pick decides what is shown, even when an older read finishes beside it', async ($, on) => {
+  engine(on)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  for (let ticks = 0; ticks < 12; ticks += 1) {
+    let open = () => {}
+    state.readGate = undefined
+    await $.command.run(args('2'))
+    const ui = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /^1\/2 /)
+    state.readGate = new Promise<void>(r => {
+      open = r
+    })
+    const a = ui.press({ key: 'goto:1' })
+    for (let i = 0; i < 20; i += 1) await null
+    state.readGate = undefined
+    open()
+    for (let i = 0; i < ticks; i += 1) await null
+    const b = ui.press({ key: 'goto:0' })
+    await Promise.all([a, b])
+    for (let i = 0; i < 50; i += 1) await null
+    await ui.unmount()
+    const after = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect([ticks, (await after.find({ type: 'Text', text: /^\d\/2 / }))?.text]).toEqual([ticks, '1/2 M src/one.ts  +1 −1'])
+    await after.unmount()
+  }
+})

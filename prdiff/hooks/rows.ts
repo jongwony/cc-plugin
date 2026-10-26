@@ -3,7 +3,7 @@
 
 import { clean, hunkSource, type FileDiff } from './parse.ts'
 
-/** The engine's limit on the text of one drawing: strings, Code sources, Button labels, Box keys. */
+/** The engine's limit on the text of one drawing: string children, Code sources, Button labels, Box keys (not a Button's key). */
 export const CHAR_BUDGET = 100_000
 
 /** The part of CHAR_BUDGET held back for the file list while the open file is drawn. */

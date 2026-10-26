@@ -93,28 +93,30 @@ export function hostOfUrl(url: string): string | undefined {
   return m?.[1]?.toLowerCase()
 }
 
-/** Each fetch remote of `git remote -v` with the `owner/repo` and host its URL names. */
-export function remoteRepos(remoteV: string): Array<{ name: string; repo: string; host?: string }> {
-  const out: Array<{ name: string; repo: string; host?: string }> = []
+/** Each fetch remote of `git remote -v`, with the `owner/repo` and host its URL names when it names one. */
+export function remoteRepos(remoteV: string): Array<{ name: string; repo?: string; host?: string }> {
+  const out: Array<{ name: string; repo?: string; host?: string }> = []
   for (const line of remoteV.split('\n')) {
     // `<name>\t<url> (fetch)`, a partial clone's with ` [blob:none]` after it; a name may hold spaces.
     const m = /^([^\t]+)\t(\S+) \(fetch\)(?: \[[^\]]*\])?$/.exec(line)
-    const repo = m?.[2] ? repoOfUrl(m[2]) : undefined
-    if (m?.[1] && m[2] && repo) out.push({ name: m[1], repo, host: hostOfUrl(m[2]) })
+    if (m?.[1] && m[2]) out.push({ name: m[1], repo: repoOfUrl(m[2]), host: hostOfUrl(m[2]) })
   }
   return out
 }
 
 /**
- * The remote whose fetch URL is the repository `gh` resolved; on `host` when
- * a remote URL names that host, else on any; origin first.
+ * Every fetch remote, in the order they are tried for the PR: those whose
+ * URL names `repo` on `host`, then those naming `repo` elsewhere, then the
+ * rest; origin first within each.
  */
-export function remoteFor(remoteV: string, repo: string, host?: string): string | undefined {
+export function candidates(remoteV: string, repo: string, host?: string): string[] {
   const want = repo.toLowerCase()
-  const all = remoteRepos(remoteV).filter(r => r.repo === want)
-  const onHost = host === undefined ? [] : all.filter(r => r.host === host.toLowerCase())
-  const names = (onHost.length > 0 ? onHost : all).map(r => r.name)
-  return names.includes('origin') ? 'origin' : names[0]
+  const rank = (r: { name: string; repo?: string; host?: string }) =>
+    (r.repo === want ? (host !== undefined && r.host === host.toLowerCase() ? 0 : 1) : 2) * 2 + (r.name === 'origin' ? 0 : 1)
+  return remoteRepos(remoteV)
+    .map((r, i) => ({ name: r.name, key: rank(r), i }))
+    .sort((a, b) => a.key - b.key || a.i - b.i)
+    .map(r => r.name)
 }
 
 /**
@@ -155,23 +157,32 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   if (!repo) throw new StepError('gh pr view', `unreadable PR URL ${JSON.stringify(pr.url)}`)
   const git = [...GIT, '-C', topOut.stdout.trim()]
   const remoteV = (await must(run, 'git remote', [...git, 'remote', '-v'])).stdout
-  const remote = remoteFor(remoteV, repo, hostOfUrl(pr.url))
-  if (!remote) throw new StepError('remote', `no git remote points at ${repo}`)
+  const tried = candidates(remoteV, repo, hostOfUrl(pr.url))
+  if (tried.length === 0) throw new StepError('remote', 'this repository has no fetch remote')
 
   const env = await noPrompts(run, git, known.ownSsh)
   // Git commands from the listing on run under `env`.
   const quiet: Run = (argv, timeoutMs) => run(argv, timeoutMs, env)
-  // Both tips come from one ls-remote and are fetched by id; no ref is written.
+  // The PR's remote is the first whose `refs/pull/<n>/head` is the head gh reports.
   const baseName = `refs/heads/${pr.baseRefName}`
   const headName = `refs/pull/${number}/head`
-  const listed = await must(quiet, 'git ls-remote', [...git, 'ls-remote', '--', remote, baseName, headName], 120_000)
-  const tip = (name: string) => listed.stdout.split('\n').find(l => l.endsWith(`\t${name}`))?.split('\t')[0]
-  const baseOid = tip(baseName)
+  const seen: string[] = []
+  let found: { remote: string; baseOid?: string } | undefined
+  for (const remote of tried) {
+    const listed = await quiet([...git, 'ls-remote', '--', remote, baseName, headName], 120_000)
+    const tip = (name: string) => listed.stdout.split('\n').find(l => l.endsWith(`\t${name}`))?.split('\t')[0]
+    const head = listed.exitCode === 0 ? tip(headName) : undefined
+    seen.push(`${remote} ${listed.exitCode !== 0 ? `failed: ${firstLine(listed)}` : head === undefined ? 'has none' : `has ${head.slice(0, 7)}`}`)
+    if (head === pr.headRefOid) {
+      found = { remote, baseOid: tip(baseName) }
+      break
+    }
+  }
+  if (!found) throw new StepError('remote', `gh reports PR #${number} at ${pr.headRefOid.slice(0, 7)}; ${headName} on ${seen.join(', ')}`)
+  const { remote, baseOid } = found
   if (!baseOid) throw new StepError('git ls-remote', `${remote} has no branch ${pr.baseRefName}`)
-  const headOid = tip(headName)
-  if (!headOid) throw new StepError('git ls-remote', `${remote} has no ${headName}`)
-  // The remote is the PR's only if its pull head is the head GitHub reports for the PR.
-  if (headOid !== pr.headRefOid) throw new StepError('remote', `${remote}'s PR #${number} head is not the PR's head`)
+  const headOid = pr.headRefOid
+  // Both tips are fetched by id; no ref is written.
   await must(quiet, 'git fetch', [...git, 'fetch', '--quiet', '--no-write-fetch-head', '--no-recurse-submodules', '--no-auto-maintenance', '--', remote, baseOid, headOid], 120_000)
   const based = await quiet([...git, 'merge-base', baseOid, headOid])
   if (based.exitCode === 1 && based.stdout.trim() === '' && based.stderr.trim() === '') {

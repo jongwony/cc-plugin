@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { loadDiff, remoteFor, repoOfUrl, type Run, type RunResult } from '../hooks/git.ts'
+import { candidates, loadDiff, repoOfUrl, type Run, type RunResult } from '../hooks/git.ts'
 
 const ok = (stdout: string): RunResult => ({ exitCode: 0, stdout, stderr: '', isStdoutTruncated: false })
 const fail = (stderr: string): RunResult => ({ exitCode: 1, stdout: '', stderr, isStdoutTruncated: false })
@@ -35,7 +35,7 @@ function fakeRepo(overrides: Record<string, RunResult> = {}) {
   return { run, calls }
 }
 
-test('the remote is the one whose URL is the repository gh resolved, origin first, whatever the host', () => {
+test('remotes are tried with URL matches first, origin first within each, then the rest', () => {
   expect(repoOfUrl('git@github.com:Me/R.git')).toBe('me/r')
   expect(repoOfUrl('https://github.com/o/r')).toBe('o/r')
   expect(repoOfUrl('git@github-work:delightroom/app.git')).toBe('delightroom/app')
@@ -44,11 +44,12 @@ test('the remote is the one whose URL is the repository gh resolved, origin firs
   expect(repoOfUrl('git@ghe.corp.com:o/r.git')).toBe('o/r')
   expect(repoOfUrl('/local/path/r')).toBe(undefined)
   const v = 'up\thttps://github.com/o/r (fetch)\norigin\tssh://git@github.com/o/r.git (fetch)\n'
-  expect(remoteFor(v, 'O/R')).toBe('origin')
-  expect(remoteFor('work\tgit@github-work:o/r.git (fetch)\n', 'o/r')).toBe('work')
-  expect(remoteFor('fork\tgit@github.com:me/r.git (fetch)\n', 'o/r')).toBe(undefined)
-  // A partial clone writes its filter after the fetch URL.
-  expect(remoteFor('origin\thttps://github.com/o/r.git (fetch) [blob:none]\norigin\thttps://github.com/o/r.git (push)\n', 'o/r')).toBe('origin')
+  expect(candidates(v, 'O/R')).toEqual(['origin', 'up'])
+  // A remote naming another repository is still tried, after those naming this one.
+  expect(candidates('fork\tgit@github.com:me/r.git (fetch)\nwork\tgit@github-work:o/r.git (fetch)\n', 'o/r')).toEqual(['work', 'fork'])
+  // A partial clone writes its filter after the fetch URL; a name may hold spaces.
+  expect(candidates('origin\thttps://github.com/o/r.git (fetch) [blob:none]\norigin\thttps://github.com/o/r.git (push)\n', 'o/r')).toEqual(['origin'])
+  expect(candidates('my remote\t/srv/r (fetch)\n', 'o/r')).toEqual(['my remote'])
 })
 
 test('a PR not checked out: both tips listed once, fetched by id without a ref, diffed merge-base..head', async () => {
@@ -68,7 +69,7 @@ test('a PR not checked out: both tips listed once, fetched by id without a ref, 
 test('a failed fetch or merge-base is reported with its step, not swallowed', async () => {
   const f = fakeRepo({ ' fetch ': fail('fatal: remote error: upload-pack: not our ref') })
   await expect(loadDiff(f.run, 7)).rejects.toThrow('git fetch: fatal: remote error: upload-pack: not our ref')
-  const gone = fakeRepo({ ' ls-remote ': ok('') })
+  const gone = fakeRepo({ ' ls-remote ': ok(`${'h'.repeat(40)}\trefs/pull/7/head\n`) })
   await expect(loadDiff(gone.run, 7)).rejects.toThrow('git ls-remote: origin has no branch feat/a')
   const m = fakeRepo({ 'merge-base': fail('') })
   await expect(loadDiff(m.run, 7)).rejects.toThrow('git merge-base: returned no merge base for feat/a and the PR head (exit 1)')
@@ -128,11 +129,9 @@ test('a file patch cut at 4 MiB is kept as far as it arrived; a file list cut th
 
 test('with one owner/repo on two hosts, the remote on the PR\'s host is used', async () => {
   const v = 'origin\thttps://github.com/o/r.git (fetch)\nwork\tgit@ghe.corp.com:o/r.git (fetch)\n'
-  expect(remoteFor(v, 'o/r', 'ghe.corp.com')).toBe('work')
-  expect(remoteFor(v, 'o/r', 'github.com')).toBe('origin')
-  // A host no remote URL names (an ssh alias) falls back to the path match.
-  expect(remoteFor('work\tgit@github-work:o/r.git (fetch)\n', 'o/r', 'github.com')).toBe('work')
-  expect(remoteFor(v, 'o/r')).toBe('origin')
+  expect(candidates(v, 'o/r', 'ghe.corp.com')).toEqual(['work', 'origin'])
+  expect(candidates(v, 'o/r', 'github.com')).toEqual(['origin', 'work'])
+  expect(candidates(v, 'o/r')).toEqual(['origin', 'work'])
 })
 
 test('a PR whose head is already in its base says so instead of showing nothing', async () => {
@@ -211,7 +210,7 @@ test('a failure names its error line, not a warning printed ahead of it', async 
     'Please make sure you have the correct access rights',
   ].join('\n')
   const f = fakeRepo({ ' ls-remote ': fail(ssh) })
-  await expect(loadDiff(f.run, 7)).rejects.toThrow('git ls-remote: fatal: Could not read from remote repository.')
+  await expect(loadDiff(f.run, 7)).rejects.toThrow('origin failed: fatal: Could not read from remote repository.')
   const w = fakeRepo({ ' fetch ': fail('warning: redirecting to https://github.com/o/r2.git/\nremote: Repository not found.') })
   await expect(loadDiff(w.run, 7)).rejects.toThrow('git fetch: remote: Repository not found.')
 })
@@ -264,16 +263,28 @@ test('the PR URL names the repository and host; gh is asked nothing else about t
   await expect(loadDiff(odd.run, 7)).rejects.toThrow('gh pr view: unreadable PR URL "not a url"')
 })
 
-test('a remote whose PR head is not the one gh reports is not used', async () => {
-  // A GitHub Enterprise PR, while the only remote naming o/r is on github.com (an ssh alias names no host).
-  const ghe = { ...PR, url: 'https://ghe.corp.com/o/r/pull/7' }
-  const other = fakeRepo({
-    'gh pr view 7': ok(JSON.stringify(ghe)),
-    'remote -v': ok('origin\tgit@github.com:o/r.git (fetch)\n'),
-    ' ls-remote ': ok(`${'b'.repeat(40)}\trefs/heads/feat/a\n${'x'.repeat(40)}\trefs/pull/7/head\n`),
-  })
-  await expect(loadDiff(other.run, 7)).rejects.toThrow("remote: origin's PR #7 head is not the PR's head")
-  expect(other.calls.some(c => c.includes('fetch'))).toBe(false)
+test('the PR\'s remote is the first whose pull head is gh\'s head; with none, the load says what each had', async () => {
+  const pulls: Record<string, string> = { origin: 'x'.repeat(40), corp: 'h'.repeat(40) }
+  // A GitLab origin and a GitHub remote reached through an ssh alias that names no host.
+  const lab = fakeRepo({ 'remote -v': ok('origin\tgit@gitlab.com:o/r.git (fetch)\ncorp\tcorp:o/r.git (fetch)\n') })
+  const by = (pull: Record<string, string>): Run => async (argv, t, env) => {
+    const at = argv.indexOf('ls-remote')
+    if (at >= 0) {
+      const head = pull[argv[at + 2] ?? '']
+      return ok(`${'b'.repeat(40)}\trefs/heads/feat/a\n${head ? `${head}\trefs/pull/7/head\n` : ''}`)
+    }
+    return lab.run(argv, t, env)
+  }
+  await loadDiff(by(pulls), 7)
+  expect(lab.calls.find(c => c.includes('fetch'))?.slice(-4)).toEqual(['--', 'corp', 'b'.repeat(40), 'h'.repeat(40)])
+  // A renamed repository whose remote still names the old path is found by its head alone.
+  const renamed = fakeRepo({ 'remote -v': ok('origin\tgit@github.com:o/old-name.git (fetch)\n') })
+  await loadDiff(renamed.run, 7)
+  expect(renamed.calls.find(c => c.includes('fetch'))?.includes('origin')).toBe(true)
+  // No remote holds the head gh reports: each one tried, and what it had, is named.
+  await expect(loadDiff(by({ origin: 'x'.repeat(40) }), 7)).rejects.toThrow(
+    'remote: gh reports PR #7 at hhhhhhh; refs/pull/7/head on origin has xxxxxxx, corp has none',
+  )
 })
 
 test('a remote name is never read as an option', async () => {

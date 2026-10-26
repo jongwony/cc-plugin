@@ -180,7 +180,7 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
     const shallow = (await quiet([...git, 'rev-parse', '--is-shallow-repository'])).stdout.trim() === 'true'
     throw new StepError(
       'git merge-base',
-      `no common ancestor of ${pr.baseRefName} and the PR head${shallow ? ' in this shallow clone; fetch more history (git fetch --unshallow)' : ''}`,
+      `returned no merge base for ${pr.baseRefName} and the PR head (exit 1)${shallow ? '; this is a shallow clone, where fetching more history (git fetch --unshallow) can supply one' : ''}`,
     )
   }
   if (based.exitCode !== 0) throw new StepError('git merge-base', firstLine(based))

@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { FileDiff } from '../hooks/parse.ts'
-import { Budget, CHAR_BUDGET, clip, drawn, listed } from '../hooks/rows.ts'
+import { Budget, CHAR_BUDGET, clip, drawn, listed, targetIndex } from '../hooks/rows.ts'
 
 function file(hunks: number, lines: number, width = 10): FileDiff {
   return {
@@ -87,4 +87,11 @@ test('the last label is drawn when it fits, with no room kept for a note it woul
   const long = ['a'.repeat(20), 'b'.repeat(20), 'c'.repeat(20)]
   const note = '2 more files; j and k reach them'
   expect(listed(long, new Budget(20 + note.length))).toEqual({ labels: [long[0]], note })
+})
+
+test('j and k step within the files; from no open file they land on the first or the last', () => {
+  expect(targetIndex(undefined, { step: 1 }, 5)).toBe(0)
+  expect(targetIndex(undefined, { step: -1 }, 5)).toBe(4)
+  expect([targetIndex(2, { step: 1 }, 5), targetIndex(4, { step: 1 }, 5), targetIndex(0, { step: -1 }, 5)]).toEqual([3, 4, 0])
+  expect(targetIndex(1, 3, 5)).toBe(3)
 })

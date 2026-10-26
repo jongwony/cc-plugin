@@ -4,7 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { PrdiffDiff } from '../types'
 import { loadDiff, type DiffData, type Run } from './git.ts'
 import { clean, summaryOf, type FileDiff } from './parse.ts'
-import { Budget, CHAR_BUDGET, LIST_BUDGET, clip, drawn, fileLabel, listed } from './rows.ts'
+import { Budget, CHAR_BUDGET, LIST_BUDGET, clip, drawn, fileLabel, listed, targetIndex, type Target } from './rows.ts'
 
 export const PANE = 'prdiff'
 
@@ -78,8 +78,6 @@ async function openDiff($: EngineInterface, number: number): Promise<void> {
   if (data.entries.length > 0) await openFile($, 0)
 }
 
-/** A file of the load: its index, or a step from the file the stored state has open. */
-type Target = number | { step: 1 | -1 }
 
 /**
  * Opens a file of the newest load and brings the pane to its top, where the
@@ -104,7 +102,7 @@ async function openFile($: EngineInterface, target: Target): Promise<void> {
   try {
     const started = await update($, now => {
       if (now.gen !== gen || now.status !== 'ready') return undefined
-      index = typeof target === 'number' ? target : Math.min(count - 1, Math.max(0, (now.file?.index ?? 0) + target.step))
+      index = targetIndex(now.file?.index, target, count)
       if (index < 0 || index >= count) return undefined
       if (now.file?.index === index && now.file.status !== 'error' && cur.files.has(index)) return undefined
       return { ...now, file: { index, pick: (now.file?.pick ?? 0) + 1, status: cur.files.get(index)?.got ? 'ready' : 'loading' } }

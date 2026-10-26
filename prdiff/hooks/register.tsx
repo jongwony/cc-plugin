@@ -74,6 +74,8 @@ async function openDiff($: EngineInterface, number: number): Promise<void> {
     held = { gen, data, files: new Map() }
     if ((await putFor($, gen, { status: 'ready', gen, number, owner: self })) === undefined) return
   } catch (err) {
+    // A failure before this load had a state of its own goes to start()'s notice.
+    if (gen === 0) throw err
     await putFor($, gen, { status: 'error', gen, number, owner: self, error: message(err) })
     return
   }
@@ -144,6 +146,8 @@ async function openFile($: EngineInterface, target: Target): Promise<void> {
     )
     await Promise.all([read(), scroll()])
   } catch (err) {
+    // A failure before this pick was stored goes to start()'s notice.
+    if (pick === undefined) throw err
     await settle({ fault: message(err) })
   }
 }

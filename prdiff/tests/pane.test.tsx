@@ -374,3 +374,24 @@ test('a pick that changes nothing writes nothing', async ($, on) => {
   expect(writes.length).toBe(before)
   await ui.unmount()
 })
+
+test('a load whose first state write fails is reported, not dropped', async ($, on) => {
+  const notices: string[] = []
+  let failed = false
+  engine(on)
+  on('state.set', (_, e, next) => {
+    if (!failed && e.key === 'diff') {
+      failed = true
+      return { deny: 'state store unavailable' }
+    }
+    return next(e)
+  })
+  on('ui.log', (_, e, next) => {
+    notices.push(e.text)
+    return next(e)
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run(args('2'))
+  for (let i = 0; i < 200 && notices.length === 0; i += 1) await null
+  expect(notices.some(n => n.includes('state store unavailable'))).toBe(true)
+})

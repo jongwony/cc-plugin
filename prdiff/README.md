@@ -18,7 +18,7 @@ so uncommitted work stays `/diff`'s.
 | The base | the tip of the PR's own `baseRefName` on the remote, read with `git ls-remote` and fetched by its id |
 | The head | the tip of `refs/pull/<n>/head`, read and fetched the same way |
 | The files | `git diff --raw --numstat <merge-base(base, head)> <head>`, read once: renames, binary files, type and mode changes listed |
-| One file's lines | `git diff <merge-base>:<old path> <head>:<path>`, each side named by revision and path (the empty blob for an added or deleted file's missing side, stored if the repository lacks it), read when the file is opened; binary files, submodules and mode-only changes have none to read. Naming the path keeps `.gitattributes` in force, as it is for the file list |
+| One file's lines | `git diff <merge-base>:<old path> <head>:<path>`, each side named by revision and path (the empty blob for an added or deleted file's missing side, stored if the repository lacks it), read when the file is opened; binary files, submodules and mode-only changes have none to read. Naming the path keeps `.gitattributes` in force; both diffs read it from the PR head (`--attr-source`), as GitHub does, not from the checkout |
 
 The fetch brings in objects only: no ref, branch, tag or `FETCH_HEAD` is
 written, and it starts no automatic maintenance (`gc --auto`). The PR's

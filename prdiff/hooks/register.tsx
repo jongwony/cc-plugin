@@ -51,31 +51,24 @@ function putFor($: EngineInterface, gen: number, value: PrdiffDiff): Promise<Prd
   return update($, now => (now.gen === gen ? value : undefined))
 }
 
-/**
- * Starts what a command or a press asks for. Its failures land in the load's
- * or pick's own state; one that cannot (a state write that itself failed)
- * goes to the transcript as a notice.
- */
+/** Starts what a command or a press asks for; a rejection no load or pick state holds goes to the transcript. */
 function start($: EngineInterface, task: Promise<void>): Promise<void> {
   return task.catch(err => $.ui.log(`prdiff: ${message(err)}`))
 }
 
 /** Loads PR #number and opens its first file. */
 async function openDiff($: EngineInterface, number: number): Promise<void> {
-  let gen = 0
+  // A load's gen is one past the stored one, taken in the same write that stores it.
+  const started = await update($, now => ({ status: 'loading', gen: now.gen + 1, number, owner: self }))
+  const gen = started?.gen ?? 0
   let data: DiffData
   try {
-    // A load's gen is one past the stored one, taken in the same write that stores it.
-    const started = await update($, now => ({ status: 'loading', gen: now.gen + 1, number, owner: self }))
-    gen = started?.gen ?? 0
     const ownSsh = (await Promise.all([$.env.get('GIT_SSH_COMMAND'), $.env.get('GIT_SSH')])).some(v => v !== undefined)
     data = await loadDiff(runner($), number, { ownSsh })
     if ((await $.state.get(diffRef)).value?.gen !== gen) return
     held = { gen, data, files: new Map() }
     if ((await putFor($, gen, { status: 'ready', gen, number, owner: self })) === undefined) return
   } catch (err) {
-    // A failure before this load had a state of its own goes to start()'s notice.
-    if (gen === 0) throw err
     await putFor($, gen, { status: 'error', gen, number, owner: self, error: message(err) })
     return
   }
@@ -86,9 +79,8 @@ async function openDiff($: EngineInterface, number: number): Promise<void> {
 /**
  * Opens a file of the newest load and brings the pane to its top, where the
  * file is drawn. The target is resolved against the stored pick; a pick of
- * the file already open or being read changes nothing. Whatever the pick
- * ends in, its read's error or its scroll's rejection included, is written
- * to that pick's stored file state.
+ * the file already open or being read changes nothing. The read's result is
+ * written to that pick's stored file state.
  */
 async function openFile($: EngineInterface, target: Target): Promise<void> {
   const cur = held
@@ -96,60 +88,48 @@ async function openFile($: EngineInterface, target: Target): Promise<void> {
   const gen = cur.gen
   const count = cur.data.entries.length
   let index = -1
-  let pick: number | undefined
-  // What the pick ends in is shown only while it is still the stored pick.
+  const started = await update($, now => {
+    if (now.gen !== gen || now.status !== 'ready') return undefined
+    index = targetIndex(now.gen, now.file?.index, target, count)
+    if (index < 0 || index >= count) return undefined
+    if (now.file?.index === index && now.file.status !== 'error' && cur.files.has(index)) return undefined
+    return { ...now, file: { index, pick: (now.file?.pick ?? 0) + 1, status: cur.files.get(index)?.got ? 'ready' : 'loading' } }
+  })
+  const pick = started?.file?.pick
+  const e = cur.data.entries[index]
+  if (pick === undefined || !e) return
+  // What the read ends in is shown only while its pick is still the stored one.
   const settle = (change: Partial<NonNullable<PrdiffDiff['file']>>) =>
     update($, now => {
       const f = now.file
-      return now.gen === gen && f !== undefined && pick !== undefined && f.pick === pick ? { ...now, file: { ...f, ...change } } : undefined
+      return now.gen === gen && f !== undefined && f.pick === pick ? { ...now, file: { ...f, ...change } } : undefined
     })
-  try {
-    const started = await update($, now => {
-      if (now.gen !== gen || now.status !== 'ready') return undefined
-      index = targetIndex(now.gen, now.file?.index, target, count)
-      if (index < 0 || index >= count) return undefined
-      if (now.file?.index === index && now.file.status !== 'error' && cur.files.has(index)) return undefined
-      return { ...now, file: { index, pick: (now.file?.pick ?? 0) + 1, status: cur.files.get(index)?.got ? 'ready' : 'loading' } }
-    })
-    pick = started?.file?.pick
-    const e = cur.data.entries[index]
-    if (pick === undefined || !e) return
-    let entry = cur.files.get(index)
-    if (!entry) {
-      const made: { read: Promise<void>; got?: { file: FileDiff; isCut: boolean } } = {
-        read: cur.data.readFile(e).then(
-          got => {
-            made.got = got
-          },
-          err => {
-            cur.files.delete(index)
-            throw err
-          },
-        ),
-      }
-      cur.files.set(index, made)
-      entry = made
+  let entry = cur.files.get(index)
+  if (!entry) {
+    const made: { read: Promise<void>; got?: { file: FileDiff; isCut: boolean } } = {
+      read: cur.data.readFile(e).then(
+        got => {
+          made.got = got
+        },
+        err => {
+          cur.files.delete(index)
+          throw err
+        },
+      ),
     }
-    const reading = entry
-    const read = async () => {
-      try {
-        await reading.read
-        await settle({ status: 'ready' })
-      } catch (err) {
-        await settle({ status: 'error', error: message(err) })
-      }
-    }
-    // An impossible scroll is answered `{ deny }` and leaves the pick as drawn; a rejected one is the pick's fault.
-    const scroll = () => $.ui.scroll({ in: PANE, to: 'start' }).then(
-      () => undefined,
-      err => settle({ fault: message(err) }),
-    )
-    await Promise.all([read(), scroll()])
-  } catch (err) {
-    // A failure before this pick was stored goes to start()'s notice.
-    if (pick === undefined) throw err
-    await settle({ fault: message(err) })
+    cur.files.set(index, made)
+    entry = made
   }
+  const reading = entry
+  const read = async () => {
+    try {
+      await reading.read
+      await settle({ status: 'ready' })
+    } catch (err) {
+      await settle({ status: 'error', error: message(err) })
+    }
+  }
+  await Promise.all([read(), $.ui.scroll({ in: PANE, to: 'start' })])
 }
 
 export const register: Register = on => {
@@ -245,7 +225,6 @@ export const register: Register = on => {
       ...(shown?.notes ?? []).map(n => line(`  ${n}`, { dimColor: true })),
       f?.status === 'loading' && line('Loading…', { dimColor: true }),
       f?.status === 'error' && problem(f.error ?? ''),
-      f?.fault !== undefined && problem(f.fault),
       got?.isCut === true && line('  patch over 4 MiB: only its start was read', { dimColor: true }),
     ]
     const body = got ? drawn(got.file, width, b, LIST_BUDGET) : undefined

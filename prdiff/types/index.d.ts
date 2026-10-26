@@ -6,8 +6,8 @@ export type PrdiffDiff = {
   owner?: string
   number: number
   error?: string
-  /** The open file of this load: its index in the inventory, the pick that opened it (counting up within the load), its read, and the pick's own fault (a rejected scroll). */
-  file?: { index: number; pick: number; status: 'loading' | 'ready' | 'error'; error?: string; fault?: string }
+  /** The open file of this load: its index in the inventory, the pick that opened it (counting up within the load), and its read. */
+  file?: { index: number; pick: number; status: 'loading' | 'ready' | 'error'; error?: string }
 }
 
 declare module 'claude-code' {

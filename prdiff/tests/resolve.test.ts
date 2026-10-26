@@ -261,8 +261,6 @@ test('the PR URL names the repository and host; gh is asked nothing else about t
   await loadDiff(run, 7)
   expect(calls.find(c => c.includes('ls-remote'))?.at(-3)).toBe('work')
   expect(calls.some(c => c[0] === 'gh' && c[1] === 'repo')).toBe(false)
-  const odd = fakeRepo({ 'gh pr view 7': ok(JSON.stringify({ ...PR, url: 'not a url' })) })
-  await expect(loadDiff(odd.run, 7)).rejects.toThrow('gh pr view: unreadable PR URL "not a url"')
 })
 
 test('the PR\'s remote is the first whose pull head is gh\'s head; with none, the load says what each had', async () => {

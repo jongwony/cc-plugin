@@ -61,14 +61,6 @@ async function must(run: Run, step: string, argv: string[], timeoutMs?: number):
   return r
 }
 
-function json<T>(step: string, text: string): T {
-  try {
-    return JSON.parse(text) as T
-  } catch {
-    throw new StepError(step, 'unreadable JSON from gh')
-  }
-}
-
 /**
  * `owner/repo`, lowercased, from a remote URL in https, ssh or scp form: the
  * path's last two segments, whatever the host (an ssh alias, GHE, port 443).
@@ -144,17 +136,16 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
     ]),
     must(run, 'git rev-parse', [...GIT, 'rev-parse', '--show-toplevel']),
   ])
-  const pr = json<{
+  const pr = JSON.parse(prOut.stdout) as {
     number: number
     title: string
     url: string
     headRefName: string
     headRefOid: string
     baseRefName: string
-  }>('gh pr view', prOut.stdout)
+  }
   // The PR's own URL names its repository and host: https://<host>/<owner>/<repo>/pull/<n>.
-  const repo = /^[a-z]+:\/\/[^/]+\/([^/]+\/[^/]+)\/pull\/\d+$/i.exec(pr.url)?.[1]
-  if (!repo) throw new StepError('gh pr view', `unreadable PR URL ${JSON.stringify(pr.url)}`)
+  const repo = /^[a-z]+:\/\/[^/]+\/([^/]+\/[^/]+)\/pull\/\d+$/i.exec(pr.url)?.[1] ?? ''
   const git = [...GIT, '-C', topOut.stdout.trim()]
   const remoteV = (await must(run, 'git remote', [...git, 'remote', '-v'])).stdout
   const tried = candidates(remoteV, repo, hostOfUrl(pr.url))

@@ -103,8 +103,13 @@ test('/prdiff N lists the PR\'s files and draws the first one', async ($, on) =>
 
 test('j and a file in the list each draw that file, read only when it is opened', async ($, on) => {
   const reads: string[] = []
+  const notices: string[] = []
   engine(on, Promise.resolve(), argv => {
     if (/^[0-9a-f]{40}:/.test(String(argv.at(-1)))) reads.push(String(argv.at(-1)).slice(41))
+  })
+  on('ui.log', (_, e, next) => {
+    notices.push(e.text)
+    return next(e)
   })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await $.command.run(args('2'))
@@ -113,9 +118,9 @@ test('j and a file in the list each draw that file, read only when it is opened'
   // Picking the file already open reads nothing.
   await ui.press({ key: 'prev' })
   expect(reads).toEqual(['src/one.ts'])
-  // The kit implements no `$.ui.scroll`: each change of the shown file draws that failure beside the file it opened.
+  // The kit implements no `$.ui.scroll`, against the engine's contract (`{}` or `{ deny }`): that reaches start()'s notice.
   await ui.press({ key: 'next' })
-  expect(await ui.find({ type: 'Text', text: /no implementation for ui\.scroll/ })).toBeDefined()
+  expect(notices.some(n => n.includes('no implementation for ui.scroll'))).toBe(true)
   expect(await ui.find({ type: 'Text', text: /^2\/2 M src\/two\.ts/ })).toBeDefined()
   expect(String((await ui.find({ type: 'Code' }))?.props.source)).toContain('+TWO')
   await ui.press({ key: 'goto:0' })

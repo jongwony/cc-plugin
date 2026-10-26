@@ -39,6 +39,9 @@ The pane takes the keyboard after `ctrl+x tab` or a click.
 | `r` | reload the PR |
 | wheel, arrows, `PgUp` / `PgDn`, `Home` / `End` | scroll the pane |
 
+`j` and `k` are drawn while the PR has files to move through, `r` once a PR
+has been asked for.
+
 The pane shows the PR, the open file and then the list of every file;
 pressing a file in the list opens it. Each drawing holds at most about 90,000
 characters, the engine's limit on one drawing less some room: the list takes

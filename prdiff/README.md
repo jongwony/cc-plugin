@@ -43,8 +43,8 @@ The pane takes the keyboard after `ctrl+x tab` or a click.
 has been asked for.
 
 The pane shows the PR, the open file and then the list of every file;
-pressing a file in the list opens it. A pick that changes the open file, and
-a reload, bring the pane back to its top. A file whose read failed is read
+pressing a file in the list opens it. Whenever the shown file changes (a pick,
+a reload, or `/prdiff` on an open pane) the pane scrolls back to its top. A file whose read failed is read
 again when picked again.
 
 Each drawing holds at most 100,000 characters of text, the engine's limit on

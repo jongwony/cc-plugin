@@ -192,11 +192,19 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   const inventory = await must(quiet, 'git diff', [...git, ...DIFF, '--raw', '--no-abbrev', '--numstat', '-z', ...ends], 120_000)
   const { entries, isWhole } = parseDiff(inventory.stdout)
   if (!isWhole || inventory.isStdoutTruncated) throw new StepError('git diff', 'file list over 4 MiB was cut')
-  // An added or deleted file is diffed against the empty blob, written once.
-  let empty: Promise<string> | undefined
+  // An added or deleted file is diffed against the empty blob, written only when this repository lacks it.
+  let empty: string | undefined
+  const blank = async () => {
+    if (empty !== undefined) return empty
+    const id = (await must(quiet, 'git hash-object', [...git, 'hash-object', '-t', 'blob', '/dev/null'])).stdout.trim()
+    if ((await quiet([...git, 'cat-file', '-e', id])).exitCode !== 0) {
+      await must(quiet, 'git hash-object', [...git, 'hash-object', '-w', '-t', 'blob', '/dev/null'])
+    }
+    empty = id
+    return id
+  }
   const readFile = async (e: Entry) => {
     if (!hasLines(e)) return { file: summaryOf(e), isCut: false }
-    const blank = () => (empty ??= must(quiet, 'git hash-object', [...git, 'hash-object', '-w', '-t', 'blob', '/dev/null']).then(r => r.stdout.trim()))
     const old = e.status === 'A' ? await blank() : e.oldId
     const now = e.status === 'D' ? await blank() : e.newId
     const r = await must(quiet, 'git diff', [...git, ...DIFF, old, now], 120_000)

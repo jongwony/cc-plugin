@@ -72,7 +72,7 @@ async function openFile($: EngineInterface, index: number): Promise<void> {
 /** Opens a file the person picked and brings the pane back to its top, where the file is drawn. */
 async function showFile($: EngineInterface, index: number): Promise<void> {
   await openFile($, index)
-  await $.ui.scroll({ in: PANE, to: 'start' }).catch(() => undefined)
+  await $.ui.scroll({ in: PANE, to: 'start' })
 }
 
 export const register: Register = on => {
@@ -112,8 +112,8 @@ export const register: Register = on => {
     const reload = d.number > 0 && <Button key="reload" plain hotkey="r" label="reload" onPress={() => void openDiff($, d.number)} />
     const controls = (
       <Box flexDirection="row" gap={1}>
-        {count > 0 && <Button key="next" plain hotkey="j" label="next file" onPress={() => void showFile($, Math.min(count - 1, at + 1))} />}
-        {count > 0 && <Button key="prev" plain hotkey="k" label="prev" onPress={() => void showFile($, Math.max(0, at - 1))} />}
+        {count > 0 && <Button key="next" plain hotkey="j" label="next file" onPress={() => showFile($, Math.min(count - 1, at + 1))} />}
+        {count > 0 && <Button key="prev" plain hotkey="k" label="prev" onPress={() => showFile($, Math.max(0, at - 1))} />}
         {reload}
       </Box>
     )
@@ -163,7 +163,7 @@ export const register: Register = on => {
         {body !== undefined && body.left > 0 && line(`  ${body.left} more lines of this file are not drawn`, { dimColor: true })}
         {line('─'.repeat(Math.min(cols, 80)), { dimColor: true })}
         {labels.slice(0, listed).map((label, i) => (
-          <Button key={`goto:${i}`} plain onPress={() => void showFile($, i)}>
+          <Button key={`goto:${i}`} plain onPress={() => showFile($, i)}>
             {clean(label)}
           </Button>
         ))}

@@ -111,10 +111,10 @@ test('j and a file in the list each draw that file, read only when it is opened'
   await $.command.run(args('2'))
   const ui = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /^1\/2 /)
   expect(reads).toEqual(['src/one.ts'])
-  // Picking the file already open does nothing: no read, no scroll, no failure.
+  // Picking the file already open reads nothing.
   await ui.press({ key: 'prev' })
-  expect(await ui.find({ type: 'Text', text: /no implementation for ui\.scroll/ })).toBe(undefined)
-  // The kit implements no `$.ui.scroll`, so a pick that changes the file draws that failure, beside the file it opened.
+  expect(reads).toEqual(['src/one.ts'])
+  // The kit implements no `$.ui.scroll`: each change of the shown file draws that failure beside the file it opened.
   await ui.press({ key: 'next' })
   expect(await ui.find({ type: 'Text', text: /no implementation for ui\.scroll/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^2\/2 M src\/two\.ts/ })).toBeDefined()

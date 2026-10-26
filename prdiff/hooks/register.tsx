@@ -61,30 +61,32 @@ async function act($: EngineInterface, fn: () => Promise<void>): Promise<void> {
   }
 }
 
-/** Loads PR #number and opens its first file; a person's reload also brings the pane to its top, as a pick does. */
-async function openDiff($: EngineInterface, number: number, byPerson = false): Promise<void> {
+/** Loads PR #number and opens its first file. */
+async function openDiff($: EngineInterface, number: number): Promise<void> {
   diffGen += 1
   const gen = diffGen
   await $.state.set(failureRef, '')
   await $.state.set(diffRef, { status: 'loading', gen, number })
+  let data: DiffData
   try {
     const ownSsh = (await Promise.all([$.env.get('GIT_SSH_COMMAND'), $.env.get('GIT_SSH')])).some(v => v !== undefined)
-    const data = await loadDiff(runner($), number, { ownSsh })
-    if (gen !== diffGen) return
-    held = { gen, data, files: new Map() }
-    if ((await putFor($, gen, { status: 'ready', gen, number })) === undefined) return
-    if (data.entries.length > 0) await openFile($, 0, byPerson)
+    data = await loadDiff(runner($), number, { ownSsh })
   } catch (err) {
     await putFor($, gen, { status: 'error', gen, number, error: message(err) })
+    return
   }
+  if (gen !== diffGen) return
+  held = { gen, data, files: new Map() }
+  if ((await putFor($, gen, { status: 'ready', gen, number })) === undefined) return
+  if (data.entries.length > 0) await openFile($, 0)
 }
 
 /**
- * Opens a file of the newest load. A pick of the file already open or being
- * read does nothing; a person's pick that changes it also brings the pane to
- * its top, where the file is drawn.
+ * Opens a file of the newest load and brings the pane to its top, where the
+ * file is drawn. A pick of the file already open or being read changes
+ * nothing.
  */
-async function openFile($: EngineInterface, index: number, byPerson = false): Promise<void> {
+async function openFile($: EngineInterface, index: number): Promise<void> {
   const cur = held
   const e = cur?.data.entries[index]
   if (!cur || cur.gen !== diffGen || !e) return
@@ -125,7 +127,7 @@ async function openFile($: EngineInterface, index: number, byPerson = false): Pr
       await settle({ index, pick, status: 'error', error: message(err) })
     }
   }
-  await Promise.all([read(), byPerson ? $.ui.scroll({ in: PANE, to: 'start' }) : undefined])
+  await Promise.all([read(), $.ui.scroll({ in: PANE, to: 'start' })])
 }
 
 export const register: Register = on => {
@@ -182,9 +184,9 @@ export const register: Register = on => {
       : []
     const controls = (
       <Box flexDirection="row" gap={1}>
-        {count > 0 && button('next', 'j', 'next file', () => openFile($, Math.min(count - 1, at + 1), true))}
-        {count > 0 && button('prev', 'k', 'prev', () => openFile($, Math.max(0, at - 1), true))}
-        {d.number > 0 && button('reload', 'r', 'reload', () => openDiff($, d.number, true))}
+        {count > 0 && button('next', 'j', 'next file', () => openFile($, Math.min(count - 1, at + 1)))}
+        {count > 0 && button('prev', 'k', 'prev', () => openFile($, Math.max(0, at - 1)))}
+        {d.number > 0 && button('reload', 'r', 'reload', () => openDiff($, d.number))}
       </Box>
     )
     const problem = failed !== '' && line(failed, { color: 'error' })
@@ -237,7 +239,7 @@ export const register: Register = on => {
       const label = clip(clean(`${i === at ? '▸ ' : '  '}${fileLabel(s)}`), width)
       if (b.left - label.length < keep || !b.take(label)) break
       list.push(
-        <Button key={`goto:${i}`} plain onPress={() => act($, () => openFile($, i, true))}>
+        <Button key={`goto:${i}`} plain onPress={() => act($, () => openFile($, i))}>
           {label}
         </Button>,
       )

@@ -9,7 +9,9 @@ import { Budget, CHAR_BUDGET, LIST_BUDGET, clip, drawn, fileLabel, listed, targe
 export const PANE = 'prdiff'
 
 const diffRef = { plugin: 'prdiff', key: 'diff' } as const
-const diff = atom(diffRef, { status: 'idle', gen: 0, number: 0 } as PrdiffDiff)
+/** The diff state before any load. */
+const IDLE: PrdiffDiff = { status: 'idle', gen: 0, number: 0 }
+const diff = atom(diffRef, IDLE)
 
 function runner($: EngineInterface): Run {
   return async (argv, timeoutMs, env) => {
@@ -38,7 +40,7 @@ let held: { gen: number; data: DiffData; files: Map<number, { read: Promise<void
 async function update($: EngineInterface, fn: (now: PrdiffDiff) => PrdiffDiff | undefined): Promise<PrdiffDiff | undefined> {
   for (;;) {
     const now = await $.state.get(diffRef)
-    const next = fn(now.value ?? { status: 'idle', gen: 0, number: 0 })
+    const next = fn(now.value ?? IDLE)
     if (next === undefined) return undefined
     if ((await $.state.set(diffRef, next, { ifVersion: now.version })).isSet) return next
   }

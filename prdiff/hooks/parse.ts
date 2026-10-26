@@ -2,8 +2,8 @@
 // and for one file's patch (`git diff <old blob> <new blob>`). Pure: no `$`.
 
 export type DiffLine = {
-  /** ' ', '+', '-' or '\\' (no newline at end of file). */
-  mark: ' ' | '+' | '-' | '\\'
+  /** ' ', '+' or '-'. */
+  mark: ' ' | '+' | '-'
   text: string
   /** Old/new line cursors before this line, as the hunk header counts them. */
   oldNo: number
@@ -74,9 +74,9 @@ function hunksOf(patch: string, isCut: boolean): { hunks: Hunk[]; eol: boolean }
     // empty context line written without its space; otherwise it is the
     // patch's trailing newline.
     const mark = line === '' && oldLeft > 0 && newLeft > 0 ? ' ' : line[0]
-    const owed = mark === ' ' ? oldLeft > 0 && newLeft > 0 : mark === '-' ? oldLeft > 0 : mark === '+' ? newLeft > 0 : mark === '\\'
+    if (mark === '\\') continue
     // A hunk ends when its declared counts are used up; what follows is not its content.
-    if (!owed) {
+    if ((mark !== ' ' || oldLeft === 0 || newLeft === 0) && (mark !== '-' || oldLeft === 0) && (mark !== '+' || newLeft === 0)) {
       hunk = undefined
       continue
     }
@@ -203,10 +203,9 @@ export function fileFor(e: Entry, patch: string, isCut = false): FileDiff {
 /**
  * A unified-diff source for the first lines of one hunk, with a header that
  * counts just those lines, so `Code format="diff"` parses a hunk the drawing
- * budget cut short. `\\` lines are left out; a run with no content line gives ''.
+ * budget cut short. An empty run gives ''.
  */
-export function hunkSource(all: readonly DiffLine[]): string {
-  const lines = all.filter(l => l.mark !== '\\')
+export function hunkSource(lines: readonly DiffLine[]): string {
   const first = lines[0]
   if (!first) return ''
   const oldCount = lines.filter(l => l.mark === ' ' || l.mark === '-').length

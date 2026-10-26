@@ -255,5 +255,5 @@ test('a type change is read by path and drawn in its two halves', async () => {
   const e = d.entries[0]
   if (!e) throw new Error('no entry')
   const { file } = await d.readFile(e)
-  expect(file.hunks.flatMap(h => h.lines.map(l => l.mark + l.text))).toEqual(['-x', '+m.txt', '\\ No newline at end of file'])
+  expect(file.hunks.flatMap(h => h.lines.map(l => l.mark + l.text))).toEqual(['-x', '+m.txt'])
 })

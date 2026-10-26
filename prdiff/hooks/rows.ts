@@ -39,10 +39,10 @@ export function drawn(f: FileDiff, width: number, b: Budget, keep = 0): { runs: 
   const runs: Run[] = []
   let left = 0
   // Room for the note on what is left out, sized for the most it could count: every content line.
-  const all = f.hunks.reduce((n, h) => n + h.lines.filter(l => l.mark !== '\\').length, 0)
+  const all = f.hunks.reduce((n, h) => n + h.lines.length, 0)
   const room0 = keep + leftOut(all).length
   for (const hunk of f.hunks) {
-    const lines = hunk.lines.filter(l => l.mark !== '\\').map(l => (l.text.length > width ? { ...l, text: clip(l.text, width) } : l))
+    const lines = hunk.lines.map(l => (l.text.length > width ? { ...l, text: clip(l.text, width) } : l))
     if (left > 0) {
       left += lines.length
       continue

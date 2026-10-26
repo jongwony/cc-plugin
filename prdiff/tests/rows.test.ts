@@ -50,12 +50,6 @@ test('lines are clipped to the width a row shows, which leaves more of the file 
   expect(d.runs[0]?.source.split('\n').slice(1).map(l => l.length)).toEqual([21, 21, 21])
 })
 
-test('a "no newline" marker takes nothing from the budget and is never drawn', () => {
-  const f = file(1, 1)
-  f.hunks[0]?.lines.push({ mark: '\\', text: ' No newline at end of file', oldNo: 1, newNo: 2 })
-  expect(drawn(f, 80, new Budget(CHAR_BUDGET)).runs[0]?.source).toBe('@@ -0,0 +1,1 @@\n+xxxxxxxxxx')
-})
-
 test('a budget takes a string only while it fits, and what it took is spent', () => {
   const b = new Budget(5)
   expect([b.take('aa'), b.take('bbbb'), b.take('cc'), b.left]).toEqual([true, false, true, 1])

@@ -52,7 +52,7 @@ test('a type change read by path draws both of its sections, and nothing of the 
   const f = fileFor(entries[1] as Entry, TYPECHANGE)
   expect(f.hunks.map(h => [h.header, h.lines.map(l => l.mark + l.text)])).toEqual([
     ['@@ -1 +0,0 @@', ['-x']],
-    ['@@ -0,0 +1 @@', ['+m.txt', '\\ No newline at end of file']],
+    ['@@ -0,0 +1 @@', ['+m.txt']],
   ])
   expect(fileFor(entries[1] as Entry, TYPECHANGE_BLOBS).hunks.length).toBe(1)
   expect(f.notes).toEqual(['mode 100644 → 120000'])
@@ -82,12 +82,12 @@ test('an empty context line written without its space still counts as context', 
   expect(f.hunks[0]?.lines.map(l => `${l.mark}${l.oldNo}/${l.newNo}`)).toEqual([' 1/1', ' 2/2', '-3/3', '+4/3'])
 })
 
-test('a "no newline" marker is never drawn, and a run of only that gives no source', () => {
+test('a "no newline" mark is read past, not kept as a line', () => {
   const f = one('r.ts', 'diff --git a/1111111 b/2222222\nindex 1111111..2222222 100644\n--- a/1111111\n+++ b/2222222\n@@ -10,2 +10,4 @@\n keep\n+added one\n+added two\n keep\n\\ No newline at end of file\n')
   const lines = f.hunks[0]?.lines ?? []
-  expect(lines.at(-1)?.mark).toBe('\\')
+  expect(lines.map(l => l.mark + l.text)).toEqual([' keep', '+added one', '+added two', ' keep'])
   expect(hunkSource(lines)).toBe('@@ -10,2 +10,4 @@\n keep\n+added one\n+added two\n keep')
-  expect(hunkSource(lines.slice(-1))).toBe('')
+  expect(hunkSource([])).toBe('')
 })
 
 test('a change only in line endings is noted, since the drawn texts are identical', () => {

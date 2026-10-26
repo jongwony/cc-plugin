@@ -12,6 +12,8 @@ declare module 'claude-code' {
   interface PluginState {
     prdiff: {
       diff: PrdiffDiff
+      /** The last command's or press's failure, drawn until the next load; '' when none. */
+      failure: string
     }
   }
 }

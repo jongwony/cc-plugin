@@ -9,7 +9,9 @@ import { CHAR_BUDGET, LIST_BUDGET, clip, drawn, fileLabel, fitting } from './row
 export const PANE = 'prdiff'
 
 const diffRef = { plugin: 'prdiff', key: 'diff' } as const
+const failureRef = { plugin: 'prdiff', key: 'failure' } as const
 const diff = atom(diffRef, { status: 'idle', gen: 0, number: 0 } as PrdiffDiff)
+const failure = atom(failureRef, '')
 
 function runner($: EngineInterface): Run {
   return async (argv, timeoutMs, env) => {
@@ -32,9 +34,19 @@ let picked: { gen: number; index: number } | undefined
 // pane then offers to load again.
 let held: { gen: number; data: DiffData; files: Map<number, { file: FileDiff; isCut: boolean }> } | undefined
 
+/** Runs what a command or a press asks for; its failure, whatever step it came from, is drawn in the pane. */
+async function act($: EngineInterface, fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn()
+  } catch (err) {
+    await $.state.set(failureRef, message(err))
+  }
+}
+
 async function openDiff($: EngineInterface, number: number): Promise<void> {
   diffGen += 1
   const gen = diffGen
+  await $.state.set(failureRef, '')
   await $.state.set(diffRef, { status: 'loading', gen, number })
   try {
     const ownSsh = (await Promise.all([$.env.get('GIT_SSH_COMMAND'), $.env.get('GIT_SSH')])).some(v => v !== undefined)
@@ -49,30 +61,33 @@ async function openDiff($: EngineInterface, number: number): Promise<void> {
   }
 }
 
-async function openFile($: EngineInterface, index: number): Promise<void> {
+/**
+ * Opens a file of the newest load. A pick of the file already open does
+ * nothing; a person's pick that changes it also brings the pane to its top,
+ * where the file is drawn.
+ */
+async function openFile($: EngineInterface, index: number, byPerson = false): Promise<void> {
   const cur = held
   const e = cur?.data.entries[index]
   if (!cur || cur.gen !== diffGen || !e) return
   const gen = cur.gen
+  if (picked?.gen === gen && picked.index === index) return
   picked = { gen, index }
   const show = async (file: NonNullable<PrdiffDiff['file']>) => {
     if (diffGen !== gen || picked?.gen !== gen || picked.index !== index) return
     await $.state.set(diffRef, { status: 'ready', gen, number: cur.data.number, file })
   }
-  if (cur.files.has(index)) return show({ index, status: 'ready' })
-  await show({ index, status: 'loading' })
-  try {
-    cur.files.set(index, await cur.data.readFile(e))
-    await show({ index, status: 'ready' })
-  } catch (err) {
-    await show({ index, status: 'error', error: message(err) })
+  const read = async () => {
+    if (cur.files.has(index)) return show({ index, status: 'ready' })
+    await show({ index, status: 'loading' })
+    try {
+      cur.files.set(index, await cur.data.readFile(e))
+      await show({ index, status: 'ready' })
+    } catch (err) {
+      await show({ index, status: 'error', error: message(err) })
+    }
   }
-}
-
-/** Opens a file the person picked and brings the pane back to its top, where the file is drawn. */
-async function showFile($: EngineInterface, index: number): Promise<void> {
-  await openFile($, index)
-  await $.ui.scroll({ in: PANE, to: 'start' })
+  await Promise.all([read(), byPerson ? $.ui.scroll({ in: PANE, to: 'start' }) : undefined])
 }
 
 export const register: Register = on => {
@@ -90,7 +105,7 @@ export const register: Register = on => {
     const n = arg === undefined ? 0 : Number(arg)
     if (n === 0) return { text: 'Usage: /prdiff <PR number>' }
     await $.ui.open({ id: PANE, title: 'PR diff', focus: true })
-    void openDiff($, n)
+    void act($, () => openDiff($, n))
     return { text: `PR diff pane opened on #${n}.` }
   })
 
@@ -102,18 +117,19 @@ export const register: Register = on => {
         {clean(text)}
       </Text>
     )
-    const d = await read($, diff)
+    const [d, failed] = await Promise.all([read($, diff), read($, failure)])
+    const problem = failed !== '' && line(failed, { color: 'error' })
     // A state this module instance did not write (a hot reload empties `held`) is not loaded.
     const isMine = d.gen === diffGen
     const cur = isMine && d.status === 'ready' && held?.gen === d.gen ? held : undefined
     const f = cur ? d.file : undefined
     const at = f?.index ?? -1
     const count = cur?.data.entries.length ?? 0
-    const reload = d.number > 0 && <Button key="reload" plain hotkey="r" label="reload" onPress={() => void openDiff($, d.number)} />
+    const reload = d.number > 0 && <Button key="reload" plain hotkey="r" label="reload" onPress={() => act($, () => openDiff($, d.number))} />
     const controls = (
       <Box flexDirection="row" gap={1}>
-        {count > 0 && <Button key="next" plain hotkey="j" label="next file" onPress={() => showFile($, Math.min(count - 1, at + 1))} />}
-        {count > 0 && <Button key="prev" plain hotkey="k" label="prev" onPress={() => showFile($, Math.max(0, at - 1))} />}
+        {count > 0 && <Button key="next" plain hotkey="j" label="next file" onPress={() => act($, () => openFile($, Math.min(count - 1, at + 1), true))} />}
+        {count > 0 && <Button key="prev" plain hotkey="k" label="prev" onPress={() => act($, () => openFile($, Math.max(0, at - 1), true))} />}
         {reload}
       </Box>
     )
@@ -129,6 +145,7 @@ export const register: Register = on => {
       return (
         <Box flexDirection="column">
           {controls}
+          {problem}
           {status}
         </Box>
       )
@@ -151,6 +168,7 @@ export const register: Register = on => {
         })}
         {dd.notes.map(n => line(n, { color: 'warning' }))}
         {controls}
+        {problem}
         {shown && line(`${at + 1}/${count} ${fileLabel(shown)}`, { bold: true })}
         {shown?.notes.map(n => line(`  ${n}`, { dimColor: true }))}
         {f?.status === 'loading' && line('Loading…', { dimColor: true })}
@@ -163,7 +181,7 @@ export const register: Register = on => {
         {body !== undefined && body.left > 0 && line(`  ${body.left} more lines of this file are not drawn`, { dimColor: true })}
         {line('─'.repeat(Math.min(cols, 80)), { dimColor: true })}
         {labels.slice(0, listed).map((label, i) => (
-          <Button key={`goto:${i}`} plain onPress={() => showFile($, i)}>
+          <Button key={`goto:${i}`} plain onPress={() => act($, () => openFile($, i, true))}>
             {clean(label)}
           </Button>
         ))}

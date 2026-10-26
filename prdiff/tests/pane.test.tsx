@@ -341,3 +341,18 @@ test('two loads started back to back leave the later one shown', async ($, on) =
   expect(await ui.find({ type: 'Text', text: /^#2 Title 2/ })).toBeDefined()
   await ui.unmount()
 })
+
+test('two presses of j before a redraw move two files on', async ($, on) => {
+  state.files = 3
+  engine(on)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run(args('2'))
+  const ui = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /^1\/3 /)
+  await Promise.all([ui.press({ key: 'next' }), ui.press({ key: 'next' })])
+  for (let i = 0; i < 100; i += 1) await null
+  await ui.unmount()
+  const after = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await after.find({ type: 'Text', text: /^\d\/3 / }))?.text).toBe('3/3 M src/f0.ts  +1 −1')
+  await after.unmount()
+  state.files = 2
+})

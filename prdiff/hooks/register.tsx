@@ -55,10 +55,10 @@ function putFor($: EngineInterface, gen: number, value: PrdiffDiff): Promise<Prd
 async function openDiff($: EngineInterface, number: number): Promise<void> {
   diffGen += 1
   const gen = diffGen
-  // A load's first write replaces any older load's state, never a newer one's.
-  if ((await update($, now => (now.gen > gen ? undefined : { status: 'loading', gen, number }))) === undefined) return
   let data: DiffData
   try {
+    // A load's first write replaces any older load's state, never a newer one's.
+    if ((await update($, now => (now.gen > gen ? undefined : { status: 'loading', gen, number }))) === undefined) return
     const ownSsh = (await Promise.all([$.env.get('GIT_SSH_COMMAND'), $.env.get('GIT_SSH')])).some(v => v !== undefined)
     data = await loadDiff(runner($), number, { ownSsh })
     if (gen !== diffGen) return
@@ -71,57 +71,74 @@ async function openDiff($: EngineInterface, number: number): Promise<void> {
   if (data.entries.length > 0) await openFile($, 0)
 }
 
+/** A file of the load: its index, or a step from the file the stored state has open. */
+type Target = number | { step: 1 | -1 }
+
 /**
  * Opens a file of the newest load and brings the pane to its top, where the
- * file is drawn. A pick of the file already open or being read changes
- * nothing.
+ * file is drawn. The target is resolved against the stored pick; a pick of
+ * the file already open or being read changes nothing. Whatever the pick
+ * ends in, its read's error or its scroll's rejection included, is written
+ * to that pick's stored file state.
  */
-async function openFile($: EngineInterface, index: number): Promise<void> {
+async function openFile($: EngineInterface, target: Target): Promise<void> {
   const cur = held
-  const e = cur?.data.entries[index]
-  if (!cur || cur.gen !== diffGen || !e) return
+  if (!cur || cur.gen !== diffGen) return
   const gen = cur.gen
-  const started = await update($, now => {
-    if (now.gen !== gen || now.status !== 'ready') return undefined
-    if (now.file?.index === index && now.file.status !== 'error' && cur.files.has(index)) return undefined
-    return { ...now, file: { index, pick: (now.file?.pick ?? 0) + 1, status: cur.files.get(index)?.got ? 'ready' : 'loading' } }
-  })
-  const pick = started?.file?.pick
-  if (pick === undefined) return
-  let entry = cur.files.get(index)
-  if (!entry) {
-    const made: { read: Promise<void>; got?: { file: FileDiff; isCut: boolean } } = {
-      read: cur.data.readFile(e).then(
-        got => {
-          made.got = got
-        },
-        err => {
-          cur.files.delete(index)
-          throw err
-        },
-      ),
-    }
-    cur.files.set(index, made)
-    entry = made
-  }
-  const reading = entry
-  // What the pick's read and scroll end in is shown only while its pick is still the stored one.
+  const count = cur.data.entries.length
+  let index = -1
+  let pick: number | undefined
+  // What the pick ends in is shown only while it is still the stored pick.
   const settle = (change: Partial<NonNullable<PrdiffDiff['file']>>) =>
-    update($, now => (now.gen === gen && now.file?.pick === pick ? { ...now, file: { ...now.file, ...change } } : undefined))
-  const read = async () => {
-    try {
-      await reading.read
-      await settle({ status: 'ready' })
-    } catch (err) {
-      await settle({ status: 'error', error: message(err) })
+    update($, now => {
+      const f = now.file
+      return now.gen === gen && f !== undefined && pick !== undefined && f.pick === pick ? { ...now, file: { ...f, ...change } } : undefined
+    })
+  try {
+    const started = await update($, now => {
+      if (now.gen !== gen || now.status !== 'ready') return undefined
+      index = typeof target === 'number' ? target : Math.min(count - 1, Math.max(0, (now.file?.index ?? 0) + target.step))
+      if (index < 0 || index >= count) return undefined
+      if (now.file?.index === index && now.file.status !== 'error' && cur.files.has(index)) return undefined
+      return { ...now, file: { index, pick: (now.file?.pick ?? 0) + 1, status: cur.files.get(index)?.got ? 'ready' : 'loading' } }
+    })
+    pick = started?.file?.pick
+    const e = cur.data.entries[index]
+    if (pick === undefined || !e) return
+    let entry = cur.files.get(index)
+    if (!entry) {
+      const made: { read: Promise<void>; got?: { file: FileDiff; isCut: boolean } } = {
+        read: cur.data.readFile(e).then(
+          got => {
+            made.got = got
+          },
+          err => {
+            cur.files.delete(index)
+            throw err
+          },
+        ),
+      }
+      cur.files.set(index, made)
+      entry = made
     }
+    const reading = entry
+    const read = async () => {
+      try {
+        await reading.read
+        await settle({ status: 'ready' })
+      } catch (err) {
+        await settle({ status: 'error', error: message(err) })
+      }
+    }
+    // An impossible scroll is answered `{ deny }` and leaves the pick as drawn; a rejected one is the pick's fault.
+    const scroll = () => $.ui.scroll({ in: PANE, to: 'start' }).then(
+      () => undefined,
+      err => settle({ fault: message(err) }),
+    )
+    await Promise.all([read(), scroll()])
+  } catch (err) {
+    await settle({ fault: message(err) })
   }
-  // An impossible scroll is answered `{ deny }` and leaves the pick as drawn; a rejected one is the pick's fault.
-  const scroll = () => $.ui.scroll({ in: PANE, to: 'start' }).then(
-    () => undefined,
-    err => settle({ fault: message(err) }),
-  )
-  await Promise.all([read(), scroll()])
 }
 
 export const register: Register = on => {
@@ -178,8 +195,8 @@ export const register: Register = on => {
       : []
     const controls = (
       <Box flexDirection="row" gap={1}>
-        {count > 0 && button('next', 'j', 'next file', () => openFile($, Math.min(count - 1, at + 1)))}
-        {count > 0 && button('prev', 'k', 'prev', () => openFile($, Math.max(0, at - 1)))}
+        {count > 0 && button('next', 'j', 'next file', () => openFile($, { step: 1 }))}
+        {count > 0 && button('prev', 'k', 'prev', () => openFile($, { step: -1 }))}
         {d.number > 0 && button('reload', 'r', 'reload', () => openDiff($, d.number))}
       </Box>
     )

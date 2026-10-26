@@ -5,11 +5,11 @@ const ok = (stdout: string): RunResult => ({ exitCode: 0, stdout, stderr: '', is
 const fail = (stderr: string): RunResult => ({ exitCode: 1, stdout: '', stderr, isStdoutTruncated: false })
 
 const PR = { number: 7, title: 'Stacked', url: 'https://github.com/o/r/pull/7', headRefName: 'feat/b', baseRefName: 'feat/a' }
-const PATCH = 'diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n'
+const PATCH = 'diff --git a/old-x b/new-x\nindex old-x..new-x 100644\n--- a/old-x\n+++ b/new-x\n@@ -1 +1 @@\n-a\n+b\n'
 
 /** The `--raw --numstat -z` records of modified `paths`, as git writes them ahead of the patch. */
 const inv = (paths: string[]) =>
-  paths.map(p => `:100644 100644 old-${p} new-${p} M\0${p}\0`).join('') + paths.map(p => `1\t1\t${p}\0`).join('') + '\0'
+  paths.map(p => `:100644 100644 old-${p} new-${p} M\0${p}\0`).join('') + paths.map(p => `1\t1\t${p}\0`).join('')
 
 /** A repository that answers by the command's shape; records every argv. */
 function fakeRepo(overrides: Record<string, RunResult> = {}) {
@@ -27,8 +27,8 @@ function fakeRepo(overrides: Record<string, RunResult> = {}) {
     }
     if (s.includes(' fetch ')) return ok('')
     if (s.includes('merge-base')) return ok('m'.repeat(40) + '\n')
-    if (s.includes('--raw')) return ok(inv(['x']) + PATCH)
-    if (s.includes(' -p ')) return ok(PATCH)
+    if (s.includes('--raw')) return ok(inv(['x']))
+    if (s.endsWith(' old-x new-x')) return ok(PATCH)
     return fail(`unexpected: ${s}`)
   }
   return { run, calls }

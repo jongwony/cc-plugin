@@ -1,5 +1,5 @@
-// Parsers for `git diff --numstat -z` and `git diff -p`, and the merge of the
-// two into one inventory. Pure: no `$`.
+// Parsers for a PR's inventory (`git diff --raw --no-abbrev --numstat -z`)
+// and for one file's patch (`git diff <old blob> <new blob>`). Pure: no `$`.
 
 export type DiffLine = {
   /** ' ', '+', '-' or '\\' (no newline at end of file). */
@@ -37,16 +37,10 @@ export function clean(text: string): string {
 
 const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$/
 
-type Section = {
-  hunks: Hunk[]
-  /** A removed and an added line of one hunk differ only in a trailing CR. */
-  eol: boolean
-}
-
-/** Splits a patch into per-file sections at each `diff --git` line, in the order git wrote them. */
-function sections(patch: string): Section[] {
-  const out: Section[] = []
-  let cur: Section | undefined
+/** The hunks of one blob pair's patch, and whether a removed and an added line differ only in a trailing CR. */
+function hunksOf(patch: string): { hunks: Hunk[]; eol: boolean } {
+  const hunks: Hunk[] = []
+  let eol = false
   let hunk: Hunk | undefined
   let oldNo = 0
   let newNo = 0
@@ -57,13 +51,6 @@ function sections(patch: string): Section[] {
   let seen = { '-': new Map<string, Set<boolean>>(), '+': new Map<string, Set<boolean>>() }
   for (const raw of patch.split('\n')) {
     const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw
-    if (line.startsWith('diff --git ') || line.startsWith('diff --cc ')) {
-      cur = { hunks: [], eol: false }
-      hunk = undefined
-      out.push(cur)
-      continue
-    }
-    if (!cur) continue
     const m = HUNK.exec(line)
     if (m) {
       oldLeft = m[2] === undefined ? 1 : Number(m[2])
@@ -73,7 +60,7 @@ function sections(patch: string): Section[] {
       newNo = Number(m[3]) + (newLeft === 0 ? 1 : 0)
       hunk = { header: line.slice(0, line.indexOf(' @@') + 3), section: clean(m[5] ?? ''), lines: [] }
       seen = { '-': new Map(), '+': new Map() }
-      cur.hunks.push(hunk)
+      hunks.push(hunk)
       continue
     }
     if (!hunk) continue
@@ -81,33 +68,24 @@ function sections(patch: string): Section[] {
     // empty context line written without its space; otherwise it is the
     // patch's trailing newline.
     const mark = line === '' && oldLeft > 0 && newLeft > 0 ? ' ' : line[0]
-    if (mark === ' ' || mark === '+' || mark === '-' || mark === '\\') {
-      hunk.lines.push({ mark, text: clean(line.slice(1)), oldNo, newNo })
-      if (mark === '-' || mark === '+') {
-        const cr = raw.endsWith('\r')
-        const text = line.slice(1)
-        if (seen[mark === '-' ? '+' : '-'].get(text)?.has(!cr)) cur.eol = true
-        seen[mark].set(text, (seen[mark].get(text) ?? new Set<boolean>()).add(cr))
-      }
-      if (mark === ' ') {
-        oldNo += 1
-        newNo += 1
-        oldLeft -= 1
-        newLeft -= 1
-      } else if (mark === '-') {
-        oldNo += 1
-        oldLeft -= 1
-      } else if (mark === '+') {
-        newNo += 1
-        newLeft -= 1
-      }
-    } else if (line === '') {
-      // The trailing newline of the whole patch.
-    } else {
-      hunk = undefined
+    if (mark !== ' ' && mark !== '+' && mark !== '-' && mark !== '\\') continue
+    hunk.lines.push({ mark, text: clean(line.slice(1)), oldNo, newNo })
+    if (mark === '-' || mark === '+') {
+      const cr = raw.endsWith('\r')
+      const text = line.slice(1)
+      if (seen[mark === '-' ? '+' : '-'].get(text)?.has(!cr)) eol = true
+      seen[mark].set(text, (seen[mark].get(text) ?? new Set<boolean>()).add(cr))
+    }
+    if (mark === ' ' || mark === '-') {
+      oldNo += 1
+      oldLeft -= 1
+    }
+    if (mark === ' ' || mark === '+') {
+      newNo += 1
+      newLeft -= 1
     }
   }
-  return out
+  return { hunks, eol }
 }
 
 /** One file of `git diff --raw --numstat -z`: its raw record and its numstat counts. */
@@ -203,12 +181,8 @@ export function summaryOf(e: Entry): FileDiff {
 /** One entry's file from the patch of its two blobs. */
 export function fileFor(e: Entry, patch: string): FileDiff {
   const f = summaryOf(e)
-  const secs = sections(patch)
-  return {
-    ...f,
-    hunks: secs.flatMap(s => s.hunks),
-    notes: [...f.notes, ...(secs.some(s => s.eol) ? ['line endings changed'] : [])],
-  }
+  const { hunks, eol } = hunksOf(patch)
+  return { ...f, hunks, notes: [...f.notes, ...(eol ? ['line endings changed'] : [])] }
 }
 
 /**

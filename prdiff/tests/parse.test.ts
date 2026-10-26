@@ -1,10 +1,13 @@
 import { expect, test } from 'claude-code/testing'
 import { clean, fileFor, hunkSource, parseDiff, summaryOf, type Entry } from '../hooks/parse.ts'
 
-// `git diff --raw --numstat -p -z -M` from git 2.54, over: a binary edit, a
-// file turned symlink, an edit, an added `new one.txt`, `ren.txt` renamed to
-// `say "hi".txt`, and a mode change on `with space.txt`.
-const REAL = ":100644 100644 bdc955b 8835708 M\u0000bin\u0000:100644 120000 587be6b 347bda8 T\u0000f\u0000:100644 100644 422c2b7 de98044 M\u0000m.txt\u0000:000000 100644 0000000 3e75765 A\u0000new one.txt\u0000:100644 100644 4286f42 4286f42 R100\u0000ren.txt\u0000say \"hi\".txt\u0000:100644 100755 3367afd 3367afd M\u0000with space.txt\u0000-\t-\tbin\u00001\t1\tf\u00001\t0\tm.txt\u00001\t0\tnew one.txt\u00000\t0\t\u0000ren.txt\u0000say \"hi\".txt\u00000\t0\twith space.txt\u0000\u0000diff --git a/bin b/bin\nindex bdc955b..8835708 100644\nBinary files a/bin and b/bin differ\ndiff --git a/f b/f\ndeleted file mode 100644\nindex 587be6b..0000000\n--- a/f\n+++ /dev/null\n@@ -1 +0,0 @@\n-x\ndiff --git a/f b/f\nnew file mode 120000\nindex 0000000..347bda8\n--- /dev/null\n+++ b/f\n@@ -0,0 +1 @@\n+m.txt\n\\ No newline at end of file\ndiff --git a/m.txt b/m.txt\nindex 422c2b7..de98044 100644\n--- a/m.txt\n+++ b/m.txt\n@@ -1,2 +1,3 @@\n a\n b\n+c\ndiff --git a/new one.txt b/new one.txt\nnew file mode 100644\nindex 0000000..3e75765\n--- /dev/null\n+++ b/new one.txt\t\n@@ -0,0 +1 @@\n+new\ndiff --git a/ren.txt \"b/say \\\"hi\\\".txt\"\nsimilarity index 100%\nrename from ren.txt\nrename to \"say \\\"hi\\\".txt\"\ndiff --git a/with space.txt b/with space.txt\nold mode 100644\nnew mode 100755\n"
+// The inventory `git diff --raw --no-abbrev --numstat -z -M` from git 2.54,
+// over: a binary edit, a file turned symlink, an edit, an added `new one.txt`,
+// `ren.txt` renamed to `say "hi".txt`, and a mode change on `with space.txt`.
+const REAL = ":100644 100644 bdc955b7b2e610ad5a72302b139a2e6cb325519a 8835708590a9afa236e1bbad18df9d23de82ccd3 M\u0000bin\u0000:100644 120000 587be6b4c3f93f93c489c0111bba5596147a26cb 347bda8b202a5db796d1fe649680232fde0f6c3a T\u0000f\u0000:100644 100644 422c2b7ab3b3c668038da977e4e93a5fc623169c de980441c3ab03a8c07dda1ad27b8a11f39deb1e M\u0000m.txt\u0000:000000 100644 0000000000000000000000000000000000000000 3e757656cf36eca53338e520d134963a44f793f8 A\u0000new one.txt\u0000:100644 100644 4286f428e3b19fe84de503916ce0e7dc8deefea1 4286f428e3b19fe84de503916ce0e7dc8deefea1 R100\u0000ren.txt\u0000say \"hi\".txt\u0000:100644 100755 3367afdbbf91e638efe983616377c60477cc6612 3367afdbbf91e638efe983616377c60477cc6612 M\u0000with space.txt\u0000-\t-\tbin\u00001\t1\tf\u00001\t0\tm.txt\u00001\t0\tnew one.txt\u00000\t0\t\u0000ren.txt\u0000say \"hi\".txt\u00000\t0\twith space.txt\u0000"
+
+// The blob-pair patch git 2.54 writes for that type change (`git diff <old blob> <new blob>`).
+const TYPECHANGE = "diff --git a/587be6b b/347bda8\nindex 587be6b..347bda8 100644\n--- a/587be6b\n+++ b/347bda8\n@@ -1 +1 @@\n-x\n+m.txt\n\\ No newline at end of file\n"
 
 /** A one-entry diff: a modified `path` with the given patch. */
 function one(path: string, patch: string, added = 1, deleted = 1) {
@@ -13,10 +16,10 @@ function one(path: string, patch: string, added = 1, deleted = 1) {
   return fileFor(e, patch)
 }
 
-const PATCH = `diff --git a/src/a.ts b/src/a.ts
+const PATCH = `diff --git a/1111111 b/2222222
 index 1111111..2222222 100644
---- a/src/a.ts
-+++ b/src/a.ts
+--- a/1111111
++++ b/2222222
 @@ -1,3 +1,5 @@ function top()
  one
 -two
@@ -41,11 +44,11 @@ test('the raw records name every file, its status, its counts and its notes', ()
   expect(parseDiff(REAL.slice(0, REAL.indexOf('ren.txt'))).isWhole).toBe(false)
 })
 
-test('a type change read alone takes both of its sections', () => {
+test('a type change reads as one hunk of its two blobs', () => {
   const { entries } = parseDiff(REAL)
-  const patch = REAL.slice(REAL.indexOf('diff --git a/f b/f'), REAL.indexOf('diff --git a/m.txt'))
-  const f = fileFor(entries[1] as Entry, patch)
+  const f = fileFor(entries[1] as Entry, TYPECHANGE)
   expect(f.hunks.flatMap(h => h.lines.map(l => l.mark + l.text))).toEqual(['-x', '+m.txt', '\\ No newline at end of file'])
+  expect(f.notes).toEqual(['file type changed'])
 })
 
 test('hunk lines carry their old and new line numbers', () => {
@@ -62,18 +65,18 @@ test('a window that starts mid-hunk gets a header numbering that window', () => 
 
 test('control characters are replaced, carriage returns dropped', () => {
   expect(clean('a\u0007b\nc')).toBe('a�b�c')
-  const f = one('w.txt', 'diff --git a/w.txt b/w.txt\n--- a/w.txt\n+++ b/w.txt\n@@ -1 +1 @@\n-old\r\n+new\u001b[0m\r\n')
+  const f = one('w.txt', 'diff --git a/1111111 b/2222222\nindex 1111111..2222222 100644\n--- a/1111111\n+++ b/2222222\n@@ -1 +1 @@\n-old\r\n+new\u001b[0m\r\n')
   expect(f.hunks[0]?.lines.map(l => l.text)).toEqual(['old', 'new�[0m'])
 })
 
 test('an empty context line written without its space still counts as context', () => {
   // diff.suppressBlankEmpty=true writes a blank context line as ''.
-  const f = one('e.txt', 'diff --git a/e.txt b/e.txt\n--- a/e.txt\n+++ b/e.txt\n@@ -1,3 +1,3 @@\n a\n\n-b\n+B\n')
+  const f = one('e.txt', 'diff --git a/1111111 b/2222222\nindex 1111111..2222222 100644\n--- a/1111111\n+++ b/2222222\n@@ -1,3 +1,3 @@\n a\n\n-b\n+B\n')
   expect(f.hunks[0]?.lines.map(l => `${l.mark}${l.oldNo}/${l.newNo}`)).toEqual([' 1/1', ' 2/2', '-3/3', '+4/3'])
 })
 
 test('a "no newline" marker is never drawn, and a run of only that gives no source', () => {
-  const f = one('r.ts', 'diff --git a/r.ts b/r.ts\n--- a/r.ts\n+++ b/r.ts\n@@ -10,2 +10,4 @@\n keep\n+added one\n+added two\n keep\n\\ No newline at end of file\n')
+  const f = one('r.ts', 'diff --git a/1111111 b/2222222\nindex 1111111..2222222 100644\n--- a/1111111\n+++ b/2222222\n@@ -10,2 +10,4 @@\n keep\n+added one\n+added two\n keep\n\\ No newline at end of file\n')
   const lines = f.hunks[0]?.lines ?? []
   expect(lines.at(-1)?.mark).toBe('\\')
   expect(hunkSource(lines)).toBe('@@ -10,2 +10,4 @@\n keep\n+added one\n+added two\n keep')
@@ -82,7 +85,7 @@ test('a "no newline" marker is never drawn, and a run of only that gives no sour
 
 test('a change only in line endings is noted, since the drawn texts are identical', () => {
   // `git diff` of `x\r\ny\n` to `x\ny\n`, as git 2.54 writes it.
-  const patch = 'diff --git a/c.txt b/c.txt\nindex 1111111..2222222 100644\n--- a/c.txt\n+++ b/c.txt\n@@ -1,2 +1,2 @@\n-x\r\n+x\n y\n'
+  const patch = 'diff --git a/1111111 b/2222222\nindex 1111111..2222222 100644\n--- a/1111111\n+++ b/2222222\n@@ -1,2 +1,2 @@\n-x\r\n+x\n y\n'
   const f = one('c.txt', patch)
   expect(f.notes).toEqual(['line endings changed'])
   expect(f.hunks[0]?.lines.map(l => l.mark + l.text)).toEqual(['-x', '+x', ' y'])
@@ -92,12 +95,12 @@ test('a change only in line endings is noted, since the drawn texts are identica
 
 test('a side that counts no lines starts the run after the line its header names', () => {
   // git 2.54 with -U0: inserting A, B after line 5 of 1..10, and deleting lines 5 and 6.
-  const i = one('n', 'diff --git a/n b/n\n--- a/n\n+++ b/n\n@@ -5,0 +6,2 @@\n+A\n+B\n', 2, 0)
-  const d = one('n', 'diff --git a/n b/n\n--- a/n\n+++ b/n\n@@ -5,2 +4,0 @@\n-5\n-6\n', 0, 2)
+  const i = one('n', 'diff --git a/1111111 b/2222222\nindex 1111111..2222222 100644\n--- a/1111111\n+++ b/2222222\n@@ -5,0 +6,2 @@\n+A\n+B\n', 2, 0)
+  const d = one('n', 'diff --git a/1111111 b/2222222\nindex 1111111..2222222 100644\n--- a/1111111\n+++ b/2222222\n@@ -5,2 +4,0 @@\n-5\n-6\n', 0, 2)
   expect(i.hunks[0]?.lines.map(l => [l.oldNo, l.newNo])).toEqual([[6, 6], [6, 7]])
   expect(d.hunks[0]?.lines.map(l => [l.oldNo, l.newNo])).toEqual([[5, 5], [6, 5]])
   expect(hunkSource(i.hunks[0]?.lines ?? []).split('\n')[0]).toBe('@@ -5,0 +6,2 @@')
   expect(hunkSource(d.hunks[0]?.lines ?? []).split('\n')[0]).toBe('@@ -5,2 +4,0 @@')
-  const n = one('n', 'diff --git a/n b/n\nnew file mode 100644\n--- /dev/null\n+++ b/n\n@@ -0,0 +1 @@\n+x\n', 1, 0)
+  const n = one('n', 'diff --git a/1111111 b/2222222\nindex 1111111..2222222 100644\n--- a/1111111\n+++ b/2222222\n@@ -0,0 +1 @@\n+x\n', 1, 0)
   expect(hunkSource(n.hunks[0]?.lines ?? []).split('\n')[0]).toBe('@@ -0,0 +1,1 @@')
 })

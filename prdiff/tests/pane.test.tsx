@@ -16,7 +16,7 @@ const PANE = {
 
 /** The `--raw --numstat -z` records of `paths`, each added or changed by `added`/`deleted` lines. */
 const inv = (paths: string[], added = 1, deleted = 0) =>
-  paths.map(p => `:100644 100644 old-${p} new-${p} M\0${p}\0`).join('') + paths.map(p => `${added}\t${deleted}\t${p}\0`).join('') + '\0'
+  paths.map(p => `:100644 100644 old-${p} new-${p} M\0${p}\0`).join('') + paths.map(p => `${added}\t${deleted}\t${p}\0`).join('')
 
 const result = (stdout: string, exitCode = 0) => ({
   exitCode,
@@ -47,8 +47,8 @@ function answer(argv: readonly string[], gate: Promise<void>): Promise<ReturnTyp
   if (s.includes('merge-base')) return result('m'.repeat(40))
   if (s.includes('--raw')) return result(state.files === 0 ? '' : inv(['src/one.ts', 'src/two.ts'], 1, 1))
   if (state.failRead && s.endsWith('new-src/one.ts')) return result('fatal: bad object', 128)
-  if (s.endsWith('old-src/one.ts new-src/one.ts')) return result('diff --git a/src/one.ts b/src/one.ts\n--- a/src/one.ts\n+++ b/src/one.ts\n@@ -1 +1 @@\n-old\n+new\n')
-  if (s.endsWith('old-src/two.ts new-src/two.ts')) return result('diff --git a/src/two.ts b/src/two.ts\n--- a/src/two.ts\n+++ b/src/two.ts\n@@ -1 +1 @@\n-two\n+TWO\n')
+  if (s.endsWith('old-src/one.ts new-src/one.ts')) return result('diff --git a/old-src/one.ts b/new-src/one.ts\n--- a/old-src/one.ts\n+++ b/new-src/one.ts\n@@ -1 +1 @@\n-old\n+new\n')
+  if (s.endsWith('old-src/two.ts new-src/two.ts')) return result('diff --git a/old-src/two.ts b/new-src/two.ts\n--- a/old-src/two.ts\n+++ b/new-src/two.ts\n@@ -1 +1 @@\n-two\n+TWO\n')
   return result(`unexpected ${s}`, 2)
 }
 

@@ -37,8 +37,12 @@ export function clean(text: string): string {
 
 const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$/
 
-/** The hunks of one blob pair's patch, and whether a removed and an added line differ only in a trailing CR. */
-function hunksOf(patch: string): { hunks: Hunk[]; eol: boolean } {
+/**
+ * The hunks of one blob pair's patch, and whether a removed and an added line
+ * differ only in a trailing CR. A cut patch's last line is incomplete and is
+ * not read.
+ */
+function hunksOf(patch: string, isCut: boolean): { hunks: Hunk[]; eol: boolean } {
   const hunks: Hunk[] = []
   let eol = false
   let hunk: Hunk | undefined
@@ -49,7 +53,9 @@ function hunksOf(patch: string): { hunks: Hunk[]; eol: boolean } {
   let newLeft = 0
   // The current hunk's removed and added texts, each with whether it ended in CR.
   let seen = { '-': new Map<string, Set<boolean>>(), '+': new Map<string, Set<boolean>>() }
-  for (const raw of patch.split('\n')) {
+  const lines = patch.split('\n')
+  if (isCut) lines.pop()
+  for (const raw of lines) {
     const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw
     const m = HUNK.exec(line)
     if (m) {
@@ -178,10 +184,10 @@ export function summaryOf(e: Entry): FileDiff {
   }
 }
 
-/** One entry's file from the patch of its two blobs. */
-export function fileFor(e: Entry, patch: string): FileDiff {
+/** One entry's file from the patch of its two blobs; `isCut` when the read stopped at 4 MiB. */
+export function fileFor(e: Entry, patch: string, isCut = false): FileDiff {
   const f = summaryOf(e)
-  const { hunks, eol } = hunksOf(patch)
+  const { hunks, eol } = hunksOf(patch, isCut)
   return { ...f, hunks, notes: [...f.notes, ...(eol ? ['line endings changed'] : [])] }
 }
 

@@ -200,7 +200,7 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
     const old = e.status === 'A' ? await blank() : e.oldId
     const now = e.status === 'D' ? await blank() : e.newId
     const r = await must(quiet, 'git diff', [...git, ...DIFF, old, now], 120_000)
-    return { file: fileFor(e, r.stdout), isCut: r.isStdoutTruncated }
+    return { file: fileFor(e, r.stdout, r.isStdoutTruncated), isCut: r.isStdoutTruncated }
   }
 
   return {

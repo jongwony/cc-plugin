@@ -104,3 +104,15 @@ test('a side that counts no lines starts the run after the line its header names
   const n = one('n', 'diff --git a/1111111 b/2222222\nindex 1111111..2222222 100644\n--- a/1111111\n+++ b/2222222\n@@ -0,0 +1 @@\n+x\n', 1, 0)
   expect(hunkSource(n.hunks[0]?.lines ?? []).split('\n')[0]).toBe('@@ -0,0 +1,1 @@')
 })
+
+test('a patch cut at 4 MiB keeps only its whole lines, even when the cut falls just after a newline', () => {
+  const whole = 'diff --git a/1111111 b/2222222\nindex 1111111..2222222 100644\n--- a/1111111\n+++ b/2222222\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n'
+  const atNewline = whole.slice(0, whole.indexOf('-b'))
+  const midLine = whole.slice(0, whole.indexOf('-b') + 1)
+  const { entries } = parseDiff(':100644 100644 1111111 2222222 M\0e.txt\0' + '1\t1\te.txt\0')
+  const e = entries[0] as Entry
+  for (const cut of [atNewline, midLine]) {
+    expect(fileFor(e, cut, true).hunks[0]?.lines.map(l => l.mark + l.text)).toEqual([' a'])
+  }
+  expect(fileFor(e, whole).hunks[0]?.lines.map(l => l.mark + l.text)).toEqual([' a', '-b', '+B', ' c'])
+})

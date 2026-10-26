@@ -54,10 +54,10 @@ export function guarded(run: Run): Run {
   }
 }
 
+/** `argv` run, or a StepError naming `step` when it fails; a caller that needs all of stdout checks isStdoutTruncated. */
 async function must(run: Run, step: string, argv: string[], timeoutMs?: number): Promise<RunResult> {
   const r = await run(argv, timeoutMs)
   if (r.exitCode !== 0) throw new StepError(step, firstLine(r))
-  if (r.isStdoutTruncated) throw new StepError(step, 'output over 4 MiB was cut')
   return r
 }
 
@@ -145,7 +145,7 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   const run = guarded(unguarded)
   const [prOut, topOut, repo] = await Promise.all([
     must(run, 'gh pr view', [
-      'gh', 'pr', 'view', String(number), '--json', 'number,title,url,headRefName,headRefOid,baseRefName',
+      'gh', 'pr', 'view', String(number), '--json', 'number,title,url,headRefName,baseRefName',
     ]),
     must(run, 'git rev-parse', [...GIT, 'rev-parse', '--show-toplevel']),
     repoOf(run),
@@ -155,7 +155,6 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
     title: string
     url: string
     headRefName: string
-    headRefOid: string
     baseRefName: string
   }>('gh pr view', prOut.stdout)
   const git = [...GIT, '-C', topOut.stdout.trim()]
@@ -169,15 +168,13 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   // The tips are read once and fetched by id, so no ref is written.
   const baseName = `refs/heads/${pr.baseRefName}`
   const headName = `refs/pull/${number}/head`
-  const listed = await quiet([...git, 'ls-remote', remote, baseName, headName], 120_000)
-  if (listed.exitCode !== 0) throw new StepError('git ls-remote', firstLine(listed))
+  const listed = await must(quiet, 'git ls-remote', [...git, 'ls-remote', remote, baseName, headName], 120_000)
   const tip = (name: string) => listed.stdout.split('\n').find(l => l.endsWith(`\t${name}`))?.split('\t')[0]
   const baseOid = tip(baseName)
   if (!baseOid) throw new StepError('git ls-remote', `${remote} has no branch ${pr.baseRefName}`)
   const headOid = tip(headName)
   if (!headOid) throw new StepError('git ls-remote', `${remote} has no ${headName}`)
-  const fetch = await quiet([...git, 'fetch', '--quiet', '--no-write-fetch-head', '--no-recurse-submodules', remote, baseOid, headOid], 120_000)
-  if (fetch.exitCode !== 0) throw new StepError('git fetch', firstLine(fetch))
+  await must(quiet, 'git fetch', [...git, 'fetch', '--quiet', '--no-write-fetch-head', '--no-recurse-submodules', remote, baseOid, headOid], 120_000)
   const based = await quiet([...git, 'merge-base', baseOid, headOid])
   if (based.exitCode === 1 && based.stdout.trim() === '' && based.stderr.trim() === '') {
     const shallow = (await quiet([...git, 'rev-parse', '--is-shallow-repository'])).stdout.trim() === 'true'
@@ -192,14 +189,12 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   const notes: string[] = []
   if (mergeBase === headOid) notes.push(`the PR head is already in ${pr.baseRefName}: merged?`)
   const ends = [mergeBase, headOid]
-  const inventory = await quiet([...git, ...DIFF, '--raw', '--numstat', '-z', ...ends], 120_000)
-  if (inventory.exitCode !== 0) throw new StepError('git diff', firstLine(inventory))
+  const inventory = await must(quiet, 'git diff', [...git, ...DIFF, '--raw', '--numstat', '-z', ...ends], 120_000)
   const { entries, isWhole } = parseDiff(inventory.stdout)
   if (!isWhole || inventory.isStdoutTruncated) throw new StepError('git diff', 'file list over 4 MiB was cut')
   const readFile = async (e: Entry) => {
     const paths = e.oldPath !== undefined ? [e.oldPath, e.path] : [e.path]
-    const r = await quiet([...git, '--literal-pathspecs', ...DIFF, '-p', ...ends, '--', ...paths], 120_000)
-    if (r.exitCode !== 0) throw new StepError('git diff', firstLine(r))
+    const r = await must(quiet, 'git diff', [...git, '--literal-pathspecs', ...DIFF, '-p', ...ends, '--', ...paths], 120_000)
     return { file: fileFor(e, r.stdout), isCut: r.isStdoutTruncated }
   }
 

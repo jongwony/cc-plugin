@@ -21,7 +21,7 @@ const inv = (paths: string[], added = 1, deleted = 0) =>
 const result = (stdout: string, exitCode = 0) => ({ exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false })
 
 function pr(n: number) {
-  return { number: n, title: `Title ${n}`, url: `https://github.com/o/r/pull/${n}`, headRefName: `b${n}`, headRefOid: 'h'.repeat(40), baseRefName: 'main' }
+  return { number: n, title: `Title ${n}`, url: `https://github.com/o/r/pull/${n}`, headRefName: `b${n}`, baseRefName: 'main' }
 }
 
 /** Answers the host commands loadDiff makes; PR 1's view waits on `gate`. */

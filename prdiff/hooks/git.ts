@@ -169,7 +169,7 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   if (!baseOid) throw new StepError('git ls-remote', `${remote} has no branch ${pr.baseRefName}`)
   const headOid = tip(headName)
   if (!headOid) throw new StepError('git ls-remote', `${remote} has no ${headName}`)
-  await must(quiet, 'git fetch', [...git, 'fetch', '--quiet', '--no-write-fetch-head', '--no-recurse-submodules', remote, baseOid, headOid], 120_000)
+  await must(quiet, 'git fetch', [...git, 'fetch', '--quiet', '--no-write-fetch-head', '--no-recurse-submodules', '--no-auto-maintenance', remote, baseOid, headOid], 120_000)
   const based = await quiet([...git, 'merge-base', baseOid, headOid])
   if (based.exitCode === 1 && based.stdout.trim() === '' && based.stderr.trim() === '') {
     const shallow = (await quiet([...git, 'rev-parse', '--is-shallow-repository'])).stdout.trim() === 'true'

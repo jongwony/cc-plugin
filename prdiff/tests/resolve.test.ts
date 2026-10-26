@@ -193,6 +193,8 @@ test('the fetch skips submodules, and every git command from it on runs prompt-f
   await d.readFile(e)
   const at = seen.findIndex(c => c.s.includes(' fetch '))
   expect(seen[at]?.s).toContain('--no-recurse-submodules')
+  // No `maintenance run --auto` (gc) is started by the fetch.
+  expect(seen[at]?.s).toContain('--no-auto-maintenance')
   const after = seen.slice(at).filter(c => c.s.startsWith('git '))
   expect(after.length).toBeGreaterThan(3)
   expect(after.every(c => c.env?.GIT_TERMINAL_PROMPT === '0')).toBe(true)

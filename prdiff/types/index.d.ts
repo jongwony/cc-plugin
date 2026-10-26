@@ -4,16 +4,14 @@ export type PrdiffDiff = {
   gen: number
   number: number
   error?: string
-  /** The open file of this load: its index in the inventory, the pick that opened it (counting up within the load), and its read. */
-  file?: { index: number; pick: number; status: 'loading' | 'ready' | 'error'; error?: string }
+  /** The open file of this load: its index in the inventory, the pick that opened it (counting up within the load), its read, and the pick's own fault (a rejected scroll). */
+  file?: { index: number; pick: number; status: 'loading' | 'ready' | 'error'; error?: string; fault?: string }
 }
 
 declare module 'claude-code' {
   interface PluginState {
     prdiff: {
       diff: PrdiffDiff
-      /** The last command's or press's failure, drawn until the next load; '' when none. */
-      failure: string
     }
   }
 }

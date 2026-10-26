@@ -9,9 +9,7 @@ import { Budget, CHAR_BUDGET, LIST_BUDGET, clip, drawn, fileLabel } from './rows
 export const PANE = 'prdiff'
 
 const diffRef = { plugin: 'prdiff', key: 'diff' } as const
-const failureRef = { plugin: 'prdiff', key: 'failure' } as const
 const diff = atom(diffRef, { status: 'idle', gen: 0, number: 0 } as PrdiffDiff)
-const failure = atom(failureRef, '')
 
 function runner($: EngineInterface): Run {
   return async (argv, timeoutMs, env) => {
@@ -52,33 +50,23 @@ function putFor($: EngineInterface, gen: number, value: PrdiffDiff): Promise<Prd
   return update($, now => (now.gen === gen ? value : undefined))
 }
 
-/** Runs what a command or a press asks for; its failure, whatever step it came from, is drawn in the pane. */
-async function act($: EngineInterface, fn: () => Promise<void>): Promise<void> {
-  try {
-    await fn()
-  } catch (err) {
-    await $.state.set(failureRef, message(err))
-  }
-}
-
 /** Loads PR #number and opens its first file. */
 async function openDiff($: EngineInterface, number: number): Promise<void> {
   diffGen += 1
   const gen = diffGen
-  await $.state.set(failureRef, '')
   // A load's first write replaces any older load's state, never a newer one's.
   if ((await update($, now => (now.gen > gen ? undefined : { status: 'loading', gen, number }))) === undefined) return
   let data: DiffData
   try {
     const ownSsh = (await Promise.all([$.env.get('GIT_SSH_COMMAND'), $.env.get('GIT_SSH')])).some(v => v !== undefined)
     data = await loadDiff(runner($), number, { ownSsh })
+    if (gen !== diffGen) return
+    held = { gen, data, files: new Map() }
+    if ((await putFor($, gen, { status: 'ready', gen, number })) === undefined) return
   } catch (err) {
     await putFor($, gen, { status: 'error', gen, number, error: message(err) })
     return
   }
-  if (gen !== diffGen) return
-  held = { gen, data, files: new Map() }
-  if ((await putFor($, gen, { status: 'ready', gen, number })) === undefined) return
   if (data.entries.length > 0) await openFile($, 0)
 }
 
@@ -116,18 +104,23 @@ async function openFile($: EngineInterface, index: number): Promise<void> {
     entry = made
   }
   const reading = entry
-  // What a read ends in is shown only while its pick is still the stored one.
-  const settle = (file: NonNullable<PrdiffDiff['file']>) =>
-    update($, now => (now.gen === gen && now.file?.pick === pick ? { ...now, file } : undefined))
+  // What the pick's read and scroll end in is shown only while its pick is still the stored one.
+  const settle = (change: Partial<NonNullable<PrdiffDiff['file']>>) =>
+    update($, now => (now.gen === gen && now.file?.pick === pick ? { ...now, file: { ...now.file, ...change } } : undefined))
   const read = async () => {
     try {
       await reading.read
-      await settle({ index, pick, status: 'ready' })
+      await settle({ status: 'ready' })
     } catch (err) {
-      await settle({ index, pick, status: 'error', error: message(err) })
+      await settle({ status: 'error', error: message(err) })
     }
   }
-  await Promise.all([read(), $.ui.scroll({ in: PANE, to: 'start' })])
+  // An impossible scroll is answered `{ deny }` and leaves the pick as drawn; a rejected one is the pick's fault.
+  const scroll = () => $.ui.scroll({ in: PANE, to: 'start' }).then(
+    () => undefined,
+    err => settle({ fault: message(err) }),
+  )
+  await Promise.all([read(), scroll()])
 }
 
 export const register: Register = on => {
@@ -145,7 +138,7 @@ export const register: Register = on => {
     const n = arg === undefined ? 0 : Number(arg)
     if (n === 0) return { text: 'Usage: /prdiff <PR number>' }
     await $.ui.open({ id: PANE, title: 'PR diff', focus: true })
-    void act($, () => openDiff($, n))
+    void openDiff($, n)
     return { text: `PR diff pane opened on #${n}.` }
   })
 
@@ -164,8 +157,8 @@ export const register: Register = on => {
       ) : null
     }
     const button = (key: string, hotkey: string, label: string, press: () => Promise<void>) =>
-      b.take(label) ? <Button key={key} plain hotkey={hotkey} label={label} onPress={() => act($, press)} /> : null
-    const [d, failed] = await Promise.all([read($, diff), read($, failure)])
+      b.take(label) ? <Button key={key} plain hotkey={hotkey} label={label} onPress={press} /> : null
+    const d = await read($, diff)
     // A state this module instance did not write is not loaded.
     const isMine = d.gen === diffGen
     const cur = isMine && d.status === 'ready' && held?.gen === d.gen ? held : undefined
@@ -189,7 +182,6 @@ export const register: Register = on => {
         {d.number > 0 && button('reload', 'r', 'reload', () => openDiff($, d.number))}
       </Box>
     )
-    const problem = failed !== '' && line(failed, { color: 'error' })
     if (!cur) {
       const status =
         isMine && d.status === 'loading'
@@ -202,7 +194,6 @@ export const register: Register = on => {
       return (
         <Box flexDirection="column">
           {controls}
-          {problem}
           {status}
         </Box>
       )
@@ -216,6 +207,7 @@ export const register: Register = on => {
       ...(shown?.notes ?? []).map(n => line(`  ${n}`, { dimColor: true })),
       f?.status === 'loading' && line('Loading…', { dimColor: true }),
       f?.status === 'error' && line(f.error ?? '', { color: 'error' }),
+      f?.fault !== undefined && line(f.fault, { color: 'error' }),
       got?.isCut === true && line('  patch over 4 MiB: only its start was read', { dimColor: true }),
     ]
     const body = got ? drawn(got.file, width, b, LIST_BUDGET) : undefined
@@ -239,7 +231,7 @@ export const register: Register = on => {
       const label = clip(clean(`${i === at ? '▸ ' : '  '}${fileLabel(s)}`), width)
       if (b.left - label.length < keep || !b.take(label)) break
       list.push(
-        <Button key={`goto:${i}`} plain onPress={() => act($, () => openFile($, i))}>
+        <Button key={`goto:${i}`} plain onPress={() => openFile($, i)}>
           {label}
         </Button>,
       )
@@ -249,7 +241,6 @@ export const register: Register = on => {
       <Box flexDirection="column">
         {head}
         {controls}
-        {problem}
         {opened}
         {hunks}
         {rest}

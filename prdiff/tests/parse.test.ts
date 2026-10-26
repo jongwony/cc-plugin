@@ -132,3 +132,10 @@ test('a mode change is noted whatever the status, and only where both sides exis
   )
   expect(entries.map(summaryOf).map(f => f.notes)).toEqual([['mode 100644 → 100755', 'similarity index 100%'], [], []])
 })
+
+test('format characters such as bidi overrides are drawn as a mark, not applied unseen', () => {
+  // Trojan Source: U+202E reverses what follows; U+2066 opens an isolate; U+200B is zero-width.
+  expect(clean('if (x) { /* \u202E } \u2066 */ ok\u200B }')).toBe('if (x) { /* \ufffd } \ufffd */ ok\ufffd }')
+  const f = one('t.js', 'diff --git a/1111111 b/2222222\nindex 1111111..2222222 100644\n--- a/1111111\n+++ b/2222222\n@@ -1 +1 @@\n-a\n+b \u202Eevil\n')
+  expect(f.hunks[0]?.lines.map(l => l.text)).toEqual(['a', 'b \ufffdevil'])
+})

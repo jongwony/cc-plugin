@@ -28,8 +28,8 @@ export type FileDiff = {
   hunks: Hunk[]
 }
 
-/** Characters a Text or Code refuses: every control character but tab. */
-const CONTROL = /[\u0000-\u0008\u000a-\u001f\u007f-\u009f]/g
+/** Characters drawn as U+FFFD: every control character but tab, and every format character (Unicode Cf). */
+const CONTROL = /[\u0000-\u0008\u000a-\u001f\u007f-\u009f]|\p{Cf}/gu
 
 export function clean(text: string): string {
   return text.replace(CONTROL, '\ufffd')

@@ -331,3 +331,13 @@ test('a pick of a file whose read finishes as it is picked shows the file, not a
     await after.unmount()
   }
 })
+
+test('two loads started back to back leave the later one shown', async ($, on) => {
+  engine(on)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await Promise.all([$.command.run(args('1')), $.command.run(args('2'))])
+  for (let i = 0; i < 300; i += 1) await null
+  const ui = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /^#\d Title/)
+  expect(await ui.find({ type: 'Text', text: /^#2 Title 2/ })).toBeDefined()
+  await ui.unmount()
+})

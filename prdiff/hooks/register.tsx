@@ -66,7 +66,8 @@ async function openDiff($: EngineInterface, number: number): Promise<void> {
   diffGen += 1
   const gen = diffGen
   await $.state.set(failureRef, '')
-  await $.state.set(diffRef, { status: 'loading', gen, number })
+  // A load's first write replaces any older load's state, never a newer one's.
+  if ((await update($, now => (now.gen > gen ? undefined : { status: 'loading', gen, number }))) === undefined) return
   let data: DiffData
   try {
     const ownSsh = (await Promise.all([$.env.get('GIT_SSH_COMMAND'), $.env.get('GIT_SSH')])).some(v => v !== undefined)

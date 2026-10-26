@@ -4,7 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { PrdiffDiff } from '../types'
 import { loadDiff, type DiffData, type Run } from './git.ts'
 import { clean, summaryOf, type FileDiff } from './parse.ts'
-import { Budget, CHAR_BUDGET, LIST_BUDGET, clip, drawn, fileLabel } from './rows.ts'
+import { Budget, CHAR_BUDGET, LIST_BUDGET, clip, drawn, fileLabel, listed } from './rows.ts'
 
 export const PANE = 'prdiff'
 
@@ -224,19 +224,20 @@ export const register: Register = on => {
       </Text>
     )
     const rule = line('─'.repeat(Math.min(cols, 80)), { dimColor: true })
-    const moreNote = (n: number) => `${n} more files; j and k reach them`
-    const keep = moreNote(summaries.length).length
-    const list = []
-    for (const [i, s] of summaries.entries()) {
-      const label = clip(clean(`${i === at ? '▸ ' : '  '}${fileLabel(s)}`), width)
-      if (b.left - label.length < keep || !b.take(label)) break
-      list.push(
-        <Button key={`goto:${i}`} plain onPress={() => openFile($, i)}>
-          {label}
-        </Button>,
-      )
-    }
-    const more = list.length < summaries.length && line(moreNote(summaries.length - list.length), { dimColor: true })
+    const shownList = listed(
+      summaries.map((s, i) => clip(clean(`${i === at ? '▸ ' : '  '}${fileLabel(s)}`), width)),
+      b,
+    )
+    const list = shownList.labels.map((label, i) => (
+      <Button key={`goto:${i}`} plain onPress={() => openFile($, i)}>
+        {label}
+      </Button>
+    ))
+    const more = shownList.note !== undefined && (
+      <Text wrap="truncate-end" dimColor>
+        {shownList.note}
+      </Text>
+    )
     return (
       <Box flexDirection="column">
         {head}

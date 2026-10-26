@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { FileDiff } from '../hooks/parse.ts'
-import { Budget, CHAR_BUDGET, clip, drawn } from '../hooks/rows.ts'
+import { Budget, CHAR_BUDGET, clip, drawn, listed } from '../hooks/rows.ts'
 
 function file(hunks: number, lines: number, width = 10): FileDiff {
   return {
@@ -77,4 +77,14 @@ test('the note on what is left out is charged as printed, its count taken from t
   const d = drawn(f, 80, b)
   expect(d.note).toBe(`  ${d.left} more lines of this file are not drawn`)
   expect(1000 - b.left).toBe(total(d) + (d.note?.length ?? 0))
+})
+
+test('the last label is drawn when it fits, with no room kept for a note it would not need', () => {
+  const labels = ['aaaa', 'bbbb', 'cccc']
+  // Exactly the three labels: nothing remains after the last, so no note is needed.
+  expect(listed(labels, new Budget(12))).toEqual({ labels, note: undefined })
+  // Not all fit: labels give way, from the end, until the note counting the rest fits beside them.
+  const long = ['a'.repeat(20), 'b'.repeat(20), 'c'.repeat(20)]
+  const note = '2 more files; j and k reach them'
+  expect(listed(long, new Budget(20 + note.length))).toEqual({ labels: [long[0]], note })
 })

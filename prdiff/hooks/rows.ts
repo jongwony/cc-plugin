@@ -71,6 +71,32 @@ export function drawn(f: FileDiff, width: number, b: Budget, keep = 0): { runs: 
   return { runs, left, note }
 }
 
+/**
+ * The most labels of `labels`, in order, that `b` takes together with the
+ * line counting the rest; with none left over, no such line is needed.
+ */
+export function listed(labels: readonly string[], b: Budget): { labels: string[]; note?: string } {
+  let k = 0
+  let used = 0
+  while (k < labels.length && used + (labels[k]?.length ?? 0) <= b.left) {
+    used += labels[k]?.length ?? 0
+    k += 1
+  }
+  while (k > 0 && k < labels.length && used + moreFiles(labels.length - k).length > b.left) {
+    k -= 1
+    used -= labels[k]?.length ?? 0
+  }
+  const out = labels.slice(0, k)
+  for (const label of out) b.take(label)
+  const rest = labels.length - k
+  return { labels: out, note: rest > 0 && b.take(moreFiles(rest)) ? moreFiles(rest) : undefined }
+}
+
+/** The line that counts the files left out of the list. */
+function moreFiles(n: number): string {
+  return `${n} more files; j and k reach them`
+}
+
 /** The line that counts a file's lines left out of its drawing. */
 function leftOut(n: number): string {
   return `  ${n} more lines of this file are not drawn`

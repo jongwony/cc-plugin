@@ -97,8 +97,8 @@ export function hostOfUrl(url: string): string | undefined {
 export function remoteRepos(remoteV: string): Array<{ name: string; repo: string; host?: string }> {
   const out: Array<{ name: string; repo: string; host?: string }> = []
   for (const line of remoteV.split('\n')) {
-    // Also a partial clone's `(fetch) [blob:none]`.
-    const m = /^(\S+)\s+(\S+)\s+\(fetch\)(?:\s+\[[^\]]*\])?$/.exec(line.trim())
+    // `<name>\t<url> (fetch)`, a partial clone's with ` [blob:none]` after it; a name may hold spaces.
+    const m = /^([^\t]+)\t(\S+) \(fetch\)(?: \[[^\]]*\])?$/.exec(line)
     const repo = m?.[2] ? repoOfUrl(m[2]) : undefined
     if (m?.[1] && m[2] && repo) out.push({ name: m[1], repo, host: hostOfUrl(m[2]) })
   }
@@ -164,7 +164,7 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   // Both tips come from one ls-remote and are fetched by id; no ref is written.
   const baseName = `refs/heads/${pr.baseRefName}`
   const headName = `refs/pull/${number}/head`
-  const listed = await must(quiet, 'git ls-remote', [...git, 'ls-remote', remote, baseName, headName], 120_000)
+  const listed = await must(quiet, 'git ls-remote', [...git, 'ls-remote', '--', remote, baseName, headName], 120_000)
   const tip = (name: string) => listed.stdout.split('\n').find(l => l.endsWith(`\t${name}`))?.split('\t')[0]
   const baseOid = tip(baseName)
   if (!baseOid) throw new StepError('git ls-remote', `${remote} has no branch ${pr.baseRefName}`)
@@ -172,7 +172,7 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   if (!headOid) throw new StepError('git ls-remote', `${remote} has no ${headName}`)
   // The remote is the PR's only if its pull head is the head GitHub reports for the PR.
   if (headOid !== pr.headRefOid) throw new StepError('remote', `${remote}'s PR #${number} head is not the PR's head`)
-  await must(quiet, 'git fetch', [...git, 'fetch', '--quiet', '--no-write-fetch-head', '--no-recurse-submodules', '--no-auto-maintenance', remote, baseOid, headOid], 120_000)
+  await must(quiet, 'git fetch', [...git, 'fetch', '--quiet', '--no-write-fetch-head', '--no-recurse-submodules', '--no-auto-maintenance', '--', remote, baseOid, headOid], 120_000)
   const based = await quiet([...git, 'merge-base', baseOid, headOid])
   if (based.exitCode === 1 && based.stdout.trim() === '' && based.stderr.trim() === '') {
     const shallow = (await quiet([...git, 'rev-parse', '--is-shallow-repository'])).stdout.trim() === 'true'

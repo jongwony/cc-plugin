@@ -24,7 +24,7 @@ function fakeRepo(overrides: Record<string, RunResult> = {}) {
     if (s.includes('rev-parse --show-toplevel')) return ok('/repo\n')
     if (s.includes('remote -v')) return ok('fork\tgit@github.com:me/r.git (fetch)\norigin\thttps://github.com/o/r.git (fetch)\n')
     if (s.includes(' ls-remote ')) {
-      return ok(argv.slice(argv.indexOf('ls-remote') + 2).map(n => `${n.startsWith('refs/pull/') ? 'h'.repeat(40) : 'b'.repeat(40)}\t${n}`).join('\n') + '\n')
+      return ok(argv.slice(argv.indexOf('ls-remote') + 3).map(n => `${n.startsWith('refs/pull/') ? 'h'.repeat(40) : 'b'.repeat(40)}\t${n}`).join('\n') + '\n')
     }
     if (s.includes(' fetch ')) return ok('')
     if (s.includes('merge-base')) return ok('m'.repeat(40) + '\n')
@@ -56,9 +56,9 @@ test('a PR not checked out: both tips listed once, fetched by id without a ref, 
   const d = await loadDiff(run, 7)
   expect(d.baseRefName).toBe('feat/a')
   const listed = calls.find(c => c.includes('ls-remote')) ?? []
-  expect(listed.slice(-3)).toEqual(['origin', 'refs/heads/feat/a', 'refs/pull/7/head'])
+  expect(listed.slice(-4)).toEqual(['--', 'origin', 'refs/heads/feat/a', 'refs/pull/7/head'])
   const fetch = calls.find(c => c.includes('fetch')) ?? []
-  expect(fetch.slice(-3)).toEqual(['origin', 'b'.repeat(40), 'h'.repeat(40)])
+  expect(fetch.slice(-4)).toEqual(['--', 'origin', 'b'.repeat(40), 'h'.repeat(40)])
   expect(calls.some(c => c.includes('update-ref'))).toBe(false)
   const diffed = calls.find(c => c.includes('--raw')) ?? []
   expect(diffed.slice(-2)).toEqual(['m'.repeat(40), 'h'.repeat(40)])
@@ -104,7 +104,7 @@ test('a file is read as the diff of its two sides named <rev>:<path>, with no pa
   const [m, h] = ['m'.repeat(40), 'h'.repeat(40)]
   expect(diffs).toEqual([[`${m}:x`, `${h}:x`], ['e'.repeat(40), `${h}:a`], [`${m}:d`, 'e'.repeat(40)]])
   // No pathspec reaches git: a path is never read as magic, a glob or a directory.
-  expect(calls.some(c => c.includes('--'))).toBe(false)
+  expect(calls.some(c => c.includes('diff') && c.includes('--'))).toBe(false)
   // Mode-only, binary and submodule entries have no lines to read.
   const before = calls.length
   expect((await read('m')).file.notes).toEqual(['mode 100644 → 100755'])
@@ -274,4 +274,13 @@ test('a remote whose PR head is not the one gh reports is not used', async () =>
   })
   await expect(loadDiff(other.run, 7)).rejects.toThrow("remote: origin's PR #7 head is not the PR's head")
   expect(other.calls.some(c => c.includes('fetch'))).toBe(false)
+})
+
+test('a remote name is never read as an option', async () => {
+  const name = '--upload-pack=touch PWNED;git-upload-pack'
+  const { run, calls } = fakeRepo({ 'remote -v': ok(`${name}\thttps://github.com/o/r.git (fetch)\n`) })
+  await loadDiff(run, 7)
+  for (const c of calls.filter(c => c.includes('ls-remote') || c.includes('fetch'))) {
+    expect(c.indexOf('--')).toBe(c.indexOf(name) - 1)
+  }
 })

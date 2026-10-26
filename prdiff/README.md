@@ -21,11 +21,13 @@ so uncommitted work stays `/diff`'s.
 | One file's lines | `git diff <merge-base>:<old path> <head>:<path>`, each side named by revision and path (the empty blob for an added or deleted file's missing side, stored if the repository lacks it), read when the file is opened; binary files, submodules and mode-only changes have none to read. Naming the path keeps `.gitattributes` in force, as it is for the file list |
 
 The fetch brings in objects only: no ref, branch, tag or `FETCH_HEAD` is
-written, and it starts no automatic maintenance (`gc --auto`). The remote used is the one whose URL path names the repository in
-the PR's own URL, preferring one on that URL's host, whatever its form — an
-ssh alias or GitHub Enterprise included (`origin` first). The chosen
-remote's `refs/pull/<n>/head` must be the head `gh` reports for the PR, or the
-load stops and says so.
+written, and it starts no automatic maintenance (`gc --auto`). The PR's
+remote is the first one whose `refs/pull/<n>/head` is the head `gh` reports
+for the PR. Remotes are tried with those whose URL names the PR's repository
+first (on the PR's host, then elsewhere; `origin` first), then the rest, so a
+GitHub Enterprise remote behind an ssh alias, or a remote still on a renamed
+repository's old URL, is found too. If none has that head, the pane says what
+each one had.
 
 ## Use
 

@@ -24,15 +24,11 @@ function pr(n: number) {
   return { number: n, title: `Title ${n}`, url: `https://github.com/o/r/pull/${n}`, headRefName: `b${n}`, headRefOid: 'h'.repeat(40), baseRefName: 'main' }
 }
 
-/** Answers the host commands loadDiff and listPrs make; PR 1's view waits on `gate`. */
+/** Answers the host commands loadDiff makes; PR 1's view waits on `gate`. */
 function answer(argv: readonly string[], gate: Promise<void>): Promise<ReturnType<typeof result>> | ReturnType<typeof result> {
   const s = argv.join(' ')
-  if (s === 'gh pr view --json number') return result('', 1)
   if (s.startsWith('gh pr view 1 ')) return gate.then(() => result(JSON.stringify(pr(1))))
   if (s.startsWith('gh pr view 2 ')) return result(JSON.stringify(pr(2)))
-  if (s.startsWith('gh pr list')) {
-    return result(JSON.stringify([1, 2].map(n => ({ ...pr(n), author: { login: 'me' }, isDraft: false }))))
-  }
   if (s.startsWith('gh repo view')) return result(JSON.stringify({ nameWithOwner: 'o/r' }))
   if (s.includes('--show-toplevel')) return result('/repo')
   if (s.includes('remote -v')) return result('origin\thttps://github.com/o/r.git (fetch)\n')
@@ -44,18 +40,23 @@ function answer(argv: readonly string[], gate: Promise<void>): Promise<ReturnTyp
   return result(`unexpected ${s}`, 2)
 }
 
-/** A mount of the pane once the list a bare `/prdiff` starts without awaiting is drawn. */
-async function listedPane<M extends { find(q: { key: string }): Promise<unknown>; unmount(): Promise<void> }>(mount: () => Promise<M>): Promise<M> {
+/** A mount of the pane once it draws `text`: a pane mounted while a load runs is drawn again only on an act. */
+async function paneWith<M extends { find(q: { type: string; text: RegExp }): Promise<unknown>; unmount(): Promise<void> }>(
+  mount: () => Promise<M>,
+  text: RegExp,
+): Promise<M> {
   for (let i = 0; i < 200; i += 1) {
     const ui = await mount()
-    if (await ui.find({ key: 'pr:1' })) return ui
+    if (await ui.find({ type: 'Text', text })) return ui
     await ui.unmount()
     await null
   }
   return mount()
 }
 
-test('the list shows the PRs and a press opens one diff as a stream of files', async ($, on) => {
+const args = (a: string) => ({ command: 'prdiff', args: a, origin: { kind: 'composer' as const }, presentation: { isFullscreen: true, columns: 160 } })
+
+test('/prdiff N opens one diff as a stream of files', async ($, on) => {
   on('command.register', () => ({ value: { command: 'prdiff' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('env.get', () => ({ value: undefined }))
@@ -63,18 +64,12 @@ test('the list shows the PRs and a press opens one diff as a stream of files', a
   on('process.run', async (_, e) => ({ value: await answer(e.argv, Promise.resolve()) }))
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  await $.command.run({ command: 'prdiff', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 160 } })
-
+  await $.command.run(args('2'))
   for (const surface of ['terminal', 'desktop'] as const) {
-    const ui = await listedPane(() => $.ui.mount({ ...PANE, surface }))
-    expect((await ui.find({ key: 'pr:2' }))).toBeDefined()
-    await ui.press({ key: 'pr:2' })
-    expect(await ui.find({ type: 'Text', text: /#2 Title 2/ })).toBeDefined()
+    const ui = await paneWith(() => $.ui.mount({ ...PANE, surface }), /#2 Title 2/)
     expect(await ui.find({ key: 'goto:0' })).toBeDefined()
     expect(await ui.find({ key: 'file:0' })).toBeDefined()
     expect(await ui.find({ type: 'Code' })).toBeDefined()
-    await ui.press({ key: 'back' })
-    expect(await ui.find({ key: 'pr:1' })).toBeDefined()
     await ui.unmount()
   }
 })
@@ -91,18 +86,16 @@ test('a slower earlier load never overwrites the PR asked for later', async ($, 
   on('process.run', async (_, e) => ({ value: await answer(e.argv, gate) }))
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  await $.command.run({ command: 'prdiff', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 160 } })
-  const ui = await listedPane(() => $.ui.mount({ ...PANE, surface: 'terminal' }))
-  const first = ui.press({ key: 'pr:1' })
-  // Let PR 1's handler reach its slow `gh pr view` before the next act.
-  for (let i = 0; i < 200 && !(await ui.find({ key: 'back' })); i += 1) await null
-  await ui.press({ key: 'back' })
-  await ui.press({ key: 'pr:2' })
+  await $.command.run(args('1'))
+  await $.command.run(args('2'))
+  const ui = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /#2 Title 2/)
   release()
-  await first
-  expect(await ui.find({ type: 'Text', text: /#2 Title 2/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /Title 1/ })).toBe(undefined)
+  for (let i = 0; i < 200; i += 1) await null
   await ui.unmount()
+  const after = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await after.find({ type: 'Text', text: /#2 Title 2/ })).toBeDefined()
+  expect(await after.find({ type: 'Text', text: /Title 1/ })).toBe(undefined)
+  await after.unmount()
 })
 
 test('scrolling while another PR loads leaves that PR to open at its top', async ($, on) => {
@@ -126,12 +119,9 @@ test('scrolling while another PR loads leaves that PR to open at its top', async
   })
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  await $.command.run({ command: 'prdiff', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 160 } })
-  const ui = await listedPane(() => $.ui.mount({ ...PANE, surface: 'terminal' }))
-  await ui.press({ key: 'pr:1' })
-  expect(await ui.find({ type: 'Text', text: /#1 Title 1/ })).toBeDefined()
-  await ui.press({ key: 'back' })
-  const second = ui.press({ key: 'pr:2' })
+  await $.command.run(args('1'))
+  const ui = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /#1 Title 1/)
+  const second = $.command.run(args('2'))
   for (let i = 0; i < 200 && !(await ui.find({ type: 'Text', text: /Loading #2/ })); i += 1) await null
   expect(await ui.find({ type: 'Text', text: /Loading #2/ })).toBeDefined()
   await ui.press({ key: 'down' })
@@ -169,31 +159,6 @@ test('after the pane grows, the first move up starts from the top on screen', as
   await tall.press({ key: 'up' })
   expect(await firstLine(tall)).not.toBe(before)
   await tall.unmount()
-})
-
-test('a failed refresh keeps the repository and current PR the list already showed', async ($, on) => {
-  let lists = 0
-  on('command.register', () => ({ value: { command: 'prdiff' } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('env.get', () => ({ value: undefined }))
-  on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('process.run', async (_, e) => {
-    const s = e.argv.join(' ')
-    if (s.startsWith('gh pr list')) {
-      lists += 1
-      if (lists > 1) return { value: result('', 1) }
-    }
-    return { value: await answer(e.argv, Promise.resolve()) }
-  })
-  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  await $.command.run({ command: 'prdiff', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 160 } })
-  const ui = await listedPane(() => $.ui.mount({ ...PANE, surface: 'terminal' }))
-  expect(await ui.find({ type: 'Text', text: /Pull requests · o\/r/ })).toBeDefined()
-  await ui.press({ key: 'reload' })
-  for (let i = 0; i < 200 && !(await ui.find({ type: 'Text', text: /Could not list PRs/ })); i += 1) await null
-  expect(await ui.find({ type: 'Text', text: /Could not list PRs/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /Pull requests · o\/r/ })).toBeDefined()
-  await ui.unmount()
 })
 
 test('/prdiff N returns while its load is still running', async ($, on) => {
@@ -258,16 +223,15 @@ test('a move still running when another PR opens never writes its top over the n
   await ui.unmount()
 })
 
-test('/prdiff with an argument that is not a PR number opens the list and says so', async ($, on) => {
+test('/prdiff without a PR number says how to use it and opens nothing', async ($, on) => {
+  const opened: string[] = []
   on('command.register', () => ({ value: { command: 'prdiff' } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('env.get', () => ({ value: undefined }))
+  on('ui.open', (_, e) => {
+    opened.push(e.id)
+    return { value: { isPlaced: true } }
+  })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('process.run', async (_, e) => ({ value: await answer(e.argv, Promise.resolve()) }))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const r = await $.command.run({ command: 'prdiff', args: '12abc', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 160 } })
-  expect(r.text).toBe('PR diff pane opened on the list: "12abc" is not a PR number.')
-  const ui = await listedPane(() => $.ui.mount({ ...PANE, surface: 'terminal' }))
-  expect(await ui.find({ key: 'pr:1' })).toBeDefined()
-  await ui.unmount()
+  for (const a of ['', '12abc']) expect((await $.command.run(args(a))).text).toBe('Usage: /prdiff <PR number>')
+  expect(opened).toEqual([])
 })

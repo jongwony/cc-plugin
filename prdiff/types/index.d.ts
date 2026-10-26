@@ -1,24 +1,3 @@
-export type PrdiffView = { kind: 'list' } | { kind: 'diff'; number: number }
-
-export type PrdiffPr = {
-  number: number
-  title: string
-  headRefName: string
-  baseRefName: string
-  author: string
-  isDraft: boolean
-}
-
-export type PrdiffList = {
-  status: 'idle' | 'loading' | 'ready' | 'error'
-  repo?: string
-  current?: number
-  items: PrdiffPr[]
-  /** The list stopped at its limit; more open PRs may exist. */
-  isCut?: boolean
-  error?: string
-}
-
 export type PrdiffDiff = {
   status: 'idle' | 'loading' | 'ready' | 'error'
   /** The load that wrote this; the parsed diff is held under it in the module. */
@@ -30,8 +9,6 @@ export type PrdiffDiff = {
 declare module 'claude-code' {
   interface PluginState {
     prdiff: {
-      view: PrdiffView
-      list: PrdiffList
       diff: PrdiffDiff
       top: number
     }

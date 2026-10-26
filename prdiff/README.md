@@ -13,7 +13,7 @@ PR's branch. prdiff does both.
 
 | Step | Where it comes from |
 | --- | --- |
-| The PR list | `gh pr list` for the repository `gh` resolves in the session's directory; `●` marks the PR `gh pr view` associates with the current checkout |
+| The PR | `gh pr view <n>` for the repository `gh` resolves in the session's directory |
 | The base | the tip of the PR's own `baseRefName` on the remote, read with `git ls-remote` and fetched by its id |
 | The head | the tip of `refs/pull/<n>/head`, read and fetched the same way |
 | The diff | `git diff <merge-base(base, head)> <head>`, with renames, binary files and mode-only changes listed |
@@ -26,23 +26,20 @@ Enterprise included (`origin` first).
 ## Use
 
 ```
-/prdiff        open the pane on the PR list
-/prdiff 123    open the pane straight on PR #123
+/prdiff 123    open the pane on PR #123
 ```
 
 The pane takes the keyboard after `ctrl+x tab` or a click.
 
-| Key | In the list | In a diff |
-| --- | --- | --- |
-| `1`–`9` | open that PR | |
-| `r` | refresh the list | reload the PR |
-| `j` / `k` | | next / previous file |
-| `d` / `u` | | half a page down / up |
-| `b` | | back to the list |
-| `Home` / `End` | | top / end of the stream |
-| `↑` / `↓` | | a row up / down |
-| `PgUp` / `PgDn` | | a page up / down |
-| wheel | scroll | scroll the stream |
+| Key | In a diff |
+| --- | --- |
+| `r` | reload the PR |
+| `j` / `k` | next / previous file |
+| `d` / `u` | half a page down / up |
+| `Home` / `End` | top / end of the stream |
+| `↑` / `↓` | a row up / down |
+| `PgUp` / `PgDn` | a page up / down |
+| wheel | scroll the stream |
 
 The top of a diff lists every file; pressing one jumps to it. A file over 3,000
 lines is cut and says how many lines were left out. When the patch passes 4 MiB,

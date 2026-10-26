@@ -1,19 +1,15 @@
 import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { PrdiffDiff, PrdiffList, PrdiffView } from '../types'
-import { listPrs, loadDiff, type DiffData, type Run } from './git.ts'
+import type { PrdiffDiff } from '../types'
+import { loadDiff, type DiffData, type Run } from './git.ts'
 import { clean, hunkSource } from './parse.ts'
 import { clampTop, clip as clipText, fileAt, fileLabel, fit, jump, layout, scrolled, windowOf, windowRows as bodyWindow, type Layout, type Row } from './rows.ts'
 
 export const PANE = 'prdiff'
 
-const viewRef = { plugin: 'prdiff', key: 'view' } as const
-const listRef = { plugin: 'prdiff', key: 'list' } as const
 const diffRef = { plugin: 'prdiff', key: 'diff' } as const
 const topRef = { plugin: 'prdiff', key: 'top' } as const
-const view = atom(viewRef, { kind: 'list' } as PrdiffView)
-const list = atom(listRef, { status: 'idle', items: [] } as PrdiffList)
 const diff = atom(diffRef, { status: 'idle', gen: 0, number: 0 } as PrdiffDiff)
 const top = atom(topRef, 0)
 
@@ -28,9 +24,7 @@ function message(err: unknown): string {
   return clean(err instanceof Error ? err.message : String(err))
 }
 
-// The newest load of each kind; an older one that finishes later is dropped.
-let listGen = 0
-// Starts at the clock: above any gen an earlier instance of this module wrote.
+// The newest load; an older one that finishes later is dropped. Starts at the clock: above any gen an earlier instance of this module wrote.
 let diffGen = Date.now()
 // The parsed diff lives here, under the generation that loaded it; `$.state`
 // carries the status and that generation. A hot reload empties it, and the
@@ -54,36 +48,18 @@ function windowRows(paneRows: number, data: DiffData): number {
 
 /** The diff on screen, only while the load it came from is the one ready for the PR in view. */
 async function ready($: EngineInterface): Promise<Held | undefined> {
-  const [v, d] = await Promise.all([read($, view), read($, diff)])
-  if (v.kind !== 'diff' || d.status !== 'ready' || d.number !== v.number) return undefined
-  return held && held.gen === d.gen ? held : undefined
-}
-
-async function loadList($: EngineInterface): Promise<void> {
-  listGen += 1
-  const gen = listGen
-  const prev = await read($, list)
-  await $.state.set(listRef, { ...prev, status: 'loading', error: undefined })
-  try {
-    const got = await listPrs(runner($))
-    if (gen !== listGen) return
-    await $.state.set(listRef, { status: 'ready', repo: got.repo, current: got.current, items: got.items, isCut: got.isCut })
-  } catch (err) {
-    if (gen !== listGen) return
-    await $.state.set(listRef, { ...prev, status: 'error', error: message(err) })
-  }
+  const d = await read($, diff)
+  return d.status === 'ready' && held && held.gen === d.gen ? held : undefined
 }
 
 async function openDiff($: EngineInterface, number: number): Promise<void> {
   diffGen += 1
   const gen = diffGen
-  await $.state.set(viewRef, { kind: 'diff', number })
   await $.state.set(topRef, 0)
   await $.state.set(diffRef, { status: 'loading', gen, number })
   try {
-    const l = await read($, list)
     const ownSsh = (await Promise.all([$.env.get('GIT_SSH_COMMAND'), $.env.get('GIT_SSH')])).some(v => v !== undefined)
-    const data = await loadDiff(runner($), number, { repo: l.status === 'ready' ? l.repo : undefined, ownSsh })
+    const data = await loadDiff(runner($), number, { ownSsh })
     if (gen !== diffGen) return
     held = { gen, data, layout: layout(data.files) }
     await $.state.set(diffRef, { status: 'ready', gen, number })
@@ -114,18 +90,12 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'prdiff' }, async ($, e) => {
-    await $.ui.open({ id: PANE, title: 'PR diff', focus: true })
     const arg = /^#?(\d+)$/.exec(e.args.trim())?.[1]
     const n = arg === undefined ? 0 : Number(arg)
-    if (n > 0) {
-      void loadList($)
-      void openDiff($, n)
-      return { text: `PR diff pane opened on #${n}.` }
-    }
-    await $.state.set(viewRef, { kind: 'list' })
-    void loadList($)
-    const asked = e.args.trim()
-    return { text: asked === '' ? 'PR diff pane opened.' : `PR diff pane opened on the list: ${JSON.stringify(asked)} is not a PR number.` }
+    if (n === 0) return { text: 'Usage: /prdiff <PR number>' }
+    await $.ui.open({ id: PANE, title: 'PR diff', focus: true })
+    void openDiff($, n)
+    return { text: `PR diff pane opened on #${n}.` }
   })
 
   on('ui.scroll', { requestId: PANE }, async ($, e, next) => {
@@ -139,41 +109,11 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button, Code } = $.ui.resolve(e)
     const cols = Math.max(20, e.props.bodyColumns)
-    const v = await read($, view)
     const line = (text: string, props: { dimColor?: boolean; bold?: boolean; color?: string } = {}) => (
       <Text wrap="truncate-end" {...props}>
         {clean(text)}
       </Text>
     )
-
-    if (v.kind === 'list') {
-      const l = await read($, list)
-      return (
-        <Box flexDirection="column">
-          <Box flexDirection="row">
-            <Text bold wrap="truncate-end">
-              Pull requests{l.repo ? ` · ${l.repo}` : ''}{' '}
-            </Text>
-            <Button key="reload" plain hotkey="r" label="refresh" onPress={() => void loadList($)} />
-          </Box>
-          {l.status === 'loading' && line('Loading…', { dimColor: true })}
-          {l.status === 'error' && line(`Could not list PRs: ${l.error ?? ''}`, { color: 'error' })}
-          {l.status === 'ready' && l.items.length === 0 && line('No open pull requests.', { dimColor: true })}
-          {l.isCut === true && line(`The first ${l.items.length} open PRs; open another with /prdiff <number>.`, { dimColor: true })}
-          {l.items.map((p, i) => (
-            <Button
-              key={`pr:${p.number}`}
-              plain
-              hotkey={i < 9 ? String(i + 1) : undefined}
-              onPress={() => void openDiff($, p.number)}
-            >
-              {clean(`${p.number === l.current ? '● ' : '  '}#${p.number} ${p.title}`)}
-              <Text dimColor>{clean(`  ${p.baseRefName} ← ${p.headRefName} · ${p.author}${p.isDraft ? ' · draft' : ''}`)}</Text>
-            </Button>
-          ))}
-        </Box>
-      )
-    }
 
     const d = await read($, diff)
     const paneRows = e.props.scroll.bodyRows
@@ -184,18 +124,19 @@ export const register: Register = on => {
         <Button key="prev" plain hotkey="k" label="prev" onPress={() => void moveTop($, paneRows, (t, l) => jump(l.fileRows, t, -1))} />
         <Button key="down" plain hotkey="d" label="down" onPress={() => void moveTop($, paneRows, t => t + half(held))} />
         <Button key="up" plain hotkey="u" label="up" onPress={() => void moveTop($, paneRows, t => t - half(held))} />
-        <Button key="back" plain hotkey="b" label="PRs" onPress={() => void $.state.set(viewRef, { kind: 'list' })} />
-        <Button key="reload" plain hotkey="r" label="reload" onPress={() => void openDiff($, v.number)} />
+        <Button key="reload" plain hotkey="r" label="reload" onPress={() => void openDiff($, d.number)} />
       </Box>
     )
-    const data = held && held.gen === d.gen && d.status === 'ready' && d.number === v.number ? held : undefined
+    const data = held && held.gen === d.gen && d.status === 'ready' ? held : undefined
     if (!data) {
       const status =
-        d.status === 'loading' && d.number === v.number
-          ? line(`Loading #${v.number}…`, { dimColor: true })
-          : d.status === 'error' && d.number === v.number
-            ? line(`#${v.number}: ${d.error ?? ''}`, { color: 'error' })
-            : line(`#${v.number} is not loaded. Press r to load it.`, { dimColor: true })
+        d.status === 'loading'
+          ? line(`Loading #${d.number}…`, { dimColor: true })
+          : d.status === 'error'
+            ? line(`#${d.number}: ${d.error ?? ''}`, { color: 'error' })
+            : d.number > 0
+              ? line(`#${d.number} is not loaded. Press r to load it.`, { dimColor: true })
+              : line('Run /prdiff <PR number> to open one.', { dimColor: true })
       return (
         <Box flexDirection="column">
           {controls}

@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { listPrs, loadDiff, mapLimit, remoteFor, repoOfUrl, type Run, type RunResult } from '../hooks/git.ts'
+import { loadDiff, mapLimit, remoteFor, repoOfUrl, type Run, type RunResult } from '../hooks/git.ts'
 
 const ok = (stdout: string): RunResult => ({ exitCode: 0, stdout, stderr: '', isStdoutTruncated: false })
 const fail = (stderr: string): RunResult => ({ exitCode: 1, stdout: '', stderr, isStdoutTruncated: false })
@@ -74,10 +74,6 @@ test('a PR not checked out: both tips listed once, fetched by id without a ref, 
   const fetch = calls.find(c => c.includes('fetch')) ?? []
   expect(fetch.slice(-3)).toEqual(['origin', 'b'.repeat(40), 'h'.repeat(40)])
   expect(calls.some(c => c.includes('update-ref'))).toBe(false)
-  // The repository the list already resolved is not asked again.
-  const again = fakeRepo(undefined)
-  await loadDiff(again.run, 7, { repo: 'o/r' })
-  expect(again.calls.some(c => c.join(' ').startsWith('gh repo view'))).toBe(false)
   const diffed = calls.find(c => c.includes('--raw')) ?? []
   expect(diffed.slice(-2)).toEqual(['m'.repeat(40), 'h'.repeat(40)])
   expect(d.files.map(f => f.path)).toEqual(['x'])
@@ -203,16 +199,4 @@ test('a failure names its error line, not a warning printed ahead of it', async 
   await expect(loadDiff(f.run, 7)).rejects.toThrow('git ls-remote: fatal: Could not read from remote repository.')
   const w = fakeRepo(undefined, { ' fetch ': fail('warning: redirecting to https://github.com/o/r2.git/\nremote: Repository not found.') })
   await expect(loadDiff(w.run, 7)).rejects.toThrow('git fetch: remote: Repository not found.')
-})
-
-test('a list that reaches its limit says more may exist', async () => {
-  const many = Array.from({ length: 100 }, (_, i) => ({ number: i + 1, title: 't', headRefName: 'h', baseRefName: 'main', author: { login: 'a' }, isDraft: false }))
-  const run: Run = async argv => {
-    const s = argv.join(' ')
-    if (s.startsWith('gh repo view')) return ok(JSON.stringify({ nameWithOwner: 'o/r' }))
-    if (s.startsWith('gh pr list')) return ok(JSON.stringify(s.includes('--limit 100') ? many : []))
-    return fail('no pull requests found')
-  }
-  expect((await listPrs(run)).isCut).toBe(true)
-  expect((await listPrs(async argv => (argv.join(' ').startsWith('gh pr list') ? ok('[]') : run(argv)))).isCut).toBe(false)
 })

@@ -2,7 +2,6 @@
 // base being the PR's own baseRefName. Every host command goes through the
 // injected `run`, so tests answer it without a repository.
 
-import type { PrdiffPr } from '../types'
 import { fileFor, filesOf, parseDiff, type FileDiff } from './parse.ts'
 
 export type RunResult = {
@@ -13,19 +12,6 @@ export type RunResult = {
 }
 
 export type Run = (argv: string[], timeoutMs?: number, env?: Record<string, string>) => Promise<RunResult>
-
-export type PrSummary = PrdiffPr
-
-export type PrList = {
-  repo: string
-  current?: number
-  items: PrSummary[]
-  /** The list stopped at LIST_LIMIT; more open PRs may exist. */
-  isCut: boolean
-}
-
-/** Open PRs listed, at most. */
-export const LIST_LIMIT = 100
 
 export type DiffData = {
   number: number
@@ -99,45 +85,11 @@ function json<T>(step: string, text: string): T {
   }
 }
 
-/** The PR `gh` associates with the current checkout, if any. */
-export async function currentPr(run: Run): Promise<number | undefined> {
-  const r = await guarded(run)(['gh', 'pr', 'view', '--json', 'number'])
-  if (r.exitCode !== 0) return undefined
-  try {
-    const n = (JSON.parse(r.stdout) as { number?: unknown }).number
-    return typeof n === 'number' ? n : undefined
-  } catch {
-    return undefined
-  }
-}
-
 async function repoOf(run: Run): Promise<string> {
   return json<{ nameWithOwner: string }>(
     'gh repo view',
     (await must(run, 'gh repo view', ['gh', 'repo', 'view', '--json', 'nameWithOwner'])).stdout,
   ).nameWithOwner
-}
-
-export async function listPrs(unguarded: Run): Promise<PrList> {
-  const run = guarded(unguarded)
-  const [repo, listed, current] = await Promise.all([
-    repoOf(run),
-    must(run, 'gh pr list', [
-      'gh', 'pr', 'list', '--limit', String(LIST_LIMIT),
-      '--json', 'number,title,headRefName,baseRefName,author,isDraft',
-    ]),
-    currentPr(run),
-  ])
-  const raw = json<Array<Omit<PrSummary, 'author'> & { author?: { login?: string } }>>('gh pr list', listed.stdout)
-  const items = raw.map(p => ({
-    number: p.number,
-    title: p.title,
-    headRefName: p.headRefName,
-    baseRefName: p.baseRefName,
-    author: p.author?.login ?? '',
-    isDraft: p.isDraft === true,
-  }))
-  return { repo, current, items, isCut: items.length >= LIST_LIMIT }
 }
 
 /**
@@ -201,8 +153,6 @@ export async function noPrompts(run: Run, git: string[], ownSsh = false): Promis
 }
 
 export type Known = {
-  /** The repository `gh` resolved, when the list already asked. */
-  repo?: string
   /** GIT_SSH_COMMAND or GIT_SSH is set in the environment. */
   ownSsh?: boolean
 }
@@ -214,7 +164,7 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
       'gh', 'pr', 'view', String(number), '--json', 'number,title,url,headRefName,headRefOid,baseRefName',
     ]),
     must(run, 'git rev-parse', [...GIT, 'rev-parse', '--show-toplevel']),
-    known.repo !== undefined ? Promise.resolve(known.repo) : repoOf(run),
+    repoOf(run),
   ])
   const pr = json<{
     number: number

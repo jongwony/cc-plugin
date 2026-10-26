@@ -31,11 +31,11 @@ test('a file over the budget is drawn from its start and says how many lines are
   const first = whole.runs[0]
   if (!first) throw new Error('no run')
   // Room for the first hunk and one more line of the second.
-  const budget = first.title.length + first.source.length + 50
+  const budget = first.title.length + first.source.length + 50 + '  8 more lines of this file are not drawn'.length
   const d = drawn(file(2, 4), 80, new Budget(budget))
   expect(d.runs.map(r => r.source.split('\n').length - 1)).toEqual([4, 1])
   expect(d.left).toBe(3)
-  expect(total(d)).toBeLessThanOrEqual(budget)
+  expect(total(d) + (d.note?.length ?? 0)).toBeLessThanOrEqual(budget)
 })
 
 test('many tiny hunks are charged for every header and source they draw', () => {
@@ -65,11 +65,22 @@ test('drawing leaves what it is told to keep, and charges exactly what it draws'
   const b = new Budget(CHAR_BUDGET)
   const d = drawn(file(20_000, 1, 1), 80, b, 20_000)
   expect(b.left).toBeGreaterThanOrEqual(20_000)
-  expect(CHAR_BUDGET - b.left).toBe(total(d))
+  expect(CHAR_BUDGET - b.left).toBe(total(d) + (d.note?.length ?? 0))
 })
 
 test('a line clipped next to an astral character never keeps half of it', () => {
   expect(clip('ab😀c', 3)).toBe('ab')
   expect(clip('ab😀c', 4)).toBe('ab😀')
   expect(clip('abc', 5)).toBe('abc')
+})
+
+test('the note on what is left out is charged as printed, its count taken from the lines drawn, context included', () => {
+  // Two changed lines among 30,000 context lines: numstat would count 2, the note counts 29,999.
+  const f = file(1, 30_000, 1)
+  f.added = 2
+  f.deleted = 0
+  const b = new Budget(1000)
+  const d = drawn(f, 80, b)
+  expect(d.note).toBe(`  ${d.left} more lines of this file are not drawn`)
+  expect(1000 - b.left).toBe(total(d) + (d.note?.length ?? 0))
 })

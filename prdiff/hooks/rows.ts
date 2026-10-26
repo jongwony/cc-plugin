@@ -35,9 +35,12 @@ export type Run = { title: string; source: string }
  * shows no more), and how many content lines are left out. A hunk the
  * budget reaches is drawn as far as it fits.
  */
-export function drawn(f: FileDiff, width: number, b: Budget, keep = 0): { runs: Run[]; left: number } {
+export function drawn(f: FileDiff, width: number, b: Budget, keep = 0): { runs: Run[]; left: number; note?: string } {
   const runs: Run[] = []
   let left = 0
+  // Room for the note on what is left out, sized for the most it could count: every content line.
+  const all = f.hunks.reduce((n, h) => n + h.lines.filter(l => l.mark !== '\\').length, 0)
+  const room0 = keep + leftOut(all).length
   for (const hunk of f.hunks) {
     const lines = hunk.lines.filter(l => l.mark !== '\\').map(l => (l.text.length > width ? { ...l, text: clip(l.text, width) } : l))
     if (left > 0) {
@@ -46,7 +49,7 @@ export function drawn(f: FileDiff, width: number, b: Budget, keep = 0): { runs: 
     }
     const title = clip(clean(`${hunk.header} ${hunk.section}`), width)
     const run = (n: number): Run => ({ title, source: hunkSource(lines.slice(0, n)) })
-    const room = b.left - keep
+    const room = b.left - room0
     // The most lines of this hunk that still fit.
     let lo = 0
     let hi = lines.length
@@ -64,7 +67,13 @@ export function drawn(f: FileDiff, width: number, b: Budget, keep = 0): { runs: 
     }
     left += lines.length - lo
   }
-  return { runs, left }
+  const note = left > 0 && b.take(leftOut(left)) ? leftOut(left) : undefined
+  return { runs, left, note }
+}
+
+/** The line that counts a file's lines left out of its drawing. */
+function leftOut(n: number): string {
+  return `  ${n} more lines of this file are not drawn`
 }
 
 export function fileLabel(f: FileDiff): string {

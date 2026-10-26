@@ -203,8 +203,7 @@ export const register: Register = on => {
       f?.status === 'error' && line(f.error ?? '', { color: 'error' }),
       got?.isCut === true && line('  patch over 4 MiB: only its start was read', { dimColor: true }),
     ]
-    const leftNote = (n: number) => `  ${n} more lines of this file are not drawn`
-    const body = got ? drawn(got.file, width, b, LIST_BUDGET + leftNote(got.file.added + got.file.deleted).length) : undefined
+    const body = got ? drawn(got.file, width, b, LIST_BUDGET) : undefined
     // drawn() produced and charged each hunk's title and source; they are drawn as given.
     const hunks = (body?.runs ?? []).map(r => [
       <Text wrap="truncate-end" color="subtle">
@@ -212,7 +211,11 @@ export const register: Register = on => {
       </Text>,
       <Code source={r.source} format="diff" path={shown?.path} wrap="truncate-end" />,
     ])
-    const rest = body !== undefined && body.left > 0 && line(leftNote(body.left), { dimColor: true })
+    const rest = body?.note !== undefined && (
+      <Text wrap="truncate-end" dimColor>
+        {body.note}
+      </Text>
+    )
     const rule = line('─'.repeat(Math.min(cols, 80)), { dimColor: true })
     const moreNote = (n: number) => `${n} more files; j and k reach them`
     const keep = moreNote(summaries.length).length

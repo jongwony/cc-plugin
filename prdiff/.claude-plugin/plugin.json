@@ -1,7 +1,7 @@
 {
   "name": "prdiff",
   "description": "A pane that shows one pull request's cumulative diff, merge-base of its own base branch to its head, one file at a time: /prdiff <number>.",
-  "version": "0.1.47",
+  "version": "0.1.48",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

@@ -87,8 +87,7 @@ test('a file is read as the diff of its two sides named <rev>:<path>, with no pa
   ].join('') + ['1\t1\tx', '1\t0\ta', '0\t1\td', '0\t0\tm', '-\t-\tb', '1\t1\tsub', ''].join('\0')
   const { run, calls } = fakeRepo({
     '--raw': ok(records),
-    'hash-object -t blob /dev/null': ok('e'.repeat(40) + '\n'),
-    'cat-file -e': ok(''),
+    'hash-object -w -t blob /dev/null': ok('e'.repeat(40) + '\n'),
     [READ_X]: ok(PATCH),
     ' hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh:a': ok(''),
     'mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm:d ': ok(''),
@@ -113,8 +112,8 @@ test('a file is read as the diff of its two sides named <rev>:<path>, with no pa
   expect((await read('b')).file.notes).toEqual(['binary file'])
   expect((await read('sub')).file.notes).toEqual(['submodule aaaaaaa → bbbbbbb'])
   expect(calls.length).toBe(before)
-  // The empty blob is already in this repository: it is not written.
-  expect(calls.some(c => c.includes('hash-object') && c.includes('-w'))).toBe(false)
+  // The empty blob is asked for once for the load.
+  expect(calls.filter(c => c.includes('hash-object')).length).toBe(1)
 })
 
 test('a file patch cut at 4 MiB is kept as far as it arrived; a file list cut there is reported', async () => {
@@ -216,31 +215,24 @@ test('a failure names its error line, not a warning printed ahead of it', async 
   await expect(loadDiff(w.run, 7)).rejects.toThrow('git fetch: remote: Repository not found.')
 })
 
-test('the empty blob is written only when the repository lacks it, and a failed write is not kept', async () => {
+test('the empty blob comes from one hash-object; a failed one is not kept', async () => {
   const z = '0'.repeat(40)
   const records = `:000000 100644 ${z} new-a A\0a\0` + '1\t0\ta\0'
   let writes = 0
-  let present = false
   const { run, calls } = fakeRepo({ '--raw': ok(records), ':a': ok('') })
   const repo: Run = async (argv, t, env) => {
-    const s = argv.join(' ')
-    if (s.endsWith('hash-object -t blob /dev/null')) return ok('e'.repeat(40) + '\n')
-    if (s.includes('cat-file -e')) return present ? ok('') : fail('')
-    if (s.includes('hash-object -w')) {
+    if (argv.join(' ').includes('hash-object -w -t blob /dev/null')) {
       writes += 1
-      if (writes === 1) return fail('error: unable to create temporary file: Read-only file system')
-      present = true
-      return ok('e'.repeat(40) + '\n')
+      return writes === 1 ? fail('error: insufficient permission for adding an object to repository database .git/objects') : ok('e'.repeat(40) + '\n')
     }
     return run(argv, t, env)
   }
   const d = await loadDiff(repo, 7)
   const e = d.entries[0]
   if (!e) throw new Error('no entry')
-  await expect(d.readFile(e)).rejects.toThrow('git hash-object: error: unable to create temporary file: Read-only file system')
-  // The next read tries again rather than repeating the first failure.
+  await expect(d.readFile(e)).rejects.toThrow('git hash-object: error: insufficient permission')
+  // The next read asks again rather than repeating the first failure; after a success nothing more is asked.
   expect((await d.readFile(e)).file.status).toBe('A')
-  // Once present, nothing more is written.
   await d.readFile(e)
   expect(writes).toBe(2)
   expect(calls.some(c => c.includes('diff') && c.at(-2) === 'e'.repeat(40))).toBe(true)

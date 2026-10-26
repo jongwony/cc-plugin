@@ -43,13 +43,18 @@ The pane takes the keyboard after `ctrl+x tab` or a click.
 has been asked for.
 
 The pane shows the PR, the open file and then the list of every file;
-pressing a file in the list opens it. Each drawing holds at most about 90,000
-characters, the engine's limit on one drawing less some room: the list takes
-up to 20,000 of them and the open file the rest, its lines cut at the pane's
-width. What does not fit is counted, not dropped silently ("N more files", "N
-more lines of this file are not drawn"). A single file's patch over 4 MiB is
-read as far as it arrived, and the pane says so. Fetch, merge-base and `gh`
-failures show in the pane.
+pressing a file in the list opens it. A pick that changes the open file, and
+a reload, bring the pane back to its top. A file whose read failed is read
+again when picked again.
+
+Each drawing holds at most 100,000 characters of text, the engine's limit on
+one drawing, and every string drawn counts toward it: each line is cut at
+the pane's width, and while the open file is drawn 20,000 characters stay
+for the list. What does not fit is counted, not dropped silently ("N more
+files", "N more lines of this file are not drawn"). A single file's patch
+over 4 MiB is read as far as it arrived, and the pane says so. Fetch,
+merge-base and `gh` failures show in the pane, and so does the failure of
+any key.
 
 ## Requirements
 

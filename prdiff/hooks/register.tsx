@@ -147,7 +147,6 @@ export const register: Register = on => {
     const n = arg === undefined ? 0 : Number(arg)
     if (n === 0) return { text: 'Usage: /prdiff <PR number>' }
     const opened = await $.ui.open({ id: PANE, title: 'PR diff', focus: true })
-    // An unplaced pane stays open and is drawn once a surface places it.
     void start($, openDiff($, n))
     return { text: opened.isPlaced ? `PR diff pane opened on #${n}.` : `PR diff pane for #${n} is open but not drawn yet: ${opened.reason}` }
   })
@@ -166,7 +165,7 @@ export const register: Register = on => {
         </Text>
       ) : null
     }
-    // An error wraps, so its diagnostics stay readable; it is cut only where the budget, less the list's share, ends.
+    // An error wraps; it is cut where the budget, less the list's share, ends.
     const problem = (text: string) => {
       const shown = clip(clean(text), Math.max(0, b.left - LIST_BUDGET))
       return shown !== '' && b.take(shown) ? (

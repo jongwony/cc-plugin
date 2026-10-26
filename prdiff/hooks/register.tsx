@@ -1,4 +1,4 @@
-import { atom, read, update as change } from 'claude-code'
+import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { PrdiffDiff } from '../types'
@@ -32,18 +32,17 @@ let diffGen = Date.now()
 let held: { gen: number; data: DiffData; files: Map<number, { read: Promise<void>; got?: { file: FileDiff; isCut: boolean } }> } | undefined
 
 /**
- * Rewrites the stored diff state with `fn(now)` through the engine's
- * update() (read, apply, write with ifVersion, again on a miss); when `fn`
- * returns undefined the stored value is written back unchanged and
- * undefined is returned.
+ * Rewrites the stored diff state with `fn(now)`, written with ifVersion over
+ * the `now` it was computed from and computed again on a miss. When `fn`
+ * returns undefined nothing is written and undefined is returned.
  */
 async function update($: EngineInterface, fn: (now: PrdiffDiff) => PrdiffDiff | undefined): Promise<PrdiffDiff | undefined> {
-  let next: PrdiffDiff | undefined
-  await change($, diff, now => {
-    next = fn(now)
-    return next ?? now
-  })
-  return next
+  for (;;) {
+    const now = await $.state.get(diffRef)
+    const next = fn(now.value ?? { status: 'idle', gen: 0, number: 0 })
+    if (next === undefined) return undefined
+    if ((await $.state.set(diffRef, next, { ifVersion: now.version })).isSet) return next
+  }
 }
 
 /** Writes the diff state for load `gen` while the stored state is still that load's. */

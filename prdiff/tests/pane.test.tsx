@@ -356,3 +356,21 @@ test('two presses of j before a redraw move two files on', async ($, on) => {
   await after.unmount()
   state.files = 2
 })
+
+test('a pick that changes nothing writes nothing', async ($, on) => {
+  const writes: unknown[] = []
+  engine(on)
+  on('state.set', (_, e, next) => {
+    writes.push(e)
+    return next(e)
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run(args('2'))
+  const ui = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /^1\/2 /)
+  for (let i = 0; i < 50; i += 1) await null
+  const before = writes.length
+  await ui.press({ key: 'prev' })
+  await ui.press({ key: 'goto:0' })
+  expect(writes.length).toBe(before)
+  await ui.unmount()
+})

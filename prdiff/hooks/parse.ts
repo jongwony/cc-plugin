@@ -163,11 +163,15 @@ export function hasLines(e: Entry): boolean {
   return !e.isBinary && !isSubmodule(e) && e.oldId !== e.newId
 }
 
+/** A raw mode names a side that exists; an added file's old side and a deleted file's new side are 000000. */
+function present(mode: string): boolean {
+  return !/^0+$/.test(mode)
+}
+
 /** A file as its entry alone describes it: no hunks yet. */
 export function summaryOf(e: Entry): FileDiff {
   const notes = [
-    ...(e.status === 'T' ? ['file type changed'] : []),
-    ...(e.status === 'M' && e.oldMode !== e.newMode ? [`mode ${e.oldMode} → ${e.newMode}`] : []),
+    ...(present(e.oldMode) && present(e.newMode) && e.oldMode !== e.newMode ? [`mode ${e.oldMode} → ${e.newMode}`] : []),
     ...(e.score !== undefined && (e.status === 'R' || e.status === 'C') ? [`similarity index ${e.score}%`] : []),
     ...(e.isBinary ? ['binary file'] : []),
     ...(isSubmodule(e) ? [`submodule ${e.oldId.slice(0, 7)} → ${e.newId.slice(0, 7)}`] : []),

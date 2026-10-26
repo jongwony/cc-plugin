@@ -34,7 +34,7 @@ test('the raw records name every file, its status, its counts and its notes', ()
   expect(isWhole).toBe(true)
   expect(entries.map(summaryOf).map(f => [f.path, f.oldPath, f.status, f.added, f.deleted, f.isBinary, f.notes])).toEqual([
     ['bin', undefined, 'M', 0, 0, true, ['binary file']],
-    ['f', undefined, 'T', 1, 1, false, ['file type changed']],
+    ['f', undefined, 'T', 1, 1, false, ['mode 100644 → 120000']],
     ['m.txt', undefined, 'M', 1, 0, false, []],
     ['new one.txt', undefined, 'A', 1, 0, false, []],
     ['say "hi".txt', 'ren.txt', 'R', 0, 0, false, ['similarity index 100%']],
@@ -48,7 +48,7 @@ test('a type change reads as one hunk of its two blobs', () => {
   const { entries } = parseDiff(REAL)
   const f = fileFor(entries[1] as Entry, TYPECHANGE)
   expect(f.hunks.flatMap(h => h.lines.map(l => l.mark + l.text))).toEqual(['-x', '+m.txt', '\\ No newline at end of file'])
-  expect(f.notes).toEqual(['file type changed'])
+  expect(f.notes).toEqual(['mode 100644 → 120000'])
 })
 
 test('hunk lines carry their old and new line numbers', () => {
@@ -115,4 +115,13 @@ test('a patch cut at 4 MiB keeps only its whole lines, even when the cut falls j
     expect(fileFor(e, cut, true).hunks[0]?.lines.map(l => l.mark + l.text)).toEqual([' a'])
   }
   expect(fileFor(e, whole).hunks[0]?.lines.map(l => l.mark + l.text)).toEqual([' a', '-b', '+B', ' c'])
+})
+
+test('a mode change is noted whatever the status, and only where both sides exist', () => {
+  const z = '0'.repeat(40)
+  const { entries } = parseDiff(
+    [':100644 100755 aaa aaa R100\0old.sh\0new.sh\0', `:000000 100755 ${z} bbb A\0add.sh\0`, `:100755 000000 ccc ${z} D\0del.sh\0`].join('') +
+      ['0\t0\t\0old.sh\0new.sh', '1\t0\tadd.sh', '0\t1\tdel.sh', ''].join('\0'),
+  )
+  expect(entries.map(summaryOf).map(f => f.notes)).toEqual([['mode 100644 → 100755', 'similarity index 100%'], [], []])
 })

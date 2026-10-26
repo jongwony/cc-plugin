@@ -302,3 +302,33 @@ test('the newest pick decides what is shown, even when an older read finishes be
     await after.unmount()
   }
 })
+
+test('a pick of a file whose read finishes as it is picked shows the file, not a lasting Loading', async ($, on) => {
+  engine(on)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  for (let ticks = 0; ticks < 16; ticks += 1) {
+    let open = () => {}
+    state.readGate = undefined
+    await $.command.run(args('2'))
+    const ui = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /^1\/2 /)
+    state.readGate = new Promise<void>(r => {
+      open = r
+    })
+    const a = ui.press({ key: 'goto:1' })
+    for (let i = 0; i < 20; i += 1) await null
+    await ui.press({ key: 'goto:0' })
+    state.readGate = undefined
+    open()
+    for (let i = 0; i < ticks; i += 1) await null
+    await Promise.all([a, ui.press({ key: 'goto:1' })])
+    for (let i = 0; i < 50; i += 1) await null
+    await ui.unmount()
+    const after = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect([ticks, (await after.find({ type: 'Text', text: /^\d\/2 / }))?.text, await after.find({ type: 'Text', text: /^Loading/ })]).toEqual([
+      ticks,
+      '2/2 M src/two.ts  +1 −1',
+      undefined,
+    ])
+    await after.unmount()
+  }
+})

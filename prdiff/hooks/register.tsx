@@ -89,12 +89,11 @@ async function openFile($: EngineInterface, index: number, byPerson = false): Pr
   const e = cur?.data.entries[index]
   if (!cur || cur.gen !== diffGen || !e) return
   const gen = cur.gen
-  const had = cur.files.get(index)
   // The pick is stored with the state it changes: a pick of the file already open or being read changes nothing.
   const started = await update($, now => {
     if (now.gen !== gen || now.status !== 'ready') return undefined
     if (now.file?.index === index && now.file.status !== 'error' && cur.files.has(index)) return undefined
-    return { ...now, file: { index, pick: (now.file?.pick ?? 0) + 1, status: had?.got ? 'ready' : 'loading' } }
+    return { ...now, file: { index, pick: (now.file?.pick ?? 0) + 1, status: cur.files.get(index)?.got ? 'ready' : 'loading' } }
   })
   const pick = started?.file?.pick
   if (pick === undefined) return
@@ -119,7 +118,6 @@ async function openFile($: EngineInterface, index: number, byPerson = false): Pr
   const settle = (file: NonNullable<PrdiffDiff['file']>) =>
     update($, now => (now.gen === gen && now.file?.pick === pick ? { ...now, file } : undefined))
   const read = async () => {
-    if (reading.got) return
     try {
       await reading.read
       await settle({ index, pick, status: 'ready' })

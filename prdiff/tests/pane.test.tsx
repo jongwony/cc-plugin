@@ -401,3 +401,19 @@ test('a load whose first state write fails is reported, not dropped', async ($, 
   for (let i = 0; i < 200 && notices.length === 0; i += 1) await null
   expect(notices.some(n => n.includes('state store unavailable'))).toBe(true)
 })
+
+test('/prdiff N whose pane is not placed says so, and still loads for when it is drawn', async ($, on) => {
+  const runs: string[] = []
+  on('command.register', () => ({ value: { command: 'prdiff' } }))
+  on('ui.open', () => ({ value: { isPlaced: false, reason: 'no surface is attached' } }))
+  on('env.get', () => ({ value: undefined }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('process.run', async (_, e) => {
+    runs.push(e.argv.join(' '))
+    return { value: await answer(e.argv, Promise.resolve()) }
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect((await $.command.run(args('2'))).text).toBe('PR diff pane for #2 is open but not drawn yet: no surface is attached')
+  for (let i = 0; i < 100 && !runs.some(r => r.includes('--raw')); i += 1) await null
+  expect(runs.some(r => r.startsWith('gh pr view 2'))).toBe(true)
+})

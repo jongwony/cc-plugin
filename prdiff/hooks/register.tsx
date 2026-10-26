@@ -166,9 +166,10 @@ export const register: Register = on => {
     const arg = /^#?(\d+)$/.exec(e.args.trim())?.[1]
     const n = arg === undefined ? 0 : Number(arg)
     if (n === 0) return { text: 'Usage: /prdiff <PR number>' }
-    await $.ui.open({ id: PANE, title: 'PR diff', focus: true })
+    const opened = await $.ui.open({ id: PANE, title: 'PR diff', focus: true })
+    // An unplaced pane stays open and is drawn once a surface places it.
     void start($, openDiff($, n))
-    return { text: `PR diff pane opened on #${n}.` }
+    return { text: opened.isPlaced ? `PR diff pane opened on #${n}.` : `PR diff pane for #${n} is open but not drawn yet: ${opened.reason}` }
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {

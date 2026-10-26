@@ -49,6 +49,15 @@ function putFor($: EngineInterface, gen: number, value: PrdiffDiff): Promise<Prd
   return update($, now => (now.gen === gen ? value : undefined))
 }
 
+/**
+ * Starts what a command or a press asks for. Its failures land in the load's
+ * or pick's own state; one that cannot (a state write that itself failed)
+ * goes to the transcript as a notice.
+ */
+function start($: EngineInterface, task: Promise<void>): Promise<void> {
+  return task.catch(err => $.ui.log(`prdiff: ${message(err)}`))
+}
+
 /** Loads PR #number and opens its first file. */
 async function openDiff($: EngineInterface, number: number): Promise<void> {
   let gen = 0
@@ -154,7 +163,7 @@ export const register: Register = on => {
     const n = arg === undefined ? 0 : Number(arg)
     if (n === 0) return { text: 'Usage: /prdiff <PR number>' }
     await $.ui.open({ id: PANE, title: 'PR diff', focus: true })
-    void openDiff($, n)
+    void start($, openDiff($, n))
     return { text: `PR diff pane opened on #${n}.` }
   })
 
@@ -173,7 +182,7 @@ export const register: Register = on => {
       ) : null
     }
     const button = (key: string, hotkey: string, label: string, press: () => Promise<void>) =>
-      b.take(label) ? <Button key={key} plain hotkey={hotkey} label={label} onPress={press} /> : null
+      b.take(label) ? <Button key={key} plain hotkey={hotkey} label={label} onPress={() => start($, press())} /> : null
     const d = await read($, diff)
     const isMine = d.owner === self
     const cur = isMine && d.status === 'ready' && held?.gen === d.gen ? held : undefined
@@ -244,7 +253,7 @@ export const register: Register = on => {
       b,
     )
     const list = shownList.labels.map((label, i) => (
-      <Button key={`goto:${i}`} plain onPress={() => openFile($, i)}>
+      <Button key={`goto:${i}`} plain onPress={() => start($, openFile($, i))}>
         {label}
       </Button>
     ))

@@ -1,7 +1,7 @@
 // What one drawing of a file carries, under the engine's limit on a drawn
 // tree. Pure: no `$`.
 
-import type { DiffLine, FileDiff, Hunk } from './parse.ts'
+import { hunkSource, type FileDiff } from './parse.ts'
 
 /** What one drawing may carry in text; the engine cuts a tree at 100,000. */
 export const CHAR_BUDGET = 90_000
@@ -16,42 +16,57 @@ export function clip(text: string, n: number): string {
   return text.slice(0, last >= 0xd800 && last <= 0xdbff ? n - 1 : n)
 }
 
-/** How many of `texts`, in order, fit in `budget` characters, each costing its length and 8. */
+/** How many of `texts`, in order, fit in `budget` characters. */
 export function fitting(texts: readonly string[], budget: number): number {
   let used = 0
   let n = 0
   for (const t of texts) {
-    if (used + t.length + 8 > budget) break
-    used += t.length + 8
+    if (used + t.length > budget) break
+    used += t.length
     n += 1
   }
   return n
 }
 
-export type Run = { hunk: Hunk; lines: DiffLine[] }
+/** One hunk as drawn: its header row's text and its Code source. */
+export type Run = { title: string; source: string }
+
+/** The characters a drawn run puts in the tree: the one place the budget is charged. */
+function cost(r: Run): number {
+  return r.title.length + r.source.length
+}
 
 /**
  * The hunks of `f` drawn from its start under `budget`, each line clipped to
  * `width` (a row drawn `truncate-end` shows no more), and how many content
- * lines are left out. A hunk the budget reaches is drawn up to where it ends.
+ * lines are left out. A hunk the budget reaches is drawn as far as it fits.
  */
 export function drawn(f: FileDiff, width: number, budget: number): { runs: Run[]; left: number } {
   const runs: Run[] = []
   let used = 0
   let left = 0
   for (const hunk of f.hunks) {
-    const lines: DiffLine[] = []
-    for (const l of hunk.lines) {
-      if (l.mark === '\\') continue
-      const line = l.text.length > width ? { ...l, text: clip(l.text, width) } : l
-      if (left > 0 || used + line.text.length + 8 > budget) {
-        left += 1
-        continue
-      }
-      used += line.text.length + 8
-      lines.push(line)
+    const lines = hunk.lines.filter(l => l.mark !== '\\').map(l => (l.text.length > width ? { ...l, text: clip(l.text, width) } : l))
+    if (left > 0) {
+      left += lines.length
+      continue
     }
-    if (lines.length > 0) runs.push({ hunk, lines })
+    const title = `${hunk.header} ${hunk.section}`
+    const run = (n: number): Run => ({ title, source: hunkSource(lines.slice(0, n)) })
+    // The most lines of this hunk that still fit.
+    let lo = 0
+    let hi = lines.length
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2)
+      if (used + cost(run(mid)) <= budget) lo = mid
+      else hi = mid - 1
+    }
+    if (lo > 0) {
+      const r = run(lo)
+      runs.push(r)
+      used += cost(r)
+    }
+    left += lines.length - lo
   }
   return { runs, left }
 }

@@ -18,32 +18,46 @@ function file(hunks: number, lines: number, width = 10): FileDiff {
   }
 }
 
+const total = (d: ReturnType<typeof drawn>) => d.runs.reduce((n, r) => n + r.title.length + r.source.length, 0)
+
 test('a file under the budget is drawn whole, hunk by hunk', () => {
   const d = drawn(file(3, 5), 80, CHAR_BUDGET)
-  expect(d.runs.map(r => r.lines.length)).toEqual([5, 5, 5])
+  expect(d.runs.map(r => r.source.split('\n').length - 1)).toEqual([5, 5, 5])
   expect(d.left).toBe(0)
 })
 
 test('a file over the budget is drawn from its start and says how many lines are left out', () => {
-  // Each line costs 10 + 8: a budget of 100 takes five of them.
-  const d = drawn(file(2, 4), 80, 100)
-  expect(d.runs.map(r => r.lines.length)).toEqual([4, 1])
+  const whole = drawn(file(2, 4), 80, CHAR_BUDGET)
+  const first = whole.runs[0]
+  if (!first) throw new Error('no run')
+  // Room for the first hunk and one more line of the second.
+  const budget = first.title.length + first.source.length + 50
+  const d = drawn(file(2, 4), 80, budget)
+  expect(d.runs.map(r => r.source.split('\n').length - 1)).toEqual([4, 1])
   expect(d.left).toBe(3)
+  expect(total(d)).toBeLessThanOrEqual(budget)
+})
+
+test('many tiny hunks are charged for every header and source they draw', () => {
+  const d = drawn(file(20_000, 1, 1), 80, CHAR_BUDGET)
+  expect(total(d)).toBeLessThanOrEqual(CHAR_BUDGET)
+  expect(d.left).toBeGreaterThan(0)
+  expect(d.runs.length + d.left).toBe(20_000)
 })
 
 test('lines are clipped to the width a row shows, which leaves more of the file under the budget', () => {
   const d = drawn(file(1, 3, 1000), 20, CHAR_BUDGET)
-  expect(d.runs[0]?.lines.map(l => l.text.length)).toEqual([20, 20, 20])
+  expect(d.runs[0]?.source.split('\n').slice(1).map(l => l.length)).toEqual([21, 21, 21])
 })
 
 test('a "no newline" marker takes nothing from the budget and is never drawn', () => {
   const f = file(1, 1)
   f.hunks[0]?.lines.push({ mark: '\\', text: ' No newline at end of file', oldNo: 1, newNo: 2 })
-  expect(drawn(f, 80, CHAR_BUDGET).runs[0]?.lines.map(l => l.mark)).toEqual(['+'])
+  expect(drawn(f, 80, CHAR_BUDGET).runs[0]?.source).toBe('@@ -0,0 +1,1 @@\n+xxxxxxxxxx')
 })
 
 test('the file list keeps the labels that fit its budget', () => {
-  expect(fitting(['aa', 'bb', 'cc'], 20)).toBe(2)
+  expect(fitting(['aa', 'bb', 'cc'], 5)).toBe(2)
   expect(fitting(['aa', 'bb', 'cc'], 1000)).toBe(3)
 })
 

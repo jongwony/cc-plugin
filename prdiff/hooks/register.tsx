@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { PrdiffDiff, PrdiffFile } from '../types'
 import { loadDiff, type DiffData, type Run } from './git.ts'
-import { clean, hunkSource, summaryOf, type FileDiff } from './parse.ts'
+import { clean, summaryOf, type FileDiff } from './parse.ts'
 import { CHAR_BUDGET, LIST_BUDGET, clip, drawn, fileLabel, fitting } from './rows.ts'
 
 export const PANE = 'prdiff'
@@ -157,8 +157,8 @@ export const register: Register = on => {
         {f.status === 'error' && line(f.error ?? '', { color: 'error' })}
         {got?.isCut === true && line('  patch over 4 MiB: only its start was read', { dimColor: true })}
         {body?.runs.map(r => [
-          line(`${r.hunk.header} ${r.hunk.section}`, { color: 'subtle' }),
-          <Code source={hunkSource(r.lines)} format="diff" path={shown?.path} wrap="truncate-end" />,
+          line(r.title, { color: 'subtle' }),
+          <Code source={r.source} format="diff" path={shown?.path} wrap="truncate-end" />,
         ])}
         {body !== undefined && body.left > 0 && line(`  ${body.left} more lines of this file are not drawn`, { dimColor: true })}
         {line('─'.repeat(Math.min(cols, 80)), { dimColor: true })}

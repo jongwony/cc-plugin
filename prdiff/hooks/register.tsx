@@ -1,7 +1,7 @@
 import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { PrdiffDiff, PrdiffFile } from '../types'
+import type { PrdiffDiff } from '../types'
 import { loadDiff, type DiffData, type Run } from './git.ts'
 import { clean, summaryOf, type FileDiff } from './parse.ts'
 import { CHAR_BUDGET, LIST_BUDGET, clip, drawn, fileLabel, fitting } from './rows.ts'
@@ -9,9 +9,7 @@ import { CHAR_BUDGET, LIST_BUDGET, clip, drawn, fileLabel, fitting } from './row
 export const PANE = 'prdiff'
 
 const diffRef = { plugin: 'prdiff', key: 'diff' } as const
-const fileRef = { plugin: 'prdiff', key: 'file' } as const
 const diff = atom(diffRef, { status: 'idle', gen: 0, number: 0 } as PrdiffDiff)
-const file = atom(fileRef, { status: 'idle', gen: 0, index: 0 } as PrdiffFile)
 
 function runner($: EngineInterface): Run {
   return async (argv, timeoutMs, env) => {
@@ -27,8 +25,8 @@ function message(err: unknown): string {
 // The newest load; an older one that finishes later is dropped. Starts at the
 // clock: above any gen an earlier instance of this module wrote.
 let diffGen = Date.now()
-// The newest file read; an older one that finishes later is dropped.
-let fileGen = 0
+// The file last picked, under the load it belongs to; a read for any other is not shown.
+let picked: { gen: number; index: number } | undefined
 // The PR's inventory and the files read so far live here, under the load that
 // read them; `$.state` carries the status. A hot reload empties it, and the
 // pane then offers to load again.
@@ -55,21 +53,19 @@ async function openFile($: EngineInterface, index: number): Promise<void> {
   const cur = held
   const e = cur?.data.entries[index]
   if (!cur || cur.gen !== diffGen || !e) return
-  fileGen += 1
-  const gen = fileGen
-  if (cur.files.has(index)) {
-    await $.state.set(fileRef, { status: 'ready', gen, index })
-  } else {
-    await $.state.set(fileRef, { status: 'loading', gen, index })
-    try {
-      const got = await cur.data.readFile(e)
-      cur.files.set(index, got)
-      if (gen !== fileGen) return
-      await $.state.set(fileRef, { status: 'ready', gen, index })
-    } catch (err) {
-      if (gen !== fileGen) return
-      await $.state.set(fileRef, { status: 'error', gen, index, error: message(err) })
-    }
+  const gen = cur.gen
+  picked = { gen, index }
+  const show = async (file: NonNullable<PrdiffDiff['file']>) => {
+    if (diffGen !== gen || picked?.gen !== gen || picked.index !== index) return
+    await $.state.set(diffRef, { status: 'ready', gen, number: cur.data.number, file })
+  }
+  if (cur.files.has(index)) return show({ index, status: 'ready' })
+  await show({ index, status: 'loading' })
+  try {
+    cur.files.set(index, await cur.data.readFile(e))
+    await show({ index, status: 'ready' })
+  } catch (err) {
+    await show({ index, status: 'error', error: message(err) })
   }
 }
 
@@ -106,22 +102,26 @@ export const register: Register = on => {
         {clean(text)}
       </Text>
     )
-    const [d, f] = await Promise.all([read($, diff), read($, file)])
-    const cur = held && held.gen === d.gen && d.status === 'ready' ? held : undefined
-    const at = cur && f.status !== 'idle' ? f.index : -1
+    const d = await read($, diff)
+    // A state this module instance did not write (a hot reload empties `held`) is not loaded.
+    const isMine = d.gen === diffGen
+    const cur = isMine && d.status === 'ready' && held?.gen === d.gen ? held : undefined
+    const f = cur ? d.file : undefined
+    const at = f?.index ?? -1
     const count = cur?.data.entries.length ?? 0
+    const reload = d.number > 0 && <Button key="reload" plain hotkey="r" label="reload" onPress={() => void openDiff($, d.number)} />
     const controls = (
       <Box flexDirection="row" gap={1}>
-        <Button key="next" plain hotkey="j" label="next file" onPress={() => void showFile($, Math.min(count - 1, at + 1))} />
-        <Button key="prev" plain hotkey="k" label="prev" onPress={() => void showFile($, Math.max(0, at - 1))} />
-        <Button key="reload" plain hotkey="r" label="reload" onPress={() => void openDiff($, d.number)} />
+        {count > 0 && <Button key="next" plain hotkey="j" label="next file" onPress={() => void showFile($, Math.min(count - 1, at + 1))} />}
+        {count > 0 && <Button key="prev" plain hotkey="k" label="prev" onPress={() => void showFile($, Math.max(0, at - 1))} />}
+        {reload}
       </Box>
     )
     if (!cur) {
       const status =
-        d.status === 'loading'
+        isMine && d.status === 'loading'
           ? line(`Loading #${d.number}…`, { dimColor: true })
-          : d.status === 'error'
+          : isMine && d.status === 'error'
             ? line(`#${d.number}: ${d.error ?? ''}`, { color: 'error' })
             : d.number > 0
               ? line(`#${d.number} is not loaded. Press r to load it.`, { dimColor: true })
@@ -153,8 +153,8 @@ export const register: Register = on => {
         {controls}
         {shown && line(`${at + 1}/${count} ${fileLabel(shown)}`, { bold: true })}
         {shown?.notes.map(n => line(`  ${n}`, { dimColor: true }))}
-        {f.status === 'loading' && line('Loading…', { dimColor: true })}
-        {f.status === 'error' && line(f.error ?? '', { color: 'error' })}
+        {f?.status === 'loading' && line('Loading…', { dimColor: true })}
+        {f?.status === 'error' && line(f.error ?? '', { color: 'error' })}
         {got?.isCut === true && line('  patch over 4 MiB: only its start was read', { dimColor: true })}
         {body?.runs.map(r => [
           line(r.title, { color: 'subtle' }),

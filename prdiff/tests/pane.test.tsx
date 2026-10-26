@@ -18,24 +18,35 @@ const PANE = {
 const inv = (paths: string[], added = 1, deleted = 0) =>
   paths.map(p => `:100644 100644 old-${p} new-${p} M\0${p}\0`).join('') + paths.map(p => `${added}\t${deleted}\t${p}\0`).join('') + '\0'
 
-const result = (stdout: string, exitCode = 0) => ({ exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false })
+const result = (stdout: string, exitCode = 0) => ({
+  exitCode,
+  stdout: exitCode === 0 ? stdout : '',
+  stderr: exitCode === 0 ? '' : stdout,
+  isStdoutTruncated: false,
+  isStderrTruncated: false,
+})
 
 function pr(n: number) {
   return { number: n, title: `Title ${n}`, url: `https://github.com/o/r/pull/${n}`, headRefName: `b${n}`, baseRefName: 'main' }
 }
+
+/** What the next answers hold: how many files a PR has, and whether a file read fails. */
+const state = { files: 2, failRead: false }
 
 /** Answers the host commands loadDiff makes; PR 1's view waits on `gate`. */
 function answer(argv: readonly string[], gate: Promise<void>): Promise<ReturnType<typeof result>> | ReturnType<typeof result> {
   const s = argv.join(' ')
   if (s.startsWith('gh pr view 1 ')) return gate.then(() => result(JSON.stringify(pr(1))))
   if (s.startsWith('gh pr view 2 ')) return result(JSON.stringify(pr(2)))
+  if (s.startsWith('gh pr view 3 ')) return result(JSON.stringify(pr(3)))
   if (s.startsWith('gh repo view')) return result(JSON.stringify({ nameWithOwner: 'o/r' }))
   if (s.includes('--show-toplevel')) return result('/repo')
   if (s.includes('remote -v')) return result('origin\thttps://github.com/o/r.git (fetch)\n')
   if (s.includes(' ls-remote ')) return result(argv.slice(argv.indexOf('ls-remote') + 2).map(n => `${'c'.repeat(40)}\t${n}`).join('\n'))
   if (s.includes(' fetch ')) return result('')
   if (s.includes('merge-base')) return result('m'.repeat(40))
-  if (s.includes('--raw')) return result(inv(['src/one.ts', 'src/two.ts'], 1, 1))
+  if (s.includes('--raw')) return result(state.files === 0 ? '' : inv(['src/one.ts', 'src/two.ts'], 1, 1))
+  if (state.failRead && s.endsWith('new-src/one.ts')) return result('fatal: bad object', 128)
   if (s.endsWith('old-src/one.ts new-src/one.ts')) return result('diff --git a/src/one.ts b/src/one.ts\n--- a/src/one.ts\n+++ b/src/one.ts\n@@ -1 +1 @@\n-old\n+new\n')
   if (s.endsWith('old-src/two.ts new-src/two.ts')) return result('diff --git a/src/two.ts b/src/two.ts\n--- a/src/two.ts\n+++ b/src/two.ts\n@@ -1 +1 @@\n-two\n+TWO\n')
   return result(`unexpected ${s}`, 2)
@@ -159,4 +170,33 @@ test('/prdiff without a PR number says how to use it and opens nothing', async (
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   for (const a of ['', '12abc']) expect((await $.command.run(args(a))).text).toBe('Usage: /prdiff <PR number>')
   expect(opened).toEqual([])
+})
+
+test('a new PR starts with no file state from the last one, and a late read of the last one is not shown', async ($, on) => {
+  state.failRead = true
+  engine(on)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run(args('2'))
+  const first = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /fatal: bad object/)
+  await first.unmount()
+  state.failRead = false
+  state.files = 0
+  await $.command.run(args('3'))
+  const ui = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /#3 Title 3/)
+  expect(await ui.find({ type: 'Text', text: /fatal: bad object/ })).toBe(undefined)
+  expect(await ui.find({ type: 'Text', text: /Loading/ })).toBe(undefined)
+  // With no files there is nothing for j and k to move through.
+  expect(await ui.find({ key: 'next' })).toBe(undefined)
+  expect(await ui.find({ key: 'reload' })).toBeDefined()
+  await ui.unmount()
+  state.files = 2
+})
+
+test('before any PR is open the pane offers no keys', async ($, on) => {
+  engine(on)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /Run \/prdiff <PR number>/ })).toBeDefined()
+  expect(await ui.findAll({ type: 'Button' })).toEqual([])
+  await ui.unmount()
 })

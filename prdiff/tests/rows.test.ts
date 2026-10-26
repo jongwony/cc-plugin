@@ -5,7 +5,7 @@ import { CHAR_BUDGET, clip, drawn, fitting } from '../hooks/rows.ts'
 function file(hunks: number, lines: number, width = 10): FileDiff {
   return {
     path: 'a',
-    kind: 'added',
+    status: 'A',
     added: hunks * lines,
     deleted: 0,
     isBinary: false,

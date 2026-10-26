@@ -56,26 +56,8 @@ export function drawn(f: FileDiff, width: number, budget: number): { runs: Run[]
   return { runs, left }
 }
 
-export function kindMark(kind: FileDiff['kind']): string {
-  switch (kind) {
-    case 'added':
-      return 'A'
-    case 'deleted':
-      return 'D'
-    case 'renamed':
-      return 'R'
-    case 'copied':
-      return 'C'
-    case 'mode':
-    case 'typechange':
-      return 'T'
-    default:
-      return 'M'
-  }
-}
-
 export function fileLabel(f: FileDiff): string {
   const name = f.oldPath !== undefined && f.oldPath !== f.path ? `${f.oldPath} → ${f.path}` : f.path
   const stat = f.isBinary ? 'bin' : `+${f.added} −${f.deleted}`
-  return `${kindMark(f.kind)} ${name}  ${stat}`
+  return `${f.status} ${name}  ${stat}`
 }

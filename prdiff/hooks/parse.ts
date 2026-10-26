@@ -1,8 +1,6 @@
 // Parsers for `git diff --numstat -z` and `git diff -p`, and the merge of the
 // two into one inventory. Pure: no `$`.
 
-export type FileKind = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'mode' | 'typechange'
-
 export type DiffLine = {
   /** ' ', '+', '-' or '\\' (no newline at end of file). */
   mark: ' ' | '+' | '-' | '\\'
@@ -21,7 +19,8 @@ export type Hunk = {
 export type FileDiff = {
   path: string
   oldPath?: string
-  kind: FileKind
+  /** git's raw status letter: A, C, D, M, R, T, U or X. */
+  status: string
   added: number
   deleted: number
   isBinary: boolean
@@ -171,23 +170,6 @@ export function parseDiff(z: string): { entries: Entry[]; isWhole: boolean } {
   return { entries, isWhole: true }
 }
 
-function kindOf(e: Entry): FileKind {
-  switch (e.status) {
-    case 'A':
-      return 'added'
-    case 'D':
-      return 'deleted'
-    case 'R':
-      return 'renamed'
-    case 'C':
-      return 'copied'
-    case 'T':
-      return 'typechange'
-    default:
-      return e.oldMode !== e.newMode && e.added + e.deleted === 0 && !e.isBinary ? 'mode' : 'modified'
-  }
-}
-
 export function isSubmodule(e: Entry): boolean {
   return e.oldMode === '160000' || e.newMode === '160000'
 }
@@ -199,18 +181,17 @@ export function hasLines(e: Entry): boolean {
 
 /** A file as its entry alone describes it: no hunks yet. */
 export function summaryOf(e: Entry): FileDiff {
-  const kind = kindOf(e)
   const notes = [
-    ...(kind === 'typechange' ? ['file type changed'] : []),
+    ...(e.status === 'T' ? ['file type changed'] : []),
     ...(e.status === 'M' && e.oldMode !== e.newMode ? [`mode ${e.oldMode} → ${e.newMode}`] : []),
-    ...(e.score !== undefined && (kind === 'renamed' || kind === 'copied') ? [`similarity index ${e.score}%`] : []),
+    ...(e.score !== undefined && (e.status === 'R' || e.status === 'C') ? [`similarity index ${e.score}%`] : []),
     ...(e.isBinary ? ['binary file'] : []),
     ...(isSubmodule(e) ? [`submodule ${e.oldId.slice(0, 7)} → ${e.newId.slice(0, 7)}`] : []),
   ]
   return {
     path: clean(e.path),
     oldPath: e.oldPath === undefined ? undefined : clean(e.oldPath),
-    kind,
+    status: e.status,
     added: e.added,
     deleted: e.deleted,
     isBinary: e.isBinary,

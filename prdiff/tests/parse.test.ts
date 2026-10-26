@@ -26,16 +26,16 @@ index 1111111..2222222 100644
  five
 `
 
-test('the raw records name every file, its kind, its counts and its notes', () => {
+test('the raw records name every file, its status, its counts and its notes', () => {
   const { entries, isWhole } = parseDiff(REAL)
   expect(isWhole).toBe(true)
-  expect(entries.map(summaryOf).map(f => [f.path, f.oldPath, f.kind, f.added, f.deleted, f.isBinary, f.notes])).toEqual([
-    ['bin', undefined, 'modified', 0, 0, true, ['binary file']],
-    ['f', undefined, 'typechange', 1, 1, false, ['file type changed']],
-    ['m.txt', undefined, 'modified', 1, 0, false, []],
-    ['new one.txt', undefined, 'added', 1, 0, false, []],
-    ['say "hi".txt', 'ren.txt', 'renamed', 0, 0, false, ['similarity index 100%']],
-    ['with space.txt', undefined, 'mode', 0, 0, false, ['mode 100644 → 100755']],
+  expect(entries.map(summaryOf).map(f => [f.path, f.oldPath, f.status, f.added, f.deleted, f.isBinary, f.notes])).toEqual([
+    ['bin', undefined, 'M', 0, 0, true, ['binary file']],
+    ['f', undefined, 'T', 1, 1, false, ['file type changed']],
+    ['m.txt', undefined, 'M', 1, 0, false, []],
+    ['new one.txt', undefined, 'A', 1, 0, false, []],
+    ['say "hi".txt', 'ren.txt', 'R', 0, 0, false, ['similarity index 100%']],
+    ['with space.txt', undefined, 'M', 0, 0, false, ['mode 100644 → 100755']],
   ])
   // Records cut short are reported, not half read.
   expect(parseDiff(REAL.slice(0, REAL.indexOf('ren.txt'))).isWhole).toBe(false)

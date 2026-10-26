@@ -31,7 +31,7 @@ function pr(n: number) {
 }
 
 /** What the next answers hold: how many files a PR has, and whether a file read fails. */
-const state: { files: number; failRead: boolean | string; readGate?: Promise<void> } = { files: 2, failRead: false }
+const state: { files: number; failRead: boolean | string; readGate?: Promise<void>; patch?: string } = { files: 2, failRead: false }
 
 /** Answers the host commands loadDiff makes; PR 1's view waits on `gate`. */
 function answer(argv: readonly string[], gate: Promise<void>): Promise<ReturnType<typeof result>> | ReturnType<typeof result> {
@@ -45,9 +45,10 @@ function answer(argv: readonly string[], gate: Promise<void>): Promise<ReturnTyp
   if (s.includes(' ls-remote ')) return result(argv.slice(argv.indexOf('ls-remote') + 2).map(n => `${'c'.repeat(40)}\t${n}`).join('\n'))
   if (s.includes(' fetch ')) return result('')
   if (s.includes('merge-base')) return result('m'.repeat(40))
-  if (s.includes('--raw')) return result(state.files === 0 ? '' : inv(['src/one.ts', 'src/two.ts'], 1, 1))
+  if (s.includes('--raw')) return result(state.files === 0 ? '' : inv(['src/one.ts', 'src/two.ts', ...Array.from({ length: state.files - 2 }, (_, i) => `src/f${i}.ts`)], 1, 1))
   if (state.failRead && s.endsWith(':src/one.ts')) return result(typeof state.failRead === 'string' ? state.failRead : 'fatal: bad object', 128)
   if (state.readGate && s.endsWith('.ts') && s.includes(':src/')) return state.readGate.then(() => answer(argv, gate))
+  if (state.patch !== undefined && s.endsWith(':src/one.ts')) return result(state.patch)
   if (s.endsWith(':src/one.ts')) return result('diff --git a/old-src/one.ts b/new-src/one.ts\n--- a/old-src/one.ts\n+++ b/new-src/one.ts\n@@ -1 +1 @@\n-old\n+new\n')
   if (s.endsWith(':src/two.ts')) return result('diff --git a/old-src/two.ts b/new-src/two.ts\n--- a/old-src/two.ts\n+++ b/new-src/two.ts\n@@ -1 +1 @@\n-two\n+TWO\n')
   return result(`unexpected ${s}`, 2)
@@ -257,4 +258,21 @@ test('an error line of any length is clipped to the row and counted with everyth
   expect([...texts, ...labels].reduce((n, t) => n + t.length, 0)).toBeLessThanOrEqual(100_000)
   await ui.unmount()
   state.failRead = false
+})
+
+test('a file of many tiny hunks leaves the list its share: each drawn string is charged once', async ($, on) => {
+  state.files = 200
+  state.patch = 'diff --git a/x b/x\n--- a/x\n+++ b/x\n' + Array.from({ length: 20_000 }, (_, i) => `@@ -${i + 1} +${i + 1} @@\n-a\n+b\n`).join('')
+  engine(on)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run(args('2'))
+  const ui = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /^1\/200 /)
+  const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+  const codes = (await ui.findAll({ type: 'Code' })).map(c => String(c.props.source))
+  const labels = (await ui.findAll({ type: 'Button' })).map(b => String(b.props.label ?? b.text))
+  expect(labels.filter(l => /src\//.test(l)).length).toBeGreaterThan(100)
+  expect([...texts, ...codes, ...labels].reduce((n, t) => n + t.length, 0)).toBeLessThanOrEqual(100_000)
+  await ui.unmount()
+  state.files = 2
+  state.patch = undefined
 })

@@ -1,7 +1,7 @@
 // What one drawing of a file carries, under the engine's limit on a drawn
 // tree. Pure: no `$`.
 
-import { hunkSource, type FileDiff } from './parse.ts'
+import { clean, hunkSource, type FileDiff } from './parse.ts'
 
 /** The engine's limit on the text of one drawing: strings, Code sources, Button labels, Box keys. */
 export const CHAR_BUDGET = 100_000
@@ -44,7 +44,7 @@ export function drawn(f: FileDiff, width: number, b: Budget, keep = 0): { runs: 
       left += lines.length
       continue
     }
-    const title = clip(`${hunk.header} ${hunk.section}`, width)
+    const title = clip(clean(`${hunk.header} ${hunk.section}`), width)
     const run = (n: number): Run => ({ title, source: hunkSource(lines.slice(0, n)) })
     const room = b.left - keep
     // The most lines of this hunk that still fit.

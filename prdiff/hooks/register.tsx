@@ -205,8 +205,11 @@ export const register: Register = on => {
     ]
     const leftNote = (n: number) => `  ${n} more lines of this file are not drawn`
     const body = got ? drawn(got.file, width, b, LIST_BUDGET + leftNote(got.file.added + got.file.deleted).length) : undefined
+    // drawn() produced and charged each hunk's title and source; they are drawn as given.
     const hunks = (body?.runs ?? []).map(r => [
-      line(r.title, { color: 'subtle' }),
+      <Text wrap="truncate-end" color="subtle">
+        {r.title}
+      </Text>,
       <Code source={r.source} format="diff" path={shown?.path} wrap="truncate-end" />,
     ])
     const rest = body !== undefined && body.left > 0 && line(leftNote(body.left), { dimColor: true })

@@ -35,6 +35,13 @@ let picked: { gen: number; index: number } | undefined
 // A file's entry is its read: in flight until `got` is set; a failed read leaves no entry.
 let held: { gen: number; data: DiffData; files: Map<number, { read: Promise<void>; got?: { file: FileDiff; isCut: boolean } }> } | undefined
 
+/** Writes the diff state for load `gen`, only while the stored state is still that load's; false when another load wrote since. */
+async function putFor($: EngineInterface, gen: number, value: PrdiffDiff): Promise<boolean> {
+  const now = await $.state.get(diffRef)
+  if (now.value?.gen !== gen) return false
+  return (await $.state.set(diffRef, value, { ifVersion: now.version })).isSet
+}
+
 /** Runs what a command or a press asks for; its failure, whatever step it came from, is drawn in the pane. */
 async function act($: EngineInterface, fn: () => Promise<void>): Promise<void> {
   try {
@@ -55,11 +62,10 @@ async function openDiff($: EngineInterface, number: number, byPerson = false): P
     const data = await loadDiff(runner($), number, { ownSsh })
     if (gen !== diffGen) return
     held = { gen, data, files: new Map() }
-    await $.state.set(diffRef, { status: 'ready', gen, number })
+    if (!(await putFor($, gen, { status: 'ready', gen, number }))) return
     if (data.entries.length > 0) await openFile($, 0, byPerson)
   } catch (err) {
-    if (gen !== diffGen) return
-    await $.state.set(diffRef, { status: 'error', gen, number, error: message(err) })
+    await putFor($, gen, { status: 'error', gen, number, error: message(err) })
   }
 }
 
@@ -93,8 +99,8 @@ async function openFile($: EngineInterface, index: number, byPerson = false): Pr
   }
   const reading = entry
   const show = async (file: NonNullable<PrdiffDiff['file']>) => {
-    if (diffGen !== gen || picked?.gen !== gen || picked.index !== index) return
-    await $.state.set(diffRef, { status: 'ready', gen, number: cur.data.number, file })
+    if (picked?.gen !== gen || picked.index !== index) return
+    await putFor($, gen, { status: 'ready', gen, number: cur.data.number, file })
   }
   const read = async () => {
     if (reading.got) return show({ index, status: 'ready' })

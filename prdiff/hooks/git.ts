@@ -2,7 +2,7 @@
 // base being the PR's own baseRefName. Every host command goes through the
 // injected `run`, so tests answer it without a repository.
 
-import { fileFor, parseDiff, type Entry, type FileDiff } from './parse.ts'
+import { fileFor, hasLines, parseDiff, summaryOf, type Entry, type FileDiff } from './parse.ts'
 
 export type RunResult = {
   exitCode: number
@@ -189,12 +189,17 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   const notes: string[] = []
   if (mergeBase === headOid) notes.push(`the PR head is already in ${pr.baseRefName}: merged?`)
   const ends = [mergeBase, headOid]
-  const inventory = await must(quiet, 'git diff', [...git, ...DIFF, '--raw', '--numstat', '-z', ...ends], 120_000)
+  const inventory = await must(quiet, 'git diff', [...git, ...DIFF, '--raw', '--no-abbrev', '--numstat', '-z', ...ends], 120_000)
   const { entries, isWhole } = parseDiff(inventory.stdout)
   if (!isWhole || inventory.isStdoutTruncated) throw new StepError('git diff', 'file list over 4 MiB was cut')
+  // An added or deleted file is diffed against the empty blob, written once.
+  let empty: Promise<string> | undefined
   const readFile = async (e: Entry) => {
-    const paths = e.oldPath !== undefined ? [e.oldPath, e.path] : [e.path]
-    const r = await must(quiet, 'git diff', [...git, '--literal-pathspecs', ...DIFF, '-p', ...ends, '--', ...paths], 120_000)
+    if (!hasLines(e)) return { file: summaryOf(e), isCut: false }
+    const blank = () => (empty ??= must(quiet, 'git hash-object', [...git, 'hash-object', '-w', '-t', 'blob', '/dev/null']).then(r => r.stdout.trim()))
+    const old = e.status === 'A' ? await blank() : e.oldId
+    const now = e.status === 'D' ? await blank() : e.newId
+    const r = await must(quiet, 'git diff', [...git, ...DIFF, old, now], 120_000)
     return { file: fileFor(e, r.stdout), isCut: r.isStdoutTruncated }
   }
 

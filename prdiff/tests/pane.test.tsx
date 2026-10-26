@@ -16,7 +16,7 @@ const PANE = {
 
 /** The `--raw --numstat -z` records of `paths`, each added or changed by `added`/`deleted` lines. */
 const inv = (paths: string[], added = 1, deleted = 0) =>
-  paths.map(p => `:100644 100644 1111111 2222222 M\0${p}\0`).join('') + paths.map(p => `${added}\t${deleted}\t${p}\0`).join('') + '\0'
+  paths.map(p => `:100644 100644 old-${p} new-${p} M\0${p}\0`).join('') + paths.map(p => `${added}\t${deleted}\t${p}\0`).join('') + '\0'
 
 const result = (stdout: string, exitCode = 0) => ({ exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false })
 
@@ -36,8 +36,8 @@ function answer(argv: readonly string[], gate: Promise<void>): Promise<ReturnTyp
   if (s.includes(' fetch ')) return result('')
   if (s.includes('merge-base')) return result('m'.repeat(40))
   if (s.includes('--raw')) return result(inv(['src/one.ts', 'src/two.ts'], 1, 1))
-  if (s.endsWith('-- src/one.ts')) return result('diff --git a/src/one.ts b/src/one.ts\n--- a/src/one.ts\n+++ b/src/one.ts\n@@ -1 +1 @@\n-old\n+new\n')
-  if (s.endsWith('-- src/two.ts')) return result('diff --git a/src/two.ts b/src/two.ts\n--- a/src/two.ts\n+++ b/src/two.ts\n@@ -1 +1 @@\n-two\n+TWO\n')
+  if (s.endsWith('old-src/one.ts new-src/one.ts')) return result('diff --git a/src/one.ts b/src/one.ts\n--- a/src/one.ts\n+++ b/src/one.ts\n@@ -1 +1 @@\n-old\n+new\n')
+  if (s.endsWith('old-src/two.ts new-src/two.ts')) return result('diff --git a/src/two.ts b/src/two.ts\n--- a/src/two.ts\n+++ b/src/two.ts\n@@ -1 +1 @@\n-two\n+TWO\n')
   return result(`unexpected ${s}`, 2)
 }
 
@@ -92,7 +92,7 @@ test('/prdiff N lists the PR\'s files and draws the first one', async ($, on) =>
 test('j and a file in the list each draw that file, read only when it is opened', async ($, on) => {
   const reads: string[] = []
   engine(on, Promise.resolve(), argv => {
-    if (argv.includes('-p')) reads.push(String(argv.at(-1)))
+    if (String(argv.at(-1)).startsWith('new-')) reads.push(String(argv.at(-1)).slice(4))
   })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await $.command.run(args('2'))

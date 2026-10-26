@@ -18,7 +18,7 @@ so uncommitted work stays `/diff`'s.
 | The base | the tip of the PR's own `baseRefName` on the remote, read with `git ls-remote` and fetched by its id |
 | The head | the tip of `refs/pull/<n>/head`, read and fetched the same way |
 | The files | `git diff --raw --numstat <merge-base(base, head)> <head>`, read once: renames, binary files, type and mode changes listed |
-| One file's lines | `git diff -p <merge-base> <head> -- <that file>`, read when the file is opened |
+| One file's lines | `git diff <old blob> <new blob>`, the two blob ids from the file's raw record (the empty blob for an added or deleted file), read when the file is opened; binary files, submodules and mode-only changes have none to read |
 
 The fetch brings in objects only: no ref, branch, tag or `FETCH_HEAD` is
 written. The remote used is the one whose URL path

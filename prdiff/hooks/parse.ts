@@ -119,6 +119,9 @@ export type Entry = {
   score?: number
   oldMode: string
   newMode: string
+  /** The blob (or, for a submodule, commit) ids on each side; all zeros where the side is absent. */
+  oldId: string
+  newId: string
   path: string
   oldPath?: string
   added: number
@@ -135,18 +138,20 @@ export function parseDiff(z: string): { entries: Entry[]; isWhole: boolean } {
   const entries: Entry[] = []
   let i = 0
   while (parts[i]?.startsWith(':')) {
-    const m = /^:(\d+) (\d+) \S+ \S+ ([A-Z])(\d*)$/.exec(parts[i] ?? '')
+    const m = /^:(\d+) (\d+) (\S+) (\S+) ([A-Z])(\d*)$/.exec(parts[i] ?? '')
     if (!m) return { entries, isWhole: false }
-    const status = m[3] ?? 'M'
+    const status = m[5] ?? 'M'
     const two = status === 'R' || status === 'C'
     const first = parts[i + 1]
     const second = two ? parts[i + 2] : undefined
     if (first === undefined || (two && second === undefined)) return { entries, isWhole: false }
     entries.push({
       status,
-      score: m[4] ? Number(m[4]) : undefined,
+      score: m[6] ? Number(m[6]) : undefined,
       oldMode: m[1] ?? '',
       newMode: m[2] ?? '',
+      oldId: m[3] ?? '',
+      newId: m[4] ?? '',
       path: second ?? first,
       oldPath: two ? first : undefined,
       added: 0,
@@ -183,6 +188,15 @@ function kindOf(e: Entry): FileKind {
   }
 }
 
+export function isSubmodule(e: Entry): boolean {
+  return e.oldMode === '160000' || e.newMode === '160000'
+}
+
+/** Whether the entry has lines to read: neither binary nor a submodule, and its content changed. */
+export function hasLines(e: Entry): boolean {
+  return !e.isBinary && !isSubmodule(e) && e.oldId !== e.newId
+}
+
 /** A file as its entry alone describes it: no hunks yet. */
 export function summaryOf(e: Entry): FileDiff {
   const kind = kindOf(e)
@@ -191,6 +205,7 @@ export function summaryOf(e: Entry): FileDiff {
     ...(e.status === 'M' && e.oldMode !== e.newMode ? [`mode ${e.oldMode} → ${e.newMode}`] : []),
     ...(e.score !== undefined && (kind === 'renamed' || kind === 'copied') ? [`similarity index ${e.score}%`] : []),
     ...(e.isBinary ? ['binary file'] : []),
+    ...(isSubmodule(e) ? [`submodule ${e.oldId.slice(0, 7)} → ${e.newId.slice(0, 7)}`] : []),
   ]
   return {
     path: clean(e.path),
@@ -204,7 +219,7 @@ export function summaryOf(e: Entry): FileDiff {
   }
 }
 
-/** One entry's file from the patch read for that entry alone (for a type change, two sections). */
+/** One entry's file from the patch of its two blobs. */
 export function fileFor(e: Entry, patch: string): FileDiff {
   const f = summaryOf(e)
   const secs = sections(patch)

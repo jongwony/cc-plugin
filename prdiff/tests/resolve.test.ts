@@ -9,7 +9,7 @@ const PATCH = 'diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n'
 
 /** The `--raw --numstat -z` records of modified `paths`, as git writes them ahead of the patch. */
 const inv = (paths: string[]) =>
-  paths.map(p => `:100644 100644 1111111 2222222 M\0${p}\0`).join('') + paths.map(p => `1\t1\t${p}\0`).join('') + '\0'
+  paths.map(p => `:100644 100644 old-${p} new-${p} M\0${p}\0`).join('') + paths.map(p => `1\t1\t${p}\0`).join('') + '\0'
 
 /** A repository that answers by the command's shape; records every argv. */
 function fakeRepo(overrides: Record<string, RunResult> = {}) {
@@ -73,20 +73,53 @@ test('a failed fetch or merge-base is reported with its step, not swallowed', as
   await expect(loadDiff(m.run, 7)).rejects.toThrow('git merge-base: no common ancestor of feat/a and the PR head')
 })
 
-test('a file is read on its own, by literal pathspec, and a patch cut at 4 MiB is kept as far as it arrived', async () => {
-  const { run, calls } = fakeRepo({ '-- x': ok(PATCH) })
+test('a file is read as the diff of its two blobs, with no pathspec', async () => {
+  const z = (n: number) => '0'.repeat(n)
+  const records = [
+    `:100644 100644 old-x new-x M\0x\0`,
+    `:000000 100644 ${z(40)} new-a A\0a\0`,
+    `:100644 000000 old-d ${z(40)} D\0d\0`,
+    `:100644 100755 same same M\0m\0`,
+    `:100644 100644 old-b new-b M\0b\0`,
+    `:160000 160000 aaaaaaaaaa bbbbbbbbbb M\0sub\0`,
+  ].join('') + ['1\t1\tx', '1\t0\ta', '0\t1\td', '0\t0\tm', '-\t-\tb', '1\t1\tsub', ''].join('\0')
+  const { run, calls } = fakeRepo({
+    '--raw': ok(records),
+    'hash-object -w -t blob /dev/null': ok('e'.repeat(40) + '\n'),
+    'old-x new-x': ok(PATCH),
+    ' new-a': ok(''),
+    'old-d ': ok(''),
+  })
   const d = await loadDiff(run, 7)
-  expect(calls.some(c => c.includes('-p'))).toBe(false)
+  const read = async (path: string) => {
+    const e = d.entries.find(x => x.path === path)
+    if (!e) throw new Error(path)
+    return d.readFile(e)
+  }
+  expect((await read('x')).file.hunks.length).toBe(1)
+  await read('a')
+  await read('d')
+  const diffs = calls.filter(c => c.includes('diff') && !c.includes('--raw')).map(c => c.slice(-2))
+  expect(diffs).toEqual([['old-x', 'new-x'], ['e'.repeat(40), 'new-a'], ['old-d', 'e'.repeat(40)]])
+  // No pathspec reaches git: a path is never read as magic, a glob or a directory.
+  expect(calls.some(c => c.includes('--'))).toBe(false)
+  // Mode-only, binary and submodule entries have no lines to read.
+  const before = calls.length
+  expect((await read('m')).file.notes).toEqual(['mode 100644 → 100755'])
+  expect((await read('b')).file.notes).toEqual(['binary file'])
+  expect((await read('sub')).file.notes).toEqual(['submodule aaaaaaa → bbbbbbb'])
+  expect(calls.length).toBe(before)
+  // The empty blob is written once for the load.
+  expect(calls.filter(c => c.includes('hash-object')).length).toBe(1)
+})
+
+test('a file patch cut at 4 MiB is kept as far as it arrived; a file list cut there is reported', async () => {
+  const cut = fakeRepo({ 'old-x new-x': { ...ok(PATCH.slice(0, PATCH.indexOf('+b'))), isStdoutTruncated: true } })
+  const d = await loadDiff(cut.run, 7)
   const e = d.entries[0]
   if (!e) throw new Error('no entry')
-  const got = await d.readFile(e)
-  expect([got.file.hunks.length, got.isCut]).toEqual([1, false])
-  // File names are never read as pathspec magic or globs.
-  expect(calls.find(c => c.at(-1) === 'x' && c.at(-2) === '--')).toContain('--literal-pathspecs')
-  const cut = fakeRepo({ '-- x': { ...ok(PATCH.slice(0, PATCH.indexOf('+b'))), isStdoutTruncated: true } })
-  const c = await (await loadDiff(cut.run, 7)).readFile(e)
+  const c = await d.readFile(e)
   expect([c.file.hunks[0]?.lines.map(l => l.mark + l.text), c.isCut]).toEqual([['-a'], true])
-  // The file list itself over 4 MiB is reported, not half read.
   const long = fakeRepo({ '--raw': { ...ok(inv(['x'])), isStdoutTruncated: true } })
   await expect(loadDiff(long.run, 7)).rejects.toThrow('git diff: file list over 4 MiB was cut')
 })
@@ -133,7 +166,7 @@ function rejecting(run: Run, match: string): Run {
 
 test('a command that never answers fails the load, or the file read, under its step', async () => {
   await expect(loadDiff(rejecting(fakeRepo().run, '--raw'), 7)).rejects.toThrow('git diff: process.run: timed out')
-  const d = await loadDiff(rejecting(fakeRepo().run, '-- x'), 7)
+  const d = await loadDiff(rejecting(fakeRepo().run, 'old-x new-x'), 7)
   const e = d.entries[0]
   if (!e) throw new Error('no entry')
   await expect(d.readFile(e)).rejects.toThrow('git diff: process.run: timed out')
@@ -152,7 +185,7 @@ test('the fetch skips submodules, and every git command from it on runs prompt-f
     seen.push({ s: argv.join(' '), t, env })
     return run(argv, t, env)
   }
-  const d = await loadDiff(record(fakeRepo({ '-- x': ok(PATCH) }).run), 7)
+  const d = await loadDiff(record(fakeRepo({ 'old-x new-x': ok(PATCH) }).run), 7)
   const e = d.entries[0]
   if (!e) throw new Error('no entry')
   await d.readFile(e)
@@ -162,7 +195,7 @@ test('the fetch skips submodules, and every git command from it on runs prompt-f
   expect(after.length).toBeGreaterThan(3)
   expect(after.every(c => c.env?.GIT_TERMINAL_PROMPT === '0')).toBe(true)
   const budget = (match: string) => seen.find(c => c.s.includes(match))?.t
-  expect(budget('-- x')).toBe(120_000)
+  expect(budget('old-x new-x')).toBe(120_000)
 })
 
 test('a failure names its error line, not a warning printed ahead of it', async () => {

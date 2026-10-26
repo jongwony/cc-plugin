@@ -185,6 +185,15 @@ export const register: Register = on => {
         </Text>
       ) : null
     }
+    // An error wraps, so its diagnostics stay readable; it is cut only where the budget, less the list's share, ends.
+    const problem = (text: string) => {
+      const shown = clip(clean(text), Math.max(0, b.left - LIST_BUDGET))
+      return shown !== '' && b.take(shown) ? (
+        <Text wrap="wrap" color="error">
+          {shown}
+        </Text>
+      ) : null
+    }
     const button = (key: string, hotkey: string, label: string, press: () => Promise<void>) =>
       b.take(label) ? <Button key={key} plain hotkey={hotkey} label={label} onPress={() => start($, press())} /> : null
     const d = await read($, diff)
@@ -215,7 +224,7 @@ export const register: Register = on => {
         isMine && d.status === 'loading'
           ? line(`Loading #${d.number}…`, { dimColor: true })
           : isMine && d.status === 'error'
-            ? line(`#${d.number}: ${d.error ?? ''}`, { color: 'error' })
+            ? problem(`#${d.number}: ${d.error ?? ''}`)
             : d.number > 0
               ? line(`#${d.number} is not loaded. Press r to load it.`, { dimColor: true })
               : line('Run /prdiff <PR number> to open one.', { dimColor: true })
@@ -234,8 +243,8 @@ export const register: Register = on => {
       shown && line(`${at + 1}/${count} ${fileLabel(shown)}`, { bold: true }),
       ...(shown?.notes ?? []).map(n => line(`  ${n}`, { dimColor: true })),
       f?.status === 'loading' && line('Loading…', { dimColor: true }),
-      f?.status === 'error' && line(f.error ?? '', { color: 'error' }),
-      f?.fault !== undefined && line(f.fault, { color: 'error' }),
+      f?.status === 'error' && problem(f.error ?? ''),
+      f?.fault !== undefined && problem(f.fault),
       got?.isCut === true && line('  patch over 4 MiB: only its start was read', { dimColor: true }),
     ]
     const body = got ? drawn(got.file, width, b, LIST_BUDGET) : undefined

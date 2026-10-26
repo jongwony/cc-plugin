@@ -244,18 +244,24 @@ test('picking a file whose read is still running does not read it again', async 
   await ui.unmount()
 })
 
-test('an error line of any length is clipped to the row and counted with everything else drawn', async ($, on) => {
-  state.failRead = `fatal: ${'x'.repeat(200_000)}`
+test('an error wraps whole so its diagnostics show, and is counted with everything else drawn', async ($, on) => {
+  const tail = 'refs/pull/2/head on origin has xxxxxxx, fork has none'
+  state.failRead = `fatal: ${'x'.repeat(200)} ${tail}`
   engine(on)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await $.command.run(args('2'))
   const ui = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /^git diff: fatal: x/)
-  const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-  const labels = (await ui.findAll({ type: 'Button' })).map(t => String(t.props.label ?? t.text))
-  const longest = Math.max(...texts.map(t => t.length))
-  expect(longest).toBeLessThanOrEqual(PANE.props.bodyColumns + 1)
-  expect([...texts, ...labels].reduce((n, t) => n + t.length, 0)).toBeLessThanOrEqual(100_000)
+  const error = await ui.find({ type: 'Text', text: /^git diff: fatal: x/ })
+  expect([error?.props.wrap, String(error?.text).endsWith(tail)]).toEqual(['wrap', true])
   await ui.unmount()
+  // One of any length is cut where the budget ends, never past it.
+  state.failRead = `fatal: ${'x'.repeat(200_000)}`
+  await $.command.run(args('2'))
+  const big = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /^git diff: fatal: x/)
+  const texts = (await big.findAll({ type: 'Text' })).map(t => t.text)
+  const labels = (await big.findAll({ type: 'Button' })).map(t => String(t.props.label ?? t.text))
+  expect([...texts, ...labels].reduce((n, t) => n + t.length, 0)).toBeLessThanOrEqual(100_000)
+  await big.unmount()
   state.failRead = false
 })
 

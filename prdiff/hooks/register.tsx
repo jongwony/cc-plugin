@@ -79,7 +79,7 @@ async function openDiff($: EngineInterface, number: number): Promise<void> {
     await putFor($, gen, { status: 'error', gen, number, owner: self, error: message(err) })
     return
   }
-  if (data.entries.length > 0) await openFile($, 0)
+  if (data.entries.length > 0) await openFile($, { index: 0, gen })
 }
 
 
@@ -106,7 +106,7 @@ async function openFile($: EngineInterface, target: Target): Promise<void> {
   try {
     const started = await update($, now => {
       if (now.gen !== gen || now.status !== 'ready') return undefined
-      index = targetIndex(now.file?.index, target, count)
+      index = targetIndex(now.gen, now.file?.index, target, count)
       if (index < 0 || index >= count) return undefined
       if (now.file?.index === index && now.file.status !== 'error' && cur.files.has(index)) return undefined
       return { ...now, file: { index, pick: (now.file?.pick ?? 0) + 1, status: cur.files.get(index)?.got ? 'ready' : 'loading' } }
@@ -267,7 +267,7 @@ export const register: Register = on => {
       b,
     )
     const list = shownList.labels.map((label, i) => (
-      <Button key={`goto:${i}`} plain onPress={() => start($, openFile($, i))}>
+      <Button key={`goto:${i}`} plain onPress={() => start($, openFile($, { index: i, gen: cur.gen }))}>
         {label}
       </Button>
     ))

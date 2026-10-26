@@ -90,8 +90,14 @@ test('the last label is drawn when it fits, with no room kept for a note it woul
 })
 
 test('j and k step within the files; from no open file they land on the first or the last', () => {
-  expect(targetIndex(undefined, { step: 1 }, 5)).toBe(0)
-  expect(targetIndex(undefined, { step: -1 }, 5)).toBe(4)
-  expect([targetIndex(2, { step: 1 }, 5), targetIndex(4, { step: 1 }, 5), targetIndex(0, { step: -1 }, 5)]).toEqual([3, 4, 0])
-  expect(targetIndex(1, 3, 5)).toBe(3)
+  expect(targetIndex(7, undefined, { step: 1 }, 5)).toBe(0)
+  expect(targetIndex(7, undefined, { step: -1 }, 5)).toBe(4)
+  expect([targetIndex(7, 2, { step: 1 }, 5), targetIndex(7, 4, { step: 1 }, 5), targetIndex(7, 0, { step: -1 }, 5)]).toEqual([3, 4, 0])
 })
+
+test('a list entry opens its file only in the load it was drawn for', () => {
+  expect(targetIndex(7, 1, { index: 3, gen: 7 }, 5)).toBe(3)
+  // Drawn for load 6, pressed after a reload made load 7: it names no file of load 7.
+  expect(targetIndex(7, 1, { index: 3, gen: 6 }, 5)).toBe(-1)
+})
+

@@ -97,16 +97,17 @@ function moreFiles(n: number): string {
   return `${n} more files; j and k reach them`
 }
 
-/** A file to open: its index, or a step from the file open now. */
-export type Target = number | { step: 1 | -1 }
+/** A file to open: an index in the load it was drawn for, or a step from the file open now. */
+export type Target = { index: number; gen: number } | { step: 1 | -1 }
 
 /**
- * The index `target` names among `count` files, with `open` the index open
- * now: a step stays within the files, and a step from no open file lands on
- * the first (`+1`) or the last (`-1`).
+ * The index `target` names among the `count` files of load `gen`, with
+ * `open` the index open now, or -1 when it names none: an index drawn for
+ * another load names none; a step stays within the files, and a step from no
+ * open file lands on the first (`+1`) or the last (`-1`).
  */
-export function targetIndex(open: number | undefined, target: Target, count: number): number {
-  if (typeof target === 'number') return target
+export function targetIndex(gen: number, open: number | undefined, target: Target, count: number): number {
+  if ('index' in target) return target.gen === gen ? target.index : -1
   if (open === undefined) return target.step > 0 ? 0 : count - 1
   return Math.min(count - 1, Math.max(0, open + target.step))
 }

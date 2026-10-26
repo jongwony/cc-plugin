@@ -74,7 +74,12 @@ function hunksOf(patch: string, isCut: boolean): { hunks: Hunk[]; eol: boolean }
     // empty context line written without its space; otherwise it is the
     // patch's trailing newline.
     const mark = line === '' && oldLeft > 0 && newLeft > 0 ? ' ' : line[0]
-    if (mark !== ' ' && mark !== '+' && mark !== '-' && mark !== '\\') continue
+    const owed = mark === ' ' ? oldLeft > 0 && newLeft > 0 : mark === '-' ? oldLeft > 0 : mark === '+' ? newLeft > 0 : mark === '\\'
+    // A hunk ends when its declared counts are used up; what follows is not its content.
+    if (!owed) {
+      hunk = undefined
+      continue
+    }
     hunk.lines.push({ mark, text: clean(line.slice(1)), oldNo, newNo })
     if (mark === '-' || mark === '+') {
       const cr = raw.endsWith('\r')

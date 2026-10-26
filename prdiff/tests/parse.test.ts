@@ -6,8 +6,11 @@ import { clean, fileFor, hunkSource, parseDiff, summaryOf, type Entry } from '..
 // `ren.txt` renamed to `say "hi".txt`, and a mode change on `with space.txt`.
 const REAL = ":100644 100644 bdc955b7b2e610ad5a72302b139a2e6cb325519a 8835708590a9afa236e1bbad18df9d23de82ccd3 M\u0000bin\u0000:100644 120000 587be6b4c3f93f93c489c0111bba5596147a26cb 347bda8b202a5db796d1fe649680232fde0f6c3a T\u0000f\u0000:100644 100644 422c2b7ab3b3c668038da977e4e93a5fc623169c de980441c3ab03a8c07dda1ad27b8a11f39deb1e M\u0000m.txt\u0000:000000 100644 0000000000000000000000000000000000000000 3e757656cf36eca53338e520d134963a44f793f8 A\u0000new one.txt\u0000:100644 100644 4286f428e3b19fe84de503916ce0e7dc8deefea1 4286f428e3b19fe84de503916ce0e7dc8deefea1 R100\u0000ren.txt\u0000say \"hi\".txt\u0000:100644 100755 3367afdbbf91e638efe983616377c60477cc6612 3367afdbbf91e638efe983616377c60477cc6612 M\u0000with space.txt\u0000-\t-\tbin\u00001\t1\tf\u00001\t0\tm.txt\u00001\t0\tnew one.txt\u00000\t0\t\u0000ren.txt\u0000say \"hi\".txt\u00000\t0\twith space.txt\u0000"
 
-// The blob-pair patch git 2.54 writes for that type change (`git diff <old blob> <new blob>`).
-const TYPECHANGE = "diff --git a/587be6b b/347bda8\nindex 587be6b..347bda8 100644\n--- a/587be6b\n+++ b/347bda8\n@@ -1 +1 @@\n-x\n+m.txt\n\\ No newline at end of file\n"
+// The patch git 2.54 writes for that type change, read as `git diff <base>:f <head>:f`: two sections.
+const TYPECHANGE = "diff --git a/f b/f\ndeleted file mode 100644\nindex 587be6b..0000000\n--- a/f\n+++ /dev/null\n@@ -1 +0,0 @@\n-x\ndiff --git a/f b/f\nnew file mode 120000\nindex 0000000..347bda8\n--- /dev/null\n+++ b/f\n@@ -0,0 +1 @@\n+m.txt\n\\ No newline at end of file\n"
+
+// The same change read as a pair of blob ids: one section.
+const TYPECHANGE_BLOBS = "diff --git a/587be6b b/347bda8\nindex 587be6b..347bda8 100644\n--- a/587be6b\n+++ b/347bda8\n@@ -1 +1 @@\n-x\n+m.txt\n\\ No newline at end of file\n"
 
 /** A one-entry diff: a modified `path` with the given patch. */
 function one(path: string, patch: string, added = 1, deleted = 1) {
@@ -44,10 +47,14 @@ test('the raw records name every file, its status, its counts and its notes', ()
   expect(parseDiff(REAL.slice(0, REAL.indexOf('ren.txt'))).isWhole).toBe(false)
 })
 
-test('a type change reads as one hunk of its two blobs', () => {
+test('a type change read by path draws both of its sections, and nothing of the second header', () => {
   const { entries } = parseDiff(REAL)
   const f = fileFor(entries[1] as Entry, TYPECHANGE)
-  expect(f.hunks.flatMap(h => h.lines.map(l => l.mark + l.text))).toEqual(['-x', '+m.txt', '\\ No newline at end of file'])
+  expect(f.hunks.map(h => [h.header, h.lines.map(l => l.mark + l.text)])).toEqual([
+    ['@@ -1 +0,0 @@', ['-x']],
+    ['@@ -0,0 +1 @@', ['+m.txt', '\\ No newline at end of file']],
+  ])
+  expect(fileFor(entries[1] as Entry, TYPECHANGE_BLOBS).hunks.length).toBe(1)
   expect(f.notes).toEqual(['mode 100644 → 120000'])
 })
 

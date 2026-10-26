@@ -245,3 +245,15 @@ test('the empty blob is written only when the repository lacks it, and a failed 
   expect(writes).toBe(2)
   expect(calls.some(c => c.includes('diff') && c.at(-2) === 'e'.repeat(40))).toBe(true)
 })
+
+test('a type change is read by path and drawn in its two halves', async () => {
+  const records = ':100644 120000 old-f new-f T\0f\0' + '1\t1\tf\0'
+  const sections = "diff --git a/f b/f\ndeleted file mode 100644\nindex 587be6b..0000000\n--- a/f\n+++ /dev/null\n@@ -1 +0,0 @@\n-x\ndiff --git a/f b/f\nnew file mode 120000\nindex 0000000..347bda8\n--- /dev/null\n+++ b/f\n@@ -0,0 +1 @@\n+m.txt\n\\ No newline at end of file\n"
+  const f = `${'m'.repeat(40)}:f ${'h'.repeat(40)}:f`
+  const { run } = fakeRepo({ '--raw': ok(records), [f]: ok(sections) })
+  const d = await loadDiff(run, 7)
+  const e = d.entries[0]
+  if (!e) throw new Error('no entry')
+  const { file } = await d.readFile(e)
+  expect(file.hunks.flatMap(h => h.lines.map(l => l.mark + l.text))).toEqual(['-x', '+m.txt', '\\ No newline at end of file'])
+})

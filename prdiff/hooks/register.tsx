@@ -91,7 +91,6 @@ async function openFile($: EngineInterface, index: number): Promise<void> {
   const e = cur?.data.entries[index]
   if (!cur || cur.gen !== diffGen || !e) return
   const gen = cur.gen
-  // The pick is stored with the state it changes: a pick of the file already open or being read changes nothing.
   const started = await update($, now => {
     if (now.gen !== gen || now.status !== 'ready') return undefined
     if (now.file?.index === index && now.file.status !== 'error' && cur.files.has(index)) return undefined
@@ -166,7 +165,7 @@ export const register: Register = on => {
     const button = (key: string, hotkey: string, label: string, press: () => Promise<void>) =>
       b.take(label) ? <Button key={key} plain hotkey={hotkey} label={label} onPress={() => act($, press)} /> : null
     const [d, failed] = await Promise.all([read($, diff), read($, failure)])
-    // A state this module instance did not write (a hot reload empties `held`) is not loaded.
+    // A state this module instance did not write is not loaded.
     const isMine = d.gen === diffGen
     const cur = isMine && d.status === 'ready' && held?.gen === d.gen ? held : undefined
     const f = cur ? d.file : undefined

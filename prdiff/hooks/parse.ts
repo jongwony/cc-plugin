@@ -1,5 +1,5 @@
 // Parsers for a PR's inventory (`git diff --raw --no-abbrev --numstat -z`)
-// and for one file's patch (`git diff <old blob> <new blob>`). Pure: no `$`.
+// and for one file's patch (`git diff <base>:<old path> <head>:<path>`). Pure: no `$`.
 
 export type DiffLine = {
   /** ' ', '+' or '-'. */
@@ -38,7 +38,7 @@ export function clean(text: string): string {
 const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$/
 
 /**
- * The hunks of one blob pair's patch, and whether a removed and an added line
+ * The hunks of one file's patch, and whether a removed and an added line
  * differ only in a trailing CR. A cut patch's last line is incomplete and is
  * not read.
  */
@@ -193,7 +193,7 @@ export function summaryOf(e: Entry): FileDiff {
   }
 }
 
-/** One entry's file from the patch of its two blobs; `isCut` when the read stopped at 4 MiB. */
+/** One entry's file from its patch; `isCut` when the read stopped at 4 MiB. */
 export function fileFor(e: Entry, patch: string, isCut = false): FileDiff {
   const f = summaryOf(e)
   const { hunks, eol } = hunksOf(patch, isCut)

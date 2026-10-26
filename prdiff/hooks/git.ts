@@ -1,6 +1,6 @@
 // Resolving a PR to a local cumulative diff: merge-base(base, head)...head,
 // base being the PR's own baseRefName. Every host command goes through the
-// injected `run`, so tests answer it without a repository.
+// injected `run`.
 
 import { fileFor, hasLines, parseDiff, summaryOf, type Entry, type FileDiff } from './parse.ts'
 
@@ -165,7 +165,7 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   const env = await noPrompts(run, git, known.ownSsh)
   // Git commands from the listing on run under `env`.
   const quiet: Run = (argv, timeoutMs) => run(argv, timeoutMs, env)
-  // The tips are read once and fetched by id, so no ref is written.
+  // Both tips come from one ls-remote and are fetched by id; no ref is written.
   const baseName = `refs/heads/${pr.baseRefName}`
   const headName = `refs/pull/${number}/head`
   const listed = await must(quiet, 'git ls-remote', [...git, 'ls-remote', remote, baseName, headName], 120_000)
@@ -205,7 +205,7 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   }
   const readFile = async (e: Entry) => {
     if (!hasLines(e)) return { file: summaryOf(e), isCut: false }
-    // `<rev>:<path>` names each side by its path too, so the path's attributes apply as in the inventory.
+    // Each side is `<rev>:<path>`: the path's attributes apply to the read.
     const old = e.status === 'A' ? await blank() : `${mergeBase}:${e.oldPath ?? e.path}`
     const now = e.status === 'D' ? await blank() : `${headOid}:${e.path}`
     const r = await must(quiet, 'git diff', [...git, ...DIFF, old, now], 120_000)

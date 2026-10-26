@@ -31,8 +31,8 @@ export type Run = { title: string; source: string }
 
 /**
  * The hunks of `f` drawn from its start, charged to `b` while `keep` of it
- * stays unspent, each line clipped to `width` (a row drawn `truncate-end`
- * shows no more), and how many content lines are left out. A hunk the
+ * stays unspent, each line clipped to `width`, and how many content lines
+ * are left out. A hunk the
  * budget reaches is drawn as far as it fits.
  */
 export function drawn(f: FileDiff, width: number, b: Budget, keep = 0): { runs: Run[]; left: number; note?: string } {

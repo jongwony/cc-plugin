@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { decideMode, listPrs, loadDiff, mapLimit, remoteFor, repoOfUrl, type Run, type RunResult } from '../hooks/git.ts'
+import { listPrs, loadDiff, mapLimit, remoteFor, repoOfUrl, type Run, type RunResult } from '../hooks/git.ts'
 
 const ok = (stdout: string): RunResult => ({ exitCode: 0, stdout, stderr: '', isStdoutTruncated: false })
 const fail = (stderr: string): RunResult => ({ exitCode: 1, stdout: '', stderr, isStdoutTruncated: false })
@@ -27,22 +27,13 @@ function fakeRepo(current: number | undefined, overrides: Record<string, RunResu
       return ok(argv.slice(argv.indexOf('ls-remote') + 2).map(n => `${n.startsWith('refs/pull/') ? 'h'.repeat(40) : 'b'.repeat(40)}\t${n}`).join('\n') + '\n')
     }
     if (s.includes(' fetch ')) return ok('')
-    if (s.includes('rev-parse --verify --quiet HEAD')) return ok('l'.repeat(40) + '\n')
     if (s.includes('merge-base')) return ok('m'.repeat(40) + '\n')
     if (s.includes('--raw')) return ok(inv(['x']) + PATCH)
     if (s.includes(' -p ')) return ok(PATCH)
-    if (s.includes('ls-files --others')) return ok('new.txt\0')
-    if (s.includes('--no-index')) return { ...ok('diff --git a/new.txt b/new.txt\n--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1 @@\n+n\n'), exitCode: 1 }
     return fail(`unexpected: ${s}`)
   }
   return { run, calls }
 }
-
-test('working-tree changes join only when gh names this checkout the same PR', () => {
-  expect(decideMode(7, 7)).toBe('worktree')
-  expect(decideMode(8, 7)).toBe('committed')
-  expect(decideMode(undefined, 7)).toBe('committed')
-})
 
 test('the remote is the one whose URL is the repository gh resolved, origin first, whatever the host', () => {
   expect(repoOfUrl('git@github.com:Me/R.git')).toBe('me/r')
@@ -77,7 +68,6 @@ test('per-file reads keep their order and stay under the concurrency limit', asy
 test('a PR not checked out: both tips listed once, fetched by id without a ref, diffed merge-base..head', async () => {
   const { run, calls } = fakeRepo(undefined)
   const d = await loadDiff(run, 7)
-  expect(d.mode).toBe('committed')
   expect(d.baseRefName).toBe('feat/a')
   const listed = calls.find(c => c.includes('ls-remote')) ?? []
   expect(listed.slice(-3)).toEqual(['origin', 'refs/heads/feat/a', 'refs/pull/7/head'])
@@ -91,19 +81,6 @@ test('a PR not checked out: both tips listed once, fetched by id without a ref, 
   const diffed = calls.find(c => c.includes('--raw')) ?? []
   expect(diffed.slice(-2)).toEqual(['m'.repeat(40), 'h'.repeat(40)])
   expect(d.files.map(f => f.path)).toEqual(['x'])
-  expect(calls.some(c => c.includes('ls-files'))).toBe(false)
-})
-
-test('the checked-out PR: merge-base against the working tree, untracked files added', async () => {
-  const { run, calls } = fakeRepo(7)
-  const d = await loadDiff(run, 7)
-  expect(d.mode).toBe('worktree')
-  const diffed = calls.find(c => c.includes('--raw')) ?? []
-  expect(diffed.at(-1)).toBe('m'.repeat(40))
-  expect(d.files.map(f => [f.path, f.kind])).toEqual([['x', 'modified'], ['new.txt', 'untracked']])
-  expect(d.notes.some(n => n.includes('differs from the PR head'))).toBe(true)
-  // An untracked file is read as its bytes, never through a textconv filter.
-  expect(calls.find(c => c.includes('--no-index'))).toContain('--no-textconv')
 })
 
 test('a failed fetch or merge-base is reported with its step, not swallowed', async () => {
@@ -146,42 +123,6 @@ test('a remote still on the URL from before a rename or transfer is found throug
   await expect(loadDiff(none.run, 7)).rejects.toThrow('remote: no git remote points at O/R')
 })
 
-test('an untracked path git cannot read is listed as not read, not as an empty file', async () => {
-  const { run } = fakeRepo(7, {
-    'ls-files --others': ok('locked.txt\0new.txt\0'),
-    '-- /dev/null locked.txt': { exitCode: 128, stdout: '', stderr: 'error: open("locked.txt"): Permission denied\nfatal: cannot hash locked.txt\n', isStdoutTruncated: false },
-  })
-  const d = await loadDiff(run, 7)
-  const emb = d.files.find(f => f.path === 'locked.txt')
-  expect(emb?.notes).toContain('content not read')
-  expect(d.files.find(f => f.path === 'new.txt')?.notes).toEqual(['untracked'])
-})
-
-test('a warning beside an untracked patch, such as a line-ending one, is not a failure', async () => {
-  const warned = fakeRepo(7, {
-    '--no-index': {
-      exitCode: 1,
-      stdout: 'diff --git a/new.txt b/new.txt\n--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1 @@\n+n\n',
-      stderr: "warning: in the working copy of 'new.txt', LF will be replaced by CRLF the next time Git touches it\n",
-      isStdoutTruncated: false,
-    },
-  })
-  const d = await loadDiff(warned.run, 7)
-  expect(d.files.find(f => f.path === 'new.txt')?.notes).toEqual(['untracked'])
-  expect(d.files.find(f => f.path === 'new.txt')?.added).toBe(1)
-  // Line-ending conversion is pinned off for the read itself.
-  expect(warned.calls.find(c => c.includes('--no-index'))?.join(' ')).toContain('-c core.autocrlf=false -c core.safecrlf=false')
-})
-
-test('an untracked list over 4 MiB lists what arrived whole instead of failing the load', async () => {
-  const { run } = fakeRepo(7, {
-    'ls-files --others': { exitCode: 0, stdout: 'a.txt\0b.txt\0c.t', stderr: '', isStdoutTruncated: true },
-  })
-  const d = await loadDiff(run, 7)
-  expect(d.files.filter(f => f.kind === 'untracked').map(f => f.path)).toEqual(['a.txt', 'b.txt'])
-  expect(d.notes.some(n => n.includes('more untracked files not listed'))).toBe(true)
-})
-
 test('with one owner/repo on two hosts, the remote on the PR\'s host is used', async () => {
   const v = 'origin\thttps://github.com/o/r.git (fetch)\nwork\tgit@ghe.corp.com:o/r.git (fetch)\n'
   expect(remoteFor(v, 'o/r', 'ghe.corp.com')).toBe('work')
@@ -214,14 +155,6 @@ test('the fetch asks nothing on the terminal, and leaves a user\'s own ssh comma
   expect(envs[2]).toEqual({ GIT_TERMINAL_PROMPT: '0' })
 })
 
-test('the checked-out PR lists and fetches only its base, so a remote without pull refs still loads', async () => {
-  const { run, calls } = fakeRepo(7)
-  const d = await loadDiff(run, 7)
-  expect(d.mode).toBe('worktree')
-  expect(calls.find(c => c.includes('ls-remote'))?.slice(-2)).toEqual(['origin', 'refs/heads/feat/a'])
-  expect(calls.find(c => c.includes('fetch'))?.slice(-2)).toEqual(['origin', 'b'.repeat(40)])
-})
-
 /** `run`, except that a command whose text holds `match` rejects as a timeout does. */
 function rejecting(run: Run, match: string): Run {
   return async (argv, t, env) => {
@@ -229,19 +162,6 @@ function rejecting(run: Run, match: string): Run {
     return run(argv, t, env)
   }
 }
-
-test('a gh lookup of the current PR that never answers leaves it unknown, not the load failed', async () => {
-  const run = rejecting(fakeRepo(7).run, 'gh pr view --json number')
-  const d = await loadDiff(run, 7)
-  expect(d.mode).toBe('committed')
-  const listed = rejecting(async argv => {
-    const s = argv.join(' ')
-    if (s.startsWith('gh repo view')) return ok(JSON.stringify({ nameWithOwner: 'o/r' }))
-    if (s.startsWith('gh pr list')) return ok('[]')
-    return fail(`unexpected: ${s}`)
-  }, 'gh pr view --json number')
-  expect((await listPrs(listed)).current).toBe(undefined)
-})
 
 test('a command that never answers fails the load under its step; one file of the fallback only marks that file', async () => {
   await expect(loadDiff(rejecting(fakeRepo(undefined).run, '--raw'), 7)).rejects.toThrow('git diff: process.run: timed out')
@@ -264,23 +184,13 @@ test('no merge-base in a shallow clone says so instead of an exit code', async (
   await expect(loadDiff(unrelated.run, 7)).rejects.toThrow('git merge-base: no common ancestor of feat/a and the PR head')
 })
 
-test('a nested repository among the untracked files is listed as one, never diffed', async () => {
-  const { run, calls } = fakeRepo(7, { 'ls-files --others': ok('sub/\0new.txt\0') })
-  const d = await loadDiff(run, 7)
-  expect(d.files.filter(f => f.kind === 'untracked').map(f => [f.path, f.notes])).toEqual([
-    ['sub/', ['untracked', 'nested repository, not diffed']],
-    ['new.txt', ['untracked']],
-  ])
-  expect(calls.some(c => c.includes('--no-index') && c.at(-1) === 'sub/')).toBe(false)
-})
-
 test('the fetch skips submodules, and every git command from it on runs prompt-free with the diff budget', async () => {
   const seen: Array<{ s: string; t?: number; env?: Record<string, string> }> = []
   const record = (run: Run): Run => async (argv, t, env) => {
     seen.push({ s: argv.join(' '), t, env })
     return run(argv, t, env)
   }
-  const big = fakeRepo(7, { '-- x': ok(PATCH) })
+  const big = fakeRepo(undefined, { '-- x': ok(PATCH) })
   const cut: Run = async (argv, t, env) => {
     const s = argv.join(' ')
     if (s.includes('--raw')) return { ...ok(inv(['x'])), isStdoutTruncated: true }
@@ -290,26 +200,10 @@ test('the fetch skips submodules, and every git command from it on runs prompt-f
   const at = seen.findIndex(c => c.s.includes(' fetch '))
   expect(seen[at]?.s).toContain('--no-recurse-submodules')
   const after = seen.slice(at).filter(c => c.s.startsWith('git '))
-  expect(after.length).toBeGreaterThan(5)
+  expect(after.length).toBeGreaterThan(3)
   expect(after.every(c => c.env?.GIT_TERMINAL_PROMPT === '0')).toBe(true)
   const budget = (match: string) => seen.find(c => c.s.includes(match))?.t
   expect(budget('-- x')).toBe(120_000)
-  expect(budget('ls-files --others')).toBe(120_000)
-  expect(budget('--no-index')).toBe(120_000)
-})
-
-test('a checkout gh matches by branch name whose HEAD lacks the PR head gets the PR\'s commits, said so', async () => {
-  const { run, calls } = fakeRepo(7, { '--is-ancestor': fail('') })
-  const d = await loadDiff(run, 7)
-  expect(d.mode).toBe('committed')
-  expect(d.notes).toEqual(["this checkout is matched to #7 by its branch, but its HEAD does not hold the PR head: showing the PR's commits"])
-  expect(calls.some(c => c.includes('ls-files'))).toBe(false)
-  const held = fakeRepo(7, { '--is-ancestor': ok('') })
-  expect((await loadDiff(held.run, 7)).mode).toBe('worktree')
-  // Another PR checked out asks nothing.
-  const other = fakeRepo(8)
-  await loadDiff(other.run, 7)
-  expect(other.calls.some(c => c.includes('--is-ancestor'))).toBe(false)
 })
 
 test('a failure names its error line, not a warning printed ahead of it', async () => {

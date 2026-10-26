@@ -210,7 +210,7 @@ export const register: Register = on => {
     const head = [
       line(`#${dd.number} ${dd.title}`, { bold: true }),
       line(
-        `${dd.baseRefName} ← ${dd.headRefName} · ${dd.mode} · ${dd.files.length} files +${added} −${deleted} · base ${dd.mergeBase.slice(0, 7)}`,
+        `${dd.baseRefName} ← ${dd.headRefName} · ${dd.files.length} files +${added} −${deleted} · base ${dd.mergeBase.slice(0, 7)}`,
         { dimColor: true },
       ),
       ...dd.notes.map(n => line(n, { color: 'warning' })),

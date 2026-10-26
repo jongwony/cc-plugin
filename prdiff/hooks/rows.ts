@@ -217,8 +217,6 @@ export function kindMark(kind: FileDiff['kind']): string {
     case 'mode':
     case 'typechange':
       return 'T'
-    case 'untracked':
-      return '?'
     default:
       return 'M'
   }

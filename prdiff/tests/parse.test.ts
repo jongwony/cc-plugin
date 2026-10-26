@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { clean, fileFor, filesOf, hunkSource, parseDiff, untrackedFile, type Entry } from '../hooks/parse.ts'
+import { clean, fileFor, filesOf, hunkSource, parseDiff, type Entry } from '../hooks/parse.ts'
 
 // `git diff --raw --numstat -p -z -M` from git 2.54, over: a binary edit, a
 // file turned symlink, an edit, an added `new one.txt`, `ren.txt` renamed to
@@ -79,11 +79,6 @@ test('control characters are replaced, carriage returns dropped', () => {
   expect(clean('a\u0007b\nc')).toBe('a�b�c')
   const f = one('w.txt', 'diff --git a/w.txt b/w.txt\n--- a/w.txt\n+++ b/w.txt\n@@ -1 +1 @@\n-old\r\n+new\u001b[0m\r\n')
   expect(f.hunks[0]?.lines.map(l => l.text)).toEqual(['old', 'new�[0m'])
-})
-
-test('an untracked file counts its added lines', () => {
-  const f = untrackedFile('notes.md', 'diff --git a/notes.md b/notes.md\nnew file mode 100644\n--- /dev/null\n+++ b/notes.md\n@@ -0,0 +1,2 @@\n+a\n+b\n')
-  expect([f.kind, f.added, f.hunks.length]).toEqual(['untracked', 2, 1])
 })
 
 test('an empty context line written without its space still counts as context', () => {

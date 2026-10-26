@@ -1,7 +1,7 @@
 // Parsers for `git diff --numstat -z` and `git diff -p`, and the merge of the
 // two into one inventory. Pure: no `$`.
 
-export type FileKind = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'mode' | 'typechange' | 'untracked'
+export type FileKind = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'mode' | 'typechange'
 
 export type DiffLine = {
   /** ' ', '+', '-' or '\\' (no newline at end of file). */
@@ -240,16 +240,6 @@ export function filesOf(entries: readonly Entry[], patch: string, isCut = false)
 /** One entry's file from a patch read for that entry alone. */
 export function fileFor(e: Entry, patch: string): FileDiff {
   return fileOf(e, sections(patch))
-}
-
-/** A file the working tree holds that git does not track, shown as added. */
-export function untrackedFile(path: string, patch: string | undefined, note?: string): FileDiff {
-  const secs = patch ? sections(patch) : []
-  const hunks = secs[0]?.hunks ?? []
-  const added = hunks.reduce((n, h) => n + h.lines.filter(l => l.mark === '+').length, 0)
-  const isBinary = secs[0]?.isBinary ?? false
-  const notes = ['untracked', ...(isBinary ? ['binary file'] : []), ...(note ? [note] : [])]
-  return { path: clean(path), kind: 'untracked', added, deleted: 0, isBinary, notes, hunks }
 }
 
 /**

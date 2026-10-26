@@ -3,7 +3,7 @@
 // injected `run`, so tests answer it without a repository.
 
 import type { PrdiffPr } from '../types'
-import { fileFor, filesOf, parseDiff, untrackedFile, type FileDiff } from './parse.ts'
+import { fileFor, filesOf, parseDiff, type FileDiff } from './parse.ts'
 
 export type RunResult = {
   exitCode: number
@@ -27,25 +27,19 @@ export type PrList = {
 /** Open PRs listed, at most. */
 export const LIST_LIMIT = 100
 
-export type Mode = 'worktree' | 'committed'
-
 export type DiffData = {
   number: number
   title: string
   url: string
   baseRefName: string
   headRefName: string
-  mode: Mode
   mergeBase: string
   headOid: string
   files: FileDiff[]
   notes: string[]
 }
 
-/** Untracked files read into a worktree diff, at most. */
-export const MAX_UNTRACKED = 200
-
-/** Per-file patch reads (over-4-MiB fallback, untracked files) in flight at once. */
+/** Per-file patch reads (over-4-MiB fallback) in flight at once. */
 export const CONCURRENCY = 8
 
 const GIT = ['git', '--no-optional-locks']
@@ -147,14 +141,6 @@ export async function listPrs(unguarded: Run): Promise<PrList> {
 }
 
 /**
- * Working-tree changes belong to the diff only when `gh` itself says the
- * current checkout is this PR; a matching branch name alone is not identity.
- */
-export function decideMode(current: number | undefined, number: number, holdsHead = true): Mode {
-  return current === number && holdsHead ? 'worktree' : 'committed'
-}
-
-/**
  * `owner/repo`, lowercased, from a remote URL in https, ssh or scp form: the
  * path's last two segments, whatever the host (an ssh alias, GHE, port 443).
  */
@@ -243,13 +229,12 @@ export type Known = {
 
 export async function loadDiff(unguarded: Run, number: number, known: Known = {}): Promise<DiffData> {
   const run = guarded(unguarded)
-  const [prOut, topOut, repo, current] = await Promise.all([
+  const [prOut, topOut, repo] = await Promise.all([
     must(run, 'gh pr view', [
       'gh', 'pr', 'view', String(number), '--json', 'number,title,url,headRefName,headRefOid,baseRefName',
     ]),
     must(run, 'git rev-parse', [...GIT, 'rev-parse', '--show-toplevel']),
     known.repo !== undefined ? Promise.resolve(known.repo) : repoOf(run),
-    currentPr(run),
   ])
   const pr = json<{
     number: number
@@ -264,29 +249,21 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   const remote = remoteFor(remoteV, repo, hostOfUrl(pr.url)) ?? (await renamedRemote(run, remoteV, repo))
   if (!remote) throw new StepError('remote', `no git remote points at ${repo}`)
 
-  // Worktree mode also needs local HEAD to hold the PR head.
-  const holdsHead =
-    current !== number || (await run([...git, 'merge-base', '--is-ancestor', pr.headRefOid, 'HEAD'])).exitCode === 0
-  const mode = decideMode(current, number, holdsHead)
   const env = await noPrompts(run, git, known.ownSsh)
   // Git commands from the listing on run under `env`.
   const quiet: Run = (argv, timeoutMs) => run(argv, timeoutMs, env)
-  // The tips are read once and fetched by id, so no ref is written; worktree mode needs only the base.
+  // The tips are read once and fetched by id, so no ref is written.
   const baseName = `refs/heads/${pr.baseRefName}`
   const headName = `refs/pull/${number}/head`
-  const listed = await quiet([...git, 'ls-remote', remote, baseName, ...(mode === 'worktree' ? [] : [headName])], 120_000)
+  const listed = await quiet([...git, 'ls-remote', remote, baseName, headName], 120_000)
   if (listed.exitCode !== 0) throw new StepError('git ls-remote', firstLine(listed))
   const tip = (name: string) => listed.stdout.split('\n').find(l => l.endsWith(`\t${name}`))?.split('\t')[0]
   const baseOid = tip(baseName)
   if (!baseOid) throw new StepError('git ls-remote', `${remote} has no branch ${pr.baseRefName}`)
-  const fetchedHead = mode === 'worktree' ? undefined : tip(headName)
-  if (mode === 'committed' && !fetchedHead) throw new StepError('git ls-remote', `${remote} has no ${headName}`)
-  const fetch = await quiet(
-    [...git, 'fetch', '--quiet', '--no-write-fetch-head', '--no-recurse-submodules', remote, baseOid, ...(fetchedHead ? [fetchedHead] : [])],
-    120_000,
-  )
+  const headOid = tip(headName)
+  if (!headOid) throw new StepError('git ls-remote', `${remote} has no ${headName}`)
+  const fetch = await quiet([...git, 'fetch', '--quiet', '--no-write-fetch-head', '--no-recurse-submodules', remote, baseOid, headOid], 120_000)
   if (fetch.exitCode !== 0) throw new StepError('git fetch', firstLine(fetch))
-  const headOid = fetchedHead ?? (await must(quiet, 'git rev-parse HEAD', [...git, 'rev-parse', '--verify', '--quiet', 'HEAD^{commit}'])).stdout.trim()
   const based = await quiet([...git, 'merge-base', baseOid, headOid])
   if (based.exitCode === 1 && based.stdout.trim() === '' && based.stderr.trim() === '') {
     const shallow = (await quiet([...git, 'rev-parse', '--is-shallow-repository'])).stdout.trim() === 'true'
@@ -299,14 +276,8 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   const mergeBase = based.stdout.trim()
 
   const notes: string[] = []
-  if (!holdsHead) notes.push(`this checkout is matched to #${number} by its branch, but its HEAD does not hold the PR head: showing the PR's commits`)
-  if (mode === 'committed' && mergeBase === headOid) notes.push(`the PR head is already in ${pr.baseRefName}: merged?`)
-  if (mode === 'worktree') {
-    notes.push('includes uncommitted changes of this checkout')
-    if (headOid !== pr.headRefOid) notes.push(`local HEAD ${headOid.slice(0, 7)} differs from the PR head ${pr.headRefOid.slice(0, 7)}`)
-  }
-  // Worktree mode: the merge-base against the working tree.
-  const ends = mode === 'worktree' ? [mergeBase] : [mergeBase, headOid]
+  if (mergeBase === headOid) notes.push(`the PR head is already in ${pr.baseRefName}: merged?`)
+  const ends = [mergeBase, headOid]
   const whole = await quiet([...git, ...DIFF, '--raw', '--numstat', '-p', '-z', ...ends], 120_000)
   if (whole.exitCode !== 0) throw new StepError('git diff', firstLine(whole))
   const { entries, patch, isWhole } = parseDiff(whole.stdout)
@@ -326,34 +297,12 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
     return f
   })
 
-  if (mode === 'worktree') {
-    const ls = await quiet([...git, 'ls-files', '--others', '--exclude-standard', '-z'], 120_000)
-    if (ls.exitCode !== 0) throw new StepError('git ls-files', firstLine(ls))
-    // A list cut at 4 MiB keeps only its whole names.
-    const named = ls.stdout.split('\0')
-    const others = (ls.isStdoutTruncated ? named.slice(0, -1) : named).filter(p => p !== '')
-    const read = await mapLimit(others.slice(0, MAX_UNTRACKED), CONCURRENCY, async p => {
-      // `ls-files --others` names a nested repository as its directory.
-      if (p.endsWith('/')) return untrackedFile(p, undefined, 'nested repository, not diffed')
-      // Exit 1 is a patch when it wrote one and no `error:`/`fatal:` line.
-      const r = await quiet([...git, '-c', 'core.autocrlf=false', '-c', 'core.safecrlf=false',
-        'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', p], 120_000)
-      const failed = /^(?:error|fatal): /m.test(r.stderr)
-      const ok = !r.isStdoutTruncated && (r.exitCode === 0 || (r.exitCode === 1 && r.stdout !== '' && !failed))
-      return untrackedFile(p, ok ? r.stdout : undefined, ok ? undefined : 'content not read')
-    })
-    files.push(...read)
-    if (others.length > MAX_UNTRACKED) notes.push(`${others.length - MAX_UNTRACKED}${ls.isStdoutTruncated ? '+' : ''} more untracked files not listed`)
-    else if (ls.isStdoutTruncated) notes.push('more untracked files not listed: their list is over 4 MiB')
-  }
-
   return {
     number: pr.number,
     title: pr.title,
     url: pr.url,
     baseRefName: pr.baseRefName,
     headRefName: pr.headRefName,
-    mode,
     mergeBase,
     headOid,
     files,

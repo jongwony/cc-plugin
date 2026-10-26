@@ -50,6 +50,8 @@ test('remotes are tried with URL matches first, origin first within each, then t
   // A partial clone writes its filter after the fetch URL; a name may hold spaces.
   expect(candidates('origin\thttps://github.com/o/r.git (fetch) [blob:none]\norigin\thttps://github.com/o/r.git (push)\n', 'o/r')).toEqual(['origin'])
   expect(candidates('my remote\t/srv/r (fetch)\n', 'o/r')).toEqual(['my remote'])
+  // A local mirror whose path holds a space.
+  expect(candidates('mirror\t/srv/mirror dir/r (fetch)\n', 'o/r')).toEqual(['mirror'])
 })
 
 test('a PR not checked out: both tips listed once, fetched by id without a ref, diffed merge-base..head', async () => {

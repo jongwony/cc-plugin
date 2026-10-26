@@ -97,8 +97,8 @@ export function hostOfUrl(url: string): string | undefined {
 export function remoteRepos(remoteV: string): Array<{ name: string; repo?: string; host?: string }> {
   const out: Array<{ name: string; repo?: string; host?: string }> = []
   for (const line of remoteV.split('\n')) {
-    // `<name>\t<url> (fetch)`, a partial clone's with ` [blob:none]` after it; a name may hold spaces.
-    const m = /^([^\t]+)\t(\S+) \(fetch\)(?: \[[^\]]*\])?$/.exec(line)
+    // `<name>\t<url> (fetch)`, a partial clone's with ` [blob:none]` after it; a name or a URL may hold spaces.
+    const m = /^([^\t]+)\t(.+) \(fetch\)(?: \[[^\]]*\])?$/.exec(line)
     if (m?.[1] && m[2]) out.push({ name: m[1], repo: repoOfUrl(m[2]), host: hostOfUrl(m[2]) })
   }
   return out

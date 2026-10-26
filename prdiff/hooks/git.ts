@@ -198,7 +198,9 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   const notes: string[] = []
   if (mergeBase === headOid) notes.push(`the PR head is already in ${pr.baseRefName}: merged?`)
   const ends = [mergeBase, headOid]
-  const inventory = await must(quiet, 'git diff', [...git, ...DIFF, '--raw', '--no-abbrev', '--numstat', '-z', ...ends], 120_000)
+  // `.gitattributes` comes from the PR head, not the checkout.
+  const atHead = [...git, `--attr-source=${headOid}`]
+  const inventory = await must(quiet, 'git diff', [...atHead, ...DIFF, '--raw', '--no-abbrev', '--numstat', '-z', ...ends], 120_000)
   const { entries, isWhole } = parseDiff(inventory.stdout)
   if (!isWhole || inventory.isStdoutTruncated) throw new StepError('git diff', 'file list over 4 MiB was cut')
   // An added or deleted file's missing side is the empty blob, stored if the repository lacks it.
@@ -209,10 +211,10 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   }
   const readFile = async (e: Entry) => {
     if (!hasLines(e)) return { file: summaryOf(e), isCut: false }
-    // Each side is `<rev>:<path>`: the path's attributes apply to the read.
+    // Each side is `<rev>:<path>`: the path's attributes, from the PR head, apply to the read.
     const old = e.status === 'A' ? await blank() : `${mergeBase}:${e.oldPath ?? e.path}`
     const now = e.status === 'D' ? await blank() : `${headOid}:${e.path}`
-    const r = await must(quiet, 'git diff', [...git, ...DIFF, old, now], 120_000)
+    const r = await must(quiet, 'git diff', [...atHead, ...DIFF, old, now], 120_000)
     return { file: fileFor(e, r.stdout, r.isStdoutTruncated), isCut: r.isStdoutTruncated }
   }
 

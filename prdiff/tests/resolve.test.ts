@@ -297,3 +297,14 @@ test('a remote name is never read as an option', async () => {
     expect(c.indexOf('--')).toBe(c.indexOf(name) - 1)
   }
 })
+
+test('attributes are read from the PR head, in the file list and in each file read', async () => {
+  const { run, calls } = fakeRepo({ [READ_X]: ok(PATCH) })
+  const d = await loadDiff(run, 7)
+  const e = d.entries[0]
+  if (!e) throw new Error('no entry')
+  await d.readFile(e)
+  const diffs = calls.filter(c => c.includes('diff'))
+  expect(diffs.length).toBe(2)
+  expect(diffs.every(c => c.includes(`--attr-source=${'h'.repeat(40)}`))).toBe(true)
+})

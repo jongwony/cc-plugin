@@ -66,8 +66,8 @@ error, or a scroll the engine rejects, shows under that file.
 ## Requirements
 
 - Claude Code with function hooks (mods).
-- `git` 2.29 or newer on `PATH` (`git fetch --no-write-fetch-head` arrived
-  in 2.29). Install it from <https://git-scm.com/downloads>, or with a package
+- `git` 2.40 or newer on `PATH` (`--attr-source`, which reads `.gitattributes`
+  from the PR head, arrived in 2.40). Install it from <https://git-scm.com/downloads>, or with a package
   manager (`brew install git`, `apt install git`).
 - The GitHub CLI `gh` 2.0 or newer on `PATH`, signed in (`gh auth login`).
   Install it from <https://cli.github.com> (`brew install gh`, or the

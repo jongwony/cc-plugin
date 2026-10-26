@@ -44,7 +44,8 @@ async function act($: EngineInterface, fn: () => Promise<void>): Promise<void> {
   }
 }
 
-async function openDiff($: EngineInterface, number: number): Promise<void> {
+/** Loads PR #number and opens its first file; a person's reload also brings the pane to its top, as a pick does. */
+async function openDiff($: EngineInterface, number: number, byPerson = false): Promise<void> {
   diffGen += 1
   const gen = diffGen
   await $.state.set(failureRef, '')
@@ -55,7 +56,7 @@ async function openDiff($: EngineInterface, number: number): Promise<void> {
     if (gen !== diffGen) return
     held = { gen, data, files: new Map() }
     await $.state.set(diffRef, { status: 'ready', gen, number })
-    if (data.entries.length > 0) await openFile($, 0)
+    if (data.entries.length > 0) await openFile($, 0, byPerson)
   } catch (err) {
     if (gen !== diffGen) return
     await $.state.set(diffRef, { status: 'error', gen, number, error: message(err) })
@@ -143,7 +144,7 @@ export const register: Register = on => {
     const f = cur ? d.file : undefined
     const at = f?.index ?? -1
     const count = cur?.data.entries.length ?? 0
-    const reload = d.number > 0 && <Button key="reload" plain hotkey="r" label="reload" onPress={() => act($, () => openDiff($, d.number))} />
+    const reload = d.number > 0 && <Button key="reload" plain hotkey="r" label="reload" onPress={() => act($, () => openDiff($, d.number, true))} />
     const controls = (
       <Box flexDirection="row" gap={1}>
         {count > 0 && <Button key="next" plain hotkey="j" label="next file" onPress={() => act($, () => openFile($, Math.min(count - 1, at + 1), true))} />}

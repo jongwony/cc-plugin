@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, test, type TestBody } from 'claude-code/testing'
 
 const PANE = {
   plugin: 'prdiff',
@@ -34,9 +34,10 @@ function answer(argv: readonly string[], gate: Promise<void>): Promise<ReturnTyp
   if (s.includes('remote -v')) return result('origin\thttps://github.com/o/r.git (fetch)\n')
   if (s.includes(' ls-remote ')) return result(argv.slice(argv.indexOf('ls-remote') + 2).map(n => `${'c'.repeat(40)}\t${n}`).join('\n'))
   if (s.includes(' fetch ')) return result('')
-  if (s.includes('rev-parse --verify')) return result('c'.repeat(40))
   if (s.includes('merge-base')) return result('m'.repeat(40))
-  if (s.includes('--raw')) return result(inv(['src/one.ts'], 1, 1) + 'diff --git a/src/one.ts b/src/one.ts\n--- a/src/one.ts\n+++ b/src/one.ts\n@@ -1 +1 @@\n-old\n+new\n')
+  if (s.includes('--raw')) return result(inv(['src/one.ts', 'src/two.ts'], 1, 1))
+  if (s.endsWith('-- src/one.ts')) return result('diff --git a/src/one.ts b/src/one.ts\n--- a/src/one.ts\n+++ b/src/one.ts\n@@ -1 +1 @@\n-old\n+new\n')
+  if (s.endsWith('-- src/two.ts')) return result('diff --git a/src/two.ts b/src/two.ts\n--- a/src/two.ts\n+++ b/src/two.ts\n@@ -1 +1 @@\n-two\n+TWO\n')
   return result(`unexpected ${s}`, 2)
 }
 
@@ -56,22 +57,55 @@ async function paneWith<M extends { find(q: { type: string; text: RegExp }): Pro
 
 const args = (a: string) => ({ command: 'prdiff', args: a, origin: { kind: 'composer' as const }, presentation: { isFullscreen: true, columns: 160 } })
 
-test('/prdiff N opens one diff as a stream of files', async ($, on) => {
+/** The engine answers every test needs from beneath the plugin. */
+function engine(
+  on: Parameters<TestBody>[1],
+  gate: Promise<void> = Promise.resolve(),
+  saw: (argv: readonly string[]) => void = () => {},
+) {
   on('command.register', () => ({ value: { command: 'prdiff' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('env.get', () => ({ value: undefined }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('process.run', async (_, e) => ({ value: await answer(e.argv, Promise.resolve()) }))
+  on('process.run', async (_, e) => {
+    saw(e.argv)
+    return { value: await answer(e.argv, gate) }
+  })
+}
 
+test('/prdiff N lists the PR\'s files and draws the first one', async ($, on) => {
+  engine(on)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await $.command.run(args('2'))
   for (const surface of ['terminal', 'desktop'] as const) {
-    const ui = await paneWith(() => $.ui.mount({ ...PANE, surface }), /#2 Title 2/)
+    const ui = await paneWith(() => $.ui.mount({ ...PANE, surface }), /^1\/2 /)
+    expect(await ui.find({ type: 'Text', text: /#2 Title 2/ })).toBeDefined()
     expect(await ui.find({ key: 'goto:0' })).toBeDefined()
-    expect(await ui.find({ key: 'file:0' })).toBeDefined()
-    expect(await ui.find({ type: 'Code' })).toBeDefined()
+    expect(await ui.find({ key: 'goto:1' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^1\/2 M src\/one\.ts/ })).toBeDefined()
+    const code = await ui.find({ type: 'Code' })
+    expect(String(code?.props.source)).toBe('@@ -1,1 +1,1 @@\n-old\n+new')
     await ui.unmount()
   }
+})
+
+test('j and a file in the list each draw that file, read only when it is opened', async ($, on) => {
+  const reads: string[] = []
+  engine(on, Promise.resolve(), argv => {
+    if (argv.includes('-p')) reads.push(String(argv.at(-1)))
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run(args('2'))
+  const ui = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /^1\/2 /)
+  expect(reads).toEqual(['src/one.ts'])
+  await ui.press({ key: 'next' })
+  expect(await ui.find({ type: 'Text', text: /^2\/2 M src\/two\.ts/ })).toBeDefined()
+  expect(String((await ui.find({ type: 'Code' }))?.props.source)).toContain('+TWO')
+  await ui.press({ key: 'goto:0' })
+  expect(await ui.find({ type: 'Text', text: /^1\/2 M src\/one\.ts/ })).toBeDefined()
+  // A file already read is not read again.
+  expect(reads).toEqual(['src/one.ts', 'src/two.ts'])
+  await ui.unmount()
 })
 
 test('a slower earlier load never overwrites the PR asked for later', async ($, on) => {
@@ -79,12 +113,7 @@ test('a slower earlier load never overwrites the PR asked for later', async ($, 
   const gate = new Promise<void>(r => {
     release = r
   })
-  on('command.register', () => ({ value: { command: 'prdiff' } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('env.get', () => ({ value: undefined }))
-  on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('process.run', async (_, e) => ({ value: await answer(e.argv, gate) }))
-
+  engine(on, gate)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await $.command.run(args('1'))
   await $.command.run(args('2'))
@@ -98,128 +127,24 @@ test('a slower earlier load never overwrites the PR asked for later', async ($, 
   await after.unmount()
 })
 
-test('scrolling while another PR loads leaves that PR to open at its top', async ($, on) => {
-  let release = () => {}
-  const gate = new Promise<void>(r => {
-    release = r
-  })
-  const many = Array.from({ length: 40 }, (_, i) => `f${i}.txt`)
-  on('command.register', () => ({ value: { command: 'prdiff' } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('env.get', () => ({ value: undefined }))
-  on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('process.run', async (_, e) => {
-    const s = e.argv.join(' ')
-    // PR 1 is long and loads at once; PR 2 waits on the gate.
-    if (s.startsWith('gh pr view 2 ')) await gate
-    if (s.includes('--raw')) {
-      return { value: result(inv(many) + many.map(f => `diff --git a/${f} b/${f}\n--- a/${f}\n+++ b/${f}\n@@ -1 +1,2 @@\n x\n+y\n`).join('')) }
-    }
-    return { value: await answer(e.argv, Promise.resolve()) }
-  })
-
-  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  await $.command.run(args('1'))
-  const ui = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /#1 Title 1/)
-  const second = $.command.run(args('2'))
-  for (let i = 0; i < 200 && !(await ui.find({ type: 'Text', text: /Loading #2/ })); i += 1) await null
-  expect(await ui.find({ type: 'Text', text: /Loading #2/ })).toBeDefined()
-  await ui.press({ key: 'down' })
-  await ui.press({ key: 'next' })
-  for (let i = 0; i < 50; i += 1) await null
-  release()
-  await second
-  for (let i = 0; i < 200 && !(await ui.find({ type: 'Text', text: /#2 Title 2/ })); i += 1) await null
-  expect(await ui.find({ type: 'Text', text: /#2 Title 2/ })).toBeDefined()
-  // The window is at the top: the file line names no file yet.
-  expect(await ui.find({ type: 'Text', text: /^files$/ })).toBeDefined()
-  await ui.unmount()
-})
-
-test('after the pane grows, the first move up starts from the top on screen', async ($, on) => {
-  const lines = Array.from({ length: 200 }, (_, i) => `+l${i}`)
-  on('command.register', () => ({ value: { command: 'prdiff' } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('env.get', () => ({ value: undefined }))
-  on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('process.run', async (_, e) => {
-    const s = e.argv.join(' ')
-    if (s.includes('--raw')) return { value: result(inv(['long.txt'], 200) + `diff --git a/long.txt b/long.txt\n--- a/long.txt\n+++ b/long.txt\n@@ -0,0 +1,200 @@\n${lines.join('\n')}\n`) }
-    return { value: await answer(e.argv, Promise.resolve()) }
-  })
-  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  await $.command.run({ command: 'prdiff', args: '1', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 160 } })
-  const firstLine = async (ui: { find: (q: { type: string }) => Promise<{ props: Record<string, unknown> } | undefined> }) =>
-    String((await ui.find({ type: 'Code' }))?.props.source ?? '').split('\n')[1]
-  const small = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  for (let i = 0; i < 30; i += 1) await small.press({ key: 'down' })
-  await small.unmount()
-  const tall = await $.ui.mount({ ...PANE, props: { ...PANE.props, scroll: { offset: 0, bodyRows: 120 } }, surface: 'terminal' })
-  const before = await firstLine(tall)
-  await tall.press({ key: 'up' })
-  expect(await firstLine(tall)).not.toBe(before)
-  await tall.unmount()
-})
-
 test('/prdiff N returns while its load is still running', async ($, on) => {
   let release = () => {}
   const gate = new Promise<void>(r => {
     release = r
   })
-  on('command.register', () => ({ value: { command: 'prdiff' } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('env.get', () => ({ value: undefined }))
-  on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('process.run', async (_, e) => ({ value: await answer(e.argv, gate) }))
+  engine(on, gate)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   let returned = false
-  const ran = $.command
-    .run({ command: 'prdiff', args: '1', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 160 } })
-    .then(r => {
-      returned = true
-      return r
-    })
+  const ran = $.command.run(args('1')).then(r => {
+    returned = true
+    return r
+  })
   for (let i = 0; i < 200 && !returned; i += 1) await null
   expect(returned).toBe(true)
   release()
   await ran
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  for (let i = 0; i < 200 && !(await ui.find({ type: 'Text', text: /#1 Title 1/ })); i += 1) await null
+  const ui = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /#1 Title 1/)
   expect(await ui.find({ type: 'Text', text: /#1 Title 1/ })).toBeDefined()
-  await ui.unmount()
-})
-
-test('a move still running when another PR opens never writes its top over the new one', async ($, on) => {
-  let release = () => {}
-  const gate = new Promise<void>(r => {
-    release = r
-  })
-  const many = Array.from({ length: 40 }, (_, i) => `f${i}.txt`)
-  on('command.register', () => ({ value: { command: 'prdiff' } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('env.get', () => ({ value: undefined }))
-  on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('process.run', async (_, e) => {
-    const s = e.argv.join(' ')
-    if (s.startsWith('gh pr view 2 ')) await gate
-    if (s.includes('--raw')) {
-      return { value: result(inv(many) + many.map(f => `diff --git a/${f} b/${f}\n--- a/${f}\n+++ b/${f}\n@@ -1 +1,2 @@\n x\n+y\n`).join('')) }
-    }
-    return { value: await answer(e.argv, Promise.resolve()) }
-  })
-  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  await $.command.run({ command: 'prdiff', args: '1', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 160 } })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  for (let i = 0; i < 200 && !(await ui.find({ type: 'Text', text: /#1 Title 1/ })); i += 1) await null
-  const opening = $.command.run({ command: 'prdiff', args: '2', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 160 } })
-  for (let i = 0; i < 20; i += 1) await null
-  const moving = ui.press({ key: 'next' })
-  await Promise.all([moving, opening])
-  release()
-  for (let i = 0; i < 400 && !(await ui.find({ type: 'Text', text: /#2 Title 2/ })); i += 1) await null
-  expect(await ui.find({ type: 'Text', text: /#2 Title 2/ })).toBeDefined()
-  const fl = await ui.find({ type: 'Text', text: /^(files|file \d)/ })
-  expect(fl?.text).toBe('files')
   await ui.unmount()
 })
 

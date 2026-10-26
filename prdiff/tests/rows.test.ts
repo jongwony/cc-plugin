@@ -1,137 +1,53 @@
 import { expect, test } from 'claude-code/testing'
 import type { FileDiff } from '../hooks/parse.ts'
-import { CHAR_BUDGET, MAX_FILE_LINES, TICK, clampTop, clip, fileAt, fit, jump, layout, scrolled, windowOf, windowRows, type Row } from '../hooks/rows.ts'
+import { CHAR_BUDGET, clip, drawn, fitting } from '../hooks/rows.ts'
 
-function file(path: string, lineCount: number, width = 10): FileDiff {
-  const lines = Array.from({ length: lineCount }, (_, i) => ({
-    mark: '+' as const,
-    text: 'x'.repeat(width),
-    oldNo: 1,
-    newNo: i + 1,
-  }))
-  return { path, kind: 'added', added: lineCount, deleted: 0, isBinary: false, notes: [], hunks: [{ header: '@@ -0,0 +1 @@', section: '', lines }] }
+function file(hunks: number, lines: number, width = 10): FileDiff {
+  return {
+    path: 'a',
+    kind: 'added',
+    added: hunks * lines,
+    deleted: 0,
+    isBinary: false,
+    notes: [],
+    hunks: Array.from({ length: hunks }, (_, h) => ({
+      header: `@@ -0,0 +${h * lines + 1},${lines} @@`,
+      section: '',
+      lines: Array.from({ length: lines }, (_, i) => ({ mark: '+' as const, text: 'x'.repeat(width), oldNo: 1, newNo: h * lines + i + 1 })),
+    })),
+  }
 }
 
-const textOf = (_: Exclude<Row, { kind: 'line' }>) => 'label'
-
-test('every file gets a list row, a header row and its lines, in one stream', () => {
-  const files = [file('a', 2), file('b', 3)]
-  const l = layout(files)
-  expect(l.rows.slice(0, 3).map(r => r.kind)).toEqual(['goto', 'goto', 'rule'])
-  expect(l.fileRows).toEqual([3, 8])
-  expect(l.rows[3]).toEqual({ kind: 'file', file: 0 })
-  expect(l.rows[4]).toEqual({ kind: 'hunk', file: 0, hunk: 0 })
+test('a file under the budget is drawn whole, hunk by hunk', () => {
+  const d = drawn(file(3, 5), 80, CHAR_BUDGET)
+  expect(d.runs.map(r => r.lines.length)).toEqual([5, 5, 5])
+  expect(d.left).toBe(0)
 })
 
-test('a file over the line cap is cut with a note saying how much', () => {
-  const l = layout([file('big', MAX_FILE_LINES + 5)])
-  const lines = l.rows.filter(r => r.kind === 'line').length
-  expect(lines).toBe(MAX_FILE_LINES)
-  expect(l.rows.some(r => r.kind === 'note' && r.text === '5 more lines of this file are not drawn')).toBe(true)
+test('a file over the budget is drawn from its start and says how many lines are left out', () => {
+  // Each line costs 10 + 8: a budget of 100 takes five of them.
+  const d = drawn(file(2, 4), 80, 100)
+  expect(d.runs.map(r => r.lines.length)).toEqual([4, 1])
+  expect(d.left).toBe(3)
 })
 
-test('j and k land on the next and previous file header', () => {
-  const l = layout([file('a', 2), file('b', 3), file('c', 1)])
-  expect(jump(l.fileRows, 0, 1)).toBe(l.fileRows[0])
-  expect(jump(l.fileRows, l.fileRows[0] ?? 0, 1)).toBe(l.fileRows[1])
-  expect(jump(l.fileRows, (l.fileRows[1] ?? 0) + 1, -1)).toBe(l.fileRows[1])
-  expect(jump(l.fileRows, l.fileRows[2] ?? 0, 1)).toBe(l.fileRows[2])
-  expect(fileAt(l.fileRows, (l.fileRows[1] ?? 0) + 2)).toBe(1)
-  expect(fileAt(l.fileRows, 0)).toBe(-1)
+test('lines are clipped to the width a row shows, which leaves more of the file under the budget', () => {
+  const d = drawn(file(1, 3, 1000), 20, CHAR_BUDGET)
+  expect(d.runs[0]?.lines.map(l => l.text.length)).toEqual([20, 20, 20])
 })
 
-test('top is clamped to the last full window', () => {
-  expect(clampTop(500, 100, 20)).toBe(80)
-  expect(clampTop(-3, 100, 20)).toBe(0)
-  expect(clampTop(5, 10, 20)).toBe(0)
+test('a "no newline" marker takes nothing from the budget and is never drawn', () => {
+  const f = file(1, 1)
+  f.hunks[0]?.lines.push({ mark: '\\', text: ' No newline at end of file', oldNo: 1, newNo: 2 })
+  expect(drawn(f, 80, CHAR_BUDGET).runs[0]?.lines.map(l => l.mark)).toEqual(['+'])
 })
 
-test('consecutive lines of one hunk become one code piece', () => {
-  const files = [file('a', 4), file('b', 4)]
-  const l = layout(files)
-  const w = windowOf(files, l.rows, l.fileRows[0] ?? 0, 7, 80, textOf)
-  expect(w.pieces.map(p => p.kind === 'code' ? `code${p.lines.length}` : p.row.kind)).toEqual(['file', 'hunk', 'code4', 'rule'])
-  expect(w.rows).toBe(7)
-})
-
-test('the window stays under the character budget whatever the line lengths', () => {
-  const files = [file('wide', 400, 5000)]
-  const l = layout(files)
-  const w = windowOf(files, l.rows, 0, 400, 100_000, textOf)
-  const chars = w.pieces.reduce((n, p) => n + (p.kind === 'code' ? p.lines.reduce((m, x) => m + x.text.length, 0) : 5), 0)
-  expect(chars <= CHAR_BUDGET).toBe(true)
-  expect(w.isCut).toBe(true)
-  const clipped = windowOf(files, l.rows, 0, 50, 120, textOf)
-  expect(clipped.isCut).toBe(false)
-  expect(clipped.pieces.every(p => p.kind !== 'code' || p.lines.every(x => x.text.length <= 120))).toBe(true)
-})
-
-test('a "no newline" marker takes no row in the stream', () => {
-  const f = file('n', 2)
-  f.hunks[0]?.lines.push({ mark: '\\', text: ' No newline at end of file', oldNo: 1, newNo: 3 })
-  const l = layout([f])
-  expect(l.rows.filter(r => r.kind === 'line').length).toBe(2)
-})
-
-test('Home and End reach the stream\'s edges, a page key moves a page, an arrow a row', () => {
-  // The drawing is one row shorter than the pane: contentRows 29, bodyRows 30.
-  const at = (by: number) => scrolled(500, { by, bodyRows: 30, contentRows: 29 }, 24, 2000)
-  expect(at(29)).toBe(2000)
-  expect(at(-29)).toBe(0)
-  expect(at(30)).toBe(522)
-  expect(at(-30)).toBe(478)
-  // An arrow key moves a row.
-  expect(at(1)).toBe(501)
-  expect(at(-1)).toBe(499)
-})
-
-test('j reaches a last file shorter than the window, and the file line then names it', () => {
-  const files = [file('a', 40), file('b', 2)]
-  const l = layout(files)
-  const bodyRows = 20
-  const last = l.fileRows[1] ?? 0
-  const top = clampTop(jump(l.fileRows, l.fileRows[0] ?? 0, 1), l.rows.length, bodyRows, l.fileRows)
-  expect(top).toBe(last)
-  expect(fileAt(l.fileRows, top)).toBe(1)
-})
-
-test('a full drawing is shorter than the pane whenever the head fits, small panes included', () => {
-  for (let head = 5; head <= 12; head += 1) {
-    for (let pane = head + 1; pane <= 60; pane += 1) {
-      expect(head - 1 + windowRows(pane, head)).toBeLessThan(pane)
-    }
-  }
-  // A 10-row pane under an 8-row head: a floor of 3 would draw exactly 10.
-  expect(8 - 1 + windowRows(10, 8)).toBe(9)
-})
-
-test('a label is cut to the cells a row has, wide characters counting two', () => {
-  expect(fit('M src/a.ts  +1 −0', 40)).toBe('M src/a.ts  +1 −0')
-  expect(fit('abcdefghij', 10)).toBe('abcdefghij')
-  expect(fit('abcdefghijk', 10)).toBe('abcdefghi…')
-  // Six wide characters take 12 cells; four fit beside the ellipsis (4 × 2 + 1 ≤ 10).
-  expect(fit('한국어파일명', 10)).toBe('한국어파…')
-  expect(fit('한국어파일', 10)).toBe('한국어파일')
-})
-
-test('a wheel flick summed to contentRows or bodyRows still scrolls by ticks', () => {
-  const pointer = { row: 3, column: 10 }
-  expect(scrolled(500, { by: 29, bodyRows: 30, contentRows: 29, pointer }, 24, 2000)).toBe(500 + 29 * TICK)
-  expect(scrolled(500, { by: -30, bodyRows: 30, contentRows: 29, pointer }, 24, 2000)).toBe(500 - 30 * TICK)
-  // The same distances from the keys (no pointer) stay Home/End and a page.
-  expect(scrolled(500, { by: 29, bodyRows: 30, contentRows: 29 }, 24, 2000)).toBe(2000)
-  expect(scrolled(500, { by: -30, bodyRows: 30, contentRows: 29 }, 24, 2000)).toBe(478)
+test('the file list keeps the labels that fit its budget', () => {
+  expect(fitting(['aa', 'bb', 'cc'], 20)).toBe(2)
+  expect(fitting(['aa', 'bb', 'cc'], 1000)).toBe(3)
 })
 
 test('a line clipped next to an astral character never keeps half of it', () => {
-  const text = 'x'.repeat(9) + '😀' + 'tail'
-  const f = { ...file('a', 1), hunks: [{ header: '@@ -0,0 +1 @@', section: '', lines: [{ mark: '+' as const, text, oldNo: 1, newNo: 1 }] }] }
-  const l = layout([f])
-  const w = windowOf([f], l.rows, 0, l.rows.length, 10, textOf)
-  const code = w.pieces.find(p => p.kind === 'code')
-  const got = code?.kind === 'code' ? code.lines[0]?.text ?? '' : ''
-  expect(got).toBe('x'.repeat(9))
-  expect(/[\ud800-\udbff]$/.test(got)).toBe(false)
   expect(clip('ab😀c', 3)).toBe('ab')
   expect(clip('ab😀c', 4)).toBe('ab😀')
   expect(clip('abc', 5)).toBe('abc')

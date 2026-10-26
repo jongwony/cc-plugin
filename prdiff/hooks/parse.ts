@@ -40,7 +40,6 @@ const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$/
 
 type Section = {
   hunks: Hunk[]
-  isBinary: boolean
   /** A removed and an added line of one hunk differ only in a trailing CR. */
   eol: boolean
 }
@@ -60,7 +59,7 @@ function sections(patch: string): Section[] {
   for (const raw of patch.split('\n')) {
     const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw
     if (line.startsWith('diff --git ') || line.startsWith('diff --cc ')) {
-      cur = { hunks: [], isBinary: false, eol: false }
+      cur = { hunks: [], eol: false }
       hunk = undefined
       out.push(cur)
       continue
@@ -78,10 +77,7 @@ function sections(patch: string): Section[] {
       cur.hunks.push(hunk)
       continue
     }
-    if (!hunk) {
-      if (line.startsWith('Binary files ') || line === 'GIT binary patch') cur.isBinary = true
-      continue
-    }
+    if (!hunk) continue
     // An empty line inside a hunk that still owes lines on both sides is an
     // empty context line written without its space; otherwise it is the
     // patch's trailing newline.
@@ -131,22 +127,21 @@ export type Entry = {
 }
 
 /**
- * `git diff --raw --numstat -p -z`: every raw record, then every numstat
- * record in the same order, then the patch. `isWhole` is false when the
- * output stops inside the records.
+ * `git diff --raw --numstat -z`: every raw record, then every numstat record
+ * in the same order. `isWhole` is false when the output stops inside them.
  */
-export function parseDiff(z: string): { entries: Entry[]; patch: string; isWhole: boolean } {
+export function parseDiff(z: string): { entries: Entry[]; isWhole: boolean } {
   const parts = z.split('\0')
   const entries: Entry[] = []
   let i = 0
   while (parts[i]?.startsWith(':')) {
     const m = /^:(\d+) (\d+) \S+ \S+ ([A-Z])(\d*)$/.exec(parts[i] ?? '')
-    if (!m) return { entries, patch: '', isWhole: false }
+    if (!m) return { entries, isWhole: false }
     const status = m[3] ?? 'M'
     const two = status === 'R' || status === 'C'
     const first = parts[i + 1]
     const second = two ? parts[i + 2] : undefined
-    if (first === undefined || (two && second === undefined)) return { entries, patch: '', isWhole: false }
+    if (first === undefined || (two && second === undefined)) return { entries, isWhole: false }
     entries.push({
       status,
       score: m[4] ? Number(m[4]) : undefined,
@@ -162,17 +157,16 @@ export function parseDiff(z: string): { entries: Entry[]; patch: string; isWhole
   }
   for (const e of entries) {
     const m = /^(-|\d+)\t(-|\d+)\t/.exec(parts[i] ?? '')
-    if (!m) return { entries, patch: '', isWhole: false }
+    if (!m) return { entries, isWhole: false }
     e.isBinary = m[1] === '-' && m[2] === '-'
     e.added = e.isBinary ? 0 : Number(m[1])
     e.deleted = e.isBinary ? 0 : Number(m[2])
     i += parts[i]?.length === m[0].length ? 3 : 1
   }
-  if (parts[i] === '') i += 1
-  return { entries, patch: parts.slice(i).join('\0'), isWhole: true }
+  return { entries, isWhole: true }
 }
 
-function kindOf(e: Entry, hunks: number): FileKind {
+function kindOf(e: Entry): FileKind {
   switch (e.status) {
     case 'A':
       return 'added'
@@ -185,26 +179,18 @@ function kindOf(e: Entry, hunks: number): FileKind {
     case 'T':
       return 'typechange'
     default:
-      return e.oldMode !== e.newMode && hunks === 0 ? 'mode' : 'modified'
+      return e.oldMode !== e.newMode && e.added + e.deleted === 0 && !e.isBinary ? 'mode' : 'modified'
   }
 }
 
-/** Sections an entry takes in the patch: a type change is written as a deletion and an addition. */
-function sectionCount(e: Entry): number {
-  return e.status === 'T' ? 2 : 1
-}
-
-/** One file from its entry and the patch sections git wrote for it. */
-function fileOf(e: Entry, secs: readonly Section[]): FileDiff {
-  const hunks = secs.flatMap(s => s.hunks)
-  const kind = kindOf(e, hunks.length)
-  const isBinary = e.isBinary || secs.some(s => s.isBinary)
+/** A file as its entry alone describes it: no hunks yet. */
+export function summaryOf(e: Entry): FileDiff {
+  const kind = kindOf(e)
   const notes = [
     ...(kind === 'typechange' ? ['file type changed'] : []),
     ...(e.status === 'M' && e.oldMode !== e.newMode ? [`mode ${e.oldMode} → ${e.newMode}`] : []),
     ...(e.score !== undefined && (kind === 'renamed' || kind === 'copied') ? [`similarity index ${e.score}%`] : []),
-    ...(isBinary ? ['binary file'] : []),
-    ...(secs.some(s => s.eol) ? ['line endings changed'] : []),
+    ...(e.isBinary ? ['binary file'] : []),
   ]
   return {
     path: clean(e.path),
@@ -212,40 +198,27 @@ function fileOf(e: Entry, secs: readonly Section[]): FileDiff {
     kind,
     added: e.added,
     deleted: e.deleted,
-    isBinary,
+    isBinary: e.isBinary,
     notes,
-    hunks,
+    hunks: [],
+  }
+}
+
+/** One entry's file from the patch read for that entry alone (for a type change, two sections). */
+export function fileFor(e: Entry, patch: string): FileDiff {
+  const f = summaryOf(e)
+  const secs = sections(patch)
+  return {
+    ...f,
+    hunks: secs.flatMap(s => s.hunks),
+    notes: [...f.notes, ...(secs.some(s => s.eol) ? ['line endings changed'] : [])],
   }
 }
 
 /**
- * The files of a parsed diff, its patch sections taken in entry order. With
- * `isCut` the patch stopped early: the last section may be partial, so it
- * and every entry after it come back `undefined`, to be read again.
- */
-export function filesOf(entries: readonly Entry[], patch: string, isCut = false): Array<FileDiff | undefined> {
-  const secs = sections(patch)
-  if (isCut) secs.pop()
-  // Pairing by order holds only while git wrote the sections the entries call for.
-  if (!isCut && secs.length !== entries.reduce((n, e) => n + sectionCount(e), 0)) return entries.map(() => undefined)
-  let at = 0
-  return entries.map(e => {
-    const n = sectionCount(e)
-    const mine = secs.slice(at, at + n)
-    at += n
-    return mine.length === n ? fileOf(e, mine) : undefined
-  })
-}
-
-/** One entry's file from a patch read for that entry alone. */
-export function fileFor(e: Entry, patch: string): FileDiff {
-  return fileOf(e, sections(patch))
-}
-
-/**
- * A unified-diff source for a run of one hunk's lines, with a header that
- * numbers that run, so `Code format="diff"` gutters stay true when a window
- * starts mid-hunk. `\` lines are left out; a run with no content line gives ''.
+ * A unified-diff source for the first lines of one hunk, with a header that
+ * counts just those lines, so `Code format="diff"` parses a hunk the drawing
+ * budget cut short. `\\` lines are left out; a run with no content line gives ''.
  */
 export function hunkSource(all: readonly DiffLine[]): string {
   const lines = all.filter(l => l.mark !== '\\')

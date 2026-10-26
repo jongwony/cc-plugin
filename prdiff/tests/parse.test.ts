@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { clean, fileFor, filesOf, hunkSource, parseDiff, type Entry } from '../hooks/parse.ts'
+import { clean, fileFor, hunkSource, parseDiff, summaryOf, type Entry } from '../hooks/parse.ts'
 
 // `git diff --raw --numstat -p -z -M` from git 2.54, over: a binary edit, a
 // file turned symlink, an edit, an added `new one.txt`, `ren.txt` renamed to
@@ -26,41 +26,26 @@ index 1111111..2222222 100644
  five
 `
 
-test('the raw records name every file, its kind and its counts; sections pair by order', () => {
-  const { entries, patch, isWhole } = parseDiff(REAL)
+test('the raw records name every file, its kind, its counts and its notes', () => {
+  const { entries, isWhole } = parseDiff(REAL)
   expect(isWhole).toBe(true)
-  const files = filesOf(entries, patch)
-  expect(files.map(f => [f?.path, f?.oldPath, f?.kind, f?.added, f?.deleted, f?.isBinary, f?.hunks.length])).toEqual([
-    ['bin', undefined, 'modified', 0, 0, true, 0],
-    ['f', undefined, 'typechange', 1, 1, false, 2],
-    ['m.txt', undefined, 'modified', 1, 0, false, 1],
-    ['new one.txt', undefined, 'added', 1, 0, false, 1],
-    ['say "hi".txt', 'ren.txt', 'renamed', 0, 0, false, 0],
-    ['with space.txt', undefined, 'mode', 0, 0, false, 0],
+  expect(entries.map(summaryOf).map(f => [f.path, f.oldPath, f.kind, f.added, f.deleted, f.isBinary, f.notes])).toEqual([
+    ['bin', undefined, 'modified', 0, 0, true, ['binary file']],
+    ['f', undefined, 'typechange', 1, 1, false, ['file type changed']],
+    ['m.txt', undefined, 'modified', 1, 0, false, []],
+    ['new one.txt', undefined, 'added', 1, 0, false, []],
+    ['say "hi".txt', 'ren.txt', 'renamed', 0, 0, false, ['similarity index 100%']],
+    ['with space.txt', undefined, 'mode', 0, 0, false, ['mode 100644 → 100755']],
   ])
-  expect(files.map(f => f?.notes)).toEqual([
-    ['binary file'],
-    ['file type changed'],
-    [],
-    [],
-    ['similarity index 100%'],
-    ['mode 100644 → 100755'],
-  ])
-  expect(files[1]?.hunks.flatMap(h => h.lines.map(l => l.mark + l.text))).toEqual(['-x', '+m.txt', '\\ No newline at end of file'])
-})
-
-test('a patch cut at 4 MiB keeps the files it holds whole and leaves the rest to read again', () => {
-  const { entries, patch } = parseDiff(REAL)
-  const cut = patch.slice(0, patch.indexOf('+c\n') + 1)
-  expect(filesOf(entries, cut, true).map(f => f?.path)).toEqual(['bin', 'f', undefined, undefined, undefined, undefined])
   // Records cut short are reported, not half read.
   expect(parseDiff(REAL.slice(0, REAL.indexOf('ren.txt'))).isWhole).toBe(false)
 })
 
-test('sections that do not match the entries one for one are not paired at all', () => {
-  const { entries, patch } = parseDiff(REAL)
-  const dropped = patch.replace(/diff --git a\/m\.txt[\s\S]*?(?=diff --git a\/new)/, '')
-  expect(filesOf(entries, dropped).every(f => f === undefined)).toBe(true)
+test('a type change read alone takes both of its sections', () => {
+  const { entries } = parseDiff(REAL)
+  const patch = REAL.slice(REAL.indexOf('diff --git a/f b/f'), REAL.indexOf('diff --git a/m.txt'))
+  const f = fileFor(entries[1] as Entry, patch)
+  expect(f.hunks.flatMap(h => h.lines.map(l => l.mark + l.text))).toEqual(['-x', '+m.txt', '\\ No newline at end of file'])
 })
 
 test('hunk lines carry their old and new line numbers', () => {

@@ -2,12 +2,13 @@
 
 A Claude Code mod that adds a pane for one pull request's **cumulative** diff:
 everything the PR changes from the point where it left its own base branch,
-drawn as one scrollable stream of files, like GitHub's "Files changed" tab.
+as GitHub holds it, one file at a time.
 
 The built-in `/diff` shows this session's edits, the uncommitted changes, or
 the branch against the repository's default branch. It cannot pick a PR, and it
 never uses a PR's real base, which matters for stacked PRs whose base is another
-PR's branch. prdiff does both.
+PR's branch. prdiff does both, and only that: it never reads the working tree,
+so uncommitted work stays `/diff`'s.
 
 ## What it shows
 
@@ -16,7 +17,8 @@ PR's branch. prdiff does both.
 | The PR | `gh pr view <n>` for the repository `gh` resolves in the session's directory |
 | The base | the tip of the PR's own `baseRefName` on the remote, read with `git ls-remote` and fetched by its id |
 | The head | the tip of `refs/pull/<n>/head`, read and fetched the same way |
-| The diff | `git diff <merge-base(base, head)> <head>`, with renames, binary files and mode-only changes listed |
+| The files | `git diff --raw --numstat <merge-base(base, head)> <head>`, read once: renames, binary files, type and mode changes listed |
+| One file's lines | `git diff -p <merge-base> <head> -- <that file>`, read when the file is opened |
 
 The fetch brings in objects only: no ref, branch, tag or `FETCH_HEAD` is
 written. The remote used is the one whose URL path
@@ -31,20 +33,20 @@ Enterprise included (`origin` first).
 
 The pane takes the keyboard after `ctrl+x tab` or a click.
 
-| Key | In a diff |
+| Key | |
 | --- | --- |
-| `r` | reload the PR |
 | `j` / `k` | next / previous file |
-| `d` / `u` | half a page down / up |
-| `Home` / `End` | top / end of the stream |
-| `↑` / `↓` | a row up / down |
-| `PgUp` / `PgDn` | a page up / down |
-| wheel | scroll the stream |
+| `r` | reload the PR |
+| wheel, arrows, `PgUp` / `PgDn`, `Home` / `End` | scroll the pane |
 
-The top of a diff lists every file; pressing one jumps to it. A file over 3,000
-lines is cut and says how many lines were left out. When the patch passes 4 MiB,
-the files whose patch arrived whole are kept and only the rest are read again
-one by one; a single file over 4 MiB is listed without its lines. Fetch, merge-base and `gh` failures show in the pane.
+The pane shows the PR, the open file and then the list of every file;
+pressing a file in the list opens it. Each drawing holds at most about 90,000
+characters, the engine's limit on one drawing less some room: the list takes
+up to 20,000 of them and the open file the rest, its lines cut at the pane's
+width. What does not fit is counted, not dropped silently ("N more files", "N
+more lines of this file are not drawn"). A single file's patch over 4 MiB is
+read as far as it arrived, and the pane says so. Fetch, merge-base and `gh`
+failures show in the pane.
 
 ## Requirements
 

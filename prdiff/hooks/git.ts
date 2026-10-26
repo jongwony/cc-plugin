@@ -2,7 +2,7 @@
 // base being the PR's own baseRefName. Every host command goes through the
 // injected `run`, so tests answer it without a repository.
 
-import { fileFor, filesOf, parseDiff, type FileDiff } from './parse.ts'
+import { fileFor, parseDiff, type Entry, type FileDiff } from './parse.ts'
 
 export type RunResult = {
   exitCode: number
@@ -21,12 +21,11 @@ export type DiffData = {
   headRefName: string
   mergeBase: string
   headOid: string
-  files: FileDiff[]
+  entries: Entry[]
   notes: string[]
+  /** Reads one entry's patch. */
+  readFile: (e: Entry) => Promise<{ file: FileDiff; isCut: boolean }>
 }
-
-/** Per-file patch reads (over-4-MiB fallback) in flight at once. */
-export const CONCURRENCY = 8
 
 const GIT = ['git', '--no-optional-locks']
 const DIFF = ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--ignore-submodules=dirty', '--submodule=short', '-M']
@@ -53,21 +52,6 @@ export function guarded(run: Run): Run {
       return { exitCode: -1, stdout: '', stderr: err instanceof Error ? err.message : String(err), isStdoutTruncated: false }
     }
   }
-}
-
-/** `fn` over `items` with at most `limit` in flight; results in input order. */
-export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length)
-  let next = 0
-  const worker = async () => {
-    while (next < items.length) {
-      const i = next
-      next += 1
-      out[i] = await fn(items[i] as T, i)
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
-  return out
 }
 
 async function must(run: Run, step: string, argv: string[], timeoutMs?: number): Promise<RunResult> {
@@ -208,24 +192,16 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   const notes: string[] = []
   if (mergeBase === headOid) notes.push(`the PR head is already in ${pr.baseRefName}: merged?`)
   const ends = [mergeBase, headOid]
-  const whole = await quiet([...git, ...DIFF, '--raw', '--numstat', '-p', '-z', ...ends], 120_000)
-  if (whole.exitCode !== 0) throw new StepError('git diff', firstLine(whole))
-  const { entries, patch, isWhole } = parseDiff(whole.stdout)
-  if (!isWhole) throw new StepError('git diff', 'file list over 4 MiB was cut')
-  const got = filesOf(entries, patch, whole.isStdoutTruncated)
-  // Files whose patch did not arrive whole are read one at a time.
-  const files = await mapLimit(entries, CONCURRENCY, async (e, i) => {
-    const had = got[i]
-    if (had) return had
+  const inventory = await quiet([...git, ...DIFF, '--raw', '--numstat', '-z', ...ends], 120_000)
+  if (inventory.exitCode !== 0) throw new StepError('git diff', firstLine(inventory))
+  const { entries, isWhole } = parseDiff(inventory.stdout)
+  if (!isWhole || inventory.isStdoutTruncated) throw new StepError('git diff', 'file list over 4 MiB was cut')
+  const readFile = async (e: Entry) => {
     const paths = e.oldPath !== undefined ? [e.oldPath, e.path] : [e.path]
-    const one = await quiet([...git, '--literal-pathspecs', ...DIFF, '-p', ...ends, '--', ...paths], 120_000)
-    const f = fileFor(e, one.exitCode === 0 && !one.isStdoutTruncated ? one.stdout : '')
-    if (one.exitCode !== 0 || one.isStdoutTruncated) {
-      f.hunks = []
-      f.notes = [one.isStdoutTruncated ? 'patch over 4 MiB: not drawn' : `git diff failed: ${firstLine(one)}`]
-    }
-    return f
-  })
+    const r = await quiet([...git, '--literal-pathspecs', ...DIFF, '-p', ...ends, '--', ...paths], 120_000)
+    if (r.exitCode !== 0) throw new StepError('git diff', firstLine(r))
+    return { file: fileFor(e, r.stdout), isCut: r.isStdoutTruncated }
+  }
 
   return {
     number: pr.number,
@@ -235,7 +211,8 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
     headRefName: pr.headRefName,
     mergeBase,
     headOid,
-    files,
+    entries,
     notes,
+    readFile,
   }
 }

@@ -4,7 +4,7 @@ import { loadDiff, remoteFor, repoOfUrl, type Run, type RunResult } from '../hoo
 const ok = (stdout: string): RunResult => ({ exitCode: 0, stdout, stderr: '', isStdoutTruncated: false })
 const fail = (stderr: string): RunResult => ({ exitCode: 1, stdout: '', stderr, isStdoutTruncated: false })
 
-const PR = { number: 7, title: 'Stacked', url: 'https://github.com/o/r/pull/7', headRefName: 'feat/b', baseRefName: 'feat/a' }
+const PR = { number: 7, title: 'Stacked', url: 'https://github.com/o/r/pull/7', headRefName: 'feat/b', headRefOid: 'h'.repeat(40), baseRefName: 'feat/a' }
 /** The file read of `x`: its two sides named `<rev>:<path>`. */
 const READ_X = `${'m'.repeat(40)}:x ${'h'.repeat(40)}:x`
 const PATCH = 'diff --git a/x b/x\nindex 1111111..2222222 100644\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n'
@@ -262,4 +262,16 @@ test('the PR URL names the repository and host; gh is asked nothing else about t
   expect(calls.some(c => c[0] === 'gh' && c[1] === 'repo')).toBe(false)
   const odd = fakeRepo({ 'gh pr view 7': ok(JSON.stringify({ ...PR, url: 'not a url' })) })
   await expect(loadDiff(odd.run, 7)).rejects.toThrow('gh pr view: unreadable PR URL "not a url"')
+})
+
+test('a remote whose PR head is not the one gh reports is not used', async () => {
+  // A GitHub Enterprise PR, while the only remote naming o/r is on github.com (an ssh alias names no host).
+  const ghe = { ...PR, url: 'https://ghe.corp.com/o/r/pull/7' }
+  const other = fakeRepo({
+    'gh pr view 7': ok(JSON.stringify(ghe)),
+    'remote -v': ok('origin\tgit@github.com:o/r.git (fetch)\n'),
+    ' ls-remote ': ok(`${'b'.repeat(40)}\trefs/heads/feat/a\n${'x'.repeat(40)}\trefs/pull/7/head\n`),
+  })
+  await expect(loadDiff(other.run, 7)).rejects.toThrow("remote: origin's PR #7 head is not the PR's head")
+  expect(other.calls.some(c => c.includes('fetch'))).toBe(false)
 })

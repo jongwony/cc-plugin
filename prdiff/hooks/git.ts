@@ -138,7 +138,7 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   const run = guarded(unguarded)
   const [prOut, topOut] = await Promise.all([
     must(run, 'gh pr view', [
-      'gh', 'pr', 'view', String(number), '--json', 'number,title,url,headRefName,baseRefName',
+      'gh', 'pr', 'view', String(number), '--json', 'number,title,url,headRefName,headRefOid,baseRefName',
     ]),
     must(run, 'git rev-parse', [...GIT, 'rev-parse', '--show-toplevel']),
   ])
@@ -147,6 +147,7 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
     title: string
     url: string
     headRefName: string
+    headRefOid: string
     baseRefName: string
   }>('gh pr view', prOut.stdout)
   // The PR's own URL names its repository and host: https://<host>/<owner>/<repo>/pull/<n>.
@@ -169,6 +170,8 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   if (!baseOid) throw new StepError('git ls-remote', `${remote} has no branch ${pr.baseRefName}`)
   const headOid = tip(headName)
   if (!headOid) throw new StepError('git ls-remote', `${remote} has no ${headName}`)
+  // The remote is the PR's only if its pull head is the head GitHub reports for the PR.
+  if (headOid !== pr.headRefOid) throw new StepError('remote', `${remote}'s PR #${number} head is not the PR's head`)
   await must(quiet, 'git fetch', [...git, 'fetch', '--quiet', '--no-write-fetch-head', '--no-recurse-submodules', '--no-auto-maintenance', remote, baseOid, headOid], 120_000)
   const based = await quiet([...git, 'merge-base', baseOid, headOid])
   if (based.exitCode === 1 && based.stdout.trim() === '' && based.stderr.trim() === '') {

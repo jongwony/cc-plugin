@@ -4,7 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { PrdiffDiff } from '../types'
 import { loadDiff, type DiffData, type Run } from './git.ts'
 import { clean, summaryOf, type FileDiff } from './parse.ts'
-import { CHAR_BUDGET, LIST_BUDGET, clip, drawn, fileLabel, fitting } from './rows.ts'
+import { Budget, CHAR_BUDGET, LIST_BUDGET, clip, drawn, fileLabel } from './rows.ts'
 
 export const PANE = 'prdiff'
 
@@ -137,27 +137,44 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button, Code } = $.ui.resolve(e)
     const cols = Math.max(20, e.props.bodyColumns)
-    const line = (text: string, props: { dimColor?: boolean; bold?: boolean; color?: string } = {}) => (
-      <Text wrap="truncate-end" {...props}>
-        {clean(text)}
-      </Text>
-    )
+    // Every string drawn is clipped to the row and charged to one budget, in the order it is drawn.
+    const b = new Budget(CHAR_BUDGET)
+    const width = cols + 1
+    const line = (text: string, props: { dimColor?: boolean; bold?: boolean; color?: string } = {}) => {
+      const shown = clip(clean(text), width)
+      return b.take(shown) ? (
+        <Text wrap="truncate-end" {...props}>
+          {shown}
+        </Text>
+      ) : null
+    }
+    const button = (key: string, hotkey: string, label: string, press: () => Promise<void>) =>
+      b.take(label) ? <Button key={key} plain hotkey={hotkey} label={label} onPress={() => act($, press)} /> : null
     const [d, failed] = await Promise.all([read($, diff), read($, failure)])
-    const problem = failed !== '' && line(failed, { color: 'error' })
     // A state this module instance did not write (a hot reload empties `held`) is not loaded.
     const isMine = d.gen === diffGen
     const cur = isMine && d.status === 'ready' && held?.gen === d.gen ? held : undefined
     const f = cur ? d.file : undefined
     const at = f?.index ?? -1
     const count = cur?.data.entries.length ?? 0
-    const reload = d.number > 0 && <Button key="reload" plain hotkey="r" label="reload" onPress={() => act($, () => openDiff($, d.number, true))} />
+    const head = cur
+      ? [
+          line(`#${cur.data.number} ${cur.data.title}`, { bold: true }),
+          line(
+            `${cur.data.baseRefName} ← ${cur.data.headRefName} · ${count} files +${cur.data.entries.reduce((n, e) => n + e.added, 0)} −${cur.data.entries.reduce((n, e) => n + e.deleted, 0)} · base ${cur.data.mergeBase.slice(0, 7)}`,
+            { dimColor: true },
+          ),
+          ...cur.data.notes.map(n => line(n, { color: 'warning' })),
+        ]
+      : []
     const controls = (
       <Box flexDirection="row" gap={1}>
-        {count > 0 && <Button key="next" plain hotkey="j" label="next file" onPress={() => act($, () => openFile($, Math.min(count - 1, at + 1), true))} />}
-        {count > 0 && <Button key="prev" plain hotkey="k" label="prev" onPress={() => act($, () => openFile($, Math.max(0, at - 1), true))} />}
-        {reload}
+        {count > 0 && button('next', 'j', 'next file', () => openFile($, Math.min(count - 1, at + 1), true))}
+        {count > 0 && button('prev', 'k', 'prev', () => openFile($, Math.max(0, at - 1), true))}
+        {d.number > 0 && button('reload', 'r', 'reload', () => openDiff($, d.number, true))}
       </Box>
     )
+    const problem = failed !== '' && line(failed, { color: 'error' })
     if (!cur) {
       const status =
         isMine && d.status === 'loading'
@@ -176,41 +193,48 @@ export const register: Register = on => {
       )
     }
 
-    const dd = cur.data
-    const summaries = dd.entries.map(summaryOf)
-    const added = summaries.reduce((n, s) => n + s.added, 0)
-    const deleted = summaries.reduce((n, s) => n + s.deleted, 0)
-    const labels = summaries.map((s, i) => `${i === at ? '▸ ' : '  '}${clip(fileLabel(s), cols + 8)}`)
-    const listed = fitting(labels, LIST_BUDGET)
+    const summaries = cur.data.entries.map(summaryOf)
     const got = at >= 0 ? cur.files.get(at)?.got : undefined
     const shown = got?.file ?? (at >= 0 ? summaries[at] : undefined)
-    const body = got ? drawn(got.file, cols + 8, CHAR_BUDGET - LIST_BUDGET) : undefined
+    const opened = [
+      shown && line(`${at + 1}/${count} ${fileLabel(shown)}`, { bold: true }),
+      ...(shown?.notes ?? []).map(n => line(`  ${n}`, { dimColor: true })),
+      f?.status === 'loading' && line('Loading…', { dimColor: true }),
+      f?.status === 'error' && line(f.error ?? '', { color: 'error' }),
+      got?.isCut === true && line('  patch over 4 MiB: only its start was read', { dimColor: true }),
+    ]
+    const leftNote = (n: number) => `  ${n} more lines of this file are not drawn`
+    const body = got ? drawn(got.file, width, b, LIST_BUDGET + leftNote(got.file.added + got.file.deleted).length) : undefined
+    const hunks = (body?.runs ?? []).map(r => [
+      line(r.title, { color: 'subtle' }),
+      <Code source={r.source} format="diff" path={shown?.path} wrap="truncate-end" />,
+    ])
+    const rest = body !== undefined && body.left > 0 && line(leftNote(body.left), { dimColor: true })
+    const rule = line('─'.repeat(Math.min(cols, 80)), { dimColor: true })
+    const moreNote = (n: number) => `${n} more files; j and k reach them`
+    const keep = moreNote(summaries.length).length
+    const list = []
+    for (const [i, s] of summaries.entries()) {
+      const label = clip(clean(`${i === at ? '▸ ' : '  '}${fileLabel(s)}`), width)
+      if (b.left - label.length < keep || !b.take(label)) break
+      list.push(
+        <Button key={`goto:${i}`} plain onPress={() => act($, () => openFile($, i, true))}>
+          {label}
+        </Button>,
+      )
+    }
+    const more = list.length < summaries.length && line(moreNote(summaries.length - list.length), { dimColor: true })
     return (
       <Box flexDirection="column">
-        {line(`#${dd.number} ${dd.title}`, { bold: true })}
-        {line(`${dd.baseRefName} ← ${dd.headRefName} · ${dd.entries.length} files +${added} −${deleted} · base ${dd.mergeBase.slice(0, 7)}`, {
-          dimColor: true,
-        })}
-        {dd.notes.map(n => line(n, { color: 'warning' }))}
+        {head}
         {controls}
         {problem}
-        {shown && line(`${at + 1}/${count} ${fileLabel(shown)}`, { bold: true })}
-        {shown?.notes.map(n => line(`  ${n}`, { dimColor: true }))}
-        {f?.status === 'loading' && line('Loading…', { dimColor: true })}
-        {f?.status === 'error' && line(f.error ?? '', { color: 'error' })}
-        {got?.isCut === true && line('  patch over 4 MiB: only its start was read', { dimColor: true })}
-        {body?.runs.map(r => [
-          line(r.title, { color: 'subtle' }),
-          <Code source={r.source} format="diff" path={shown?.path} wrap="truncate-end" />,
-        ])}
-        {body !== undefined && body.left > 0 && line(`  ${body.left} more lines of this file are not drawn`, { dimColor: true })}
-        {line('─'.repeat(Math.min(cols, 80)), { dimColor: true })}
-        {labels.slice(0, listed).map((label, i) => (
-          <Button key={`goto:${i}`} plain onPress={() => act($, () => openFile($, i, true))}>
-            {clean(label)}
-          </Button>
-        ))}
-        {listed < labels.length && line(`${labels.length - listed} more files; j and k reach them`, { dimColor: true })}
+        {opened}
+        {hunks}
+        {rest}
+        {rule}
+        {list}
+        {more}
       </Box>
     )
   })

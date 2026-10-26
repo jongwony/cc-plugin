@@ -31,7 +31,7 @@ function pr(n: number) {
 }
 
 /** What the next answers hold: how many files a PR has, and whether a file read fails. */
-const state: { files: number; failRead: boolean; readGate?: Promise<void> } = { files: 2, failRead: false }
+const state: { files: number; failRead: boolean | string; readGate?: Promise<void> } = { files: 2, failRead: false }
 
 /** Answers the host commands loadDiff makes; PR 1's view waits on `gate`. */
 function answer(argv: readonly string[], gate: Promise<void>): Promise<ReturnType<typeof result>> | ReturnType<typeof result> {
@@ -46,7 +46,7 @@ function answer(argv: readonly string[], gate: Promise<void>): Promise<ReturnTyp
   if (s.includes(' fetch ')) return result('')
   if (s.includes('merge-base')) return result('m'.repeat(40))
   if (s.includes('--raw')) return result(state.files === 0 ? '' : inv(['src/one.ts', 'src/two.ts'], 1, 1))
-  if (state.failRead && s.endsWith('new-src/one.ts')) return result('fatal: bad object', 128)
+  if (state.failRead && s.endsWith('new-src/one.ts')) return result(typeof state.failRead === 'string' ? state.failRead : 'fatal: bad object', 128)
   if (state.readGate && s.includes(' new-src/')) return state.readGate.then(() => answer(argv, gate))
   if (s.endsWith('old-src/one.ts new-src/one.ts')) return result('diff --git a/old-src/one.ts b/new-src/one.ts\n--- a/old-src/one.ts\n+++ b/new-src/one.ts\n@@ -1 +1 @@\n-old\n+new\n')
   if (s.endsWith('old-src/two.ts new-src/two.ts')) return result('diff --git a/old-src/two.ts b/new-src/two.ts\n--- a/old-src/two.ts\n+++ b/new-src/two.ts\n@@ -1 +1 @@\n-two\n+TWO\n')
@@ -242,4 +242,19 @@ test('picking a file whose read is still running does not read it again', async 
   await Promise.all(picks)
   expect([...reads].sort()).toEqual(['src/one.ts', 'src/two.ts'])
   await ui.unmount()
+})
+
+test('an error line of any length is clipped to the row and counted with everything else drawn', async ($, on) => {
+  state.failRead = `fatal: ${'x'.repeat(200_000)}`
+  engine(on)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run(args('2'))
+  const ui = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /^git diff: fatal: x/)
+  const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+  const labels = (await ui.findAll({ type: 'Button' })).map(t => String(t.props.label ?? t.text))
+  const longest = Math.max(...texts.map(t => t.length))
+  expect(longest).toBeLessThanOrEqual(PANE.props.bodyColumns + 1)
+  expect([...texts, ...labels].reduce((n, t) => n + t.length, 0)).toBeLessThanOrEqual(100_000)
+  await ui.unmount()
+  state.failRead = false
 })

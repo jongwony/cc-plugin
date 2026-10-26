@@ -137,7 +137,7 @@
     {
       "name": "prdiff",
       "source": "./prdiff",
-      "description": "A pane that lists the repository's pull requests and shows one PR's cumulative diff (merge-base of its own base branch to its head) as one scrollable stream of files."
+      "description": "A pane that shows one pull request's cumulative diff, merge-base of its own base branch to its head, one file at a time: /prdiff <number>."
     }
   ]
 }

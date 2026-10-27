@@ -1,15 +1,16 @@
 #!/bin/bash
-# Write the portable rules in rules/ into ~/.claude/CLAUDE.md for a Claude Code
-# cloud session, which reads neither the local ~/.claude/rules nor claude.ai
-# profile instructions. Paste the Usage line into the cloud environment's
-# setup script.
+# Install choi's rules for a Claude Code cloud session: each file that
+# scripts/install-rules.manifest lists is written to <config>/rules/, where
+# <config> is $CLAUDE_CONFIG_DIR when set and ~/.claude otherwise. Claude Code
+# loads every rule there at session start. Paste the Usage line into the cloud
+# environment's setup script.
 #
-# The rules go between two marker lines; anything else in ~/.claude/CLAUDE.md
-# stays. Re-running replaces the block, so the result is idempotent.
-# rules/manifest lists the files to install, one per line; `#` starts a
-# comment and blank lines are skipped. README.md is for people and is not listed. Only raw.githubusercontent.com is fetched: a cloud
-# session's GitHub proxy refuses API and archive requests for repositories not
-# attached to the session.
+# The manifest lists repository paths, one per line; `#` starts a comment and
+# blank lines are skipped. Every file is fetched before any is written, so a
+# failed fetch leaves the installed set as it was and exits non-zero. A file an
+# earlier run installed and the manifest no longer lists is removed. Only
+# raw.githubusercontent.com is fetched: a cloud session's GitHub proxy refuses
+# API and archive requests for repositories not attached to the session.
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/install-rules.sh | bash
@@ -20,70 +21,46 @@ set -eo pipefail
 
 REPO="jongwony/cc-plugin"
 REF="${CC_RULES_REF:-main}"
-TARGET="${CC_RULES_TARGET:-$HOME/.claude/CLAUDE.md}"
-BEGIN="<!-- cc-plugin rules: begin -->"
-END="<!-- cc-plugin rules: end -->"
+RAW="https://raw.githubusercontent.com/$REPO/$REF"
+CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+DEST="$CLAUDE_DIR/rules"
+STATE="$CLAUDE_DIR/.cc-plugin-rules"
 
 command -v curl >/dev/null 2>&1 || { echo "Error: curl not found." >&2; exit 1; }
-command -v python3 >/dev/null 2>&1 || { echo "Error: python3 not found." >&2; exit 1; }
 
-manifest=$(curl -fsSL "https://raw.githubusercontent.com/$REPO/$REF/rules/manifest")
-names=()
+manifest=$(curl -fsSL "$RAW/scripts/install-rules.manifest")
+paths=()
 while IFS= read -r line || [ -n "$line" ]; do
   line="${line%%#*}"
   line="${line//$'\r'/}"
   line="${line#"${line%%[![:space:]]*}"}"
   line="${line%"${line##*[![:space:]]}"}"
-  if [ -n "$line" ]; then names+=("$line"); fi
+  if [ -n "$line" ]; then paths+=("$line"); fi
 done <<< "$manifest"
-[ "${#names[@]}" -gt 0 ] || { echo "Error: no rule files found at $REPO@$REF" >&2; exit 1; }
+[ "${#paths[@]}" -gt 0 ] || { echo "Error: no rule files found at $REPO@$REF" >&2; exit 1; }
 
-block=$(mktemp)
-trap 'rm -f "$block"' EXIT
-{
-  echo "$BEGIN"
-  echo "<!-- source: https://github.com/$REPO/tree/$REF/rules -->"
-  for n in "${names[@]}"; do
-    echo
-    curl -fsSL "https://raw.githubusercontent.com/$REPO/$REF/rules/$n"
-  done
-  echo
-  echo "$END"
-} > "$block"
+mkdir -p "$DEST"
+stage=$(mktemp -d "$CLAUDE_DIR/.install-rules.XXXXXX")
+trap 'rm -rf "$stage"' EXIT
 
-mkdir -p "$(dirname "$TARGET")"
-touch "$TARGET"
-python3 - "$TARGET" "$block" "$BEGIN" "$END" <<'PY'
-import os, shutil, sys, tempfile
+names=()
+for p in "${paths[@]}"; do
+  n="${p##*/}"
+  case " ${names[*]} " in *" $n "*) echo "Error: two manifest entries install as $n" >&2; exit 1 ;; esac
+  names+=("$n")
+  curl -fsSL "$RAW/$p" -o "$stage/$n"
+  [ -s "$stage/$n" ] || { echo "Error: $p is empty at $REPO@$REF" >&2; exit 1; }
+done
 
+for n in "${names[@]}"; do mv -f "$stage/$n" "$DEST/$n"; done
 
-def main():
-    target, block, begin, end = sys.argv[1:5]
-    target = os.path.realpath(target)
-    text = open(target, encoding="utf-8").read()
-    new = open(block, encoding="utf-8").read().rstrip("\n") + "\n"
-    i, j = -1, text.find(end)
-    while j != -1:
-        i = text.rfind(begin, 0, j)
-        if i != -1:
-            break
-        j = text.find(end, j + len(end))
-    if i != -1 and j != -1:
-        text = text[:i] + new + text[j + len(end):].lstrip("\n")
-    else:
-        text = (text.rstrip("\n") + "\n\n" if text.strip() else "") + new
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(target), prefix=".install-rules.")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(text)
-        shutil.copymode(target, tmp)
-        os.replace(tmp, target)
-    except BaseException:
-        os.unlink(tmp)
-        raise
+if [ -f "$STATE" ]; then
+  while IFS= read -r old || [ -n "$old" ]; do
+    case $old in ""|*/*) continue ;; esac
+    case " ${names[*]} " in *" $old "*) ;; *) rm -f "$DEST/$old" ;; esac
+  done < "$STATE"
+fi
+printf '%s\n' "${names[@]}" > "$stage/state"
+mv -f "$stage/state" "$STATE"
 
-
-main()
-PY
-
-echo "Installed ${#names[@]} rule files from $REPO@$REF into $TARGET"
+echo "Installed ${#names[@]} rule files from $REPO@$REF into $DEST"

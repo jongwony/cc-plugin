@@ -14,4 +14,4 @@ Applies where the `linear-personal` MCP is connected; a repository whose work an
 
 ## choi's machine
 
-- **Something that exists only on choi's machine is looked up there, read only.**
+- **What exists only on choi's machine is there, and is found there.**

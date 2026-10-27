@@ -214,14 +214,21 @@ export const register: Register = on => {
     const summaries = cur.data.entries.map(summaryOf)
     const got = at >= 0 ? cur.files.get(at)?.got : undefined
     const shown = got?.file ?? (at >= 0 ? summaries[at] : undefined)
+    const ruled = clip('─'.repeat(Math.min(cols, 80)), width)
+    const labels = summaries.map((s, i) => clip(clean(`${i === at ? '▸ ' : '  '}${fileLabel(s)}`), width))
+    // What the rule and the list cost when given at most LIST_BUDGET is held back from the file drawn above them.
+    const share = new Budget(LIST_BUDGET)
+    share.take(ruled)
+    listed(labels, share)
+    const keep = LIST_BUDGET - share.left
     const opened = [
       shown && line(`${at + 1}/${count} ${fileLabel(shown)}`, { bold: true }),
       ...(shown?.notes ?? []).map(n => line(`  ${n}`, { dimColor: true })),
       f?.status === 'loading' && line('Loading…', { dimColor: true }),
-      f?.status === 'error' && problem(f.error ?? '', LIST_BUDGET),
+      f?.status === 'error' && problem(f.error ?? '', keep),
       got?.isCut === true && line('  patch over 4 MiB: only its start was read', { dimColor: true }),
     ]
-    const body = got ? drawn(got.file, width, b, LIST_BUDGET) : undefined
+    const body = got ? drawn(got.file, width, b, keep) : undefined
     // drawn() produced and charged each hunk's title and source; they are drawn as given.
     const hunks = (body?.runs ?? []).map(r => [
       <Text wrap="truncate-end" color="subtle">
@@ -234,11 +241,8 @@ export const register: Register = on => {
         {body.note}
       </Text>
     )
-    const rule = line('─'.repeat(Math.min(cols, 80)), { dimColor: true })
-    const shownList = listed(
-      summaries.map((s, i) => clip(clean(`${i === at ? '▸ ' : '  '}${fileLabel(s)}`), width)),
-      b,
-    )
+    const rule = line(ruled, { dimColor: true })
+    const shownList = listed(labels, b)
     const list = shownList.labels.map((label, i) => (
       <Button key={`goto:${i}`} plain onPress={() => start($, openFile($, { index: i, gen: cur.gen }))}>
         {label}

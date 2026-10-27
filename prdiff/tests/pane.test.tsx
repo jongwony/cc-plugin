@@ -280,6 +280,24 @@ test('an error wraps whole so its diagnostics show, and is counted with everythi
   state.failLoad = undefined
 })
 
+test('a file in a short list is cut only where the list\'s own cost, not its whole share, begins', async ($, on) => {
+  state.patch = 'diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -0,0 +1,30000 @@\n' + Array.from({ length: 30_000 }, (_, i) => `+line ${i}`).join('\n') + '\n'
+  engine(on)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run(args('2'))
+  const ui = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /^1\/2 /)
+  const texts = (await ui.findAll({ type: 'Text' })).map(t => String(t.text))
+  const codes = (await ui.findAll({ type: 'Code' })).map(c => String(c.props.source))
+  const labels = (await ui.findAll({ type: 'Button' })).map(b => String(b.props.label ?? b.text))
+  const drawn = [...texts, ...codes, ...labels].reduce((n, t) => n + t.length, 0)
+  // Both list entries are drawn, and the file takes the rest of the budget less a few lines' slack.
+  expect(labels.filter(l => /src\//.test(l)).length).toBe(2)
+  expect(drawn).toBeGreaterThan(CHAR_BUDGET - 200)
+  expect(drawn).toBeLessThanOrEqual(CHAR_BUDGET)
+  await ui.unmount()
+  state.patch = undefined
+})
+
 test('a file of many tiny hunks leaves the list its share: each drawn string is charged once', async ($, on) => {
   state.files = 200
   state.patch = 'diff --git a/x b/x\n--- a/x\n+++ b/x\n' + Array.from({ length: 20_000 }, (_, i) => `@@ -${i + 1} +${i + 1} @@\n-a\n+b\n`).join('')

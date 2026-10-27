@@ -6,7 +6,7 @@ import { clean, hunkSource, type FileDiff } from './parse.ts'
 /** The engine's limit on the text of one drawing: string children, Code sources, Button labels, Box keys (not a Button's key). */
 export const CHAR_BUDGET = 100_000
 
-/** The part of CHAR_BUDGET held back for the file list while the open file is drawn. */
+/** The most of CHAR_BUDGET held back for the file list while the open file is drawn. */
 export const LIST_BUDGET = 20_000
 
 /** What one drawing has left to draw; `take` charges a drawn string and says whether it fits. */

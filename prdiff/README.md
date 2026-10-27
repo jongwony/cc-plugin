@@ -58,8 +58,8 @@ one drawing. The engine counts the text of string children, Code sources,
 Button labels and a Box's `key`; it does not count props such as a Code's
 `path`, nor a Button's `key`. The pane draws no Box with a key, and every
 string it draws is charged against that limit: each line is cut at the
-pane's width, and while the open file is drawn 20,000 characters stay
-for the list. What does not fit is counted, not dropped silently ("N more
+pane's width, and while the open file is drawn, what the list costs, up to
+20,000 characters, stays for it. What does not fit is counted, not dropped silently ("N more
 files", "N more lines of this file are not drawn"). A single file's patch
 over 4 MiB is read as far as it arrived, and the pane says so. Fetch,
 merge-base and `gh` failures show in the pane as the load's; a file's read

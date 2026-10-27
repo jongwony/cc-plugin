@@ -24,8 +24,6 @@ function message(err: unknown): string {
   return clean(err instanceof Error ? err.message : String(err))
 }
 
-// This module instance; a state another instance wrote (before a hot reload) is not loaded here.
-const self = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 // The PR's inventory and the files read so far live here, under the load that
 // read them; `$.state` carries the status. A hot reload empties it, and the
 // pane then offers to load again.
@@ -59,16 +57,16 @@ function start($: EngineInterface, task: Promise<void>): Promise<void> {
 /** Loads PR #number and opens its first file. */
 async function openDiff($: EngineInterface, number: number): Promise<void> {
   // A load's gen is one past the stored one, taken in the same write that stores it.
-  const started = await update($, now => ({ status: 'loading', gen: now.gen + 1, number, owner: self }))
+  const started = await update($, now => ({ status: 'loading', gen: now.gen + 1, number }))
   const gen = started?.gen ?? 0
   let data: DiffData
   try {
     data = await loadDiff(runner($), number)
     if ((await $.state.get(diffRef)).value?.gen !== gen) return
     held = { gen, data, files: new Map() }
-    if ((await putFor($, gen, { status: 'ready', gen, number, owner: self })) === undefined) return
+    if ((await putFor($, gen, { status: 'ready', gen, number })) === undefined) return
   } catch (err) {
-    await putFor($, gen, { status: 'error', gen, number, owner: self, error: message(err) })
+    await putFor($, gen, { status: 'error', gen, number, error: message(err) })
     return
   }
   if (data.entries.length > 0) await openFile($, { index: 0, gen })
@@ -176,8 +174,7 @@ export const register: Register = on => {
     const button = (key: string, hotkey: string, label: string, press: () => Promise<void>) =>
       b.take(label) ? <Button key={key} plain hotkey={hotkey} label={label} onPress={() => start($, press())} /> : null
     const d = await read($, diff)
-    const isMine = d.owner === self
-    const cur = isMine && d.status === 'ready' && held?.gen === d.gen ? held : undefined
+    const cur = d.status === 'ready' && held?.gen === d.gen ? held : undefined
     const f = cur ? d.file : undefined
     const at = f?.index ?? -1
     const count = cur?.data.entries.length ?? 0
@@ -200,9 +197,9 @@ export const register: Register = on => {
     )
     if (!cur) {
       const status =
-        isMine && d.status === 'loading'
+        d.status === 'loading'
           ? line(`Loading #${d.number}…`, { dimColor: true })
-          : isMine && d.status === 'error'
+          : d.status === 'error'
             ? problem(`#${d.number}: ${d.error ?? ''}`)
             : d.number > 0
               ? line(`#${d.number} is not loaded. Press r to load it.`, { dimColor: true })

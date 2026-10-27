@@ -97,18 +97,18 @@ export function remoteRepos(remoteV: string): Array<{ name: string; repo?: strin
 }
 
 /**
- * Every fetch remote, in the order they are tried for the PR: those whose
- * URL names `repo` on `host`, then those naming `repo` elsewhere, then the
- * rest; origin first within each.
+ * Every fetch remote, in the groups and order they are tried for the PR:
+ * first those whose URL names `repo` (on `host`, then elsewhere), then the
+ * rest; origin first within each. An empty group is left out.
  */
-export function candidates(remoteV: string, repo: string, host?: string): string[] {
+export function candidates(remoteV: string, repo: string, host?: string): string[][] {
   const want = repo.toLowerCase()
   const rank = (r: { name: string; repo?: string; host?: string }) =>
     (r.repo === want ? (host !== undefined && r.host === host.toLowerCase() ? 0 : 1) : 2) * 2 + (r.name === 'origin' ? 0 : 1)
-  return remoteRepos(remoteV)
+  const ranked = remoteRepos(remoteV)
     .map((r, i) => ({ name: r.name, key: rank(r), i }))
     .sort((a, b) => a.key - b.key || a.i - b.i)
-    .map(r => r.name)
+  return [ranked.filter(r => r.key < 4), ranked.filter(r => r.key >= 4)].map(g => g.map(r => r.name)).filter(g => g.length > 0)
 }
 
 export async function loadDiff(unguarded: Run, number: number): Promise<DiffData> {
@@ -139,23 +139,26 @@ export async function loadDiff(unguarded: Run, number: number): Promise<DiffData
   // The PR's remote is the first whose `refs/pull/<n>/head` is the head gh reports.
   const baseName = `refs/heads/${pr.baseRefName}`
   const headName = `refs/pull/${number}/head`
-  // All candidates are asked at once; each answer is awaited in rank order, and the first match is taken.
-  const probes = tried.map(async remote => {
+  const probe = async (remote: string) => {
     const listed = await quiet([...git, 'ls-remote', '--', remote, baseName, headName], 120_000)
     const tip = (name: string) => listed.stdout.split('\n').find(l => l.endsWith(`\t${name}`))?.split('\t')[0]
     const head = listed.exitCode === 0 ? tip(headName) : undefined
     const said = listed.exitCode !== 0 ? `failed: ${firstLine(listed)}` : head === undefined ? 'has none' : `has ${head.slice(0, 7)}`
     return { remote, head, baseOid: tip(baseName), said: `${remote} ${said}` }
-  })
+  }
   const seen: string[] = []
-  let found: Awaited<(typeof probes)[number]> | undefined
-  for (const probe of probes) {
-    const p = await probe
-    seen.push(p.said)
-    if (p.head === pr.headRefOid) {
-      found = p
-      break
+  let found: Awaited<ReturnType<typeof probe>> | undefined
+  // A group is asked only when no earlier group matched; its remotes at once, each answer awaited in rank order.
+  for (const group of tried) {
+    for (const asked of group.map(probe)) {
+      const p = await asked
+      seen.push(p.said)
+      if (p.head === pr.headRefOid) {
+        found = p
+        break
+      }
     }
+    if (found) break
   }
   if (!found) throw new StepError('remote', `gh reports PR #${number} at ${pr.headRefOid.slice(0, 7)}; ${headName} on ${seen.join(', ')}`)
   const { remote, baseOid } = found

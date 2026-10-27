@@ -35,7 +35,7 @@ function fakeRepo(overrides: Record<string, RunResult> = {}) {
   return { run, calls }
 }
 
-test('remotes are tried with URL matches first, origin first within each, then the rest', () => {
+test('remotes are grouped: URL matches first, then the rest, origin first within each', () => {
   expect(repoOfUrl('git@github.com:Me/R.git')).toBe('me/r')
   expect(repoOfUrl('https://github.com/o/r')).toBe('o/r')
   expect(repoOfUrl('git@github-work:delightroom/app.git')).toBe('delightroom/app')
@@ -44,14 +44,14 @@ test('remotes are tried with URL matches first, origin first within each, then t
   expect(repoOfUrl('git@ghe.corp.com:o/r.git')).toBe('o/r')
   expect(repoOfUrl('/local/path/r')).toBe(undefined)
   const v = 'up\thttps://github.com/o/r (fetch)\norigin\tssh://git@github.com/o/r.git (fetch)\n'
-  expect(candidates(v, 'O/R')).toEqual(['origin', 'up'])
-  // A remote naming another repository is still tried, after those naming this one.
-  expect(candidates('fork\tgit@github.com:me/r.git (fetch)\nwork\tgit@github-work:o/r.git (fetch)\n', 'o/r')).toEqual(['work', 'fork'])
+  expect(candidates(v, 'O/R')).toEqual([['origin', 'up']])
+  // A remote naming another repository is in a group of its own, after those naming this one.
+  expect(candidates('fork\tgit@github.com:me/r.git (fetch)\nwork\tgit@github-work:o/r.git (fetch)\n', 'o/r')).toEqual([['work'], ['fork']])
   // A partial clone writes its filter after the fetch URL; a name may hold spaces.
-  expect(candidates('origin\thttps://github.com/o/r.git (fetch) [blob:none]\norigin\thttps://github.com/o/r.git (push)\n', 'o/r')).toEqual(['origin'])
-  expect(candidates('my remote\t/srv/r (fetch)\n', 'o/r')).toEqual(['my remote'])
+  expect(candidates('origin\thttps://github.com/o/r.git (fetch) [blob:none]\norigin\thttps://github.com/o/r.git (push)\n', 'o/r')).toEqual([['origin']])
+  expect(candidates('my remote\t/srv/r (fetch)\n', 'o/r')).toEqual([['my remote']])
   // A local mirror whose path holds a space.
-  expect(candidates('mirror\t/srv/mirror dir/r (fetch)\n', 'o/r')).toEqual(['mirror'])
+  expect(candidates('mirror\t/srv/mirror dir/r (fetch)\n', 'o/r')).toEqual([['mirror']])
 })
 
 test('a PR not checked out: both tips listed once, fetched by id without a ref, diffed merge-base..head', async () => {
@@ -131,9 +131,9 @@ test('a file patch cut at 4 MiB is kept as far as it arrived; a file list cut th
 
 test('with one owner/repo on two hosts, the remote on the PR\'s host is used', async () => {
   const v = 'origin\thttps://github.com/o/r.git (fetch)\nwork\tgit@ghe.corp.com:o/r.git (fetch)\n'
-  expect(candidates(v, 'o/r', 'ghe.corp.com')).toEqual(['work', 'origin'])
-  expect(candidates(v, 'o/r', 'github.com')).toEqual(['origin', 'work'])
-  expect(candidates(v, 'o/r')).toEqual(['origin', 'work'])
+  expect(candidates(v, 'o/r', 'ghe.corp.com')).toEqual([['work', 'origin']])
+  expect(candidates(v, 'o/r', 'github.com')).toEqual([['origin', 'work']])
+  expect(candidates(v, 'o/r')).toEqual([['origin', 'work']])
 })
 
 test('a PR whose head is already in its base says so instead of showing nothing', async () => {
@@ -286,35 +286,50 @@ test('attributes are read from the PR head, in the file list and in each file re
   expect(diffs.every(c => c.includes(`--attr-source=${'h'.repeat(40)}`))).toBe(true)
 })
 
-test('remotes are asked at once, so a slow one ranked first does not hold the others back', async () => {
+test('remotes naming the PR\'s repository are asked at once, so a slow one ranked first does not hold the others back', async () => {
   let release = () => {}
   const askedSecond = new Promise<void>(r => {
     release = r
   })
-  const both = fakeRepo({ 'remote -v': ok('origin\tgit@github.com:o/r.git (fetch)\nmirror\t/srv/mirror (fetch)\n') })
+  const both = fakeRepo({ 'remote -v': ok('origin\tgit@github.com:o/r.git (fetch)\nwork\tgit@ghe.corp.com:o/r.git (fetch)\n') })
   const run: Run = async (argv, t, env) => {
     const at = argv.indexOf('ls-remote')
     if (at >= 0 && argv[at + 2] === 'origin') {
-      // origin answers only once mirror has been asked: one at a time, this would never return.
+      // origin answers only once work has been asked: one at a time, this would never return.
       await askedSecond
       return fail('fatal: unable to access: Connection timed out')
     }
-    if (at >= 0 && argv[at + 2] === 'mirror') release()
+    if (at >= 0 && argv[at + 2] === 'work') release()
     return both.run(argv, t, env)
   }
   await loadDiff(run, 7)
-  expect(both.calls.find(c => c.includes('fetch'))?.slice(-3, -2)).toEqual(['mirror'])
+  expect(both.calls.find(c => c.includes('fetch'))?.slice(-3, -2)).toEqual(['work'])
 })
 
 test('the first match in rank order is taken without waiting for remotes ranked below it', async () => {
   const never = new Promise<RunResult>(() => {})
-  const both = fakeRepo({ 'remote -v': ok('origin\tgit@github.com:o/r.git (fetch)\nmirror\t/srv/mirror (fetch)\n') })
+  const both = fakeRepo({ 'remote -v': ok('origin\tgit@github.com:o/r.git (fetch)\nwork\tgit@ghe.corp.com:o/r.git (fetch)\n') })
   const run: Run = async (argv, t, env) => {
     const at = argv.indexOf('ls-remote')
-    // mirror, ranked below origin, never answers.
-    if (at >= 0 && argv[at + 2] === 'mirror') return never
+    // work, ranked below origin, never answers.
+    if (at >= 0 && argv[at + 2] === 'work') return never
     return both.run(argv, t, env)
   }
   await loadDiff(run, 7)
   expect(both.calls.find(c => c.includes('fetch'))?.slice(-3, -2)).toEqual(['origin'])
+})
+
+test('a remote naming another repository is never asked while one naming the PR\'s repository matches', async () => {
+  const never = new Promise<RunResult>(() => {})
+  const repo = fakeRepo({ 'remote -v': ok('mirror\t/srv/mirror (fetch)\norigin\tgit@github.com:o/r.git (fetch)\n') })
+  const asked: string[] = []
+  const run: Run = async (argv, t, env) => {
+    const at = argv.indexOf('ls-remote')
+    if (at >= 0) asked.push(argv[at + 2] ?? '')
+    // mirror, slow, would hold its process until the timeout.
+    if (at >= 0 && argv[at + 2] === 'mirror') return never
+    return repo.run(argv, t, env)
+  }
+  await loadDiff(run, 7)
+  expect(asked).toEqual(['origin'])
 })

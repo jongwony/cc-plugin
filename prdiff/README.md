@@ -23,11 +23,12 @@ so uncommitted work stays `/diff`'s.
 The fetch brings in objects only: no ref, branch, tag or `FETCH_HEAD` is
 written, and it starts no automatic maintenance (`gc --auto`). The PR's
 remote is the first one whose `refs/pull/<n>/head` is the head `gh` reports
-for the PR. Remotes are tried with those whose URL names the PR's repository
-first (on the PR's host, then elsewhere; `origin` first), then the rest, so a
-GitHub Enterprise remote behind an ssh alias, or a remote still on a renamed
-repository's old URL, is found too. If none has that head, the pane says what
-each one had.
+for the PR. The remotes whose URL names the PR's repository are asked
+first, all at once, and the first in their order with that head is taken (on
+the PR's host, then elsewhere; `origin` first). Only when none of them has it
+are the rest asked the same way, so a remote still on a renamed repository's
+old URL is found too, and an unrelated remote is not contacted while a
+matching one has the head. If none has it, the pane says what each one had.
 
 ## Use
 
@@ -81,7 +82,7 @@ recover; it shows what happened.
 | Precondition | What a violation looks like |
 | --- | --- |
 | git 2.40 or newer | The file list fails with git's own "unknown option" line for `--attr-source`, shown as the load's error. |
-| git authentication needs no prompt: a credential helper for https, an agent or a key without a passphrase for ssh | https fails with git's "terminal prompts disabled"; an ssh prompt waits until the 120-second timeout and shows as that remote's failure. |
+| git authentication needs no prompt: a credential helper for https, an agent or a key without a passphrase for ssh | https fails with git's "terminal prompts disabled". A remote whose ssh waits on a prompt holds the load until its 120-second timeout, since remotes ranked below it are not taken before it answers; it then counts as failed with the timeout as its reason, and the next remote that has the head is used. |
 | The clone holds the history between the PR's base and head (it is not shallow there) | "git merge-base: exit 1". |
 | The PR's pull ref is current: `refs/pull/<n>/head` on the remote is the head `gh` reports | "gh reports PR #n at X; refs/pull/n/head on origin has Y". Right after a push GitHub can lag by a few seconds; press `r` again. |
 | File paths are UTF-8 | A file whose path is not shows git's error for that path when it is opened. |

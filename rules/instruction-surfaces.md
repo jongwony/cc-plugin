@@ -6,7 +6,8 @@ A surface's type is set by who reads it and when it enters that reader's context
 
 - **Memory — loaded at every session start.** A `rules/*.md` with no `paths`, and the `CLAUDE.md` / `AGENTS.md` at or above the working directory. A rule is memory: the state and what it binds. A `description` — a skill's, an agent's, a plugin's — is startup-loaded whatever file it sits in, and is written to this type.
 - **Skill — loaded on invocation or event.** A `SKILL.md` body, an agent file's body, model-visible hook output. Carry the procedure being invoked and the ground the event itself supplies, not the material it operates on.
-- **Progressive disclosure — read on demand.** `premise/`, `references/`, an agent-facing `docs/` file, a nested `CLAUDE.md`, a `paths`-scoped rule (these two enter when Claude reads a matching file). Carry the full procedure and the ground the named read point needs.
+- **Progressive disclosure — read on demand.** `references/`, an agent-facing file a surface names as its read point, a nested `CLAUDE.md`, a `paths`-scoped rule (these two enter when Claude reads a matching file). Carry the full procedure and the ground the named read point needs.
+  - `premise/`, and a Northstar read from outside its own repository, load the same way and carry ground rather than procedure: the principle the surfaces that cite it derive from, ranking above them. A change to one revises that principle.
 - **Document — a person reads it to understand.** `preferences.md` §Externalization governs it.
 
 ## Form for the first three types

@@ -13,6 +13,9 @@ export type RunResult = {
 
 export type Run = (argv: string[], timeoutMs?: number, env?: Record<string, string>) => Promise<RunResult>
 
+/** One entry's patch as read, and whether it was cut at 4 MiB. */
+export type FileRead = { file: FileDiff; isCut: boolean }
+
 export type DiffData = {
   number: number
   title: string
@@ -24,7 +27,7 @@ export type DiffData = {
   entries: Entry[]
   notes: string[]
   /** Reads one entry's patch. */
-  readFile: (e: Entry) => Promise<{ file: FileDiff; isCut: boolean }>
+  readFile: (e: Entry) => Promise<FileRead>
 }
 
 const GIT = ['git', '--no-optional-locks']

@@ -2,8 +2,8 @@ import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { PrdiffDiff } from '../types'
-import { loadDiff, type DiffData, type Run } from './git.ts'
-import { clean, summaryOf, type FileDiff } from './parse.ts'
+import { loadDiff, type DiffData, type FileRead, type Run } from './git.ts'
+import { clean, summaryOf } from './parse.ts'
 import { Budget, CHAR_BUDGET, LIST_BUDGET, clip, drawn, fileLabel, listed, targetIndex, type Target } from './rows.ts'
 
 export const PANE = 'prdiff'
@@ -27,7 +27,8 @@ function message(err: unknown): string {
 // The PR's inventory and the files read so far live here, under the load that
 // read them; `$.state` carries the status.
 // A file's entry is its read: in flight until `got` is set; a failed read leaves no entry.
-let held: { gen: number; data: DiffData; files: Map<number, { read: Promise<void>; got?: { file: FileDiff; isCut: boolean } }> } | undefined
+type Reading = { read: Promise<void>; got?: FileRead }
+let held: { gen: number; data: DiffData; files: Map<number, Reading> } | undefined
 
 /**
  * Rewrites the stored diff state with `fn(now)`, written with ifVersion over
@@ -102,7 +103,7 @@ async function openFile($: EngineInterface, target: Target): Promise<void> {
     })
   let entry = cur.files.get(index)
   if (!entry) {
-    const made: { read: Promise<void>; got?: { file: FileDiff; isCut: boolean } } = {
+    const made: Reading = {
       read: cur.data.readFile(e).then(
         got => {
           made.got = got

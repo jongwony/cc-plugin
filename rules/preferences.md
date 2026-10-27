@@ -12,6 +12,7 @@
 - Prefer standard library
 - Use `git mv` for file moves
 - Removing git-tracked files: `git rm`, not sub-directory archival
+- **A command that needs a secret runs inline — do not hand it to the user to run.** Fetch the value by command substitution in the command that consumes it: `export FOO="$(<command that reads the secret>)" && <the command>`. Never `echo`, `cat`, or interpolate the value into anything printed; secret **names** are fine to show.
 - **Code edits run in a native subagent, a full-history fork whenever the harness supports it.** The subagent carries the branch, commits and PR to completion and returns the PR's reading. For a fresh-context subagent, supply the entry points and session-only ground. Work coupled so tightly to this conversation that splitting it would rebuild the context at every step stays in one pass.
 - **A change's reasoning goes in the commit message, not into the code.** The ledger is the project's commit-message history unless the project declares another. A comment keeps only an operative contract — a claim coupled to a channel that checks it; split a sentence that carries both a contract and a reason, and route the reason.
 - First authoring a project's always-loaded instruction file → declare its ledger binding there once, and only where it departs from the commit-message default.

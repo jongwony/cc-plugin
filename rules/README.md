@@ -1,6 +1,6 @@
 # rules
 
-choi's portable Claude Code rules: the ones that hold on any machine and carry no private identifiers. Rules that only hold on choi's machine, or that carry private identifiers, stay in the local `~/.claude/rules/` and are not published.
+choi's portable Claude Code rules: the ones that hold on any machine and carry no private identifiers, plus `cloud.md`, which only cloud sessions load. Rules that only hold on choi's machine, or that carry private identifiers, stay in the local `~/.claude/rules/` and are not published.
 
 | Where Claude runs | How these rules arrive |
 |---|---|

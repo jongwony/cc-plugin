@@ -77,7 +77,6 @@ function engine(
 ) {
   on('command.register', () => ({ value: { command: 'prdiff' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('env.get', () => ({ value: undefined }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('process.run', async (_, e) => {
     saw(e.argv)
@@ -411,7 +410,6 @@ test('/prdiff N whose pane is not placed says so, and still loads for when it is
   const runs: string[] = []
   on('command.register', () => ({ value: { command: 'prdiff' } }))
   on('ui.open', () => ({ value: { isPlaced: false, reason: 'no surface is attached' } }))
-  on('env.get', () => ({ value: undefined }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('process.run', async (_, e) => {
     runs.push(e.argv.join(' '))

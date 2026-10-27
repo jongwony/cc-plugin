@@ -63,8 +63,7 @@ async function openDiff($: EngineInterface, number: number): Promise<void> {
   const gen = started?.gen ?? 0
   let data: DiffData
   try {
-    const ownSsh = (await Promise.all([$.env.get('GIT_SSH_COMMAND'), $.env.get('GIT_SSH')])).some(v => v !== undefined)
-    data = await loadDiff(runner($), number, { ownSsh })
+    data = await loadDiff(runner($), number)
     if ((await $.state.get(diffRef)).value?.gen !== gen) return
     held = { gen, data, files: new Map() }
     if ((await putFor($, gen, { status: 'ready', gen, number, owner: self })) === undefined) return

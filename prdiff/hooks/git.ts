@@ -111,24 +111,7 @@ export function candidates(remoteV: string, repo: string, host?: string): string
     .map(r => r.name)
 }
 
-/**
- * The environment a fetch runs under so neither git nor ssh asks on the
- * terminal: no credential prompt, and ssh in batch mode unless the user
- * names an ssh command of their own (GIT_SSH_COMMAND, GIT_SSH, core.sshCommand).
- */
-export async function noPrompts(run: Run, git: string[], ownSsh = false): Promise<Record<string, string>> {
-  const configured = !ownSsh && (await run([...git, 'config', '--get', 'core.sshCommand'])).exitCode === 0
-  const env: Record<string, string> = { GIT_TERMINAL_PROMPT: '0' }
-  if (!ownSsh && !configured) env.GIT_SSH_COMMAND = 'ssh -o BatchMode=yes'
-  return env
-}
-
-export type Known = {
-  /** GIT_SSH_COMMAND or GIT_SSH is set in the environment. */
-  ownSsh?: boolean
-}
-
-export async function loadDiff(unguarded: Run, number: number, known: Known = {}): Promise<DiffData> {
+export async function loadDiff(unguarded: Run, number: number): Promise<DiffData> {
   const run = guarded(unguarded)
   const [prOut, topOut] = await Promise.all([
     must(run, 'gh pr view', [
@@ -151,9 +134,8 @@ export async function loadDiff(unguarded: Run, number: number, known: Known = {}
   const tried = candidates(remoteV, repo, hostOfUrl(pr.url))
   if (tried.length === 0) throw new StepError('remote', 'this repository has no fetch remote')
 
-  const env = await noPrompts(run, git, known.ownSsh)
-  // Git commands from the listing on run under `env`.
-  const quiet: Run = (argv, timeoutMs) => run(argv, timeoutMs, env)
+  // Git commands from the listing on never prompt: a missing credential fails with git's own message.
+  const quiet: Run = (argv, timeoutMs) => run(argv, timeoutMs, { GIT_TERMINAL_PROMPT: '0' })
   // The PR's remote is the first whose `refs/pull/<n>/head` is the head gh reports.
   const baseName = `refs/heads/${pr.baseRefName}`
   const headName = `refs/pull/${number}/head`

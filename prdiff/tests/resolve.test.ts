@@ -145,20 +145,6 @@ test('a PR whose head is already in its base says so instead of showing nothing'
   expect((await loadDiff(open, 7)).notes).toEqual([])
 })
 
-test('the fetch asks nothing on the terminal, and leaves a user\'s own ssh command alone', async () => {
-  const envs: Array<Record<string, string> | undefined> = []
-  const wrap = (run: Run): Run => async (argv, t, env) => {
-    if (argv.includes('fetch')) envs.push(env)
-    return run(argv, t, env)
-  }
-  await loadDiff(wrap(fakeRepo().run), 7)
-  expect(envs[0]).toEqual({ GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' })
-  await loadDiff(wrap(fakeRepo({ 'config --get core.sshCommand': ok('ssh -i key\n') }).run), 7)
-  expect(envs[1]).toEqual({ GIT_TERMINAL_PROMPT: '0' })
-  await loadDiff(wrap(fakeRepo().run), 7, { ownSsh: true })
-  expect(envs[2]).toEqual({ GIT_TERMINAL_PROMPT: '0' })
-})
-
 /** `run`, except that a command whose text holds `match` rejects as a timeout does. */
 function rejecting(run: Run, match: string): Run {
   return async (argv, t, env) => {

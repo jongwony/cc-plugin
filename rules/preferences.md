@@ -21,7 +21,7 @@
 
 ## Tools
 
-- Web search: Tavily MCP (`tavily_search`, `tavily_extract`). Multi-step research → a subagent.
+- Multi-step research → a subagent.
 - **A Linear project status update (Pulse) is a briefing** (Externalization → Human-facing) for the initiative owner and leadership: what got settled since the last update, why a progress number moved, and what needs their coordination or decision.
 
 ## Externalization

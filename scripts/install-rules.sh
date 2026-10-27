@@ -2,8 +2,8 @@
 # Install choi's rules for a Claude Code cloud session: each file that
 # scripts/install-rules.manifest lists is written to <config>/rules/, where
 # <config> is $CLAUDE_CONFIG_DIR when set and ~/.claude otherwise. Claude Code
-# loads every rule there at session start. Paste the Usage line into the cloud
-# environment's setup script.
+# loads every rule there at session start. scripts/cloud-setup.sh runs it; run
+# it on its own to pin a version.
 #
 # The manifest lists repository paths, one per line; `#` starts a comment and
 # blank lines are skipped. Every file is fetched before any is written, so a

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Provision a Claude Code cloud environment: both plugin marketplaces, the
-# opt-in epistemic-protocols plugins, ink-figure's figure board option and the
+# Provision a Claude Code cloud environment: choi's rules (install-rules.sh),
+# both plugin marketplaces, the opt-in epistemic-protocols plugins, ink-figure's figure board option and the
 # Epistemic Ink output style, the Codex CLI with the Tavily MCP server
 # registered, and a SessionStart hook that reports a missing Codex login at
 # each session start.
@@ -45,6 +45,10 @@ fi
 # --- Marketplaces: each installer is idempotent and leaves its opt-in plugins out.
 curl -fsSL "$RAW/cc-plugin/main/scripts/install.sh" | bash || true
 curl -fsSL "$RAW/epistemic-protocols/main/scripts/install.sh" | bash || true
+
+# --- choi's rules into <config>/rules (scripts/install-rules.md). A failure
+# here stops the setup, so a session never starts without its rules.
+curl -fsSL "$RAW/cc-plugin/main/scripts/install-rules.sh" | bash || exit 1
 
 # --- Opt-in plugins. `claude plugin enable` fails loudly on a plugin that is
 # already enabled, so the enabled state is read first and enable runs only

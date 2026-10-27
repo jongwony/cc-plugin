@@ -7,16 +7,16 @@ choi's portable Claude Code rules: the ones that hold on any machine and carry n
 | Where Claude runs | How these rules arrive |
 |---|---|
 | Claude Code on choi's machine | `<config>/rules/<file>.md` is a symlink into choi's working clone (`~/github/jongwony/cc-plugin/rules/`). The Mac follows that clone's checked-out branch (`main`) and changes when `git pull` runs there |
-| Claude Code cloud session | the cloud environment's setup script runs `scripts/install-rules.sh`, which writes the files in `rules/` and `cloud-rules/` into `<config>/rules/` |
+| Claude Code cloud session | the cloud environment's setup script, `scripts/cloud-setup.sh`, runs `scripts/install-rules.sh`, which writes the files in `rules/` and `cloud-rules/` into `<config>/rules/` |
 | claude.ai chat | pasted by hand into the profile instructions (code-workflow rules left out) |
 
 Cloud environment setup script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/install-rules.sh | bash
+curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/cloud-setup.sh | bash
 ```
 
-Pin a version with `CC_RULES_REF=<sha-or-tag>` before `bash`. Confirm the result in the session with `/context`.
+A failed rules install stops the setup, so the session does not start. To pin the rules to a version, run `scripts/install-rules.sh` on its own with `CC_RULES_REF=<sha-or-tag>` before `bash`. Confirm the result in the session with `/context`.
 
 Adding a rule file: put it in `rules/`, or in `cloud-rules/` for cloud sessions only, and list its path in `scripts/install-rules.manifest`, the one list both the Mac links and the cloud installer read. On the Mac, run the link loop below again.
 

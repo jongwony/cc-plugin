@@ -185,7 +185,6 @@ export const register: Register = on => {
             `${cur.data.baseRefName} ← ${cur.data.headRefName} · ${count} files +${cur.data.entries.reduce((n, e) => n + e.added, 0)} −${cur.data.entries.reduce((n, e) => n + e.deleted, 0)} · base ${cur.data.mergeBase.slice(0, 7)}`,
             { dimColor: true },
           ),
-          ...cur.data.notes.map(n => line(n, { color: 'warning' })),
         ]
       : []
     const controls = (

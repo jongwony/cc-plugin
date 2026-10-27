@@ -28,7 +28,7 @@ const result = (stdout: string, exitCode = 0) => ({
 })
 
 function pr(n: number) {
-  return { number: n, title: `Title ${n}`, url: `https://github.com/o/r/pull/${n}`, headRefName: `b${n}`, headRefOid: 'c'.repeat(40), baseRefName: 'main' }
+  return { number: n, title: `Title ${n}`, url: `https://github.com/o/r/pull/${n}`, headRefName: `b${n}`, headRefOid: 'c'.repeat(40), baseRefName: 'main', baseRefOid: 'b'.repeat(40) }
 }
 
 /** What the next answers hold: how many files a PR has, and whether the load or a file read fails. */

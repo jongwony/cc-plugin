@@ -24,7 +24,6 @@ export type DiffData = {
   mergeBase: string
   headOid: string
   entries: Entry[]
-  notes: string[]
   /** Reads one entry's patch. */
   readFile: (e: Entry) => Promise<FileRead>
 }
@@ -119,7 +118,7 @@ export async function loadDiff(unguarded: Run, number: number): Promise<DiffData
   const run = guarded(unguarded)
   const [prOut, topOut] = await Promise.all([
     must(run, 'gh pr view', [
-      'gh', 'pr', 'view', String(number), '--json', 'number,title,url,headRefName,headRefOid,baseRefName',
+      'gh', 'pr', 'view', String(number), '--json', 'number,title,url,headRefName,headRefOid,baseRefName,baseRefOid',
     ]),
     must(run, 'git rev-parse', [...GIT, 'rev-parse', '--show-toplevel']),
   ])
@@ -130,6 +129,7 @@ export async function loadDiff(unguarded: Run, number: number): Promise<DiffData
     headRefName: string
     headRefOid: string
     baseRefName: string
+    baseRefOid: string
   }
   // The PR's own URL names its repository and host: https://<host>/<owner>/<repo>/pull/<n>.
   const repo = /^[a-z]+:\/\/[^/]+\/([^/]+\/[^/]+)\/pull\/\d+$/i.exec(pr.url)?.[1] ?? ''
@@ -142,15 +142,15 @@ export async function loadDiff(unguarded: Run, number: number): Promise<DiffData
   const quiet: Run = (argv, timeoutMs) => run(argv, timeoutMs, { GIT_TERMINAL_PROMPT: '0' })
   // The PR's remote is the first whose `refs/pull/<n>/head` is the head gh reports.
   const headName = `refs/pull/${number}/head`
-  // Each remote is asked for its two tips by name, so only those refs are advertised; a dry run writes no ref.
+  // Each remote is asked for that one ref by name, so only it is advertised; a dry run writes no ref.
   const probe = async (remote: string) => {
     const listed = await quiet([...git, 'fetch', '--dry-run', '--porcelain', '--no-write-fetch-head', '--no-tags', '--no-recurse-submodules', '--no-auto-maintenance',
-      '--', remote, `+refs/heads/${pr.baseRefName}:refs/prdiff/base`, `+${headName}:refs/prdiff/head`], 120_000)
+      '--', remote, `+${headName}:refs/prdiff/head`], 120_000)
     // Porcelain lines are `<flag> <old> <new> <local ref>`.
     const tip = (local: string) => listed.stdout.split('\n').map(l => l.split(' ')).find(f => f[3] === local)?.[2]
     const head = listed.exitCode === 0 ? tip('refs/prdiff/head') : undefined
     const said = head === undefined ? `failed: ${reason(listed)}` : `has ${head.slice(0, 7)} at ${headName}`
-    return { remote, head, baseOid: tip('refs/prdiff/base') ?? '', said: `${remote} ${said}` }
+    return { remote, head, said: `${remote} ${said}` }
   }
   const seen: string[] = []
   let found: Awaited<ReturnType<typeof probe>> | undefined
@@ -167,15 +167,15 @@ export async function loadDiff(unguarded: Run, number: number): Promise<DiffData
     if (found) break
   }
   if (!found) throw new StepError('remote', `gh reports PR #${number} at ${pr.headRefOid.slice(0, 7)}; ${seen.join(', ')}`)
-  const { remote, baseOid } = found
+  const { remote } = found
+  // The base is gh's: the commit GitHub diffs the PR against, kept after the base branch moves on or is deleted.
+  const baseOid = pr.baseRefOid
   const headOid = pr.headRefOid
-  // Both tips are fetched by id; no ref is written.
+  // Both are fetched by id; no ref is written.
   await must(quiet, 'git fetch', [...git, 'fetch', '--quiet', '--no-write-fetch-head', '--no-tags', '--no-recurse-submodules', '--no-auto-maintenance', '--', remote, baseOid, headOid], 120_000)
   const based = await must(quiet, 'git merge-base', [...git, 'merge-base', baseOid, headOid])
   const mergeBase = based.stdout.trim()
 
-  const notes: string[] = []
-  if (mergeBase === headOid) notes.push(`the PR head is already in ${pr.baseRefName}: merged?`)
   const ends = [mergeBase, headOid]
   // `.gitattributes` comes from the PR head, not the checkout.
   const atHead = [...git, `--attr-source=${headOid}`]
@@ -202,7 +202,6 @@ export async function loadDiff(unguarded: Run, number: number): Promise<DiffData
     mergeBase,
     headOid,
     entries,
-    notes,
     readFile,
   }
 }

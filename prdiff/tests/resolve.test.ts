@@ -4,7 +4,7 @@ import { candidates, loadDiff, repoOfUrl, type Run, type RunResult } from '../ho
 const ok = (stdout: string): RunResult => ({ exitCode: 0, stdout, stderr: '', isStdoutTruncated: false })
 const fail = (stderr: string): RunResult => ({ exitCode: 1, stdout: '', stderr, isStdoutTruncated: false })
 
-const PR = { number: 7, title: 'Stacked', url: 'https://github.com/o/r/pull/7', headRefName: 'feat/b', headRefOid: 'h'.repeat(40), baseRefName: 'feat/a' }
+const PR = { number: 7, title: 'Stacked', url: 'https://github.com/o/r/pull/7', headRefName: 'feat/b', headRefOid: 'h'.repeat(40), baseRefName: 'feat/a', baseRefOid: 'b'.repeat(40) }
 /** The file read of `x`: its two sides named `<rev>:<path>`. */
 const READ_X = `${'m'.repeat(40)}:x ${'h'.repeat(40)}:x`
 const PATCH = 'diff --git a/x b/x\nindex 1111111..2222222 100644\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n'
@@ -15,9 +15,8 @@ const inv = (paths: string[]) =>
 
 /** The remote a probe (`git fetch --dry-run`) asks, or undefined for any other command. */
 const probed = (argv: readonly string[]) => (argv.includes('--dry-run') ? argv[argv.indexOf('--') + 1] : undefined)
-/** A probe's porcelain answer: the base tip and, when given, the pull head. */
-const porcelain = (head?: string) =>
-  ok(`* ${'0'.repeat(40)} ${'b'.repeat(40)} refs/prdiff/base\n` + (head ? `* ${'0'.repeat(40)} ${head} refs/prdiff/head\n` : ''))
+/** A probe's porcelain answer: the pull head. */
+const porcelain = (head: string) => ok(`* ${'0'.repeat(40)} ${head} refs/prdiff/head\n`)
 /** The fetch of both tips by id. */
 const byId = (calls: string[][]) => calls.find(c => c.includes('fetch') && !c.includes('--dry-run'))
 
@@ -60,12 +59,13 @@ test('remotes are grouped: URL matches first, then the rest, origin first within
   expect(candidates('mirror\t/srv/mirror dir/r (fetch)\n', 'o/r')).toEqual([['mirror']])
 })
 
-test('a PR not checked out: both tips asked for by name in a dry run, fetched by id without a ref, diffed merge-base..head', async () => {
+test('a PR not checked out: its pull head asked for by name in a dry run, it and gh\'s base fetched by id without a ref, diffed merge-base..head', async () => {
   const { run, calls } = fakeRepo()
   const d = await loadDiff(run, 7)
   expect(d.baseRefName).toBe('feat/a')
   const listed = calls.find(c => probed(c) !== undefined) ?? []
-  expect(listed.slice(-4)).toEqual(['--', 'origin', '+refs/heads/feat/a:refs/prdiff/base', '+refs/pull/7/head:refs/prdiff/head'])
+  // The base branch is never asked for: a PR whose base branch was deleted still loads.
+  expect(listed.slice(-3)).toEqual(['--', 'origin', '+refs/pull/7/head:refs/prdiff/head'])
   expect(listed).toContain('--porcelain')
   expect(listed).toContain('--no-tags')
   const fetch = byId(calls) ?? []
@@ -79,8 +79,6 @@ test('a PR not checked out: both tips asked for by name in a dry run, fetched by
 test('a failed fetch or merge-base is reported with its step, not swallowed', async () => {
   const f = fakeRepo({ ' fetch --quiet ': fail('fatal: remote error: upload-pack: not our ref') })
   await expect(loadDiff(f.run, 7)).rejects.toThrow('git fetch: fatal: remote error: upload-pack: not our ref')
-  const gone = fakeRepo({ '--dry-run': fail('fatal: couldn\'t find remote ref refs/heads/feat/a') })
-  await expect(loadDiff(gone.run, 7)).rejects.toThrow('origin failed: fatal: couldn\'t find remote ref refs/heads/feat/a')
   const m = fakeRepo({ 'merge-base': fail('') })
   await expect(loadDiff(m.run, 7)).rejects.toThrow('git merge-base: exit 1')
 })
@@ -142,15 +140,6 @@ test('with one owner/repo on two hosts, the remote on the PR\'s host is used', a
   expect(candidates(v, 'o/r', 'ghe.corp.com')).toEqual([['work', 'origin']])
   expect(candidates(v, 'o/r', 'github.com')).toEqual([['origin', 'work']])
   expect(candidates(v, 'o/r')).toEqual([['origin', 'work']])
-})
-
-test('a PR whose head is already in its base says so instead of showing nothing', async () => {
-  const { run } = fakeRepo({ 'merge-base': ok('h'.repeat(40) + '\n'), '--raw': ok('') })
-  const d = await loadDiff(run, 7)
-  expect(d.entries).toEqual([])
-  expect(d.notes).toEqual(['the PR head is already in feat/a: merged?'])
-  const { run: open } = fakeRepo()
-  expect((await loadDiff(open, 7)).notes).toEqual([])
 })
 
 /** `run`, except that a command whose text holds `match` rejects as a timeout does. */

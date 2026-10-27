@@ -15,8 +15,8 @@ so uncommitted work stays `/diff`'s.
 | Step | Where it comes from |
 | --- | --- |
 | The PR | `gh pr view <n>` for the repository `gh` resolves in the session's directory |
-| The base | the tip of the PR's own `baseRefName` on the remote, asked for by name with `git fetch --dry-run --porcelain` (so the remote advertises only the two refs asked for, and no ref is written) and then fetched by its id |
-| The head | the tip of `refs/pull/<n>/head`, asked for and fetched the same way |
+| The base | the commit `gh` reports as the PR's base (`baseRefOid`), the one GitHub's own diff of the PR is taken from, fetched by its id. It holds after the base branch moves on, is deleted, or takes the PR in a merge commit |
+| The head | the tip of `refs/pull/<n>/head`, asked for by name with `git fetch --dry-run --porcelain` (so the remote advertises only that ref, and no ref is written), then fetched by its id |
 | The files | `git diff --raw --numstat <merge-base(base, head)> <head>`, read once: renames, binary files, type and mode changes listed |
 | One file's lines | `git diff <merge-base>:<old path> <head>:<path>`, each side named by revision and path; an added file is `git diff <empty tree> <head> -- <path>` and a deleted one `git diff <merge-base> <empty tree> -- <path>`, the path taken literally (`--literal-pathspecs`) and the empty tree git's built-in one, so nothing is written. Read when the file is opened; binary files, submodules and mode-only changes have none to read. Naming the path keeps `.gitattributes` in force; both diffs read it from the PR head (`--attr-source`), as GitHub does, not from the checkout |
 

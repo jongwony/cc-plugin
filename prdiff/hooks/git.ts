@@ -1,6 +1,6 @@
 // Resolving a PR to a local cumulative diff: merge-base(base, head)...head,
-// base being the PR's own baseRefName. Every host command goes through the
-// injected `run`.
+// base being the commit gh reports as the PR's baseRefOid. Every host command
+// goes through the injected `run`.
 
 import { fileFor, hasLines, parseDiff, summaryOf, type Entry, type FileDiff } from './parse.ts'
 

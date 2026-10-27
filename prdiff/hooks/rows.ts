@@ -31,11 +31,11 @@ export type Run = { title: string; source: string }
 
 /**
  * The hunks of `f` drawn from its start, charged to `b` while `keep` of it
- * stays unspent, each line clipped to `width`, and how many content lines
- * are left out. A hunk the
- * budget reaches is drawn as far as it fits.
+ * stays unspent, each line clipped to `width`, and the note counting the
+ * content lines left out. A hunk the budget reaches is drawn as far as it
+ * fits.
  */
-export function drawn(f: FileDiff, width: number, b: Budget, keep = 0): { runs: Run[]; left: number; note?: string } {
+export function drawn(f: FileDiff, width: number, b: Budget, keep = 0): { runs: Run[]; note?: string } {
   const runs: Run[] = []
   let left = 0
   // Room for the note on what is left out, sized for the most it could count: every content line.
@@ -68,7 +68,7 @@ export function drawn(f: FileDiff, width: number, b: Budget, keep = 0): { runs: 
     left += lines.length - lo
   }
   const note = left > 0 && b.take(leftOut(left)) ? leftOut(left) : undefined
-  return { runs, left, note }
+  return { runs, note }
 }
 
 /**

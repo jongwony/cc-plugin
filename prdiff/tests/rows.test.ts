@@ -23,7 +23,7 @@ const total = (d: ReturnType<typeof drawn>) => d.runs.reduce((n, r) => n + r.tit
 test('a file under the budget is drawn whole, hunk by hunk', () => {
   const d = drawn(file(3, 5), 80, new Budget(CHAR_BUDGET))
   expect(d.runs.map(r => r.source.split('\n').length - 1)).toEqual([5, 5, 5])
-  expect(d.left).toBe(0)
+  expect(d.note).toBe(undefined)
 })
 
 test('a file over the budget is drawn from its start and says how many lines are left out', () => {
@@ -34,15 +34,15 @@ test('a file over the budget is drawn from its start and says how many lines are
   const budget = first.title.length + first.source.length + 50 + '  8 more lines of this file are not drawn'.length
   const d = drawn(file(2, 4), 80, new Budget(budget))
   expect(d.runs.map(r => r.source.split('\n').length - 1)).toEqual([4, 1])
-  expect(d.left).toBe(3)
+  expect(d.note).toBe('  3 more lines of this file are not drawn')
   expect(total(d) + (d.note?.length ?? 0)).toBeLessThanOrEqual(budget)
 })
 
 test('many tiny hunks are charged for every header and source they draw', () => {
   const d = drawn(file(20_000, 1, 1), 80, new Budget(CHAR_BUDGET))
   expect(total(d)).toBeLessThanOrEqual(CHAR_BUDGET)
-  expect(d.left).toBeGreaterThan(0)
-  expect(d.runs.length + d.left).toBe(20_000)
+  expect(d.runs.length).toBeLessThan(20_000)
+  expect(d.note).toBe(`  ${20_000 - d.runs.length} more lines of this file are not drawn`)
 })
 
 test('lines are clipped to the width a row shows, which leaves more of the file under the budget', () => {
@@ -75,7 +75,8 @@ test('the note on what is left out is charged as printed, its count taken from t
   f.deleted = 0
   const b = new Budget(1000)
   const d = drawn(f, 80, b)
-  expect(d.note).toBe(`  ${d.left} more lines of this file are not drawn`)
+  const shown = d.runs.reduce((n, r) => n + r.source.split('\n').length - 1, 0)
+  expect(d.note).toBe(`  ${30_000 - shown} more lines of this file are not drawn`)
   expect(1000 - b.left).toBe(total(d) + (d.note?.length ?? 0))
 })
 

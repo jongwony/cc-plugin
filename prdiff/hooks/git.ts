@@ -19,7 +19,6 @@ export type FileRead = { file: FileDiff; isCut: boolean }
 export type DiffData = {
   number: number
   title: string
-  url: string
   baseRefName: string
   headRefName: string
   mergeBase: string
@@ -198,7 +197,6 @@ export async function loadDiff(unguarded: Run, number: number): Promise<DiffData
   return {
     number: pr.number,
     title: pr.title,
-    url: pr.url,
     baseRefName: pr.baseRefName,
     headRefName: pr.headRefName,
     mergeBase,

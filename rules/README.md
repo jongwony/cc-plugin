@@ -14,7 +14,7 @@ Cloud environment setup script:
 curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/install-rules.sh | bash
 ```
 
-Pin a version with `CC_RULES_REF=<sha-or-tag>` before `bash`. Confirm the result in the session with `/context`.
+Adding a rule file: list it in `rules/manifest`. Pin a version with `CC_RULES_REF=<sha-or-tag>` before `bash`. Confirm the result in the session with `/context`.
 
 Local symlinks (once, after this directory is on `main` and the marketplace clone is updated):
 

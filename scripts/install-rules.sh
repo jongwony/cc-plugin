@@ -6,7 +6,10 @@
 #
 # The rules go between two marker lines; anything else in ~/.claude/CLAUDE.md
 # stays. Re-running replaces the block, so the result is idempotent.
-# README.md in rules/ is for people and is not installed.
+# rules/manifest lists the files to install, one per line; README.md is for
+# people and is not listed. Only raw.githubusercontent.com is fetched: a cloud
+# session's GitHub proxy refuses API and archive requests for repositories not
+# attached to the session.
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/install-rules.sh | bash
@@ -24,9 +27,7 @@ END="<!-- cc-plugin rules: end -->"
 command -v curl >/dev/null 2>&1 || { echo "Error: curl not found." >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "Error: python3 not found." >&2; exit 1; }
 
-names=$(curl -fsSL "https://api.github.com/repos/$REPO/contents/rules?ref=$REF" \
-  | python3 -c "import json,sys; [print(e['name']) for e in json.load(sys.stdin) if e['name'].endswith('.md') and e['name'] != 'README.md']" \
-  | sort)
+names=$(curl -fsSL "https://raw.githubusercontent.com/$REPO/$REF/rules/manifest" | grep -v '^[[:space:]]*$')
 [ -n "$names" ] || { echo "Error: no rule files found at $REPO@$REF" >&2; exit 1; }
 
 block=$(mktemp)

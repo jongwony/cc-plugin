@@ -41,7 +41,7 @@ function answer(argv: readonly string[], gate: Promise<void>): Promise<ReturnTyp
   if (s.startsWith('gh pr view 3 ')) return result(JSON.stringify(pr(3)))
   if (s.includes('--show-toplevel')) return result('/repo')
   if (s.includes('remote -v')) return result('origin\thttps://github.com/o/r.git (fetch)\n')
-  if (s.includes(' ls-remote ')) return result(argv.slice(argv.indexOf('ls-remote') + 3).map(n => `${'c'.repeat(40)}\t${n}`).join('\n'))
+  if (s.includes('--dry-run')) return result(argv.slice(argv.indexOf('--') + 2).map(n => `* ${'0'.repeat(40)} ${'c'.repeat(40)} ${n.split(':')[1]}`).join('\n'))
   if (s.includes(' fetch ')) return result('')
   if (s.includes('merge-base')) return result('m'.repeat(40))
   if (s.includes('--raw')) return result(state.files === 0 ? '' : inv(['src/one.ts', 'src/two.ts', ...Array.from({ length: state.files - 2 }, (_, i) => `src/f${i}.ts`)], 1, 1))

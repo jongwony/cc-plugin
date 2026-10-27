@@ -13,6 +13,14 @@ const PATCH = 'diff --git a/x b/x\nindex 1111111..2222222 100644\n--- a/x\n+++ b
 const inv = (paths: string[]) =>
   paths.map(p => `:100644 100644 old-${p} new-${p} M\0${p}\0`).join('') + paths.map(p => `1\t1\t${p}\0`).join('')
 
+/** The remote a probe (`git fetch --dry-run`) asks, or undefined for any other command. */
+const probed = (argv: readonly string[]) => (argv.includes('--dry-run') ? argv[argv.indexOf('--') + 1] : undefined)
+/** A probe's porcelain answer: the base tip and, when given, the pull head. */
+const porcelain = (head?: string) =>
+  ok(`* ${'0'.repeat(40)} ${'b'.repeat(40)} refs/prdiff/base\n` + (head ? `* ${'0'.repeat(40)} ${head} refs/prdiff/head\n` : ''))
+/** The fetch of both tips by id. */
+const byId = (calls: string[][]) => calls.find(c => c.includes('fetch') && !c.includes('--dry-run'))
+
 /** A repository that answers by the command's shape; records every argv. */
 function fakeRepo(overrides: Record<string, RunResult> = {}) {
   const calls: string[][] = []
@@ -23,9 +31,7 @@ function fakeRepo(overrides: Record<string, RunResult> = {}) {
     if (s.startsWith('gh pr view 7')) return ok(JSON.stringify(PR))
     if (s.includes('rev-parse --show-toplevel')) return ok('/repo\n')
     if (s.includes('remote -v')) return ok('fork\tgit@github.com:me/r.git (fetch)\norigin\thttps://github.com/o/r.git (fetch)\n')
-    if (s.includes(' ls-remote ')) {
-      return ok(argv.slice(argv.indexOf('ls-remote') + 3).map(n => `${n.startsWith('refs/pull/') ? 'h'.repeat(40) : 'b'.repeat(40)}\t${n}`).join('\n') + '\n')
-    }
+    if (probed(argv) !== undefined) return porcelain('h'.repeat(40))
     if (s.includes(' fetch ')) return ok('')
     if (s.includes('merge-base')) return ok('m'.repeat(40) + '\n')
     if (s.includes('--raw')) return ok(inv(['x']))
@@ -54,13 +60,15 @@ test('remotes are grouped: URL matches first, then the rest, origin first within
   expect(candidates('mirror\t/srv/mirror dir/r (fetch)\n', 'o/r')).toEqual([['mirror']])
 })
 
-test('a PR not checked out: both tips listed once, fetched by id without a ref, diffed merge-base..head', async () => {
+test('a PR not checked out: both tips asked for by name in a dry run, fetched by id without a ref, diffed merge-base..head', async () => {
   const { run, calls } = fakeRepo()
   const d = await loadDiff(run, 7)
   expect(d.baseRefName).toBe('feat/a')
-  const listed = calls.find(c => c.includes('ls-remote')) ?? []
-  expect(listed.slice(-4)).toEqual(['--', 'origin', 'refs/heads/feat/a', 'refs/pull/7/head'])
-  const fetch = calls.find(c => c.includes('fetch')) ?? []
+  const listed = calls.find(c => probed(c) !== undefined) ?? []
+  expect(listed.slice(-4)).toEqual(['--', 'origin', '+refs/heads/feat/a:refs/prdiff/base', '+refs/pull/7/head:refs/prdiff/head'])
+  expect(listed).toContain('--porcelain')
+  expect(listed).toContain('--no-tags')
+  const fetch = byId(calls) ?? []
   expect(fetch.slice(-4)).toEqual(['--', 'origin', 'b'.repeat(40), 'h'.repeat(40)])
   expect(calls.some(c => c.includes('update-ref'))).toBe(false)
   const diffed = calls.find(c => c.includes('--raw')) ?? []
@@ -69,10 +77,10 @@ test('a PR not checked out: both tips listed once, fetched by id without a ref, 
 })
 
 test('a failed fetch or merge-base is reported with its step, not swallowed', async () => {
-  const f = fakeRepo({ ' fetch ': fail('fatal: remote error: upload-pack: not our ref') })
+  const f = fakeRepo({ ' fetch --quiet ': fail('fatal: remote error: upload-pack: not our ref') })
   await expect(loadDiff(f.run, 7)).rejects.toThrow('git fetch: fatal: remote error: upload-pack: not our ref')
-  const gone = fakeRepo({ ' ls-remote ': ok(`${'h'.repeat(40)}\trefs/pull/7/head\n`) })
-  await expect(loadDiff(gone.run, 7)).rejects.toThrow('git ls-remote: origin has no branch feat/a')
+  const gone = fakeRepo({ '--dry-run': fail('fatal: couldn\'t find remote ref refs/heads/feat/a') })
+  await expect(loadDiff(gone.run, 7)).rejects.toThrow('origin failed: fatal: couldn\'t find remote ref refs/heads/feat/a')
   const m = fakeRepo({ 'merge-base': fail('') })
   await expect(loadDiff(m.run, 7)).rejects.toThrow('git merge-base: exit 1')
 })
@@ -190,17 +198,17 @@ test('a failure names the lines through its error line, cause included, not the 
     '',
     'Please make sure you have the correct access rights',
   ].join('\n')
-  const f = fakeRepo({ ' ls-remote ': fail(ssh) })
+  const f = fakeRepo({ '--dry-run': fail(ssh) })
   await expect(loadDiff(f.run, 7)).rejects.toThrow(
     'origin failed: git@github.com: Permission denied (publickey). fatal: Could not read from remote repository.',
   )
   // As git 2.54 and OpenSSH wrote it for an unreachable port 22, ssh's line ending in CR.
   const port = 'ssh: connect to host github.com port 22: Operation timed out\r\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.\n'
-  const p = fakeRepo({ ' ls-remote ': { ...fail(port), exitCode: 128 } })
+  const p = fakeRepo({ '--dry-run': { ...fail(port), exitCode: 128 } })
   await expect(loadDiff(p.run, 7)).rejects.toThrow(
     'origin failed: ssh: connect to host github.com port 22: Operation timed out fatal: Could not read from remote repository.,',
   )
-  const w = fakeRepo({ ' fetch ': fail('warning: redirecting to https://github.com/o/r2.git/\nremote: Repository not found.') })
+  const w = fakeRepo({ ' fetch --quiet ': fail('warning: redirecting to https://github.com/o/r2.git/\nremote: Repository not found.') })
   await expect(loadDiff(w.run, 7)).rejects.toThrow('git fetch: remote: Repository not found.')
 })
 
@@ -223,7 +231,7 @@ test('the PR URL names the repository and host; gh is asked nothing else about t
     'remote -v': ok('origin\thttps://github.com/o/r.git (fetch)\nwork\tgit@ghe.corp.com:o/r.git (fetch)\n'),
   })
   await loadDiff(run, 7)
-  expect(calls.find(c => c.includes('ls-remote'))?.at(-3)).toBe('work')
+  expect(probed(calls.find(c => probed(c) !== undefined) ?? [])).toBe('work')
   expect(calls.some(c => c[0] === 'gh' && c[1] === 'repo')).toBe(false)
 })
 
@@ -232,22 +240,22 @@ test('the PR\'s remote is the first whose pull head is gh\'s head; with none, th
   // A GitLab origin and a GitHub remote reached through an ssh alias that names no host.
   const lab = fakeRepo({ 'remote -v': ok('origin\tgit@gitlab.com:o/r.git (fetch)\ncorp\tcorp:o/r.git (fetch)\n') })
   const by = (pull: Record<string, string>): Run => async (argv, t, env) => {
-    const at = argv.indexOf('ls-remote')
-    if (at >= 0) {
-      const head = pull[argv[at + 2] ?? '']
-      return ok(`${'b'.repeat(40)}\trefs/heads/feat/a\n${head ? `${head}\trefs/pull/7/head\n` : ''}`)
+    const remote = probed(argv)
+    if (remote !== undefined) {
+      const head = pull[remote]
+      return head ? porcelain(head) : fail('fatal: couldn\'t find remote ref refs/pull/7/head')
     }
     return lab.run(argv, t, env)
   }
   await loadDiff(by(pulls), 7)
-  expect(lab.calls.find(c => c.includes('fetch'))?.slice(-4)).toEqual(['--', 'corp', 'b'.repeat(40), 'h'.repeat(40)])
+  expect(byId(lab.calls)?.slice(-4)).toEqual(['--', 'corp', 'b'.repeat(40), 'h'.repeat(40)])
   // A renamed repository whose remote still names the old path is found by its head alone.
   const renamed = fakeRepo({ 'remote -v': ok('origin\tgit@github.com:o/old-name.git (fetch)\n') })
   await loadDiff(renamed.run, 7)
-  expect(renamed.calls.find(c => c.includes('fetch'))?.includes('origin')).toBe(true)
+  expect(byId(renamed.calls)?.includes('origin')).toBe(true)
   // No remote holds the head gh reports: each one tried, and what it had, is named.
   await expect(loadDiff(by({ origin: 'x'.repeat(40) }), 7)).rejects.toThrow(
-    'remote: gh reports PR #7 at hhhhhhh; refs/pull/7/head on origin has xxxxxxx, corp has none',
+    "remote: gh reports PR #7 at hhhhhhh; origin has xxxxxxx at refs/pull/7/head, corp failed: fatal: couldn't find remote ref refs/pull/7/head",
   )
 })
 
@@ -263,7 +271,7 @@ test('a remote name is never read as an option', async () => {
   const name = '--upload-pack=touch PWNED;git-upload-pack'
   const { run, calls } = fakeRepo({ 'remote -v': ok(`${name}\thttps://github.com/o/r.git (fetch)\n`) })
   await loadDiff(run, 7)
-  for (const c of calls.filter(c => c.includes('ls-remote') || c.includes('fetch'))) {
+  for (const c of calls.filter(c => c.includes('fetch'))) {
     expect(c.indexOf('--')).toBe(c.indexOf(name) - 1)
   }
 })
@@ -286,30 +294,28 @@ test('remotes naming the PR\'s repository are asked at once, so a slow one ranke
   })
   const both = fakeRepo({ 'remote -v': ok('origin\tgit@github.com:o/r.git (fetch)\nwork\tgit@ghe.corp.com:o/r.git (fetch)\n') })
   const run: Run = async (argv, t, env) => {
-    const at = argv.indexOf('ls-remote')
-    if (at >= 0 && argv[at + 2] === 'origin') {
+    if (probed(argv) === 'origin') {
       // origin answers only once work has been asked: one at a time, this would never return.
       await askedSecond
       return fail('fatal: unable to access: Connection timed out')
     }
-    if (at >= 0 && argv[at + 2] === 'work') release()
+    if (probed(argv) === 'work') release()
     return both.run(argv, t, env)
   }
   await loadDiff(run, 7)
-  expect(both.calls.find(c => c.includes('fetch'))?.slice(-3, -2)).toEqual(['work'])
+  expect(byId(both.calls)?.slice(-3, -2)).toEqual(['work'])
 })
 
 test('the first match in rank order is taken without waiting for remotes ranked below it', async () => {
   const never = new Promise<RunResult>(() => {})
   const both = fakeRepo({ 'remote -v': ok('origin\tgit@github.com:o/r.git (fetch)\nwork\tgit@ghe.corp.com:o/r.git (fetch)\n') })
   const run: Run = async (argv, t, env) => {
-    const at = argv.indexOf('ls-remote')
     // work, ranked below origin, never answers.
-    if (at >= 0 && argv[at + 2] === 'work') return never
+    if (probed(argv) === 'work') return never
     return both.run(argv, t, env)
   }
   await loadDiff(run, 7)
-  expect(both.calls.find(c => c.includes('fetch'))?.slice(-3, -2)).toEqual(['origin'])
+  expect(byId(both.calls)?.slice(-3, -2)).toEqual(['origin'])
 })
 
 test('a remote naming another repository is never asked while one naming the PR\'s repository matches', async () => {
@@ -317,10 +323,10 @@ test('a remote naming another repository is never asked while one naming the PR\
   const repo = fakeRepo({ 'remote -v': ok('mirror\t/srv/mirror (fetch)\norigin\tgit@github.com:o/r.git (fetch)\n') })
   const asked: string[] = []
   const run: Run = async (argv, t, env) => {
-    const at = argv.indexOf('ls-remote')
-    if (at >= 0) asked.push(argv[at + 2] ?? '')
+    const remote = probed(argv)
+    if (remote !== undefined) asked.push(remote)
     // mirror, slow, would hold its process until the timeout.
-    if (at >= 0 && argv[at + 2] === 'mirror') return never
+    if (remote === 'mirror') return never
     return repo.run(argv, t, env)
   }
   await loadDiff(run, 7)

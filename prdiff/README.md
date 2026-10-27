@@ -15,8 +15,8 @@ so uncommitted work stays `/diff`'s.
 | Step | Where it comes from |
 | --- | --- |
 | The PR | `gh pr view <n>` for the repository `gh` resolves in the session's directory |
-| The base | the tip of the PR's own `baseRefName` on the remote, read with `git ls-remote` and fetched by its id |
-| The head | the tip of `refs/pull/<n>/head`, read and fetched the same way |
+| The base | the tip of the PR's own `baseRefName` on the remote, asked for by name with `git fetch --dry-run --porcelain` (so the remote advertises only the two refs asked for, and no ref is written) and then fetched by its id |
+| The head | the tip of `refs/pull/<n>/head`, asked for and fetched the same way |
 | The files | `git diff --raw --numstat <merge-base(base, head)> <head>`, read once: renames, binary files, type and mode changes listed |
 | One file's lines | `git diff <merge-base>:<old path> <head>:<path>`, each side named by revision and path; an added file is `git diff <empty tree> <head> -- <path>` and a deleted one `git diff <merge-base> <empty tree> -- <path>`, the path taken literally (`--literal-pathspecs`) and the empty tree git's built-in one, so nothing is written. Read when the file is opened; binary files, submodules and mode-only changes have none to read. Naming the path keeps `.gitattributes` in force; both diffs read it from the PR head (`--attr-source`), as GitHub does, not from the checkout |
 
@@ -67,8 +67,9 @@ error shows under that file.
 ## Requirements
 
 - Claude Code with function hooks (mods).
-- `git` 2.40 or newer on `PATH` (`--attr-source`, which reads `.gitattributes`
-  from the PR head, arrived in 2.40). Install it from <https://git-scm.com/downloads>, or with a package
+- `git` 2.41 or newer on `PATH` (`fetch --porcelain`, which prints the tips a
+  remote has, arrived in 2.41; `--attr-source`, which reads `.gitattributes`
+  from the PR head, in 2.40). Install it from <https://git-scm.com/downloads>, or with a package
   manager (`brew install git`, `apt install git`).
 - The GitHub CLI `gh` 2.0 or newer on `PATH`, signed in (`gh auth login`).
   Install it from <https://cli.github.com> (`brew install gh`, or the
@@ -81,10 +82,10 @@ recover; it shows what happened.
 
 | Precondition | What a violation looks like |
 | --- | --- |
-| git 2.40 or newer | The file list fails with git's own "unknown option" line for `--attr-source`, shown as the load's error. |
+| git 2.41 or newer | Each remote fails with git's own "unknown option" line for `--porcelain`, shown in the load's error. |
 | git authentication needs no prompt: a credential helper for https, an agent or a key without a passphrase for ssh | https fails with git's "terminal prompts disabled". A remote whose ssh waits on a prompt holds the load until its 120-second timeout, since remotes ranked below it are not taken before it answers; it then counts as failed with the timeout as its reason, and the next remote that has the head is used. |
 | The clone holds the history between the PR's base and head (it is not shallow there) | "git merge-base: exit 1". |
-| The PR's pull ref is current: `refs/pull/<n>/head` on the remote is the head `gh` reports | "gh reports PR #n at X; refs/pull/n/head on origin has Y". Right after a push GitHub can lag by a few seconds; press `r` again. |
+| The PR's pull ref is current: `refs/pull/<n>/head` on the remote is the head `gh` reports | "gh reports PR #n at X; origin has Y at refs/pull/n/head". Right after a push GitHub can lag by a few seconds; press `r` again. |
 | File paths are UTF-8 | A file whose path is not shows git's error for that path when it is opened. |
 | The PR's file list is under 4 MiB | "git diff: file list over 4 MiB was cut". |
 | No hot reload of the mod while the pane is in use | After a reload during a load the pane keeps showing "Loading #N…" until `r`. |

@@ -142,14 +142,16 @@ export async function loadDiff(unguarded: Run, number: number): Promise<DiffData
   // Git commands from the listing on never prompt: a missing credential fails with git's own message.
   const quiet: Run = (argv, timeoutMs) => run(argv, timeoutMs, { GIT_TERMINAL_PROMPT: '0' })
   // The PR's remote is the first whose `refs/pull/<n>/head` is the head gh reports.
-  const baseName = `refs/heads/${pr.baseRefName}`
   const headName = `refs/pull/${number}/head`
+  // Each remote is asked for its two tips by name, so only those refs are advertised; a dry run writes no ref.
   const probe = async (remote: string) => {
-    const listed = await quiet([...git, 'ls-remote', '--', remote, baseName, headName], 120_000)
-    const tip = (name: string) => listed.stdout.split('\n').find(l => l.endsWith(`\t${name}`))?.split('\t')[0]
-    const head = listed.exitCode === 0 ? tip(headName) : undefined
-    const said = listed.exitCode !== 0 ? `failed: ${reason(listed)}` : head === undefined ? 'has none' : `has ${head.slice(0, 7)}`
-    return { remote, head, baseOid: tip(baseName), said: `${remote} ${said}` }
+    const listed = await quiet([...git, 'fetch', '--dry-run', '--porcelain', '--no-write-fetch-head', '--no-tags', '--no-recurse-submodules', '--no-auto-maintenance',
+      '--', remote, `+refs/heads/${pr.baseRefName}:refs/prdiff/base`, `+${headName}:refs/prdiff/head`], 120_000)
+    // Porcelain lines are `<flag> <old> <new> <local ref>`.
+    const tip = (local: string) => listed.stdout.split('\n').map(l => l.split(' ')).find(f => f[3] === local)?.[2]
+    const head = listed.exitCode === 0 ? tip('refs/prdiff/head') : undefined
+    const said = head === undefined ? `failed: ${reason(listed)}` : `has ${head.slice(0, 7)} at ${headName}`
+    return { remote, head, baseOid: tip('refs/prdiff/base') ?? '', said: `${remote} ${said}` }
   }
   const seen: string[] = []
   let found: Awaited<ReturnType<typeof probe>> | undefined
@@ -165,12 +167,11 @@ export async function loadDiff(unguarded: Run, number: number): Promise<DiffData
     }
     if (found) break
   }
-  if (!found) throw new StepError('remote', `gh reports PR #${number} at ${pr.headRefOid.slice(0, 7)}; ${headName} on ${seen.join(', ')}`)
+  if (!found) throw new StepError('remote', `gh reports PR #${number} at ${pr.headRefOid.slice(0, 7)}; ${seen.join(', ')}`)
   const { remote, baseOid } = found
-  if (!baseOid) throw new StepError('git ls-remote', `${remote} has no branch ${pr.baseRefName}`)
   const headOid = pr.headRefOid
   // Both tips are fetched by id; no ref is written.
-  await must(quiet, 'git fetch', [...git, 'fetch', '--quiet', '--no-write-fetch-head', '--no-recurse-submodules', '--no-auto-maintenance', '--', remote, baseOid, headOid], 120_000)
+  await must(quiet, 'git fetch', [...git, 'fetch', '--quiet', '--no-write-fetch-head', '--no-tags', '--no-recurse-submodules', '--no-auto-maintenance', '--', remote, baseOid, headOid], 120_000)
   const based = await must(quiet, 'git merge-base', [...git, 'merge-base', baseOid, headOid])
   const mergeBase = based.stdout.trim()
 

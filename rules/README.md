@@ -16,16 +16,15 @@ curl -fsSL https://raw.githubusercontent.com/jongwony/cc-plugin/main/scripts/ins
 
 Adding a rule file: list it in `rules/manifest`. Pin a version with `CC_RULES_REF=<sha-or-tag>` before `bash`. Confirm the result in the session with `/context`.
 
-Local symlinks (once, after this directory is on `main` and `git -C ~/github/jongwony/cc-plugin pull` has run), then commit the switch in `~/.claude`:
+Local symlinks, one per `rules/manifest` entry (once, after this directory is on `main` and `git -C ~/github/jongwony/cc-plugin pull` has run), then commit the switch in `~/.claude`:
 
 ```bash
-for f in ~/github/jongwony/cc-plugin/rules/*.md; do
-  n=$(basename "$f"); [ "$n" = README.md ] && continue
-  ln -sf "$f" ~/.claude/rules/ && git -C ~/.claude add "rules/$n"
+src=~/github/jongwony/cc-plugin/rules
+sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' "$src/manifest" | grep -v '^$' |
+while IFS= read -r n; do
+  ln -sf "$src/$n" ~/.claude/rules/ && git -C ~/.claude add "rules/$n"
 done
 git -C ~/.claude commit -m "rules: link the portable rules to the cc-plugin clone"
 ```
 
 Editing one of these rules: change it in cc-plugin through a branch and PR, not through the symlink.
-
-Cowork sessions on the desktop skip a symlinked rule file that points outside the working directory.

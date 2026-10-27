@@ -48,9 +48,10 @@ The pane takes the keyboard after `ctrl+x tab` or a click.
 has been asked for.
 
 The pane shows the PR, the open file and then the list of every file;
-pressing a file in the list opens it. Whenever a file is opened (a pick, or
-the first file of a load that has files) the pane scrolls back to its top. A
-file whose read failed is read again when picked again.
+pressing a file in the list opens it. Whenever the open file changes (a pick
+of another file, or the first file of a load that has files) the pane scrolls
+back to its top; picking the file already open, or `j` on the last file,
+changes nothing. A file whose read failed is read again when picked again.
 
 Each drawing holds at most 100,000 characters of text, the engine's limit on
 one drawing. The engine counts the text of string children, Code sources,

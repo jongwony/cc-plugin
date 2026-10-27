@@ -27,23 +27,7 @@
 
 ## Externalization
 
-Governs any artifact published for a reader. Principle: `premise/instruction-authoring.md`. Where one file would serve both readers, it is agent-facing and the picture moves to the human-facing document.
-
-### Agent-facing — instruction surfaces
-
-What a surface may carry is set by when it enters context; the earlier it enters, the less it carries. Establish a surface's actual loading moment rather than reading it off the directory name (`premise/instruction-authoring.md` §Inscription Economics):
-
-- **Startup-loaded** — a `rules/*.md` with no `paths`, and the `CLAUDE.md` / `AGENTS.md` at or above the working directory. A rule is memory, not documentation: the state and what it binds. A `description` — a skill's, an agent's, a plugin's — is startup-loaded whatever file it sits in, and is written to this tier.
-- **Invocation- or event-loaded** — a `SKILL.md` body, an agent file's body, model-visible hook output. Carry the procedure being invoked and the ground the event itself supplies, not the material it operates on.
-- **Read on demand** — `references/`, an agent-facing `docs/` file, a nested `CLAUDE.md`, a `paths`-scoped rule (these two enter when Claude reads a matching file). Carry the full procedure and the ground the named read point needs.
-
-Form at every tier:
-
-- One bullet per condition or moment, each naming the state, what triggers it, and the command or reference it resolves to.
-- No diagrams, no tables whose cells hold sentences, no narrative. A short lookup table (agent → mention → domain) is fine.
-- Operative content only; rationale goes to the ledger (commit message).
-- Nothing a model reaches by inference — only values choi holds and facts the model cannot observe.
-- A rule that only holds on choi's machine (local paths, local CLIs, user-installed plugins, harness tools) or carries private identifiers goes to the local, unpublished rules, not here.
+Governs any artifact published for a reader. Where one file would serve both readers, it is an instruction surface (`instruction-surfaces.md`) and the picture moves to the human-facing document.
 
 ### Human-facing — documents
 

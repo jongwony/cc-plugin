@@ -67,6 +67,8 @@ test('a PR not checked out: its pull head asked for by name in a dry run, it and
   // The base branch is never asked for: a PR whose base branch was deleted still loads.
   expect(listed.slice(-3)).toEqual(['--', 'origin', '+refs/pull/7/head:refs/prdiff/head'])
   expect(listed).toContain('--porcelain')
+  // An unchanged ref is printed only under --verbose.
+  expect(listed).toContain('--verbose')
   expect(listed).toContain('--no-tags')
   const fetch = byId(calls) ?? []
   expect(fetch.slice(-4)).toEqual(['--', 'origin', 'b'.repeat(40), 'h'.repeat(40)])
@@ -254,6 +256,13 @@ test('the repository directory is taken as git prints it, a trailing space kept'
   const later = calls.filter(c => c.includes('-C'))
   expect(later.length).toBeGreaterThan(0)
   expect(later.every(c => c[c.indexOf('-C') + 1] === '/srv/my repo ')).toBe(true)
+})
+
+test('a probe reads the pull head whatever its flag, a fast-forward\'s blank one and an unchanged ref included', async () => {
+  for (const flag of ['*', ' ', '+', '=']) {
+    const f = fakeRepo({ '--dry-run': ok(`${flag} ${'a'.repeat(40)} ${'h'.repeat(40)} refs/prdiff/head\n`) })
+    expect((await loadDiff(f.run, 7)).headOid).toBe('h'.repeat(40))
+  }
 })
 
 test('a remote name is never read as an option', async () => {

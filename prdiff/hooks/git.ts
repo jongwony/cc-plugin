@@ -144,11 +144,11 @@ export async function loadDiff(unguarded: Run, number: number): Promise<DiffData
   const headName = `refs/pull/${number}/head`
   // Each remote is asked for that one ref by name, so only it is advertised; a dry run writes no ref.
   const probe = async (remote: string) => {
-    const listed = await quiet([...git, 'fetch', '--dry-run', '--porcelain', '--no-write-fetch-head', '--no-tags', '--no-recurse-submodules', '--no-auto-maintenance',
+    const listed = await quiet([...git, 'fetch', '--dry-run', '--porcelain', '--verbose', '--no-write-fetch-head', '--no-tags', '--no-recurse-submodules', '--no-auto-maintenance',
       '--', remote, `+${headName}:refs/prdiff/head`], 120_000)
-    // Porcelain lines are `<flag> <old> <new> <local ref>`.
-    const tip = (local: string) => listed.stdout.split('\n').map(l => l.split(' ')).find(f => f[3] === local)?.[2]
-    const head = listed.exitCode === 0 ? tip('refs/prdiff/head') : undefined
+    // A porcelain line is a one-character flag, a space, then `<old> <new> <local ref>`; --verbose prints an unchanged ref too.
+    const fields = listed.stdout.split('\n').map(l => l.slice(2).split(' ')).find(f => f[2] === 'refs/prdiff/head')
+    const head = listed.exitCode === 0 ? fields?.[1] : undefined
     const said = head === undefined ? `failed: ${reason(listed)}` : `has ${head.slice(0, 7)} at ${headName}`
     return { remote, head, said: `${remote} ${said}` }
   }

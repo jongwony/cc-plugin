@@ -72,7 +72,8 @@ error shows under that file.
   remote has, arrived in 2.41; `--attr-source`, which reads `.gitattributes`
   from the PR head, in 2.40). Install it from <https://git-scm.com/downloads>, or with a package
   manager (`brew install git`, `apt install git`).
-- The GitHub CLI `gh` 2.0 or newer on `PATH`, signed in (`gh auth login`).
+- The GitHub CLI `gh` 2.63.0 or newer on `PATH`, signed in (`gh auth login`);
+  `pr view --json baseRefOid` arrived in 2.63.0.
   Install it from <https://cli.github.com> (`brew install gh`, or the
   packages listed there).
 
@@ -84,6 +85,7 @@ recover; it shows what happened.
 | Precondition | What a violation looks like |
 | --- | --- |
 | git 2.41 or newer | Each remote fails with git's own "unknown option" line for `--porcelain`, shown in the load's error. |
+| gh 2.63.0 or newer | The load fails with gh's own `Unknown JSON field: "baseRefOid"` and the fields that version has. |
 | git authentication needs no prompt: a credential helper for https, an agent or a key without a passphrase for ssh | https fails with git's "terminal prompts disabled". A remote whose ssh waits on a prompt holds the load until its 120-second timeout, since remotes ranked below it are not taken before it answers; it then counts as failed with the timeout as its reason, and the next remote that has the head is used. |
 | The clone holds the history between the PR's base and head (it is not shallow there) | "git merge-base: exit 1". |
 | The PR's pull ref is current: `refs/pull/<n>/head` on the remote is the head `gh` reports | "gh reports PR #n at X; origin has Y at refs/pull/n/head". Right after a push GitHub can lag by a few seconds; press `r` again. |

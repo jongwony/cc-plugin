@@ -73,6 +73,22 @@ error, or a scroll the engine rejects, shows under that file.
   Install it from <https://cli.github.com> (`brew install gh`, or the
   packages listed there).
 
+## Domain
+
+prdiff works under these preconditions. Outside them it does not try to
+recover; it shows what happened.
+
+| Precondition | What a violation looks like |
+| --- | --- |
+| git 2.40 or newer | The file list fails with git's own "unknown option" line for `--attr-source`, shown as the load's error. |
+| git authentication needs no prompt: a credential helper for https, an agent or a key without a passphrase for ssh | https fails with git's "terminal prompts disabled"; an ssh prompt waits until the 120-second timeout and shows as that remote's failure. |
+| The clone holds the history between the PR's base and head (it is not shallow there) | "git merge-base: exit 1". |
+| The PR's pull ref is current: `refs/pull/<n>/head` on the remote is the head `gh` reports | "gh reports PR #n at X; refs/pull/n/head on origin has Y". Right after a push GitHub can lag by a few seconds; press `r` again. |
+| File paths are UTF-8 | A file whose path is not shows git's error for that path when it is opened. |
+| The object store is writable | Opening an added or deleted file fails with git's "insufficient permission" when the empty blob is not yet stored. |
+| The PR's file list is under 4 MiB | "git diff: file list over 4 MiB was cut". |
+| No hot reload of the mod while the pane is in use | After a reload during a load the pane keeps showing "Loading #N…" until `r`. |
+
 ## Try it from this folder
 
 ```bash

@@ -25,8 +25,7 @@ function message(err: unknown): string {
 }
 
 // The PR's inventory and the files read so far live here, under the load that
-// read them; `$.state` carries the status. A hot reload empties it, and the
-// pane then offers to load again.
+// read them; `$.state` carries the status.
 // A file's entry is its read: in flight until `got` is set; a failed read leaves no entry.
 let held: { gen: number; data: DiffData; files: Map<number, { read: Promise<void>; got?: { file: FileDiff; isCut: boolean } }> } | undefined
 

@@ -18,7 +18,7 @@ so uncommitted work stays `/diff`'s.
 | The base | the tip of the PR's own `baseRefName` on the remote, read with `git ls-remote` and fetched by its id |
 | The head | the tip of `refs/pull/<n>/head`, read and fetched the same way |
 | The files | `git diff --raw --numstat <merge-base(base, head)> <head>`, read once: renames, binary files, type and mode changes listed |
-| One file's lines | `git diff <merge-base>:<old path> <head>:<path>`, each side named by revision and path (the empty blob for an added or deleted file's missing side, stored if the repository lacks it), read when the file is opened; binary files, submodules and mode-only changes have none to read. Naming the path keeps `.gitattributes` in force; both diffs read it from the PR head (`--attr-source`), as GitHub does, not from the checkout |
+| One file's lines | `git diff <merge-base>:<old path> <head>:<path>`, each side named by revision and path; an added file is `git diff <empty tree> <head> -- <path>` and a deleted one `git diff <merge-base> <empty tree> -- <path>`, the path taken literally (`--literal-pathspecs`) and the empty tree git's built-in one, so nothing is written. Read when the file is opened; binary files, submodules and mode-only changes have none to read. Naming the path keeps `.gitattributes` in force; both diffs read it from the PR head (`--attr-source`), as GitHub does, not from the checkout |
 
 The fetch brings in objects only: no ref, branch, tag or `FETCH_HEAD` is
 written, and it starts no automatic maintenance (`gc --auto`). The PR's
@@ -86,7 +86,6 @@ recover; it shows what happened.
 | The clone holds the history between the PR's base and head (it is not shallow there) | "git merge-base: exit 1". |
 | The PR's pull ref is current: `refs/pull/<n>/head` on the remote is the head `gh` reports | "gh reports PR #n at X; refs/pull/n/head on origin has Y". Right after a push GitHub can lag by a few seconds; press `r` again. |
 | File paths are UTF-8 | A file whose path is not shows git's error for that path when it is opened. |
-| The object store is writable | Opening an added or deleted file fails with git's "insufficient permission" when the empty blob is not yet stored. |
 | The PR's file list is under 4 MiB | "git diff: file list over 4 MiB was cut". |
 | No hot reload of the mod while the pane is in use | After a reload during a load the pane keeps showing "Loading #N…" until `r`. |
 

@@ -31,6 +31,7 @@ export type DiffData = {
 }
 
 const GIT = ['git', '--no-optional-locks']
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 const DIFF = ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--ignore-submodules=dirty', '--submodule=short', '-M']
 
 export class StepError extends Error {
@@ -181,18 +182,15 @@ export async function loadDiff(unguarded: Run, number: number): Promise<DiffData
   const inventory = await must(quiet, 'git diff', [...atHead, ...DIFF, '--raw', '--no-abbrev', '--numstat', '-z', ...ends], 120_000)
   const { entries, isWhole } = parseDiff(inventory.stdout)
   if (!isWhole || inventory.isStdoutTruncated) throw new StepError('git diff', 'file list over 4 MiB was cut')
-  // An added or deleted file's missing side is the empty blob, stored if the repository lacks it.
-  let empty: string | undefined
-  const blank = async () => {
-    empty ??= (await must(quiet, 'git hash-object', [...git, 'hash-object', '-w', '-t', 'blob', '/dev/null'])).stdout.trim()
-    return empty
-  }
   const readFile = async (e: Entry) => {
     if (!hasLines(e)) return { file: summaryOf(e), isCut: false }
-    // Each side is `<rev>:<path>`: the path's attributes, from the PR head, apply to the read.
-    const old = e.status === 'A' ? await blank() : `${mergeBase}:${e.oldPath ?? e.path}`
-    const now = e.status === 'D' ? await blank() : `${headOid}:${e.path}`
-    const r = await must(quiet, 'git diff', [...atHead, ...DIFF, old, now], 120_000)
+    // A file on both sides is read as its `<rev>:<path>` pair; an added or deleted one as its one tree
+    // against git's built-in empty tree at its literal path. The path's attributes, from the PR head, apply.
+    const sides =
+      e.status === 'A' ? ['--literal-pathspecs', ...DIFF, EMPTY_TREE, headOid, '--', e.path]
+      : e.status === 'D' ? ['--literal-pathspecs', ...DIFF, mergeBase, EMPTY_TREE, '--', e.path]
+      : [...DIFF, `${mergeBase}:${e.oldPath ?? e.path}`, `${headOid}:${e.path}`]
+    const r = await must(quiet, 'git diff', [...atHead, ...sides], 120_000)
     return { file: fileFor(e, r.stdout, r.isStdoutTruncated), isCut: r.isStdoutTruncated }
   }
 

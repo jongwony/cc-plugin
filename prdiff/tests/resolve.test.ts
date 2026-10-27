@@ -77,7 +77,7 @@ test('a failed fetch or merge-base is reported with its step, not swallowed', as
   await expect(loadDiff(m.run, 7)).rejects.toThrow('git merge-base: exit 1')
 })
 
-test('a file is read as the diff of its two sides named <rev>:<path>, with no pathspec', async () => {
+test('a file on both sides is read as its <rev>:<path> pair; an added or deleted one against the empty tree at its literal path', async () => {
   const z = (n: number) => '0'.repeat(n)
   const records = [
     `:100644 100644 old-x new-x M\0x\0`,
@@ -87,12 +87,12 @@ test('a file is read as the diff of its two sides named <rev>:<path>, with no pa
     `:100644 100644 old-b new-b M\0b\0`,
     `:160000 160000 aaaaaaaaaa bbbbbbbbbb M\0sub\0`,
   ].join('') + ['1\t1\tx', '1\t0\ta', '0\t1\td', '0\t0\tm', '-\t-\tb', '1\t1\tsub', ''].join('\0')
+  const [m, h, t] = ['m'.repeat(40), 'h'.repeat(40), '4b825dc642cb6eb9a060e54bf8d69288fbee4904']
   const { run, calls } = fakeRepo({
     '--raw': ok(records),
-    'hash-object -w -t blob /dev/null': ok('e'.repeat(40) + '\n'),
     [READ_X]: ok(PATCH),
-    ' hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh:a': ok(''),
-    'mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm:d ': ok(''),
+    [`${t} ${h} -- a`]: ok(''),
+    [`${m} ${t} -- d`]: ok(''),
   })
   const d = await loadDiff(run, 7)
   const read = async (path: string) => {
@@ -103,19 +103,19 @@ test('a file is read as the diff of its two sides named <rev>:<path>, with no pa
   expect((await read('x')).file.hunks.length).toBe(1)
   await read('a')
   await read('d')
-  const diffs = calls.filter(c => c.includes('diff') && !c.includes('--raw')).map(c => c.slice(-2))
-  const [m, h] = ['m'.repeat(40), 'h'.repeat(40)]
-  expect(diffs).toEqual([[`${m}:x`, `${h}:x`], ['e'.repeat(40), `${h}:a`], [`${m}:d`, 'e'.repeat(40)]])
-  // No pathspec reaches git: a path is never read as magic, a glob or a directory.
-  expect(calls.some(c => c.includes('diff') && c.includes('--'))).toBe(false)
+  const diffs = calls.filter(c => c.includes('diff') && !c.includes('--raw'))
+  expect(diffs.map(c => c.slice(c.indexOf('-M') + 1))).toEqual([[`${m}:x`, `${h}:x`], [t, h, '--', 'a'], [m, t, '--', 'd']])
+  // A pathspec reaches git only as a literal path, never as magic, a glob or a directory.
+  expect(diffs.filter(c => c.includes('--')).every(c => c.indexOf('--literal-pathspecs') < c.indexOf('diff'))).toBe(true)
+  expect(diffs[0]?.includes('--')).toBe(false)
+  // Nothing is written to the object store.
+  expect(calls.some(c => c.includes('hash-object'))).toBe(false)
   // Mode-only, binary and submodule entries have no lines to read.
   const before = calls.length
   expect((await read('m')).file.notes).toEqual(['mode 100644 → 100755'])
   expect((await read('b')).file.notes).toEqual(['binary file'])
   expect((await read('sub')).file.notes).toEqual(['submodule aaaaaaa → bbbbbbb'])
   expect(calls.length).toBe(before)
-  // The empty blob is asked for once for the load.
-  expect(calls.filter(c => c.includes('hash-object')).length).toBe(1)
 })
 
 test('a file patch cut at 4 MiB is kept as far as it arrived; a file list cut there is reported', async () => {
@@ -202,29 +202,6 @@ test('a failure names the lines through its error line, cause included, not the 
   )
   const w = fakeRepo({ ' fetch ': fail('warning: redirecting to https://github.com/o/r2.git/\nremote: Repository not found.') })
   await expect(loadDiff(w.run, 7)).rejects.toThrow('git fetch: remote: Repository not found.')
-})
-
-test('the empty blob comes from one hash-object; a failed one is not kept', async () => {
-  const z = '0'.repeat(40)
-  const records = `:000000 100644 ${z} new-a A\0a\0` + '1\t0\ta\0'
-  let writes = 0
-  const { run, calls } = fakeRepo({ '--raw': ok(records), ':a': ok('') })
-  const repo: Run = async (argv, t, env) => {
-    if (argv.join(' ').includes('hash-object -w -t blob /dev/null')) {
-      writes += 1
-      return writes === 1 ? fail('error: insufficient permission for adding an object to repository database .git/objects') : ok('e'.repeat(40) + '\n')
-    }
-    return run(argv, t, env)
-  }
-  const d = await loadDiff(repo, 7)
-  const e = d.entries[0]
-  if (!e) throw new Error('no entry')
-  await expect(d.readFile(e)).rejects.toThrow('git hash-object: error: insufficient permission')
-  // The next read asks again rather than repeating the first failure; after a success nothing more is asked.
-  expect((await d.readFile(e)).file.status).toBe('A')
-  await d.readFile(e)
-  expect(writes).toBe(2)
-  expect(calls.some(c => c.includes('diff') && c.at(-2) === 'e'.repeat(40))).toBe(true)
 })
 
 test('a type change is read by path and drawn in its two halves', async () => {

@@ -162,9 +162,9 @@ export const register: Register = on => {
         </Text>
       ) : null
     }
-    // An error wraps; it is cut where the budget, less the list's share, ends.
-    const problem = (text: string) => {
-      const shown = clip(clean(text), Math.max(0, b.left - LIST_BUDGET))
+    // An error wraps; it is cut where the budget, less `keep` for what follows it, ends.
+    const problem = (text: string, keep: number) => {
+      const shown = clip(clean(text), Math.max(0, b.left - keep))
       return shown !== '' && b.take(shown) ? (
         <Text wrap="wrap" color="error">
           {shown}
@@ -200,7 +200,7 @@ export const register: Register = on => {
         d.status === 'loading'
           ? line(`Loading #${d.number}…`, { dimColor: true })
           : d.status === 'error'
-            ? problem(`#${d.number}: ${d.error ?? ''}`)
+            ? problem(`#${d.number}: ${d.error ?? ''}`, 0)
             : d.number > 0
               ? line(`#${d.number} is not loaded. Press r to load it.`, { dimColor: true })
               : line('Run /prdiff <PR number> to open one.', { dimColor: true })
@@ -219,7 +219,7 @@ export const register: Register = on => {
       shown && line(`${at + 1}/${count} ${fileLabel(shown)}`, { bold: true }),
       ...(shown?.notes ?? []).map(n => line(`  ${n}`, { dimColor: true })),
       f?.status === 'loading' && line('Loading…', { dimColor: true }),
-      f?.status === 'error' && problem(f.error ?? ''),
+      f?.status === 'error' && problem(f.error ?? '', LIST_BUDGET),
       got?.isCut === true && line('  patch over 4 MiB: only its start was read', { dimColor: true }),
     ]
     const body = got ? drawn(got.file, width, b, LIST_BUDGET) : undefined

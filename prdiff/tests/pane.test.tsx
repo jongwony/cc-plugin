@@ -1,4 +1,5 @@
 import { expect, test, type TestBody } from 'claude-code/testing'
+import { CHAR_BUDGET, LIST_BUDGET } from '../hooks/rows.ts'
 
 const PANE = {
   plugin: 'prdiff',
@@ -30,12 +31,13 @@ function pr(n: number) {
   return { number: n, title: `Title ${n}`, url: `https://github.com/o/r/pull/${n}`, headRefName: `b${n}`, headRefOid: 'c'.repeat(40), baseRefName: 'main' }
 }
 
-/** What the next answers hold: how many files a PR has, and whether a file read fails. */
-const state: { files: number; failRead: boolean | string; readGate?: Promise<void>; patch?: string } = { files: 2, failRead: false }
+/** What the next answers hold: how many files a PR has, and whether the load or a file read fails. */
+const state: { files: number; failRead: boolean | string; failLoad?: string; readGate?: Promise<void>; patch?: string } = { files: 2, failRead: false }
 
 /** Answers the host commands loadDiff makes; PR 1's view waits on `gate`. */
 function answer(argv: readonly string[], gate: Promise<void>): Promise<ReturnType<typeof result>> | ReturnType<typeof result> {
   const s = argv.join(' ')
+  if (state.failLoad !== undefined && s.startsWith('gh pr view ')) return result(state.failLoad, 1)
   if (s.startsWith('gh pr view 1 ')) return gate.then(() => result(JSON.stringify(pr(1))))
   if (s.startsWith('gh pr view 2 ')) return result(JSON.stringify(pr(2)))
   if (s.startsWith('gh pr view 3 ')) return result(JSON.stringify(pr(3)))
@@ -267,6 +269,15 @@ test('an error wraps whole so its diagnostics show, and is counted with everythi
   expect([...texts, ...labels].reduce((n, t) => n + t.length, 0)).toBeLessThanOrEqual(100_000)
   await big.unmount()
   state.failRead = false
+  // A load's error has no list after it, so it may use the whole budget.
+  state.failLoad = `fatal: ${'y'.repeat(200_000)}`
+  await $.command.run(args('2'))
+  const load = await paneWith(() => $.ui.mount({ ...PANE, surface: 'terminal' }), /^#2: gh pr view: fatal: y/)
+  const drawn = (await load.findAll({ type: 'Text' })).map(t => String(t.text)).reduce((n, t) => n + t.length, 0)
+  expect(drawn).toBeGreaterThan(CHAR_BUDGET - LIST_BUDGET)
+  expect(drawn).toBeLessThanOrEqual(CHAR_BUDGET)
+  await load.unmount()
+  state.failLoad = undefined
 })
 
 test('a file of many tiny hunks leaves the list its share: each drawn string is charged once', async ($, on) => {

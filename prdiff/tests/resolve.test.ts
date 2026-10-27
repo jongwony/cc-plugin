@@ -251,6 +251,14 @@ test('the PR\'s remote is the first whose pull head is gh\'s head; with none, th
   )
 })
 
+test('the repository directory is taken as git prints it, a trailing space kept', async () => {
+  const { run, calls } = fakeRepo({ 'rev-parse --show-toplevel': ok('/srv/my repo \n') })
+  await loadDiff(run, 7)
+  const later = calls.filter(c => c.includes('-C'))
+  expect(later.length).toBeGreaterThan(0)
+  expect(later.every(c => c[c.indexOf('-C') + 1] === '/srv/my repo ')).toBe(true)
+})
+
 test('a remote name is never read as an option', async () => {
   const name = '--upload-pack=touch PWNED;git-upload-pack'
   const { run, calls } = fakeRepo({ 'remote -v': ok(`${name}\thttps://github.com/o/r.git (fetch)\n`) })

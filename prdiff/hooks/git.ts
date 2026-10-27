@@ -134,7 +134,7 @@ export async function loadDiff(unguarded: Run, number: number): Promise<DiffData
   }
   // The PR's own URL names its repository and host: https://<host>/<owner>/<repo>/pull/<n>.
   const repo = /^[a-z]+:\/\/[^/]+\/([^/]+\/[^/]+)\/pull\/\d+$/i.exec(pr.url)?.[1] ?? ''
-  const git = [...GIT, '-C', topOut.stdout.trim()]
+  const git = [...GIT, '-C', topOut.stdout.replace(/\n$/, '')]
   const remoteV = (await must(run, 'git remote', [...git, 'remote', '-v'])).stdout
   const tried = candidates(remoteV, repo, hostOfUrl(pr.url))
   if (tried.length === 0) throw new StepError('remote', 'this repository has no fetch remote')

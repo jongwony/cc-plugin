@@ -36,11 +36,12 @@ export class StepError extends Error {
   }
 }
 
-/** A failed run's reason: its first `fatal:`/`error:` line, else its first line that is no warning or hint. */
-function firstLine(r: RunResult): string {
-  const lines = (r.stderr.trim() || r.stdout.trim()).split('\n').map(l => l.trim()).filter(l => l !== '')
-  const text = lines.find(l => /^(?:fatal|error): /.test(l)) ?? lines.find(l => !/^(?:warning|hint):/i.test(l)) ?? lines[0]
-  return text === undefined ? `exit ${r.exitCode}` : text
+/** A failed run's reason: its lines that are no warning or hint, through the first `fatal:`/`error:` line, joined. */
+function reason(r: RunResult): string {
+  const lines = (r.stderr.trim() || r.stdout.trim()).split('\n').map(l => l.trim()).filter(l => l !== '' && !/^(?:warning|hint):/i.test(l))
+  const end = lines.findIndex(l => /^(?:fatal|error): /.test(l))
+  const text = (end < 0 ? lines : lines.slice(0, end + 1)).join(' ')
+  return text === '' ? `exit ${r.exitCode}` : text
 }
 
 /** `run` with a rejection (a timeout, a command that cannot start) answered as a failed run whose stderr is the reason. */
@@ -57,7 +58,7 @@ export function guarded(run: Run): Run {
 /** `argv` run, or a StepError naming `step` when it fails; a caller that needs all of stdout checks isStdoutTruncated. */
 async function must(run: Run, step: string, argv: string[], timeoutMs?: number): Promise<RunResult> {
   const r = await run(argv, timeoutMs)
-  if (r.exitCode !== 0) throw new StepError(step, firstLine(r))
+  if (r.exitCode !== 0) throw new StepError(step, reason(r))
   return r
 }
 
@@ -143,7 +144,7 @@ export async function loadDiff(unguarded: Run, number: number): Promise<DiffData
     const listed = await quiet([...git, 'ls-remote', '--', remote, baseName, headName], 120_000)
     const tip = (name: string) => listed.stdout.split('\n').find(l => l.endsWith(`\t${name}`))?.split('\t')[0]
     const head = listed.exitCode === 0 ? tip(headName) : undefined
-    const said = listed.exitCode !== 0 ? `failed: ${firstLine(listed)}` : head === undefined ? 'has none' : `has ${head.slice(0, 7)}`
+    const said = listed.exitCode !== 0 ? `failed: ${reason(listed)}` : head === undefined ? 'has none' : `has ${head.slice(0, 7)}`
     return { remote, head, baseOid: tip(baseName), said: `${remote} ${said}` }
   }
   const seen: string[] = []

@@ -182,7 +182,7 @@ test('the fetch skips submodules, and every git command from it on runs prompt-f
   expect(budget(READ_X)).toBe(120_000)
 })
 
-test('a failure names its error line, not a warning printed ahead of it', async () => {
+test('a failure names the lines through its error line, cause included, not the warnings or advice around them', async () => {
   const ssh = [
     "Warning: Permanently added 'github.com' (ED25519) to the list of known hosts.",
     'git@github.com: Permission denied (publickey).',
@@ -191,7 +191,15 @@ test('a failure names its error line, not a warning printed ahead of it', async 
     'Please make sure you have the correct access rights',
   ].join('\n')
   const f = fakeRepo({ ' ls-remote ': fail(ssh) })
-  await expect(loadDiff(f.run, 7)).rejects.toThrow('origin failed: fatal: Could not read from remote repository.')
+  await expect(loadDiff(f.run, 7)).rejects.toThrow(
+    'origin failed: git@github.com: Permission denied (publickey). fatal: Could not read from remote repository.',
+  )
+  // As git 2.54 and OpenSSH wrote it for an unreachable port 22, ssh's line ending in CR.
+  const port = 'ssh: connect to host github.com port 22: Operation timed out\r\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.\n'
+  const p = fakeRepo({ ' ls-remote ': { ...fail(port), exitCode: 128 } })
+  await expect(loadDiff(p.run, 7)).rejects.toThrow(
+    'origin failed: ssh: connect to host github.com port 22: Operation timed out fatal: Could not read from remote repository.,',
+  )
   const w = fakeRepo({ ' fetch ': fail('warning: redirecting to https://github.com/o/r2.git/\nremote: Repository not found.') })
   await expect(loadDiff(w.run, 7)).rejects.toThrow('git fetch: remote: Repository not found.')
 })

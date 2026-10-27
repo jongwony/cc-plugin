@@ -163,15 +163,7 @@ export async function loadDiff(unguarded: Run, number: number): Promise<DiffData
   const headOid = pr.headRefOid
   // Both tips are fetched by id; no ref is written.
   await must(quiet, 'git fetch', [...git, 'fetch', '--quiet', '--no-write-fetch-head', '--no-recurse-submodules', '--no-auto-maintenance', '--', remote, baseOid, headOid], 120_000)
-  const based = await quiet([...git, 'merge-base', baseOid, headOid])
-  if (based.exitCode === 1 && based.stdout.trim() === '' && based.stderr.trim() === '') {
-    const shallow = (await quiet([...git, 'rev-parse', '--is-shallow-repository'])).stdout.trim() === 'true'
-    throw new StepError(
-      'git merge-base',
-      `returned no merge base for ${pr.baseRefName} and the PR head (exit 1)${shallow ? '; this is a shallow clone, where fetching more history (git fetch --unshallow) can supply one' : ''}`,
-    )
-  }
-  if (based.exitCode !== 0) throw new StepError('git merge-base', firstLine(based))
+  const based = await must(quiet, 'git merge-base', [...git, 'merge-base', baseOid, headOid])
   const mergeBase = based.stdout.trim()
 
   const notes: string[] = []

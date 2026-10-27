@@ -74,7 +74,7 @@ test('a failed fetch or merge-base is reported with its step, not swallowed', as
   const gone = fakeRepo({ ' ls-remote ': ok(`${'h'.repeat(40)}\trefs/pull/7/head\n`) })
   await expect(loadDiff(gone.run, 7)).rejects.toThrow('git ls-remote: origin has no branch feat/a')
   const m = fakeRepo({ 'merge-base': fail('') })
-  await expect(loadDiff(m.run, 7)).rejects.toThrow('git merge-base: returned no merge base for feat/a and the PR head (exit 1)')
+  await expect(loadDiff(m.run, 7)).rejects.toThrow('git merge-base: exit 1')
 })
 
 test('a file is read as the diff of its two sides named <rev>:<path>, with no pathspec', async () => {
@@ -159,13 +159,6 @@ test('a command that never answers fails the load, or the file read, under its s
   const e = d.entries[0]
   if (!e) throw new Error('no entry')
   await expect(d.readFile(e)).rejects.toThrow('git diff: process.run: timed out')
-})
-
-test('no merge-base in a shallow clone says so instead of an exit code', async () => {
-  const shallow = fakeRepo({ 'merge-base': fail(''), 'is-shallow-repository': ok('true\n') })
-  await expect(loadDiff(shallow.run, 7)).rejects.toThrow('git merge-base: returned no merge base for feat/a and the PR head (exit 1); this is a shallow clone, where fetching more history (git fetch --unshallow) can supply one')
-  const unrelated = fakeRepo({ 'merge-base': fail(''), 'is-shallow-repository': ok('false\n') })
-  await expect(loadDiff(unrelated.run, 7)).rejects.toThrow('git merge-base: returned no merge base for feat/a and the PR head (exit 1)')
 })
 
 test('the fetch skips submodules, and every git command from it on runs prompt-free with the diff budget', async () => {

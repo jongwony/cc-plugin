@@ -275,7 +275,8 @@ so far, so the driving session records rather than re-derives it.
    to host permissions; an unsettled epistemic risk goes to the user for apply, defer,
    or drop. Rejection blocks an edit not yet written.
 3. Repeated fix-induced follow-ups across consecutive rounds, or findings under one
-   supported shared-cause reading whose repairs keep adding case handling, move
+   supported shared-cause reading that recur across rounds while their repairs keep
+   adding case handling, move
    judgment, not writing: the next apply pass returns its enumerated predicate and sites
    to Phase 3 before writing. For fix-induced follow-ups, Phase 3 reads whether those
    repairs have become a chain in which
@@ -284,8 +285,9 @@ so far, so the driving session records rather than re-derives it.
    contract leaves to judgment; removing that surrogate with the machinery grown around
    it, against adding the next case, is the plan-level root-or-local judgment. For a
    recurring shared cause, narrowing the artifact's declared input domain or premises so
-   the cause falls outside the contract stands against the next repair in that same
-   judgment. Return to autonomous apply after a review without either pattern.
+   the cause falls outside the contract stands against the next repair, and against
+   the reconsidered abstraction Phase 3 calls for, in that same judgment. Return to
+   autonomous apply after a review without either pattern.
 4. Read every written and swept site against its disposition and exercise the repaired
    invariant through the transitions and orderings identified by the scan. Repair a known
    discrepancy within the settled disposition and re-check the affected bundle before

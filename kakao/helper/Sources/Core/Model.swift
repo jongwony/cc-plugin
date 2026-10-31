@@ -107,6 +107,9 @@ public struct Config {
     public var minInterval: Double
     public var confirmTimeout: Double
     public var pollInterval: Double = 0.25
+    /// How long `send` waits for the button to turn enabled after the box was filled.
+    public var enableTimeout: Double = 3.0
+    public var enablePoll: Double = 0.1
     public var personIdleThreshold: Double = 2.0
     public var defaultSendLabels: [String] = ["전송", "보내기", "Send"]
 

@@ -324,6 +324,41 @@ test("send: button disabled after drafting → exit 6, own draft cleared") {
     expect(e.room.button.pressCount == 0, "not pressed")
 }
 
+test("send: the button turns enabled a moment after the box is filled → waits, then sends") {
+    let e = makeEnv()
+    handshake(e)
+    e.room.wireWorkingSend()
+    e.room.button.isEnabled = false
+    var filledAt: Double?
+    e.room.input.onSet = { [unowned clock = e.clock] n, t in n.stringValue = t; filledAt = t.isEmpty ? nil : clock.t; return true }
+    e.clock.onSleep = { [unowned room = e.room, unowned clock = e.clock] in
+        if let f = filledAt, clock.t - f >= 0.5 { room.button.isEnabled = true }
+    }
+    let o = send(e, "late button")
+    expect(o.exit == .ok && e.room.button.pressCount == 1, o.json)
+    expect(e.clock.slept.prefix(5).allSatisfy { $0 == 0.1 }, "polled in 0.1 s steps: \(e.clock.slept.prefix(6))")
+}
+
+test("send: the button never turns enabled → exit 6 after the enable wait, own draft cleared") {
+    let e = makeEnv()
+    handshake(e)
+    e.room.button.isEnabled = false
+    let start = e.clock.t
+    let o = send(e, "never")
+    expect(o.exit == .notVerified && o.body["cleared_own_draft"] as? Bool == true, o.json)
+    expect(e.clock.t - start >= 3.0 && e.room.button.pressCount == 0, "waited \(e.clock.t - start) s, not pressed")
+}
+
+test("send: an AX error from the press does not decide; the appearing text does") {
+    let e = makeEnv()
+    handshake(e)
+    e.room.wireWorkingSend()
+    let working = e.room.button.onPress!
+    e.room.button.onPress = { _ = working(); return false }
+    let o = send(e, "pressed anyway")
+    expect(o.exit == .ok && o.body["press_reported"] as? Bool == false, o.json)
+}
+
 test("send: interval survives a new handshake") {
     let e = makeEnv()
     handshake(e)

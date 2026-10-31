@@ -85,26 +85,37 @@ kakao/scripts/check.sh
 
 Runs unit tests against fake windows (the AX layer is not linked), compiles the real helper, runs the CLI paths that exit before touching any app, and scans the sources for keyboard-event, raise, activate, pointer and scripting calls. It does not talk to KakaoTalk.
 
-## Observed in the live app (read-only)
+## Observed in the live app
 
-One existing 1:1 chat window, inspected through AX without typing or pressing anything:
+Run end to end against a self-chat window (KakaoTalk 26.9.0), three sends in total:
 
-- The window title is the room name.
-- Messages sit in `AXScrollArea > AXTable > AXRow > AXCell`. A bubble's text is an `AXTextArea` (not settable); its time and, on the other party's first bubble, the sender name are separate `AXStaticText` elements, so they land in `labels`.
-- The input box is a settable `AXTextArea` in its own scroll area below the table. The send button is an `AXButton` titled `전송`, disabled while the box is empty.
-- Only rows near the screen exist in the AX tree (about 120 nodes for the whole window). `read` therefore covers what is loaded, not the whole history.
-- A cut bubble's text ends with `…`. Its full-view control is an untitled `AXButton` under the bubble.
+| Step | Result | Time |
+| -- | -- | -- |
+| `handshake` | exit 0; window id, input box, send button, message list and the CoreGraphics cross-check all `ok`, no hints needed | 6.6 s, including the first build |
+| `read --limit 5` | exit 0; time labels landed in `labels`; link-preview cards did not show up as messages | 0.4 s |
+| `draft`, then `clear` | exit 0 each | 0.1 s each |
+| `send` on an existing draft | exit 0 `sent`; `text_appeared` and `input_cleared` true, `press_reported` false | 0.6 s |
+| `send --text` right after | waited out the rest of the 20 s interval before drafting | — |
+| 1,562-character text through `--text-file`, then `send` and `read` | exit 0 `sent`; the bubble reads back as its first 500 characters plus `…`, `truncated: true` | 0.6 s |
+
+What the run showed:
+
+- The send button turns enabled a moment after the box is filled, so `send` waits up to 3 s for it before pressing (the first `send --text` runs, before this wait existed, ended in exit 6 with the draft cleared).
+- The press action can report an AX error although the press happened. `press_reported` records that answer; `text_appeared` and `input_cleared` decide whether the send counts.
+- Messages sit in `AXScrollArea > AXTable > AXRow > AXCell`. A bubble's text is a non-settable `AXTextArea`; its time and, on the other party's first bubble, the sender name are separate `AXStaticText` elements, so they land in `labels`.
+- The input box is a settable `AXTextArea` in its own scroll area below the table; its description differs by room type, which the role-based search does not depend on. The send button is an `AXButton` titled `전송`.
+- Only rows near the screen exist in the AX tree, so `read` covers what is loaded, not the whole history.
+- A bubble is cut at 500 visible characters and ends with `…`. Its full-view control is an untitled `AXButton` under the bubble.
 - Nothing in the tree marks a bubble as sent by this account or by the other party.
+- A closed chat window could be reopened from the main window through OCU, with its `sky_click` method (search field, friends tab, double-click on the row); default clicks did nothing in the background. This tool still never opens windows.
 
 ## Not yet verified against the live app
 
-- Any command run end to end against the app: handshake, draft, clear, send and its confirmation, the interval wait.
+- `send --text` end to end with the enable wait in place.
 - Pressing a cut bubble's full-view control, and what it opens.
 - How an unread counter appears (assumed: an `AXStaticText` of digits, kept in `labels`).
 - Whether a new bubble shows up in the loaded rows when the window is scrolled up; if not, `send` reports exit 7.
 - Several sessions setting values and pressing buttons in different windows at the same moment.
-- Reopening a closed chat window (out of scope; a person reopens it).
 - Whether AX reaches a window on another Space or a minimized window.
-- The CGWindowID ↔ AX window mapping through the private `_AXUIElementGetWindow` call, and the bounds-based fallback.
-- How long one send takes end to end.
+- The bounds-based fallback for the window id, for when the private `_AXUIElementGetWindow` call fails (the private call worked in the run above).
 - The title string of group chat windows (a member count or similar may be added). `room_not_unique` lists the titles the app reports.

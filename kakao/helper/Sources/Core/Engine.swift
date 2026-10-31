@@ -293,6 +293,13 @@ public final class Engine {
             guard normalize(cur) == normalize(expected) else {
                 throw abort(cmd, .inputBusy, "input_changed", ["room": room, "input_length": normalize(cur).count])
             }
+            // The app enables the button a moment after the value changes.
+            let enableDeadline = clock.now() + config.enableTimeout
+            while !b.sendButton.isEnabled && clock.now() < enableDeadline { clock.sleep(config.enablePoll) }
+            let settled = b.input.stringValue ?? ""
+            guard normalize(settled) == normalize(expected) else {
+                throw abort(cmd, .inputBusy, "input_changed", ["room": room, "input_length": normalize(settled).count])
+            }
             guard b.sendButton.isEnabled else {
                 var cleared = false
                 if placedNow {

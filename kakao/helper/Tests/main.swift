@@ -29,7 +29,7 @@ struct Env {
 
 func makeEnv(messages: [String] = ["hello", "how are you"], bubblesSettable: Bool = false,
              configure: (inout Config) -> Void = { _ in }) -> Env {
-    let dir = (NSTemporaryDirectory() as NSString).appendingPathComponent("kakao-rooms-test-\(UUID().uuidString)")
+    let dir = (NSTemporaryDirectory() as NSString).appendingPathComponent("kakao-test-\(UUID().uuidString)")
     var config = Config(stateDir: dir, bundleID: "test.bundle", minInterval: 20, confirmTimeout: 2)
     config.pollInterval = 0.5
     configure(&config)
@@ -65,7 +65,7 @@ test("args: send with text parses") {
         parseArguments(["send", "--room", "R", "--window", "7", "--text", "hi"], env: ["HOME": "/h"], readFile: noFile)
     else { return expect(false, "did not parse") }
     expect(r == "R" && w == 7 && t == "hi" && !a, "values")
-    expect(c.stateDir == "/h/.local/state/kakao-rooms", "default state dir")
+    expect(c.stateDir == "/h/.local/state/kakao", "default state dir")
     expect(c.minInterval == defaultMinInterval, "default interval")
 }
 
@@ -92,7 +92,7 @@ test("args: help, text file, repeatable send label, env interval") {
     if case .help = parseArguments(["send", "--help"], env: [:], readFile: noFile) {} else { expect(false, "--help") }
     guard case .run(.draft(_, _, let t), let c) = parseArguments(
         ["draft", "--room", "R", "--window", "1", "--text-file", "-"],
-        env: ["KAKAO_ROOMS_MIN_INTERVAL": "45"], readFile: { _ in "line1\nline2" }) else { return expect(false, "draft") }
+        env: ["KAKAO_MIN_INTERVAL": "45"], readFile: { _ in "line1\nline2" }) else { return expect(false, "draft") }
     expect(t == "line1\nline2" && c.minInterval == 45, "text file and env interval")
     guard case .run(.handshake(_, let h), _) = parseArguments(
         ["handshake", "--room", "R", "--send-label", "A", "--send-label", "B", "--input-identifier", "in"],

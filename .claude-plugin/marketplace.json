@@ -140,8 +140,8 @@
       "description": "Opens the other side of /branch and /fork in a Ghostty split: the original on the left after /branch, the background session on the right after /fork."
     },
     {
-      "name": "kakao-rooms",
-      "source": "./kakao-rooms",
+      "name": "kakao",
+      "source": "./kakao",
       "description": "Several macOS KakaoTalk chat rooms in parallel, one Claude session per room window — handshake once, then read, draft and send through Accessibility alone, with no server, keyboard events or window raising"
     }
   ]

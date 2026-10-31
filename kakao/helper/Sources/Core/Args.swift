@@ -7,16 +7,16 @@ public enum Parsed {
 }
 
 public let usageText = """
-kakao-rooms — one KakaoTalk (macOS) chat window per caller, through Accessibility only.
+kakao — one KakaoTalk (macOS) chat window per caller, through Accessibility only.
 
-  kakao-rooms handshake --room <title> [--send-label <label>]... [--input-identifier <id>] [--list-identifier <id>]
-  kakao-rooms read      --room <title> --window <id> [--after <marker>] [--limit <n>]
-  kakao-rooms draft     --room <title> --window <id> (--text <text> | --text-file <path|->)
-  kakao-rooms send      --room <title> --window <id> [--text <text> | --text-file <path|->] [--accept-edited]
-  kakao-rooms clear     --room <title> --window <id>
+  kakao handshake --room <title> [--send-label <label>]... [--input-identifier <id>] [--list-identifier <id>]
+  kakao read      --room <title> --window <id> [--after <marker>] [--limit <n>]
+  kakao draft     --room <title> --window <id> (--text <text> | --text-file <path|->)
+  kakao send      --room <title> --window <id> [--text <text> | --text-file <path|->] [--accept-edited]
+  kakao clear     --room <title> --window <id>
 
 Common: [--state-dir <dir>] [--min-interval <seconds>] [--confirm-timeout <seconds>]
-Env: KAKAO_ROOMS_STATE_DIR, KAKAO_ROOMS_MIN_INTERVAL, KAKAO_ROOMS_BUNDLE_ID
+Env: KAKAO_STATE_DIR, KAKAO_MIN_INTERVAL, KAKAO_BUNDLE_ID
 Output: one JSON object on stdout. Exit codes: 0 ok, 2 usage, 3 handshake incomplete,
 4 handshake again, 5 input busy, 6 not verified, 7 send unconfirmed, 8 draft changed,
 9 unavailable, 10 room not unique.
@@ -75,11 +75,11 @@ public func parseArguments(_ argv: [String], env: [String: String],
 
     let home = env["HOME"] ?? NSHomeDirectory()
     var config = Config(
-        stateDir: one("--state-dir") ?? env["KAKAO_ROOMS_STATE_DIR"] ?? "\(home)/.local/state/kakao-rooms",
-        bundleID: env["KAKAO_ROOMS_BUNDLE_ID"] ?? "com.kakao.KakaoTalkMac",
+        stateDir: one("--state-dir") ?? env["KAKAO_STATE_DIR"] ?? "\(home)/.local/state/kakao",
+        bundleID: env["KAKAO_BUNDLE_ID"] ?? "com.kakao.KakaoTalkMac",
         minInterval: defaultMinInterval,
         confirmTimeout: defaultConfirmTimeout)
-    if let s = one("--min-interval") ?? env["KAKAO_ROOMS_MIN_INTERVAL"] {
+    if let s = one("--min-interval") ?? env["KAKAO_MIN_INTERVAL"] {
         guard let v = Double(s), v >= 0 else { return .usage("min-interval must be a number >= 0") }
         config.minInterval = v
     }

@@ -45,9 +45,9 @@ public final class RoomStore {
         try ensureDir()
         let lockPath = path(room) + ".lock"
         let fd = open(lockPath, O_CREAT | O_RDWR, 0o600)
-        guard fd >= 0 else { throw NSError(domain: "kakao-rooms", code: Int(errno), userInfo: [NSLocalizedDescriptionKey: "cannot open \(lockPath)"]) }
+        guard fd >= 0 else { throw NSError(domain: "kakao", code: Int(errno), userInfo: [NSLocalizedDescriptionKey: "cannot open \(lockPath)"]) }
         defer { close(fd) }
-        guard flock(fd, LOCK_EX) == 0 else { throw NSError(domain: "kakao-rooms", code: Int(errno), userInfo: [NSLocalizedDescriptionKey: "cannot lock \(lockPath)"]) }
+        guard flock(fd, LOCK_EX) == 0 else { throw NSError(domain: "kakao", code: Int(errno), userInfo: [NSLocalizedDescriptionKey: "cannot lock \(lockPath)"]) }
         defer { flock(fd, LOCK_UN) }
         return try body()
     }

@@ -6,7 +6,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 src="$root/helper/Sources"
-out="$(mktemp -d "${TMPDIR:-/tmp}/kakao-rooms-check.XXXXXX")"
+out="$(mktemp -d "${TMPDIR:-/tmp}/kakao-check.XXXXXX")"
 trap 'rm -rf "$out"' EXIT
 
 command -v swiftc >/dev/null || { echo "swiftc not found: run xcode-select --install" >&2; exit 1; }
@@ -16,13 +16,13 @@ swiftc -o "$out/tests" "$src"/Core/*.swift "$root"/helper/Tests/*.swift
 "$out/tests"
 
 echo "== compile helper (Core + AX + CLI)"
-swiftc -O -o "$out/kakao-rooms" "$src"/Core/*.swift "$src"/AX/*.swift "$src"/CLI/main.swift
+swiftc -O -o "$out/kakao" "$src"/Core/*.swift "$src"/AX/*.swift "$src"/CLI/main.swift
 echo "ok"
 
 echo "== CLI paths that exit before constructing the driver"
-"$out/kakao-rooms" --help | head -1
+"$out/kakao" --help | head -1
 set +e
-"$out/kakao-rooms" send --window 1 --text hi; rc=$?
+"$out/kakao" send --window 1 --text hi; rc=$?
 set -e
 [ "$rc" -eq 2 ] || { echo "expected exit 2 for a usage error, got $rc" >&2; exit 1; }
 echo "usage exit: $rc"

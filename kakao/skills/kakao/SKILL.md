@@ -1,5 +1,5 @@
 ---
-name: kakao-rooms
+name: kakao
 description: >
   Read, draft and send in one macOS KakaoTalk chat room window from this session,
   through Accessibility only, while other sessions work other rooms in parallel.
@@ -7,7 +7,7 @@ description: >
   chat room ("카톡 방", "카카오톡으로 보내", a chat room title).
 ---
 
-# kakao-rooms
+# kakao
 
 ## Prerequisites
 
@@ -17,7 +17,7 @@ description: >
 
 ## Running
 
-- Every command is one Bash call: `"${CLAUDE_PLUGIN_ROOT}/scripts/kakao-rooms" <command> --room "<title>" [--window <id>] ...`. It prints one JSON object; `status` and the exit code say what happened.
+- Every command is one Bash call: `"${CLAUDE_PLUGIN_ROOT}/scripts/kakao" <command> --room "<title>" [--window <id>] ...`. It prints one JSON object; `status` and the exit code say what happened.
 - Run one command at a time for the room and read its JSON before the next.
 - Text with newlines or quotes goes through `--text-file <path>` (or `--text-file -` with stdin) instead of `--text`.
 
@@ -29,7 +29,7 @@ description: >
 
 ## Sending and reading
 
-- Default: `send --text <text>` drafts, verifies, presses the window's send button and confirms the text appeared. It waits out the room's minimum interval itself (`waited_seconds`; default 20 s, `KAKAO_ROOMS_MIN_INTERVAL`).
+- Default: `send --text <text>` drafts, verifies, presses the window's send button and confirms the text appeared. It waits out the room's minimum interval itself (`waited_seconds`; default 20 s, `KAKAO_MIN_INTERVAL`).
 - Draft for a person to approve: `draft --text <text>`, wait for the person, then `send` without `--text`. If the person edited the draft, `send` returns exit 8; add `--accept-edited` only once the person approved the edited text. `clear` removes a draft this tool placed.
 - `read` returns `messages` (oldest first) and a `marker`; pass the marker back as `--after` to get only newer rows. With `limited: true`, read again with the returned marker for the rest. `marker_found: false` means the list moved past the marker; the newest rows come back instead. `truncated: true` marks a bubble that ends in an ellipsis and may be cut.
 

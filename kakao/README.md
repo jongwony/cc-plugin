@@ -1,4 +1,4 @@
-# kakao-rooms
+# kakao
 
 Several Claude sessions work several KakaoTalk (macOS) chat rooms at the same time: one session per room window. There is no server, no shared queue and no app-wide lock. A session binds its room once with a **handshake**, then reads, drafts and sends in that window directly.
 
@@ -32,7 +32,7 @@ xcode-select --install   # swiftc, if not already present
 
 - Grant **Accessibility** to the terminal app that runs Claude Code (System Settings → Privacy & Security → Accessibility).
 - **Screen Recording** for that app is optional. With it, the handshake cross-checks the title against the CoreGraphics window list; without it the check reports `unreadable` and the AX check alone decides.
-- The helper builds itself into `~/.cache/kakao-rooms/` on first use and rebuilds when its sources change (`KAKAO_ROOMS_CACHE` overrides the directory).
+- The helper builds itself into `~/.cache/kakao/` on first use and rebuilds when its sources change (`KAKAO_CACHE` overrides the directory).
 
 ## Commands
 
@@ -69,17 +69,17 @@ Handshake hints, for when the defaults do not find an element: `--send-label <la
 - **Other people's text is left alone.** If the input box holds text this tool did not place, the command stops. Cleanup removes only text that is exactly what this tool put there.
 - **A person at the keyboard wins.** If KakaoTalk is frontmost, this window is its focused window, and there was input in the last 2 seconds, the command stops.
 - **No blind resend.** After exit 7 the caller reads the room first; the tool never presses twice for one call.
-- **Per-room minimum interval.** `send` waits until at least 20 seconds (`KAKAO_ROOMS_MIN_INTERVAL`, `--min-interval`) have passed since the last send in that room, then re-checks the window before pressing.
+- **Per-room minimum interval.** `send` waits until at least 20 seconds (`KAKAO_MIN_INTERVAL`, `--min-interval`) have passed since the last send in that room, then re-checks the window before pressing.
 - **One room, one session.** The tool does not stop two sessions from binding the same room; that is how it is meant to be run.
 
 ## State
 
-`~/.local/state/kakao-rooms/rooms/<hash>.json` (override with `KAKAO_ROOMS_STATE_DIR`): one small file per room with the window id, app version, hints, the last send time and the draft this tool placed. A `flock` on a sibling lock file serializes sends in the same room. Nothing keeps running between commands.
+`~/.local/state/kakao/rooms/<hash>.json` (override with `KAKAO_STATE_DIR`): one small file per room with the window id, app version, hints, the last send time and the draft this tool placed. A `flock` on a sibling lock file serializes sends in the same room. Nothing keeps running between commands.
 
 ## Checks
 
 ```bash
-kakao-rooms/scripts/check.sh
+kakao/scripts/check.sh
 ```
 
 Runs unit tests against fake windows (the AX layer is not linked), compiles the real helper, runs the CLI paths that exit before touching any app, and scans the sources for keyboard-event, raise, activate, pointer and scripting calls. It does not talk to KakaoTalk.

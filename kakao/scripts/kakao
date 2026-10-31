@@ -5,7 +5,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 src="$root/helper/Sources"
-cache="${KAKAO_ROOMS_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/kakao-rooms}"
+cache="${KAKAO_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/kakao}"
 
 if ! command -v swiftc >/dev/null 2>&1; then
   echo '{"exit":9,"ok":false,"reason":"swiftc not found; install the Xcode command line tools: xcode-select --install","status":"unavailable"}'
@@ -13,7 +13,7 @@ if ! command -v swiftc >/dev/null 2>&1; then
 fi
 
 hash="$(cat "$src"/Core/*.swift "$src"/AX/*.swift "$src"/CLI/main.swift | shasum -a 256 | cut -c1-16)"
-bin="$cache/kakao-rooms-$hash"
+bin="$cache/kakao-$hash"
 
 if [ ! -x "$bin" ]; then
   mkdir -p "$cache"

@@ -32,7 +32,8 @@ description: >
 - Default: `send --text <text>` drafts, verifies, presses the window's send button and confirms the text appeared. It waits out the room's minimum interval itself (`waited_seconds`; default 20 s, `KAKAO_MIN_INTERVAL`).
 - Draft for a person to approve: `draft --text <text>`, wait for the person, then `send` without `--text`. If the person edited the draft, `send` returns exit 8; add `--accept-edited` only once the person approved the edited text. `clear` removes a draft this tool placed.
 - `read` returns `messages` (oldest first; `text` is the message, `labels` the counters, times and names beside it) and a `marker`; pass the marker back as `--after` to get only newer rows.
-- `more: "newer"`: read again with the returned marker for the rest. `more: "older"`: older rows were left out; raise `--limit` to reach them. `marker_found: false` means the marker's rows are gone from the list; the newest rows come back instead. `truncated: true` marks a bubble that ends in an ellipsis and may be cut.
+- `read` sees only the rows the window has loaded, around what is on screen; the tool never scrolls, so history beyond them is out of reach. Read often enough that new rows arrive before older ones leave.
+- `more: "newer"`: read again with the returned marker for the rest. `more: "older"`: loaded rows beyond `--limit` were left out; raise `--limit`. `marker_found: false`: the marker's rows left the loaded rows, so rows in between may have been missed and the newest come back instead. `marker_ambiguous: true`: some returned rows may repeat earlier ones. `truncated: true`: the bubble ends in "…" and is cut; its full text is not reachable through this tool.
 
 ## Exit codes
 

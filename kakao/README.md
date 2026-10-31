@@ -41,7 +41,7 @@ All commands print one JSON object with `ok`, `status`, `exit` and `command`.
 | Command | What it does |
 | -- | -- |
 | `handshake --room <title> [hints]` | Finds exactly one KakaoTalk window with that title, its CGWindowID, the input box (value settable), the send button and the message list. Records the KakaoTalk version. |
-| `read --room <title> --window <id> [--after <marker>] [--limit <n>]` | Returns message rows (oldest first) and a marker. Each row's `text` is the bubble text; counters, time labels and names go to `labels` and never enter the marker. With `--after`, only newer rows, paged forward from the oldest (`more: "newer"`); without it, the newest `--limit` rows (`more: "older"` when older ones were left out). |
+| `read --room <title> --window <id> [--after <marker>] [--limit <n>]` | Returns message rows (oldest first) and a marker. Each row's `text` is the bubble text; counters, time labels and names go to `labels` and never enter the marker. With `--after`, only newer rows, paged forward from the oldest (`more: "newer"`); without it, the newest `--limit` loaded rows (`more: "older"` when loaded rows were left out). Only rows the window has loaded are seen; the tool never scrolls. |
 | `draft --room <title> --window <id> --text <text>` | Puts the text into an empty input box and reads it back. |
 | `send --room <title> --window <id> [--text <text>] [--accept-edited]` | With text: draft, then press. Without: press for the draft already in the box. Then confirms the text appeared and the box emptied. |
 | `clear --room <title> --window <id>` | Empties the input box only when it holds exactly the draft this tool placed. |
@@ -85,13 +85,26 @@ kakao/scripts/check.sh
 
 Runs unit tests against fake windows (the AX layer is not linked), compiles the real helper, runs the CLI paths that exit before touching any app, and scans the sources for keyboard-event, raise, activate, pointer and scripting calls. It does not talk to KakaoTalk.
 
+## Observed in the live app (read-only)
+
+One existing 1:1 chat window, inspected through AX without typing or pressing anything:
+
+- The window title is the room name.
+- Messages sit in `AXScrollArea > AXTable > AXRow > AXCell`. A bubble's text is an `AXTextArea` (not settable); its time and, on the other party's first bubble, the sender name are separate `AXStaticText` elements, so they land in `labels`.
+- The input box is a settable `AXTextArea` in its own scroll area below the table. The send button is an `AXButton` titled `전송`, disabled while the box is empty.
+- Only rows near the screen exist in the AX tree (about 120 nodes for the whole window). `read` therefore covers what is loaded, not the whole history.
+- A cut bubble's text ends with `…`. Its full-view control is an untitled `AXButton` under the bubble.
+- Nothing in the tree marks a bubble as sent by this account or by the other party.
+
 ## Not yet verified against the live app
 
-- Pressing a truncated bubble's full-view button through the window, and whether AX reads omit the cut part.
+- Any command run end to end against the app: handshake, draft, clear, send and its confirmation, the interval wait.
+- Pressing a cut bubble's full-view control, and what it opens.
+- How an unread counter appears (assumed: an `AXStaticText` of digits, kept in `labels`).
+- Whether a new bubble shows up in the loaded rows when the window is scrolled up; if not, `send` reports exit 7.
 - Several sessions setting values and pressing buttons in different windows at the same moment.
 - Reopening a closed chat window (out of scope; a person reopens it).
 - Whether AX reaches a window on another Space or a minimized window.
 - The CGWindowID ↔ AX window mapping through the private `_AXUIElementGetWindow` call, and the bounds-based fallback.
 - How long one send takes end to end.
-- Which elements the default heuristics pick in the current KakaoTalk build: the input box (a text area outside the message table), the send button label, and the message table's row shape.
-- The exact title string a chat window reports through AX (a group chat may add a member count or similar). `room_not_unique` lists the titles the app reports.
+- The title string of group chat windows (a member count or similar may be added). `room_not_unique` lists the titles the app reports.

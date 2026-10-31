@@ -364,7 +364,7 @@ test("read: marker returns only newer rows; unknown marker returns all") {
     expect(msgs.map { $0["text"] as? String ?? "" } == ["d", "e…"], "only new: \(msgs)")
     expect(msgs.last?["truncated"] as? Bool == true, "ellipsis flagged")
     expect(next.body["marker_found"] as? Bool == true, "found")
-    let lost = e.engine.run(.read(room: roomTitle, window: windowID, after: "v2.3.3.ffffffffffffffff", limit: 2))
+    let lost = e.engine.run(.read(room: roomTitle, window: windowID, after: "v2.3.0.ffffffffffffffff", limit: 2))
     expect(lost.body["marker_found"] as? Bool == false && lost.body["more"] as? String == "older", lost.json)
 }
 
@@ -421,19 +421,40 @@ test("read: more new rows than --limit pages forward without losing any") {
     expect(seen == ["n1", "n2", "n3", "n4", "n5"], "paged: \(seen)")
 }
 
-test("marker: recorded position wins, nearest otherwise; empty and malformed markers") {
+test("marker: recorded position wins; shorter tails and the earliest match when the top moved") {
     let rows = ["x", "y", "x", "y"].map { Message(texts: [$0]) }
     let three = marker(for: [Message(texts: ["q"]), Message(texts: ["x"]), Message(texts: ["y"])])
-    expect(messages(after: three, in: rows) == nil, "q,x,y never occurs in x,y,x,y")
+    expect(messages(after: three, in: rows)?.rows.count == 2, "q left the loaded rows: placed by its last rows x,y")
+    expect(messages(after: marker(for: [Message(texts: ["q"])]), in: rows) == nil, "no row of the marker is loaded")
     let two = marker(for: Array(rows.prefix(2)))
-    expect(two.hasPrefix("v2.2.2."), "k=2, end=2")
+    expect(two.hasPrefix("v2.2.") && two.split(separator: "-").count == 2, "end=2, two row hashes: \(two)")
     expect(messages(after: two, in: rows)?.rows.count == 2, "recorded position, not the latest occurrence")
     // An older row loaded at the top moves every index by one: x,y now ends at 3 and at 5.
     let grown = [Message(texts: ["w"])] + rows
     let found = messages(after: two, in: grown)
     expect(found?.rows.map(\.text) == ["x", "y"] && found?.ambiguous == true, "nearest: \(String(describing: found))")
-    expect(messages(after: "v2.0.0.0", in: rows)?.rows.count == 4, "empty-list marker returns all")
+    expect(messages(after: marker(for: []), in: rows)?.rows.count == 4, "empty-list marker returns all")
     expect(messages(after: "garbage", in: rows) == nil, "malformed")
+}
+
+test("read: rows leaving the top as new ones arrive (only near-screen rows are loaded)") {
+    let e = makeEnv(messages: ["a", "b", "c", "d"])
+    handshake(e)
+    let m = e.engine.run(.read(room: roomTitle, window: windowID, after: nil, limit: 30)).body["marker"] as? String ?? ""
+    e.room.table.children.removeFirst(2)       // a, b scrolled out of the loaded rows
+    e.room.append("e")
+    e.room.append("f")
+    let o = e.engine.run(.read(room: roomTitle, window: windowID, after: m, limit: 30))
+    let texts = (o.body["messages"] as? [[String: Any]] ?? []).map { $0["text"] as? String ?? "" }
+    expect(o.body["marker_found"] as? Bool == true && texts == ["e", "f"], o.json)
+}
+
+test("marker: with the top shifted and repeated rows, rows repeat rather than go missing") {
+    let start = ["a", "ㅋ", "ㅋ", "ㅋ"].map { Message(texts: [$0]) }
+    let m = marker(for: start)
+    let shifted = ["ㅋ", "ㅋ", "ㅋ", "ㅋ", "ㅋ"].map { Message(texts: [$0]) }   // a gone, two new ㅋ
+    let found = messages(after: m, in: shifted)
+    expect((found?.rows.count ?? 0) >= 2 && found?.ambiguous == true, "\(String(describing: found))")
 }
 
 test("send: marker lost after the press and an identical bubble already there → not confirmed") {

@@ -72,30 +72,40 @@ func normalize(_ s: String) -> String {
 
 let markerWindow = 3
 
-private func fingerprint(_ msgs: ArraySlice<Message>) -> String {
-    fnv1a64(msgs.map { $0.body.joined(separator: "\u{1F}") }.joined(separator: "\u{1E}"))
-}
+private func rowHash(_ m: Message) -> String { fnv1a64(m.body.joined(separator: "\u{1F}")) }
 
-/// Opaque marker for a position in the list: "v2.<k>.<end>.<hash of the k body rows before end>".
+/// Opaque marker for a position in the list:
+/// "v2.<end index>.<hash of the first loaded row>.<hashes of up to 3 rows before end, '-'-joined>".
 func marker(for msgs: [Message]) -> String {
     let k = min(markerWindow, msgs.count)
-    if k == 0 { return "v2.0.0.0" }
-    return "v2.\(k).\(msgs.count).\(fingerprint(msgs[(msgs.count - k)...]))"
+    if k == 0 { return "v2.0.0." }
+    let tail = msgs[(msgs.count - k)...].map(rowHash).joined(separator: "-")
+    return "v2.\(msgs.count).\(rowHash(msgs[0])).\(tail)"
 }
 
-/// Rows after the marker's position. Among positions whose rows match, the one at the recorded
-/// index wins, otherwise the nearest (the earlier on a tie, so rows repeat rather than go missing).
-/// nil when no position matches.
+/// Rows after the marker's position, or nil when it cannot be placed.
+///
+/// The window loads only rows near the screen, so rows leave the top as new ones arrive. Placement
+/// tries the marker's last 3 rows, then its last 2, then its last 1. Among matching positions,
+/// the recorded index wins while the first loaded row is unchanged; otherwise the earliest wins,
+/// so rows repeat rather than go missing. `ambiguous` is true when that earliest choice was among several.
 func messages(after marker: String, in msgs: [Message]) -> (rows: [Message], ambiguous: Bool)? {
     let parts = marker.split(separator: ".", omittingEmptySubsequences: false)
-    guard parts.count == 4, parts[0] == "v2", let k = Int(parts[1]), let end = Int(parts[2]),
-          k >= 0, end >= k else { return nil }
-    if k == 0 { return (msgs, false) }
-    guard msgs.count >= k else { return nil }
-    let hash = String(parts[3])
-    let hits = (k...msgs.count).filter { fingerprint(msgs[($0 - k)..<$0]) == hash }
-    guard let best = hits.min(by: { (abs($0 - end), $0) < (abs($1 - end), $1) }) else { return nil }
-    return (Array(msgs[best...]), hits.count > 1 && best != end)
+    guard parts.count == 4, parts[0] == "v2", let end = Int(parts[1]), end >= 0 else { return nil }
+    let tail = parts[3].split(separator: "-").map(String.init)
+    if tail.isEmpty { return end == 0 ? (msgs, false) : nil }
+    guard tail.count <= markerWindow, end >= tail.count else { return nil }
+    let hashes = msgs.map(rowHash)
+    let topUnchanged = hashes.first == String(parts[2])
+    for j in stride(from: tail.count, through: 1, by: -1) {
+        let want = Array(tail.suffix(j))
+        guard hashes.count >= j else { continue }
+        let hits = (j...hashes.count).filter { Array(hashes[($0 - j)..<$0]) == want }
+        guard let first = hits.first else { continue }
+        let exact = topUnchanged && hits.contains(end)
+        return (Array(msgs[(exact ? end : first)...]), hits.count > 1 && !exact)
+    }
+    return nil
 }
 
 /// A row shows `sent`: its body equals it, or some body text is its cut-off beginning.

@@ -290,7 +290,10 @@ test("send: per-room interval waits before pressing, then re-checks") {
     e.room.wireWorkingSend()
     expect(send(e, "one").exit == .ok, "first")
     e.clock.t += 5
+    var boxDuringWait: String?
+    e.clock.onSleep = { [unowned room = e.room] in boxDuringWait = room.input.stringValue }
     let o = send(e, "two")
+    expect(boxDuringWait == "", "nothing drafted while waiting, box was \(boxDuringWait ?? "nil")")
     expect(o.exit == .ok, o.json)
     expect(e.clock.slept.first == 15, "waited the remaining 15 s, slept \(e.clock.slept)")
     expect(o.body["waited_seconds"] as? Double == 15, "reported wait")
@@ -307,6 +310,7 @@ test("send: title changes during the interval wait → exit 4, not pressed") {
     let o = send(e, "two")
     expect(o.exit == .handshakeAgain, o.json)
     expect(e.room.button.pressCount == 1, "second not pressed")
+    expect(e.room.input.stringValue == "", "second never drafted")
 }
 
 test("send: button disabled after drafting → exit 6, own draft cleared") {
@@ -361,6 +365,21 @@ test("read: marker returns only newer rows; unknown marker returns all") {
     expect(next.body["marker_found"] as? Bool == true, "found")
     let lost = e.engine.run(.read(room: roomTitle, window: windowID, after: "v1.3.ffffffffffffffff", limit: 2))
     expect(lost.body["marker_found"] as? Bool == false && lost.body["limited"] as? Bool == true, lost.json)
+}
+
+test("read: more new rows than --limit pages forward without losing any") {
+    let e = makeEnv(messages: ["a", "b", "c"])
+    handshake(e)
+    var m = e.engine.run(.read(room: roomTitle, window: windowID, after: nil, limit: 30)).body["marker"] as? String ?? ""
+    for t in ["n1", "n2", "n3", "n4", "n5"] { e.room.append(t) }
+    var seen: [String] = []
+    for _ in 0..<4 {
+        let o = e.engine.run(.read(room: roomTitle, window: windowID, after: m, limit: 2))
+        seen += (o.body["messages"] as? [[String: Any]] ?? []).map { $0["text"] as? String ?? "" }
+        m = o.body["marker"] as? String ?? ""
+        if o.body["limited"] as? Bool != true { break }
+    }
+    expect(seen == ["n1", "n2", "n3", "n4", "n5"], "paged: \(seen)")
 }
 
 test("marker: repeated tails match the latest occurrence; empty list marker") {

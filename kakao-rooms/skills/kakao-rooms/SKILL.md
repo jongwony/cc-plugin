@@ -31,7 +31,7 @@ description: >
 
 - Default: `send --text <text>` drafts, verifies, presses the window's send button and confirms the text appeared. It waits out the room's minimum interval itself (`waited_seconds`; default 20 s, `KAKAO_ROOMS_MIN_INTERVAL`).
 - Draft for a person to approve: `draft --text <text>`, wait for the person, then `send` without `--text`. If the person edited the draft, `send` returns exit 8; add `--accept-edited` only once the person approved the edited text. `clear` removes a draft this tool placed.
-- `read` returns `messages` (oldest first) and a `marker`; pass the marker back as `--after` to get only newer rows. `truncated: true` marks a bubble that ends in an ellipsis and may be cut.
+- `read` returns `messages` (oldest first) and a `marker`; pass the marker back as `--after` to get only newer rows. With `limited: true`, read again with the returned marker for the rest. `marker_found: false` means the list moved past the marker; the newest rows come back instead. `truncated: true` marks a bubble that ends in an ellipsis and may be cut.
 
 ## Exit codes
 

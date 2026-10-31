@@ -125,23 +125,39 @@ public final class Engine {
         if locked { try body() } else { try store.withLock(room, body) }
     }
 
-    /// Puts `text` into an empty input box and reads it back. Returns "drafted" or "already_drafted".
-    func placeDraft(_ cmd: String, _ b: Bound, _ text: String) throws -> String {
-        let room = b.state.room
+    /// True when the input already holds `text` as this tool's recorded draft; throws when it holds anything else.
+    func inputIsOwnDraftOrEmpty(_ cmd: String, _ b: Bound, _ text: String) throws -> Bool {
         let want = normalize(text)
         let cur = normalize(b.input.stringValue ?? "")
-        if !cur.isEmpty {
-            if cur == want, let rec = b.state.draftText, normalize(rec) == want { return "already_drafted" }
-            throw abort(cmd, .inputBusy, "input_busy", ["room": room, "input_length": cur.count])
-        }
+        if cur.isEmpty { return false }
+        if cur == want, let rec = b.state.draftText, normalize(rec) == want { return true }
+        throw abort(cmd, .inputBusy, "input_busy", ["room": b.state.room, "input_length": cur.count])
+    }
+
+    /// Puts `text` into an empty input box and reads it back. Returns "drafted" or "already_drafted".
+    func placeDraft(_ cmd: String, _ b: Bound, _ text: String, locked: Bool = false) throws -> String {
+        let room = b.state.room
+        if try inputIsOwnDraftOrEmpty(cmd, b, text) { return "already_drafted" }
         let setReported = b.input.setStringValue(text)
         let back = normalize(b.input.stringValue ?? "")
-        guard back == want else {
+        guard back == normalize(text) else {
             throw abort(cmd, .notVerified, "draft_mismatch",
                         ["room": room, "set_reported": setReported, "input_empty": back.isEmpty])
         }
-        try mutate(room) { $0.draftText = text }
+        try mutate(room, locked: locked) { $0.draftText = text }
         return "drafted"
+    }
+
+    /// For `send` without text: the input must hold this tool's recorded draft, or any text with `acceptEdited`.
+    func existingDraft(_ cmd: String, _ b: Bound, acceptEdited: Bool) throws -> String {
+        let cur = b.input.stringValue ?? ""
+        guard !normalize(cur).isEmpty else { throw abort(cmd, .draftChanged, "no_draft", ["room": b.state.room]) }
+        let rec = b.state.draftText
+        if !acceptEdited && (rec.map { normalize($0) != normalize(cur) } ?? true) {
+            throw abort(cmd, .draftChanged, "draft_changed",
+                        ["room": b.state.room, "input_length": normalize(cur).count, "draft_recorded": rec != nil])
+        }
+        return cur
     }
 
     // MARK: commands
@@ -197,19 +213,19 @@ public final class Engine {
         var body: [String: Any] = [
             "room": room, "window_id": Int(window), "marker": marker(for: msgs), "total_rows": msgs.count,
         ]
-        var picked = msgs
-        if let a = after {
-            if let m = messages(after: a, in: msgs) {
-                picked = m
-                body["marker_found"] = true
-            } else {
-                body["marker_found"] = false
+        var picked = Array(msgs.suffix(limit))
+        if let a = after, let m = messages(after: a, in: msgs) {
+            body["marker_found"] = true
+            // Page forward: the oldest new rows first; the marker ends at the last row returned.
+            picked = Array(m.prefix(limit))
+            if m.count > limit {
+                body["marker"] = marker(for: Array(msgs[..<(msgs.count - m.count + limit)]))
             }
+        } else if after != nil {
+            body["marker_found"] = false
         }
-        if picked.count > limit {
-            picked = Array(picked.suffix(limit))
-            body["limited"] = true
-        }
+        let available = after.flatMap { messages(after: $0, in: msgs)?.count } ?? msgs.count
+        if available > picked.count { body["limited"] = true }
         body["messages"] = picked.map(\.asJSON)
         return outcome("read", .ok, "ok", body)
     }
@@ -226,34 +242,28 @@ public final class Engine {
         let all: Set<String> = ["input", "send_button", "message_list"]
         var b = try resolve(cmd, room, window, needs: all)
         try checkPresence(cmd, b)
+        // Fail fast before any wait; the same checks run again under the lock.
+        if let t = text { _ = try inputIsOwnDraftOrEmpty(cmd, b, t) } else { _ = try existingDraft(cmd, b, acceptEdited: acceptEdited) }
 
-        let expected: String
+        var expected = text ?? ""
         var placedNow = false
-        if let t = text {
-            placedNow = try placeDraft(cmd, b, t) == "drafted"
-            expected = t
-        } else {
-            let cur = b.input.stringValue ?? ""
-            guard !normalize(cur).isEmpty else { throw abort(cmd, .draftChanged, "no_draft", ["room": room]) }
-            let rec = b.state.draftText
-            if !acceptEdited && (rec.map { normalize($0) != normalize(cur) } ?? true) {
-                throw abort(cmd, .draftChanged, "draft_changed",
-                            ["room": room, "input_length": normalize(cur).count, "draft_recorded": rec != nil])
-            }
-            expected = cur
-        }
-
         var waited = 0.0
         var tail = ""
         var pressReported = false
         try store.withLock(room) {
+            // Wait first, so a drafted text never sits in the box through the interval.
             if let last = store.load(room)?.lastSendAt {
                 let w = last + config.minInterval - clock.now()
                 if w > 0 { clock.sleep(w); waited = w }
             }
-            // Re-check immediately before pressing, after any wait.
-            let fresh = try resolve(cmd, room, window, needs: all)
+            var fresh = try resolve(cmd, room, window, needs: all)
             try checkPresence(cmd, fresh)
+            if let t = text {
+                placedNow = try placeDraft(cmd, fresh, t, locked: true) == "drafted"
+                fresh = try resolve(cmd, room, window, needs: all)
+            } else {
+                expected = try existingDraft(cmd, fresh, acceptEdited: acceptEdited)
+            }
             let cur = fresh.input.stringValue ?? ""
             guard normalize(cur) == normalize(expected) else {
                 throw abort(cmd, .inputBusy, "input_changed", ["room": room, "input_length": normalize(cur).count])

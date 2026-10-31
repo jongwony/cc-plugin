@@ -1,7 +1,7 @@
 {
   "name": "kakao-rooms",
   "description": "Work several macOS KakaoTalk chat rooms in parallel, one Claude session per room window — handshake once, then read, draft and send through Accessibility alone, with no server, keyboard events or window raising",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

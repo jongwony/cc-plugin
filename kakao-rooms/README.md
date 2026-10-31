@@ -41,7 +41,7 @@ All commands print one JSON object with `ok`, `status`, `exit` and `command`.
 | Command | What it does |
 | -- | -- |
 | `handshake --room <title> [hints]` | Finds exactly one KakaoTalk window with that title, its CGWindowID, the input box (value settable), the send button and the message list. Records the KakaoTalk version. |
-| `read --room <title> --window <id> [--after <marker>] [--limit <n>]` | Returns message rows (oldest first) and a marker for the current end of the list. |
+| `read --room <title> --window <id> [--after <marker>] [--limit <n>]` | Returns message rows (oldest first) and a marker. With `--after`, only newer rows, paged forward from the oldest (`limited: true` means more remain). |
 | `draft --room <title> --window <id> --text <text>` | Puts the text into an empty input box and reads it back. |
 | `send --room <title> --window <id> [--text <text>] [--accept-edited]` | With text: draft, then press. Without: press for the draft already in the box. Then confirms the text appeared and the box emptied. |
 | `clear --room <title> --window <id>` | Empties the input box only when it holds exactly the draft this tool placed. |
@@ -93,3 +93,4 @@ Runs unit tests against fake windows (the AX layer is not linked), compiles the 
 - The CGWindowID ↔ AX window mapping through the private `_AXUIElementGetWindow` call, and the bounds-based fallback.
 - How long one send takes end to end.
 - Which elements the default heuristics pick in the current KakaoTalk build: the input box (a text area outside the message table), the send button label, and the message table's row shape.
+- The exact title string a chat window reports through AX (a group chat may add a member count or similar). `room_not_unique` lists the titles the app reports.

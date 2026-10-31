@@ -25,6 +25,7 @@ description: >
 
 - This session works one room. `handshake --room "<exact window title>"` binds it; keep `room` and `window_id` from the JSON and pass both to every later command.
 - Exit 3 (`handshake_incomplete`): `missing` names the element the helper could not settle and `candidates` lists what it saw. Look at the same window with OCU read-only tools (`get_app_state`, `query`), then rerun `handshake` with `--send-label <label>`, `--input-identifier <id>` or `--list-identifier <id>`. The hints are stored for the room.
+- Exit 9 `screen_locked`: with OCU Locked Use enabled, one OCU `get_app_state` call on KakaoTalk wakes the display; then retry the command once. If it is still locked, wait for a person to unlock the Mac.
 - When the helper cannot do something, report its JSON. KakaoTalk is reached only through this helper — not keyboard input, OCU click/set_value/type_text/press_key, AppleScript or coordinates — because those act on whichever window has focus and break the other rooms.
 
 ## Sending and reading
@@ -47,5 +48,5 @@ description: >
 | 6 | draft_mismatch, send_button_disabled, clear_failed | nothing was sent; for draft_mismatch the box may hold text, so ask the person |
 | 7 | send_unconfirmed | do not send again; `read` and look for the text before any next step |
 | 8 | draft_changed, no_draft | the input is not this tool's draft; see draft-for-approval above |
-| 9 | unavailable, screen_locked | act on `reason` (permission, app not running, toolchain); for screen_locked wait until a person unlocks the Mac |
+| 9 | unavailable, screen_locked | act on `reason` (permission, app not running, toolchain); for screen_locked see Binding a room |
 | 10 | room_not_unique | exactly one open window must carry the title; ask the person |

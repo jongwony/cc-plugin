@@ -100,6 +100,9 @@ Run end to end against a self-chat window and a chat with a bot account (KakaoTa
 | `send --text` with the enable wait in place | exit 0 `sent`; `text_appeared` and `input_cleared` true, `press_reported` false | 7.2 s, including a rebuild after the source change (other sends about 0.6 s) |
 | `send --text` while the box held 183 characters this tool had not placed | exit 5 `input_busy`; nothing touched | — |
 | `send --text` in the bot chat, then `read --after <marker>` 15 s later | exit 0 `sent`; the read returned the sent bubble and the bot's reply as new rows, `marker_found: true` | 8.5 s; `read` there took 3–4 s with 29 loaded rows of long bubbles, against 0.4 s in the self-chat |
+| Two `send --text` in parallel, one per room (two helper processes) | both exit 0 `sent`; each text landed only in its own room | 6.1 s and 2.3 s, 6.1 s in total |
+| `read --after <marker>` 11.5 s and 17.1 s after a send in the bot chat | first the sent bubble, then the bot's reply; `marker_found: true`, no `list_jumped` | — |
+| `read` after caching roles and not entering text elements | bot chat 2.6 / 2.4 / 2.4 s (was 3–4 s); self-chat 0.4 s | as listed |
 
 What the run showed:
 
@@ -112,15 +115,15 @@ What the run showed:
 - The unread counter is not an element of its own: it is prefixed to the time label (`"1\n오후 10:25"`), so it stays in `labels` and out of the marker. The other party's name is a label too.
 - Nothing in the tree marks a bubble as sent by this account or by the other party.
 - While the screen is locked, AX reports every KakaoTalk window under the app's name and the window-id call fails for every window; one `read` in that state returned old rows instead of new ones. The helper now stops with exit 9 `screen_locked` in that state: a `handshake` run with the screen still locked (login window in front) returned exactly that. `read` adds `list_jumped: true` when the rows it returns end earlier than its marker.
+- With OCU Locked Use enabled, one read-only OCU call (`get_app_state` on KakaoTalk) woke the display; right after it the login window was no longer in front, titles and ids read normally, and handshakes returned 0.
+- `read` stays slower in a chat of long bubbles (about 2.4 s for 29 loaded rows) than in a short one (0.4 s); the cost grows with the AX calls per row.
 - A closed chat window could be reopened from the main window through OCU, with its `sky_click` method (search field, friends tab, double-click on the row); default clicks did nothing in the background. This tool still never opens windows.
 
 ## Not yet verified against the live app
 
 - Pressing a cut bubble's full-view control, and what it opens.
 - The time-based `list_jumped` signal.
-- Where the 3–4 s `read` time in a long chat goes; caching each element's role and not entering text elements should cut AX calls, unmeasured.
 - Whether a new bubble shows up in the loaded rows when the window is scrolled up; if not, `send` reports exit 7.
-- Several sessions setting values and pressing buttons in different windows at the same moment.
 - Whether AX reaches a window on another Space or a minimized window.
 - The bounds-based fallback for the window id, for when the private `_AXUIElementGetWindow` call fails (the private call worked in the run above).
 - The title string of group chat windows (a member count or similar may be added). `room_not_unique` lists the titles the app reports.

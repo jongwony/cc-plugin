@@ -41,7 +41,7 @@ All commands print one JSON object with `ok`, `status`, `exit` and `command`.
 | Command | What it does |
 | -- | -- |
 | `handshake --room <title> [hints]` | Finds exactly one KakaoTalk window with that title, its CGWindowID, the input box (value settable), the send button and the message list. Records the KakaoTalk version. |
-| `read --room <title> --window <id> [--after <marker>] [--limit <n>]` | Returns message rows (oldest first) and a marker. With `--after`, only newer rows, paged forward from the oldest (`limited: true` means more remain). |
+| `read --room <title> --window <id> [--after <marker>] [--limit <n>]` | Returns message rows (oldest first) and a marker. Each row's `text` is the bubble text; counters, time labels and names go to `labels` and never enter the marker. With `--after`, only newer rows, paged forward from the oldest (`more: "newer"`); without it, the newest `--limit` rows (`more: "older"` when older ones were left out). |
 | `draft --room <title> --window <id> --text <text>` | Puts the text into an empty input box and reads it back. |
 | `send --room <title> --window <id> [--text <text>] [--accept-edited]` | With text: draft, then press. Without: press for the draft already in the box. Then confirms the text appeared and the box emptied. |
 | `clear --room <title> --window <id>` | Empties the input box only when it holds exactly the draft this tool placed. |
@@ -66,8 +66,9 @@ Handshake hints, for when the defaults do not find an element: `--send-label <la
 ## Safety rules
 
 - **No keyboard, no raising, no coordinates.** If the send button cannot be found, the send fails; it never falls back to Return.
-- **Other people's text is left alone.** If the input box holds text this tool did not place, the command stops. Cleanup removes only text that is exactly what this tool put there.
-- **A person at the keyboard wins.** If KakaoTalk is frontmost, this window is its focused window, and there was input in the last 2 seconds, the command stops.
+- **Other people's text is left alone.** If the input box holds text this tool did not place, the command stops. Cleanup removes only text that matches what this tool put there (line endings unified, outer whitespace ignored); when a draft reads back wrong, the tool removes its own result, or records it so `clear` can.
+- **A person at the keyboard wins.** If KakaoTalk is frontmost, this window is its focused window, and there was input in the last 2 seconds — or the idle time cannot be read — the command stops.
+- **Sent means seen.** `send` succeeds only when the box emptied and a bubble with the text appeared after the pre-press position. A matching bubble that was already there never counts.
 - **No blind resend.** After exit 7 the caller reads the room first; the tool never presses twice for one call.
 - **Per-room minimum interval.** `send` waits until at least 20 seconds (`KAKAO_MIN_INTERVAL`, `--min-interval`) have passed since the last send in that room, then re-checks the window before pressing.
 - **One room, one session.** The tool does not stop two sessions from binding the same room; that is how it is meant to be run.

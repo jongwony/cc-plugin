@@ -6,23 +6,27 @@ struct Visited {
     let path: [Int]
 }
 
-/// Depth-first, pre-order walk with node and depth caps.
-func walk(_ root: UINode, maxNodes: Int = 4000, maxDepth: Int = 40) -> [Visited] {
+/// Depth-first, pre-order walk with node and depth caps. A node for which `prune` holds is
+/// visited but its children are not. `truncated` is true when the node cap stopped the walk.
+func walk(_ root: UINode, maxNodes: Int = 4000, maxDepth: Int = 40,
+          prune: (UINode) -> Bool = { _ in false }) -> (visited: [Visited], truncated: Bool) {
     var out: [Visited] = []
     var stack: [Visited] = [Visited(node: root, ancestorRoles: [], path: [])]
-    while let v = stack.popLast(), out.count < maxNodes {
+    while let v = stack.popLast() {
+        if out.count >= maxNodes { return (out, true) }
         out.append(v)
-        guard v.path.count < maxDepth else { continue }
+        guard v.path.count < maxDepth, v.path.isEmpty || !prune(v.node) else { continue }
         let kids = v.node.children
         let roles = v.ancestorRoles + [v.node.role ?? "?"]
         for (i, k) in kids.enumerated().reversed() {
             stack.append(Visited(node: k, ancestorRoles: roles, path: v.path + [i]))
         }
     }
-    return out
+    return (out, false)
 }
 
-/// Roles that hold message rows. A text area under one of these is a message, not the input box.
+/// Roles that hold message rows. The walk does not enter them, so a long history never crowds
+/// out the input box and the send button, and a text area inside them is never the input box.
 let listRoles: Set<String> = ["AXTable", "AXOutline", "AXList"]
 let rowRoles: Set<String> = ["AXRow", "AXCell"]
 let textInputRoles: Set<String> = ["AXTextArea", "AXTextField"]
@@ -55,8 +59,8 @@ struct ElementSet {
     let input: Found
     let sendButton: Found
     let messageList: Found
-    /// Descriptors of every candidate per element, for the handshake report.
-    let candidates: [String: [[String: Any]]]
+    let truncated: Bool
+    let visited: [Visited]
 
     var missing: [String] {
         var m: [String] = []
@@ -65,11 +69,28 @@ struct ElementSet {
         if messageList.node == nil { m.append("message_list") }
         return m
     }
+
+    /// Descriptors of every candidate per element, for a handshake that could not settle one.
+    var candidates: [String: [[String: Any]]] {
+        [
+            "input": visited.filter { isInputCandidate($0) }.prefix(30).map(describe),
+            "send_button": visited.filter { $0.node.role == "AXButton" && hasLabel($0.node) }.prefix(40).map(describe),
+            "message_list": visited.filter { listRoles.contains($0.node.role ?? "") }.prefix(20).map(describe),
+        ]
+    }
 }
 
 private func trimmed(_ s: String?) -> String? {
     guard let t = s?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
     return t
+}
+
+private func hasLabel(_ n: UINode) -> Bool {
+    trimmed(n.title) != nil || trimmed(n.nodeDescription) != nil || trimmed(n.identifier) != nil
+}
+
+private func isInputCandidate(_ v: Visited) -> Bool {
+    textInputRoles.contains(v.node.role ?? "") && v.ancestorRoles.allSatisfy { !rowRoles.contains($0) }
 }
 
 func describe(_ v: Visited) -> [String: Any] {
@@ -90,46 +111,24 @@ func describe(_ v: Visited) -> [String: Any] {
 }
 
 func findElements(in window: UINode, hints: Hints, defaultSendLabels: [String]) -> ElementSet {
-    let all = walk(window)
+    let (all, truncated) = walk(window, prune: { listRoles.contains($0.role ?? "") })
 
-    let inputCands = all.filter {
-        textInputRoles.contains($0.node.role ?? "")
-            && $0.ancestorRoles.allSatisfy { !listRoles.contains($0) && !rowRoles.contains($0) }
-    }
-    let inputPick: [UINode]
-    if let id = hints.inputIdentifier {
-        inputPick = all.filter { textInputRoles.contains($0.node.role ?? "") && $0.node.identifier == id && $0.node.isValueSettable }.map(\.node)
-    } else {
-        inputPick = inputCands.filter { $0.node.isValueSettable }.map(\.node)
-    }
-
-    let labels = Set((hints.sendLabels ?? defaultSendLabels).compactMap { trimmed($0) })
-    let buttons = all.filter { $0.node.role == "AXButton" }
-    let labelled = buttons.filter { trimmed($0.node.title) != nil || trimmed($0.node.nodeDescription) != nil || trimmed($0.node.identifier) != nil }
-    let sendPick = buttons.filter { b in
-        [b.node.title, b.node.nodeDescription, b.node.identifier].contains { s in
-            guard let t = trimmed(s) else { return false }
-            return labels.contains(t)
-        }
+    let inputs = all.filter(isInputCandidate)
+    let inputPick = inputs.filter { v in
+        v.node.isValueSettable && (hints.inputIdentifier.map { v.node.identifier == $0 } ?? true)
     }.map(\.node)
 
-    let topLists = all.filter {
-        listRoles.contains($0.node.role ?? "") && $0.ancestorRoles.allSatisfy { !listRoles.contains($0) }
-    }
-    let listPick: [UINode]
-    if let id = hints.listIdentifier {
-        listPick = all.filter { listRoles.contains($0.node.role ?? "") && $0.node.identifier == id }.map(\.node)
-    } else {
-        listPick = topLists.map(\.node)
-    }
+    let labels = Set((hints.sendLabels ?? defaultSendLabels).compactMap { trimmed($0) })
+    let sendPick = all.filter { b in
+        b.node.role == "AXButton"
+            && [b.node.title, b.node.nodeDescription, b.node.identifier].contains { trimmed($0).map(labels.contains) ?? false }
+    }.map(\.node)
 
-    return ElementSet(
-        input: pick(inputPick),
-        sendButton: pick(sendPick),
-        messageList: pick(listPick),
-        candidates: [
-            "input": inputCands.prefix(30).map(describe),
-            "send_button": labelled.prefix(40).map(describe),
-            "message_list": all.filter { listRoles.contains($0.node.role ?? "") }.prefix(20).map(describe),
-        ])
+    let listPick = all.filter { v in
+        listRoles.contains(v.node.role ?? "")
+            && (hints.listIdentifier.map { v.node.identifier == $0 } ?? true)
+    }.map(\.node)
+
+    return ElementSet(input: pick(inputPick), sendButton: pick(sendPick), messageList: pick(listPick),
+                      truncated: truncated, visited: all)
 }

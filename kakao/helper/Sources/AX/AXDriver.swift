@@ -24,7 +24,8 @@ final class AXNode: UINode {
     var nodeDescription: String? { attr(kAXDescriptionAttribute) as? String }
     var identifier: String? { attr(kAXIdentifierAttribute) as? String }
     var stringValue: String? { attr(kAXValueAttribute) as? String }
-    var isEnabled: Bool { (attr(kAXEnabledAttribute) as? Bool) ?? true }
+    // An element that does not report AXEnabled counts as disabled.
+    var isEnabled: Bool { (attr(kAXEnabledAttribute) as? Bool) ?? false }
 
     var isValueSettable: Bool {
         var settable = DarwinBoolean(false)
@@ -78,12 +79,16 @@ final class AXAppDriver: AppDriver {
         let axApp = AXNode(AXUIElementCreateApplication(pid))
         let focused = axApp.attr(kAXFocusedWindowAttribute)
         guard let wins = axApp.attr(kAXWindowsAttribute) as? [AXUIElement] else { return [] }
-        let cg = cgWindows(pid: pid)
+        // The CoreGraphics list is read only if the private call fails for some window.
+        var cg: [[String: Any]]?
         return wins.map { w in
             let node = AXNode(w)
             let isFocused = focused.map { CFEqual($0, w) } ?? false
-            return WindowInfo(windowID: windowID(of: w, title: node.title, cg: cg),
-                              title: node.title, isFocused: isFocused, node: node)
+            let id = windowID(of: w, title: node.title) {
+                if cg == nil { cg = self.cgWindows(pid: pid) }
+                return cg!
+            }
+            return WindowInfo(windowID: id, title: node.title, isFocused: isFocused, node: node)
         }
     }
 
@@ -119,11 +124,11 @@ final class AXAppDriver: AppDriver {
 
     /// The private call first; otherwise the single same-app layer-0 window with the same bounds
     /// (and the same name, when names are readable).
-    private func windowID(of w: AXUIElement, title: String?, cg: [[String: Any]]) -> UInt32? {
+    private func windowID(of w: AXUIElement, title: String?, cg: () -> [[String: Any]]) -> UInt32? {
         var id = CGWindowID(0)
         if _AXUIElementGetWindow(w, &id) == .success, id != 0 { return id }
         guard let frame = axFrame(w) else { return nil }
-        let hits = cg.filter { info in
+        let hits = cg().filter { info in
             guard let b = info[kCGWindowBounds as String] as? [String: Any],
                   let r = CGRect(dictionaryRepresentation: b as CFDictionary), r.equalTo(frame) else { return false }
             if let name = info[kCGWindowName as String] as? String, let title { return name == title }

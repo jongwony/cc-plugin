@@ -56,10 +56,19 @@ final class FakeRoom {
         for m in messages { append(m, settable: bubblesSettable) }
     }
 
-    func append(_ text: String, settable: Bool = false) {
+    /// A bubble row; `labels` become static texts beside it (unread counter, time).
+    func append(_ text: String, settable: Bool = false, labels: [String] = []) {
         table.children.append(FakeNode("AXRow", children: [
-            FakeNode("AXCell", children: [FakeNode("AXTextArea", value: text, settable: settable)]),
+            FakeNode("AXCell", children: [FakeNode("AXTextArea", value: text, settable: settable)]
+                + labels.map { FakeNode("AXStaticText", value: $0) }),
         ]))
+    }
+
+    /// The static texts of row `i`, to change counters and time labels after the fact.
+    func labelNodes(row i: Int) -> [FakeNode] {
+        ((table.children[i] as! FakeNode).children[0] as! FakeNode).children.compactMap {
+            ($0 as! FakeNode).role == "AXStaticText" ? $0 as? FakeNode : nil
+        }
     }
 
     /// The button behaves like a working app: the input text becomes the newest bubble.

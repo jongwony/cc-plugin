@@ -12,12 +12,13 @@ struct Bound {
     var list: UINode { elements.messageList.node! }
 }
 
-/// Line endings unified, nothing trimmed: the test for "exactly the text this tool put there".
-func sameText(_ a: String, _ b: String) -> Bool {
-    func le(_ s: String) -> String {
-        s.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+extension Hints {
+    /// Fields given now replace stored ones; fields not given keep what an earlier handshake stored.
+    func over(_ prior: Hints?) -> Hints {
+        Hints(sendLabels: sendLabels ?? prior?.sendLabels,
+              inputIdentifier: inputIdentifier ?? prior?.inputIdentifier,
+              listIdentifier: listIdentifier ?? prior?.listIdentifier)
     }
-    return le(a) == le(b)
 }
 
 public final class Engine {
@@ -104,16 +105,19 @@ public final class Engine {
         }
         let els = findElements(in: w.node, hints: state.hints, defaultSendLabels: config.defaultSendLabels)
         let missing = els.missing.filter { needs.contains($0) }
-        guard missing.isEmpty else { throw again(cmd, room, "element_missing", ["missing": missing]) }
+        guard missing.isEmpty else {
+            throw again(cmd, room, "element_missing", ["missing": missing, "walk_truncated": els.truncated])
+        }
         return Bound(state: state, window: w, elements: els)
     }
 
-    /// A person is using this very window right now: the app is frontmost, this window
-    /// is its focused window, and there was input within the threshold.
+    /// A person may be using this very window: the app is frontmost, this window is its focused
+    /// window, and there was input within the threshold — or the idle time cannot be read.
     func checkPresence(_ cmd: String, _ b: Bound) throws {
-        guard case .running(_, let front) = driver.appState(), front, b.window.isFocused,
-              let idle = driver.secondsSinceLastInput(), idle < config.personIdleThreshold else { return }
-        throw abort(cmd, .inputBusy, "person_active", ["room": b.state.room, "idle_seconds": idle])
+        guard case .running(_, let front) = driver.appState(), front, b.window.isFocused else { return }
+        let idle = driver.secondsSinceLastInput()
+        if let i = idle, i >= config.personIdleThreshold { return }
+        throw abort(cmd, .inputBusy, "person_active", ["room": b.state.room, "idle_seconds": idle ?? NSNull()])
     }
 
     func mutate(_ room: String, locked: Bool = false, _ f: (inout RoomState) -> Void) throws {
@@ -135,17 +139,25 @@ public final class Engine {
     }
 
     /// Puts `text` into an empty input box and reads it back. Returns "drafted" or "already_drafted".
+    /// On a mismatch, whatever the set left in the box is this tool's: it is removed, or recorded as
+    /// this tool's draft so `clear` can remove it.
     func placeDraft(_ cmd: String, _ b: Bound, _ text: String, locked: Bool = false) throws -> String {
         let room = b.state.room
         if try inputIsOwnDraftOrEmpty(cmd, b, text) { return "already_drafted" }
         let setReported = b.input.setStringValue(text)
-        let back = normalize(b.input.stringValue ?? "")
-        guard back == normalize(text) else {
-            throw abort(cmd, .notVerified, "draft_mismatch",
-                        ["room": room, "set_reported": setReported, "input_empty": back.isEmpty])
+        let back = b.input.stringValue ?? ""
+        if normalize(back) == normalize(text) {
+            try mutate(room, locked: locked) { $0.draftText = text }
+            return "drafted"
         }
-        try mutate(room, locked: locked) { $0.draftText = text }
-        return "drafted"
+        var cleared = normalize(back).isEmpty
+        if !cleared {
+            cleared = b.input.setStringValue("") && normalize(b.input.stringValue ?? "").isEmpty
+            let left = cleared ? nil : (b.input.stringValue ?? back)
+            try mutate(room, locked: locked) { $0.draftText = left }
+        }
+        throw abort(cmd, .notVerified, "draft_mismatch",
+                    ["room": room, "set_reported": setReported, "input_left": !cleared])
     }
 
     /// For `send` without text: the input must hold this tool's recorded draft, or any text with `acceptEdited`.
@@ -162,9 +174,10 @@ public final class Engine {
 
     // MARK: commands
 
-    func handshake(_ room: String, _ hints: Hints) throws -> Outcome {
+    func handshake(_ room: String, _ given: Hints) throws -> Outcome {
         let cmd = "handshake"
         let version = try runningVersion(cmd)
+        let hints = given.over(store.load(room)?.hints)
         let wins = driver.windows()
         let matches = wins.filter { $0.title == room }
         guard matches.count == 1 else {
@@ -195,6 +208,7 @@ public final class Engine {
         guard missing.isEmpty, let id = w.windowID else {
             body["missing"] = missing
             body["candidates"] = els.candidates
+            body["walk_truncated"] = els.truncated
             throw abort(cmd, .handshakeIncomplete, "handshake_incomplete", body)
         }
         try store.withLock(room) {
@@ -214,18 +228,24 @@ public final class Engine {
             "room": room, "window_id": Int(window), "marker": marker(for: msgs), "total_rows": msgs.count,
         ]
         var picked = Array(msgs.suffix(limit))
-        if let a = after, let m = messages(after: a, in: msgs) {
+        var more: String?
+        if let a = after, let found = messages(after: a, in: msgs) {
             body["marker_found"] = true
+            if found.ambiguous { body["marker_ambiguous"] = true }
             // Page forward: the oldest new rows first; the marker ends at the last row returned.
-            picked = Array(m.prefix(limit))
-            if m.count > limit {
-                body["marker"] = marker(for: Array(msgs[..<(msgs.count - m.count + limit)]))
+            picked = Array(found.rows.prefix(limit))
+            if found.rows.count > limit {
+                more = "newer"
+                body["marker"] = marker(for: Array(msgs[..<(msgs.count - found.rows.count + limit)]))
             }
-        } else if after != nil {
-            body["marker_found"] = false
+        } else {
+            if after != nil { body["marker_found"] = false }
+            if msgs.count > limit { more = "older" }
         }
-        let available = after.flatMap { messages(after: $0, in: msgs)?.count } ?? msgs.count
-        if available > picked.count { body["limited"] = true }
+        if let m = more {
+            body["limited"] = true
+            body["more"] = m
+        }
         body["messages"] = picked.map(\.asJSON)
         return outcome("read", .ok, "ok", body)
     }
@@ -240,15 +260,17 @@ public final class Engine {
     func send(_ room: String, _ window: UInt32, _ text: String?, _ acceptEdited: Bool) throws -> Outcome {
         let cmd = "send"
         let all: Set<String> = ["input", "send_button", "message_list"]
-        var b = try resolve(cmd, room, window, needs: all)
-        try checkPresence(cmd, b)
-        // Fail fast before any wait; the same checks run again under the lock.
-        if let t = text { _ = try inputIsOwnDraftOrEmpty(cmd, b, t) } else { _ = try existingDraft(cmd, b, acceptEdited: acceptEdited) }
+        // Only when a wait lies ahead: fail fast now; the same checks run again under the lock.
+        if let last = store.load(room)?.lastSendAt, last + config.minInterval > clock.now() {
+            let b = try resolve(cmd, room, window, needs: all)
+            try checkPresence(cmd, b)
+            if let t = text { _ = try inputIsOwnDraftOrEmpty(cmd, b, t) } else { _ = try existingDraft(cmd, b, acceptEdited: acceptEdited) }
+        }
 
+        var bound: Bound?
         var expected = text ?? ""
-        var placedNow = false
         var waited = 0.0
-        var tail = ""
+        var before: [Message] = []
         var pressReported = false
         try store.withLock(room) {
             // Wait first, so a drafted text never sits in the box through the interval.
@@ -256,40 +278,42 @@ public final class Engine {
                 let w = last + config.minInterval - clock.now()
                 if w > 0 { clock.sleep(w); waited = w }
             }
-            var fresh = try resolve(cmd, room, window, needs: all)
-            try checkPresence(cmd, fresh)
+            let b = try resolve(cmd, room, window, needs: all)
+            try checkPresence(cmd, b)
+            var placedNow = false
             if let t = text {
-                placedNow = try placeDraft(cmd, fresh, t, locked: true) == "drafted"
-                fresh = try resolve(cmd, room, window, needs: all)
+                placedNow = try placeDraft(cmd, b, t, locked: true) == "drafted"
             } else {
-                expected = try existingDraft(cmd, fresh, acceptEdited: acceptEdited)
+                expected = try existingDraft(cmd, b, acceptEdited: acceptEdited)
             }
-            let cur = fresh.input.stringValue ?? ""
+            let cur = b.input.stringValue ?? ""
+            guard b.window.node.title == room else {
+                throw again(cmd, room, "title_mismatch", ["title": b.window.node.title ?? NSNull()])
+            }
             guard normalize(cur) == normalize(expected) else {
                 throw abort(cmd, .inputBusy, "input_changed", ["room": room, "input_length": normalize(cur).count])
             }
-            guard fresh.sendButton.isEnabled else {
+            guard b.sendButton.isEnabled else {
                 var cleared = false
-                if placedNow, let t = text, sameText(cur, t) {
-                    cleared = fresh.input.setStringValue("") && normalize(fresh.input.stringValue ?? "").isEmpty
+                if placedNow {
+                    cleared = b.input.setStringValue("") && normalize(b.input.stringValue ?? "").isEmpty
                     if cleared { try mutate(room, locked: true) { $0.draftText = nil } }
                 }
                 throw abort(cmd, .notVerified, "send_button_disabled", ["room": room, "cleared_own_draft": cleared])
             }
-            b = fresh
-            tail = marker(for: messages(in: fresh.list))
+            before = messages(in: b.list)
             try mutate(room, locked: true) { $0.lastSendAt = clock.now() }
-            pressReported = fresh.sendButton.press()
+            pressReported = b.sendButton.press()
+            bound = b
         }
+        let b = bound!
 
         let deadline = clock.now() + config.confirmTimeout
         var inputCleared = false
         var appeared = false
         while true {
             inputCleared = normalize(b.input.stringValue ?? "").isEmpty
-            let msgs = messages(in: b.list)
-            let fresh = messages(after: tail, in: msgs) ?? Array(msgs.suffix(1))
-            appeared = fresh.contains { rowShows($0, sent: expected) }
+            appeared = sentAppeared(before: before, after: messages(in: b.list), sent: expected)
             if (inputCleared && appeared) || clock.now() >= deadline { break }
             clock.sleep(config.pollInterval)
         }
@@ -311,7 +335,7 @@ public final class Engine {
             try mutate(room) { $0.draftText = nil }
             return outcome(cmd, .ok, "nothing_to_clear", ["room": room])
         }
-        guard let rec = b.state.draftText, sameText(cur, rec) else {
+        guard let rec = b.state.draftText, normalize(cur) == normalize(rec) else {
             throw abort(cmd, .inputBusy, "not_own_text", ["room": room, "input_length": normalize(cur).count])
         }
         try checkPresence(cmd, b)

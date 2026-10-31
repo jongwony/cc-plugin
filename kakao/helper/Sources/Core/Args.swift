@@ -43,9 +43,7 @@ public let defaultConfirmTimeout: Double = 5
 /// `readFile` reads a path, or standard input for "-".
 public func parseArguments(_ argv: [String], env: [String: String],
                            readFile: (String) throws -> String) -> Parsed {
-    if argv.isEmpty || argv.contains("--help") || argv.contains("-h") || argv.first == "help" {
-        return .help(usageText)
-    }
+    if argv.isEmpty || ["--help", "-h", "help"].contains(argv[0]) { return .help(usageText) }
     let cmd = argv[0]
     guard let permitted = allowed[cmd] else { return .usage("unknown command: \(cmd)") }
 
@@ -54,6 +52,8 @@ public func parseArguments(_ argv: [String], env: [String: String],
     var i = 1
     while i < argv.count {
         let flag = argv[i]
+        // Only in flag position: a --text value of "--help" is text.
+        if flag == "--help" || flag == "-h" { return .help(usageText) }
         if boolFlags.contains(flag) {
             guard permitted.contains(flag) else { return .usage("\(flag) does not apply to \(cmd)") }
             bools.insert(flag)
@@ -106,6 +106,11 @@ public func parseArguments(_ argv: [String], env: [String: String],
     var text = one("--text")
     if let p = one("--text-file") {
         do { text = try readFile(p) } catch { return .usage("cannot read --text-file \(p): \(error)") }
+        // A file's final line ending belongs to the file, not to the message.
+        if var t = text {
+            if t.hasSuffix("\r\n") { t.removeLast(2) } else if t.hasSuffix("\n") || t.hasSuffix("\r") { t.removeLast() }
+            text = t
+        }
     }
     if let t = text, t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
         return .usage("text is empty")

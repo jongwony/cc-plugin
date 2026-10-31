@@ -34,6 +34,7 @@ func makeEnv(messages: [String] = ["hello", "how are you"], bubblesSettable: Boo
     config.pollInterval = 0.5
     configure(&config)
     let room = FakeRoom(messages: messages, bubblesSettable: bubblesSettable)
+    room.window.title = roomTitle
     let driver = FakeDriver()
     driver.wins = [
         WindowInfo(windowID: 1, title: "Other Room", isFocused: false, node: FakeRoom(messages: ["x"]).window),
@@ -201,13 +202,13 @@ test("draft: someone else's text in the input → exit 5, untouched") {
     expect(e.room.input.stringValue == "half typed by a pers" && e.room.input.setCount == 0, "untouched")
 }
 
-test("draft: read-back differs → exit 6, input left as is") {
+test("draft: read-back differs → exit 6, nothing recorded once the own result is gone") {
     let e = makeEnv()
     handshake(e)
     e.room.input.onSet = { n, t in n.stringValue = String(t.prefix(3)); return true }
     let o = e.engine.run(.draft(room: roomTitle, window: windowID, text: "abcdef"))
     expect(o.exit == .notVerified && o.body["status"] as? String == "draft_mismatch", o.json)
-    expect(e.room.input.stringValue == "abc" && e.room.input.setCount == 1, "not cleared, set once")
+    expect(e.room.input.stringValue == "" && e.room.input.setCount == 2, "set, then own result removed")
     expect(e.store.load(roomTitle)?.draftText == nil, "not recorded")
 }
 
@@ -363,8 +364,46 @@ test("read: marker returns only newer rows; unknown marker returns all") {
     expect(msgs.map { $0["text"] as? String ?? "" } == ["d", "e…"], "only new: \(msgs)")
     expect(msgs.last?["truncated"] as? Bool == true, "ellipsis flagged")
     expect(next.body["marker_found"] as? Bool == true, "found")
-    let lost = e.engine.run(.read(room: roomTitle, window: windowID, after: "v1.3.ffffffffffffffff", limit: 2))
-    expect(lost.body["marker_found"] as? Bool == false && lost.body["limited"] as? Bool == true, lost.json)
+    let lost = e.engine.run(.read(room: roomTitle, window: windowID, after: "v2.3.3.ffffffffffffffff", limit: 2))
+    expect(lost.body["marker_found"] as? Bool == false && lost.body["more"] as? String == "older", lost.json)
+}
+
+test("read: without --after, rows beyond --limit are reported as older") {
+    let e = makeEnv(messages: ["a", "b", "c", "d"])
+    handshake(e)
+    let o = e.engine.run(.read(room: roomTitle, window: windowID, after: nil, limit: 2))
+    let texts = (o.body["messages"] as? [[String: Any]] ?? []).map { $0["text"] as? String ?? "" }
+    expect(texts == ["c", "d"] && o.body["more"] as? String == "older", o.json)
+}
+
+test("read: a read counter or time label changing later does not lose the marker") {
+    let e = makeEnv(messages: [])
+    for t in ["a", "b", "c"] { e.room.append(t, labels: ["1", "오후 3:12"]) }
+    handshake(e)
+    let m = e.engine.run(.read(room: roomTitle, window: windowID, after: nil, limit: 30)).body["marker"] as? String ?? ""
+    for n in e.room.labelNodes(row: 2) where n.stringValue == "1" { n.stringValue = "" }
+    e.room.labelNodes(row: 1)[1].stringValue = "오후 3:13"
+    e.room.append("d", labels: ["1"])
+    let o = e.engine.run(.read(room: roomTitle, window: windowID, after: m, limit: 30))
+    let msgs = o.body["messages"] as? [[String: Any]] ?? []
+    expect(o.body["marker_found"] as? Bool == true && msgs.map { $0["text"] as? String ?? "" } == ["d"], o.json)
+    expect(msgs.first?["labels"] as? [String] == ["1"], "labels kept apart from the text")
+}
+
+test("read: paging through repeated rows loses none") {
+    let e = makeEnv(messages: ["a"])
+    handshake(e)
+    var m = e.engine.run(.read(room: roomTitle, window: windowID, after: nil, limit: 30)).body["marker"] as? String ?? ""
+    let added = ["ㅋㅋ", "ㅋㅋ", "ㅋㅋ", "ㅋㅋ", "ㅋㅋ", "z"]
+    for t in added { e.room.append(t) }
+    var seen: [String] = []
+    for _ in 0..<6 {
+        let o = e.engine.run(.read(room: roomTitle, window: windowID, after: m, limit: 2))
+        seen += (o.body["messages"] as? [[String: Any]] ?? []).map { $0["text"] as? String ?? "" }
+        m = o.body["marker"] as? String ?? ""
+        if o.body["limited"] as? Bool != true { break }
+    }
+    expect(seen == added, "paged: \(seen)")
 }
 
 test("read: more new rows than --limit pages forward without losing any") {
@@ -382,15 +421,100 @@ test("read: more new rows than --limit pages forward without losing any") {
     expect(seen == ["n1", "n2", "n3", "n4", "n5"], "paged: \(seen)")
 }
 
-test("marker: repeated tails match the latest occurrence; empty list marker") {
+test("marker: recorded position wins, nearest otherwise; empty and malformed markers") {
     let rows = ["x", "y", "x", "y"].map { Message(texts: [$0]) }
     let three = marker(for: [Message(texts: ["q"]), Message(texts: ["x"]), Message(texts: ["y"])])
     expect(messages(after: three, in: rows) == nil, "q,x,y never occurs in x,y,x,y")
-    let two = marker(for: [Message(texts: ["x"]), Message(texts: ["y"])])
-    expect(two.hasPrefix("v1.2."), "k=2 for two rows")
-    expect(messages(after: two, in: rows)?.isEmpty == true, "latest occurrence is the end")
-    expect(messages(after: "v1.0.0", in: rows)?.count == 4, "empty-list marker returns all")
+    let two = marker(for: Array(rows.prefix(2)))
+    expect(two.hasPrefix("v2.2.2."), "k=2, end=2")
+    expect(messages(after: two, in: rows)?.rows.count == 2, "recorded position, not the latest occurrence")
+    // An older row loaded at the top moves every index by one: x,y now ends at 3 and at 5.
+    let grown = [Message(texts: ["w"])] + rows
+    let found = messages(after: two, in: grown)
+    expect(found?.rows.map(\.text) == ["x", "y"] && found?.ambiguous == true, "nearest: \(String(describing: found))")
+    expect(messages(after: "v2.0.0.0", in: rows)?.rows.count == 4, "empty-list marker returns all")
     expect(messages(after: "garbage", in: rows) == nil, "malformed")
+}
+
+test("send: marker lost after the press and an identical bubble already there → not confirmed") {
+    let e = makeEnv(messages: ["a", "ok"])
+    handshake(e)
+    e.room.button.onPress = { [unowned room = e.room] in
+        room.input.stringValue = ""
+        room.table.children.removeFirst()     // the list shifts; nothing new arrives
+        return true
+    }
+    let o = send(e, "ok")
+    expect(o.exit == .sendUnconfirmed && o.body["text_appeared"] as? Bool == false, o.json)
+}
+
+test("send: a counter change on the last bubble does not hide a real send") {
+    let e = makeEnv(messages: [])
+    e.room.append("ok", labels: ["1"])
+    handshake(e)
+    e.room.button.onPress = { [unowned room = e.room] in
+        for n in room.labelNodes(row: 0) { n.stringValue = "" }
+        room.append(room.input.stringValue ?? "", labels: ["1"])
+        room.input.stringValue = ""
+        return true
+    }
+    expect(send(e, "ok").exit == .ok, "sent")
+}
+
+test("handshake: a later handshake without hints keeps the stored ones") {
+    let e = makeEnv()
+    e.room.button.title = "Submit"
+    handshake(e, hints: Hints(sendLabels: ["Submit"]))
+    let o = handshake(e)
+    expect(e.store.load(roomTitle)?.hints.sendLabels == ["Submit"], o.json)
+}
+
+test("handshake: a long history before the input box does not hide it") {
+    let e = makeEnv(messages: (0..<5000).map { "m\($0)" })
+    handshake(e)
+}
+
+test("presence: unknown idle time while that window has focus → person_active") {
+    let e = makeEnv()
+    handshake(e)
+    e.driver.state = .running(version: "9.9.9 (1)", frontmost: true)
+    e.driver.wins[1] = WindowInfo(windowID: windowID, title: roomTitle, isFocused: true, node: e.room.window)
+    e.driver.idle = nil
+    let o = e.engine.run(.draft(room: roomTitle, window: windowID, text: "x"))
+    expect(o.body["status"] as? String == "person_active" && e.room.input.setCount == 0, o.json)
+}
+
+test("draft: a mismatched result is removed as this tool's own") {
+    let e = makeEnv()
+    handshake(e)
+    e.room.input.onSet = { n, t in n.stringValue = t.isEmpty ? "" : String(t.prefix(3)); return true }
+    let o = e.engine.run(.draft(room: roomTitle, window: windowID, text: "abcdef"))
+    expect(o.exit == .notVerified && o.body["input_left"] as? Bool == false, o.json)
+    expect(e.room.input.stringValue == "", "own result removed")
+    e.room.input.onSet = { n, t in n.stringValue = String(t.prefix(3)) + (t.isEmpty ? "?" : ""); return true }
+    let stuck = e.engine.run(.draft(room: roomTitle, window: windowID, text: "abcdef"))
+    expect(stuck.body["input_left"] as? Bool == true, stuck.json)
+    expect(e.store.load(roomTitle)?.draftText == e.room.input.stringValue, "what was left is recorded as own")
+}
+
+test("draft and clear compare the same way; text files lose one final newline") {
+    let e = makeEnv()
+    handshake(e)
+    e.room.input.onSet = { n, t in n.stringValue = t.trimmingCharacters(in: .whitespaces); return true }
+    expect(e.engine.run(.draft(room: roomTitle, window: windowID, text: "abc  ")).exit == .ok, "drafted")
+    e.room.input.onSet = nil
+    expect(e.engine.run(.clear(room: roomTitle, window: windowID)).body["status"] as? String == "cleared", "own draft cleared")
+    guard case .run(.send(_, _, let t, _), _) = parseArguments(
+        ["send", "--room", "R", "--window", "1", "--text-file", "f"], env: [:], readFile: { _ in "two\nlines\n" })
+    else { return expect(false, "parse") }
+    expect(t == "two\nlines", "one final newline stripped: \(String(describing: t))")
+}
+
+test("args: --help as a --text value is text, not help") {
+    guard case .run(.send(_, _, let t, _), _) = parseArguments(
+        ["send", "--room", "R", "--window", "1", "--text", "--help"], env: [:], readFile: noFile)
+    else { return expect(false, "parsed as help") }
+    expect(t == "--help", "text kept")
 }
 
 test("json: output is one object with ok/status/exit/command") {

@@ -111,13 +111,13 @@ What the run showed:
 - A bubble is cut at 500 visible characters and ends with `…`. Its full-view control is an untitled `AXButton` under the bubble.
 - The unread counter is not an element of its own: it is prefixed to the time label (`"1\n오후 10:25"`), so it stays in `labels` and out of the marker. The other party's name is a label too.
 - Nothing in the tree marks a bubble as sent by this account or by the other party.
-- While the screen is locked, AX reports every KakaoTalk window under the app's name and the window-id call fails for every window; one `read` in that state returned old rows instead of new ones. The helper now stops with exit 9 `screen_locked` in that state, and `read` adds `list_jumped: true` when the rows it returns end earlier than its marker.
+- While the screen is locked, AX reports every KakaoTalk window under the app's name and the window-id call fails for every window; one `read` in that state returned old rows instead of new ones. The helper now stops with exit 9 `screen_locked` in that state: a `handshake` run with the screen still locked (login window in front) returned exactly that. `read` adds `list_jumped: true` when the rows it returns end earlier than its marker.
 - A closed chat window could be reopened from the main window through OCU, with its `sky_click` method (search field, friends tab, double-click on the row); default clicks did nothing in the background. This tool still never opens windows.
 
 ## Not yet verified against the live app
 
 - Pressing a cut bubble's full-view control, and what it opens.
-- Lock detection through the session dictionary and the frontmost login window, and the time-based `list_jumped` signal (both added after the locked-screen run).
+- The time-based `list_jumped` signal.
 - Where the 3–4 s `read` time in a long chat goes; caching each element's role and not entering text elements should cut AX calls, unmeasured.
 - Whether a new bubble shows up in the loaded rows when the window is scrolled up; if not, `send` reports exit 7.
 - Several sessions setting values and pressing buttons in different windows at the same moment.

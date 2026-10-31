@@ -87,8 +87,10 @@ final class FakeDriver: AppDriver {
     var wins: [WindowInfo] = []
     var cg: Int?
     var idle: Double? = 100
+    var names: Set<String> = ["KakaoTalk", "카카오톡"]
 
     func appState() -> AppState { state }
+    func appNames() -> Set<String> { names }
     func windows() -> [WindowInfo] { wins }
     func cgTitleCount(_ title: String) -> Int? { cg }
     func secondsSinceLastInput() -> Double? { idle }

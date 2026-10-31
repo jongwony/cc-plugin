@@ -81,9 +81,22 @@ public final class Engine {
                         ["reason": "Accessibility permission is not granted to the app that runs this helper"])
         case .notRunning:
             throw abort(cmd, .unavailable, "app_not_running", ["bundle_id": config.bundleID])
+        case .screenLocked:
+            throw abort(cmd, .unavailable, "screen_locked", ["reason": "the screen is locked or the login window is in front"])
         case .running(let v, _):
             return v
         }
+    }
+
+    /// The app's windows, or the locked-screen outcome when two or more windows all report one
+    /// of the app's own names as their title (what AX shows while the screen is locked).
+    func appWindows(_ cmd: String) throws -> [WindowInfo] {
+        let wins = driver.windows()
+        let names = driver.appNames()
+        if wins.count >= 2, let first = wins[0].title, names.contains(first), wins.allSatisfy({ $0.title == first }) {
+            throw abort(cmd, .unavailable, "screen_locked", ["reason": "every window reports the app's name as its title"])
+        }
+        return wins
     }
 
     /// Re-binds the window by id, then checks title, app version and the needed elements.
@@ -97,7 +110,7 @@ public final class Engine {
             throw again(cmd, room, "app_version_changed",
                         ["handshake_version": state.appVersion, "kakao_version": version])
         }
-        guard let w = driver.windows().first(where: { $0.windowID == window }) else {
+        guard let w = try appWindows(cmd).first(where: { $0.windowID == window }) else {
             throw again(cmd, room, "window_not_found")
         }
         guard w.title == room else {
@@ -114,7 +127,9 @@ public final class Engine {
     /// A person may be using this very window: the app is frontmost, this window is its focused
     /// window, and there was input within the threshold — or the idle time cannot be read.
     func checkPresence(_ cmd: String, _ b: Bound) throws {
-        guard case .running(_, let front) = driver.appState(), front, b.window.isFocused else { return }
+        let state = driver.appState()
+        if case .screenLocked = state { _ = try runningVersion(cmd) }
+        guard case .running(_, let front) = state, front, b.window.isFocused else { return }
         let idle = driver.secondsSinceLastInput()
         if let i = idle, i >= config.personIdleThreshold { return }
         throw abort(cmd, .inputBusy, "person_active", ["room": b.state.room, "idle_seconds": idle ?? NSNull()])
@@ -178,7 +193,7 @@ public final class Engine {
         let cmd = "handshake"
         let version = try runningVersion(cmd)
         let hints = given.over(store.load(room)?.hints)
-        let wins = driver.windows()
+        let wins = try appWindows(cmd)
         let matches = wins.filter { $0.title == room }
         guard matches.count == 1 else {
             throw abort(cmd, .roomNotUnique, "room_not_unique",
@@ -239,7 +254,11 @@ public final class Engine {
                 body["marker"] = marker(for: Array(msgs[..<(msgs.count - found.rows.count + limit)]))
             }
         } else {
-            if after != nil { body["marker_found"] = false }
+            if let a = after {
+                body["marker_found"] = false
+                // The rows loaded now end earlier than the marker did: the view moved back in history.
+                if listJumpedBack(from: a, to: msgs) { body["list_jumped"] = true }
+            }
             if msgs.count > limit { more = "older" }
         }
         if let m = more {

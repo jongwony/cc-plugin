@@ -18,7 +18,9 @@ final class AXNode: UINode {
         return AXUIElementCopyAttributeValue(element, name as CFString, &v) == .success ? v : nil
     }
 
-    var role: String? { attr(kAXRoleAttribute) as? String }
+    // An element's role never changes, and the walks ask for it several times per node.
+    private lazy var cachedRole: String? = attr(kAXRoleAttribute) as? String
+    var role: String? { cachedRole }
     var subrole: String? { attr(kAXSubroleAttribute) as? String }
     var title: String? { attr(kAXTitleAttribute) as? String }
     var nodeDescription: String? { attr(kAXDescriptionAttribute) as? String }
@@ -60,9 +62,32 @@ final class AXAppDriver: AppDriver {
         NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first
     }
 
+    func appNames() -> Set<String> {
+        guard let app else { return [] }
+        var names: Set<String> = []
+        if let n = app.localizedName { names.insert(n) }
+        if let url = app.bundleURL, let bundle = Bundle(url: url) {
+            for key in ["CFBundleDisplayName", "CFBundleName"] {
+                if let n = bundle.localizedInfoDictionary?[key] as? String { names.insert(n) }
+                if let n = bundle.infoDictionary?[key] as? String { names.insert(n) }
+            }
+        }
+        return names
+    }
+
+    /// The session's lock state, and the login window in front, as the window server reports them.
+    private func screenLocked() -> Bool {
+        if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == "com.apple.loginwindow" { return true }
+        guard let session = CGSessionCopyCurrentDictionary() as? [String: Any] else { return false }
+        if (session["CGSSessionScreenIsLocked"] as? Bool) == true { return true }
+        if let onConsole = session[kCGSessionOnConsoleKey as String] as? Bool, !onConsole { return true }
+        return false
+    }
+
     func appState() -> AppState {
         guard AXIsProcessTrusted() else { return .notTrusted }
         guard let app else { return .notRunning }
+        if screenLocked() { return .screenLocked }
         var version = "unknown"
         if let url = app.bundleURL, let info = Bundle(url: url)?.infoDictionary {
             let short = info["CFBundleShortVersionString"] as? String ?? "?"

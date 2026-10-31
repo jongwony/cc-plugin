@@ -33,7 +33,7 @@ description: >
 - Draft for a person to approve: `draft --text <text>`, wait for the person, then `send` without `--text`. If the person edited the draft, `send` returns exit 8; add `--accept-edited` only once the person approved the edited text. `clear` removes a draft this tool placed.
 - `read` returns `messages` (oldest first; `text` is the message, `labels` the counters, times and names beside it) and a `marker`; pass the marker back as `--after` to get only newer rows.
 - `read` sees only the rows the window has loaded, around what is on screen; the tool never scrolls, so history beyond them is out of reach. Read often enough that new rows arrive before older ones leave.
-- `more: "newer"`: read again with the returned marker for the rest. `more: "older"`: loaded rows beyond `--limit` were left out; raise `--limit`. `marker_found: false`: the marker's rows left the loaded rows, so rows in between may have been missed and the newest come back instead. `marker_ambiguous: true`: some returned rows may repeat earlier ones. `truncated: true`: the bubble ends in "…" and is cut; its full text is not reachable through this tool.
+- `more: "newer"`: read again with the returned marker for the rest. `more: "older"`: loaded rows beyond `--limit` were left out; raise `--limit`. `marker_found: false`: the marker's rows left the loaded rows, so rows in between may have been missed and the rows loaded now come back instead; with `list_jumped: true` those rows are older than the marker, not new. `marker_ambiguous: true`: some returned rows may repeat earlier ones. `truncated: true`: the bubble ends in "…" and is cut; its full text is not reachable through this tool.
 
 ## Exit codes
 
@@ -47,5 +47,5 @@ description: >
 | 6 | draft_mismatch, send_button_disabled, clear_failed | nothing was sent; for draft_mismatch the box may hold text, so ask the person |
 | 7 | send_unconfirmed | do not send again; `read` and look for the text before any next step |
 | 8 | draft_changed, no_draft | the input is not this tool's draft; see draft-for-approval above |
-| 9 | unavailable | act on `reason` (permission, app not running, toolchain) |
+| 9 | unavailable, screen_locked | act on `reason` (permission, app not running, toolchain); for screen_locked wait until a person unlocks the Mac |
 | 10 | room_not_unique | exactly one open window must carry the title; ask the person |

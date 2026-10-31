@@ -60,7 +60,7 @@ Handshake hints, for when the defaults do not find an element: `--send-label <la
 | 6 | not verified — nothing was sent |
 | 7 | send unconfirmed — the button was pressed but the result is unknown |
 | 8 | draft changed — the box does not hold this tool's draft |
-| 9 | unavailable — no permission, app not running, or no toolchain |
+| 9 | unavailable — no permission, app not running, no toolchain, or the screen is locked (`screen_locked`) |
 | 10 | room not unique — zero or several windows carry the title |
 
 ## Safety rules
@@ -87,7 +87,7 @@ Runs unit tests against fake windows (the AX layer is not linked), compiles the 
 
 ## Observed in the live app
 
-Run end to end against a self-chat window (KakaoTalk 26.9.0), four sends in total:
+Run end to end against a self-chat window and a chat with a bot account (KakaoTalk 26.9.0):
 
 | Step | Result | Time |
 | -- | -- | -- |
@@ -98,6 +98,8 @@ Run end to end against a self-chat window (KakaoTalk 26.9.0), four sends in tota
 | `send --text` right after | waited out the rest of the 20 s interval before drafting | — |
 | 1,562-character text through `--text-file`, then `send` and `read` | exit 0 `sent`; the bubble reads back as its first 500 characters plus `…`, `truncated: true` | 0.6 s |
 | `send --text` with the enable wait in place | exit 0 `sent`; `text_appeared` and `input_cleared` true, `press_reported` false | 7.2 s, including a rebuild after the source change (other sends about 0.6 s) |
+| `send --text` while the box held 183 characters this tool had not placed | exit 5 `input_busy`; nothing touched | — |
+| `send --text` in the bot chat, then `read --after <marker>` 15 s later | exit 0 `sent`; the read returned the sent bubble and the bot's reply as new rows, `marker_found: true` | 8.5 s; `read` there took 3–4 s with 29 loaded rows of long bubbles, against 0.4 s in the self-chat |
 
 What the run showed:
 
@@ -107,13 +109,16 @@ What the run showed:
 - The input box is a settable `AXTextArea` in its own scroll area below the table; its description differs by room type, which the role-based search does not depend on. The send button is an `AXButton` titled `전송`.
 - Only rows near the screen exist in the AX tree, so `read` covers what is loaded, not the whole history.
 - A bubble is cut at 500 visible characters and ends with `…`. Its full-view control is an untitled `AXButton` under the bubble.
+- The unread counter is not an element of its own: it is prefixed to the time label (`"1\n오후 10:25"`), so it stays in `labels` and out of the marker. The other party's name is a label too.
 - Nothing in the tree marks a bubble as sent by this account or by the other party.
+- While the screen is locked, AX reports every KakaoTalk window under the app's name and the window-id call fails for every window; one `read` in that state returned old rows instead of new ones. The helper now stops with exit 9 `screen_locked` in that state, and `read` adds `list_jumped: true` when the rows it returns end earlier than its marker.
 - A closed chat window could be reopened from the main window through OCU, with its `sky_click` method (search field, friends tab, double-click on the row); default clicks did nothing in the background. This tool still never opens windows.
 
 ## Not yet verified against the live app
 
 - Pressing a cut bubble's full-view control, and what it opens.
-- How an unread counter appears (assumed: an `AXStaticText` of digits, kept in `labels`).
+- Lock detection through the session dictionary and the frontmost login window, and the time-based `list_jumped` signal (both added after the locked-screen run).
+- Where the 3–4 s `read` time in a long chat goes; caching each element's role and not entering text elements should cut AX calls, unmeasured.
 - Whether a new bubble shows up in the loaded rows when the window is scrolled up; if not, `send` reports exit 7.
 - Several sessions setting values and pressing buttons in different windows at the same moment.
 - Whether AX reaches a window on another Space or a minimized window.

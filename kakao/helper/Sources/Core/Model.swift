@@ -35,11 +35,17 @@ public struct WindowInfo {
 public enum AppState {
     case notTrusted
     case notRunning
+    /// The login window or screen lock is in front: AX then reports every window under the
+    /// app's name and window ids cannot be read.
+    case screenLocked
     case running(version: String, frontmost: Bool)
 }
 
 public protocol AppDriver {
     func appState() -> AppState
+    /// The app's own names (display, bundle and localized), which its windows report as their
+    /// title while the screen is locked.
+    func appNames() -> Set<String>
     func windows() -> [WindowInfo]
     /// Layer-0 windows of the app whose CoreGraphics name equals `title`;
     /// nil when window names are unreadable (no Screen Recording permission).

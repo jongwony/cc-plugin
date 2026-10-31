@@ -359,6 +359,49 @@ test("send: an AX error from the press does not decide; the appearing text does"
     expect(o.exit == .ok && o.body["press_reported"] as? Bool == false, o.json)
 }
 
+test("screen locked: reported as such by the app state or by every window titled with the app's name") {
+    let e = makeEnv()
+    handshake(e)
+    e.driver.state = .screenLocked
+    let a = e.engine.run(.read(room: roomTitle, window: windowID, after: nil, limit: 5))
+    expect(a.exit == .unavailable && a.body["status"] as? String == "screen_locked", a.json)
+    e.driver.state = .running(version: "9.9.9 (1)", frontmost: false)
+    e.driver.wins = e.driver.wins.map { WindowInfo(windowID: nil, title: "카카오톡", isFocused: false, node: $0.node) }
+    let h = e.engine.run(.handshake(room: roomTitle, hints: Hints()))
+    expect(h.exit == .unavailable && h.body["status"] as? String == "screen_locked", h.json)
+    let r = e.engine.run(.read(room: roomTitle, window: windowID, after: nil, limit: 5))
+    expect(r.body["status"] as? String == "screen_locked", r.json)
+    e.driver.wins = [e.driver.wins[0]]      // only the main window open: an ordinary state, not a lock
+    expect(e.engine.run(.handshake(room: roomTitle, hints: Hints())).exit == .roomNotUnique, "one window titled with the app name")
+}
+
+test("read: unread counter prefixed to the time label stays out of the text and the marker") {
+    let e = makeEnv(messages: [])
+    e.room.append("hello", labels: ["1\n오후 10:25", "someone"])
+    handshake(e)
+    let m = e.engine.run(.read(room: roomTitle, window: windowID, after: nil, limit: 5)).body["marker"] as? String ?? ""
+    expect(m.hasSuffix(".\(22 * 60 + 25)"), "marker carries 22:25: \(m)")
+    e.room.labelNodes(row: 0)[0].stringValue = "오후 10:25"
+    e.room.append("reply", labels: ["오후 10:26", "someone"])
+    let o = e.engine.run(.read(room: roomTitle, window: windowID, after: m, limit: 5))
+    let texts = (o.body["messages"] as? [[String: Any]] ?? []).map { $0["text"] as? String ?? "" }
+    expect(o.body["marker_found"] as? Bool == true && texts == ["reply"], o.json)
+    expect(isVolatileLabel("1\n오후 10:25") && isVolatileLabel("10:25") && !isVolatileLabel("meet at 10:25"), "label patterns")
+}
+
+test("read: the list jumped back in history → list_jumped, not presented as new") {
+    let e = makeEnv(messages: [])
+    for (t, time) in [("x", "오후 1:40"), ("y", "오후 1:46"), ("z", "오후 10:25")] { e.room.append(t, labels: [time]) }
+    handshake(e)
+    let m = e.engine.run(.read(room: roomTitle, window: windowID, after: nil, limit: 5)).body["marker"] as? String ?? ""
+    e.room.table.children.removeAll()
+    for (t, time) in [("old1", "오전 11:09"), ("old2", "오후 1:39")] { e.room.append(t, labels: [time]) }
+    let o = e.engine.run(.read(room: roomTitle, window: windowID, after: m, limit: 5))
+    expect(o.body["marker_found"] as? Bool == false && o.body["list_jumped"] as? Bool == true, o.json)
+    expect(minutesOfDay(["오전 12:05"]) == 5 && minutesOfDay(["11:30 PM"]) == 23 * 60 + 30, "12-hour clock")
+    expect(listJumpedBack(from: "v2.1.0.a.\(23 * 60 + 50)", to: [Message(texts: ["n", "오전 12:10"])]) == false, "a day change is not a jump")
+}
+
 test("send: interval survives a new handshake") {
     let e = makeEnv()
     handshake(e)

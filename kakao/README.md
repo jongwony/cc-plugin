@@ -87,7 +87,7 @@ Runs unit tests against fake windows (the AX layer is not linked), compiles the 
 
 ## Observed in the live app
 
-Run end to end against a self-chat window (KakaoTalk 26.9.0), three sends in total:
+Run end to end against a self-chat window (KakaoTalk 26.9.0), four sends in total:
 
 | Step | Result | Time |
 | -- | -- | -- |
@@ -97,10 +97,11 @@ Run end to end against a self-chat window (KakaoTalk 26.9.0), three sends in tot
 | `send` on an existing draft | exit 0 `sent`; `text_appeared` and `input_cleared` true, `press_reported` false | 0.6 s |
 | `send --text` right after | waited out the rest of the 20 s interval before drafting | — |
 | 1,562-character text through `--text-file`, then `send` and `read` | exit 0 `sent`; the bubble reads back as its first 500 characters plus `…`, `truncated: true` | 0.6 s |
+| `send --text` with the enable wait in place | exit 0 `sent`; `text_appeared` and `input_cleared` true, `press_reported` false | 7.2 s, including a rebuild after the source change (other sends about 0.6 s) |
 
 What the run showed:
 
-- The send button turns enabled a moment after the box is filled, so `send` waits up to 3 s for it before pressing (the first `send --text` runs, before this wait existed, ended in exit 6 with the draft cleared).
+- The send button turns enabled a moment after the box is filled, so `send` waits up to 3 s for it before pressing (before this wait existed, `send --text` ended in exit 6 with the draft cleared; with it, the same command sent).
 - The press action can report an AX error although the press happened. `press_reported` records that answer; `text_appeared` and `input_cleared` decide whether the send counts.
 - Messages sit in `AXScrollArea > AXTable > AXRow > AXCell`. A bubble's text is a non-settable `AXTextArea`; its time and, on the other party's first bubble, the sender name are separate `AXStaticText` elements, so they land in `labels`.
 - The input box is a settable `AXTextArea` in its own scroll area below the table; its description differs by room type, which the role-based search does not depend on. The send button is an `AXButton` titled `전송`.
@@ -111,7 +112,6 @@ What the run showed:
 
 ## Not yet verified against the live app
 
-- `send --text` end to end with the enable wait in place.
 - Pressing a cut bubble's full-view control, and what it opens.
 - How an unread counter appears (assumed: an `AXStaticText` of digits, kept in `labels`).
 - Whether a new bubble shows up in the loaded rows when the window is scrolled up; if not, `send` reports exit 7.

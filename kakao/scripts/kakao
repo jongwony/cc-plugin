@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Builds the helper on first use (and whenever its sources change), then runs it.
+# Build output goes to a cache directory, never into the plugin tree.
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+src="$root/helper/Sources"
+cache="${KAKAO_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/kakao}"
+
+if ! command -v swiftc >/dev/null 2>&1; then
+  echo '{"exit":9,"ok":false,"reason":"swiftc not found; install the Xcode command line tools: xcode-select --install","status":"unavailable"}'
+  exit 9
+fi
+
+hash="$(cat "$src"/Core/*.swift "$src"/AX/*.swift "$src"/CLI/main.swift | shasum -a 256 | cut -c1-16)"
+bin="$cache/kakao-$hash"
+
+if [ ! -x "$bin" ]; then
+  mkdir -p "$cache"
+  tmp="$bin.build.$$"
+  if ! swiftc -O -o "$tmp" "$src"/Core/*.swift "$src"/AX/*.swift "$src"/CLI/main.swift >&2; then
+    rm -f "$tmp"
+    echo '{"exit":9,"ok":false,"reason":"helper build failed; see stderr","status":"unavailable"}'
+    exit 9
+  fi
+  mv -f "$tmp" "$bin"
+fi
+
+exec "$bin" "$@"

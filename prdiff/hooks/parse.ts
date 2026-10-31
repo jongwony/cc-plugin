@@ -1,0 +1,217 @@
+// Parsers for a PR's inventory (`git diff --raw --no-abbrev --numstat -z`)
+// and for one file's patch (`git diff <base>:<old path> <head>:<path>`). Pure: no `$`.
+
+export type DiffLine = {
+  /** ' ', '+' or '-'. */
+  mark: ' ' | '+' | '-'
+  text: string
+  /** Old/new line cursors before this line, as the hunk header counts them. */
+  oldNo: number
+  newNo: number
+}
+
+export type Hunk = {
+  header: string
+  section: string
+  lines: DiffLine[]
+}
+
+export type FileDiff = {
+  path: string
+  oldPath?: string
+  /** git's raw status letter: A, C, D, M, R, T, U or X. */
+  status: string
+  added: number
+  deleted: number
+  isBinary: boolean
+  notes: string[]
+  hunks: Hunk[]
+}
+
+/** Characters drawn as U+FFFD: every control character but tab, and every format character (Unicode Cf). */
+const CONTROL = /[\u0000-\u0008\u000a-\u001f\u007f-\u009f]|\p{Cf}/gu
+
+export function clean(text: string): string {
+  return text.replace(CONTROL, '\ufffd')
+}
+
+const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$/
+
+/**
+ * The hunks of one file's patch, and whether a removed and an added line
+ * differ only in a trailing CR. A cut patch's last line is incomplete and is
+ * not read.
+ */
+function hunksOf(patch: string, isCut: boolean): { hunks: Hunk[]; eol: boolean } {
+  const hunks: Hunk[] = []
+  let eol = false
+  let hunk: Hunk | undefined
+  let oldNo = 0
+  let newNo = 0
+  // Lines the hunk header still owes on each side.
+  let oldLeft = 0
+  let newLeft = 0
+  // The current hunk's removed and added texts, each with whether it ended in CR.
+  let seen = { '-': new Map<string, Set<boolean>>(), '+': new Map<string, Set<boolean>>() }
+  const lines = patch.split('\n')
+  if (isCut) lines.pop()
+  for (const raw of lines) {
+    const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw
+    const m = HUNK.exec(line)
+    if (m) {
+      oldLeft = m[2] === undefined ? 1 : Number(m[2])
+      newLeft = m[4] === undefined ? 1 : Number(m[4])
+      // A side that counts 0 lines names the line before the change.
+      oldNo = Number(m[1]) + (oldLeft === 0 ? 1 : 0)
+      newNo = Number(m[3]) + (newLeft === 0 ? 1 : 0)
+      hunk = { header: line.slice(0, line.indexOf(' @@') + 3), section: clean(m[5] ?? ''), lines: [] }
+      seen = { '-': new Map(), '+': new Map() }
+      hunks.push(hunk)
+      continue
+    }
+    if (!hunk) continue
+    // An empty line inside a hunk that still owes lines on both sides is an
+    // empty context line written without its space; otherwise it is the
+    // patch's trailing newline.
+    const mark = line === '' && oldLeft > 0 && newLeft > 0 ? ' ' : line[0]
+    if (mark === '\\') continue
+    // A hunk ends when its declared counts are used up; what follows is not its content.
+    if ((mark !== ' ' || oldLeft === 0 || newLeft === 0) && (mark !== '-' || oldLeft === 0) && (mark !== '+' || newLeft === 0)) {
+      hunk = undefined
+      continue
+    }
+    hunk.lines.push({ mark, text: clean(line.slice(1)), oldNo, newNo })
+    if (mark === '-' || mark === '+') {
+      const cr = raw.endsWith('\r')
+      const text = line.slice(1)
+      if (seen[mark === '-' ? '+' : '-'].get(text)?.has(!cr)) eol = true
+      seen[mark].set(text, (seen[mark].get(text) ?? new Set<boolean>()).add(cr))
+    }
+    if (mark === ' ' || mark === '-') {
+      oldNo += 1
+      oldLeft -= 1
+    }
+    if (mark === ' ' || mark === '+') {
+      newNo += 1
+      newLeft -= 1
+    }
+  }
+  return { hunks, eol }
+}
+
+/** One file of `git diff --raw --numstat -z`: its raw record and its numstat counts. */
+export type Entry = {
+  /** The raw status letter: A, C, D, M, R, T, U or X. */
+  status: string
+  /** Similarity of a rename or copy, in percent. */
+  score?: number
+  oldMode: string
+  newMode: string
+  /** The blob (or, for a submodule, commit) ids on each side; all zeros where the side is absent. */
+  oldId: string
+  newId: string
+  path: string
+  oldPath?: string
+  added: number
+  deleted: number
+  isBinary: boolean
+}
+
+/**
+ * `git diff --raw --numstat -z`: every raw record, then every numstat record
+ * in the same order. `isWhole` is false when the output stops inside them.
+ */
+export function parseDiff(z: string): { entries: Entry[]; isWhole: boolean } {
+  const parts = z.split('\0')
+  const entries: Entry[] = []
+  let i = 0
+  while (parts[i]?.startsWith(':')) {
+    const m = /^:(\d+) (\d+) (\S+) (\S+) ([A-Z])(\d*)$/.exec(parts[i] ?? '')
+    if (!m) return { entries, isWhole: false }
+    const status = m[5] ?? 'M'
+    const two = status === 'R' || status === 'C'
+    const first = parts[i + 1]
+    const second = two ? parts[i + 2] : undefined
+    if (first === undefined || (two && second === undefined)) return { entries, isWhole: false }
+    entries.push({
+      status,
+      score: m[6] ? Number(m[6]) : undefined,
+      oldMode: m[1] ?? '',
+      newMode: m[2] ?? '',
+      oldId: m[3] ?? '',
+      newId: m[4] ?? '',
+      path: second ?? first,
+      oldPath: two ? first : undefined,
+      added: 0,
+      deleted: 0,
+      isBinary: false,
+    })
+    i += two ? 3 : 2
+  }
+  for (const e of entries) {
+    const m = /^(-|\d+)\t(-|\d+)\t/.exec(parts[i] ?? '')
+    if (!m) return { entries, isWhole: false }
+    e.isBinary = m[1] === '-' && m[2] === '-'
+    e.added = e.isBinary ? 0 : Number(m[1])
+    e.deleted = e.isBinary ? 0 : Number(m[2])
+    i += parts[i]?.length === m[0].length ? 3 : 1
+  }
+  return { entries, isWhole: true }
+}
+
+export function isSubmodule(e: Entry): boolean {
+  return e.oldMode === '160000' || e.newMode === '160000'
+}
+
+/** Whether the entry has lines to read: neither binary nor a submodule, and its content changed. */
+export function hasLines(e: Entry): boolean {
+  return !e.isBinary && !isSubmodule(e) && e.oldId !== e.newId
+}
+
+/** A raw mode names a side that exists; an added file's old side and a deleted file's new side are 000000. */
+function present(mode: string): boolean {
+  return !/^0+$/.test(mode)
+}
+
+/** A file as its entry alone describes it: no hunks yet. */
+export function summaryOf(e: Entry): FileDiff {
+  const notes = [
+    ...(present(e.oldMode) && present(e.newMode) && e.oldMode !== e.newMode ? [`mode ${e.oldMode} → ${e.newMode}`] : []),
+    ...(e.score !== undefined && (e.status === 'R' || e.status === 'C') ? [`similarity index ${e.score}%`] : []),
+    ...(e.isBinary ? ['binary file'] : []),
+    ...(isSubmodule(e) ? [`submodule ${e.oldId.slice(0, 7)} → ${e.newId.slice(0, 7)}`] : []),
+  ]
+  return {
+    path: clean(e.path),
+    oldPath: e.oldPath === undefined ? undefined : clean(e.oldPath),
+    status: e.status,
+    added: e.added,
+    deleted: e.deleted,
+    isBinary: e.isBinary,
+    notes,
+    hunks: [],
+  }
+}
+
+/** One entry's file from its patch; `isCut` when the read stopped at 4 MiB. */
+export function fileFor(e: Entry, patch: string, isCut = false): FileDiff {
+  const f = summaryOf(e)
+  const { hunks, eol } = hunksOf(patch, isCut)
+  return { ...f, hunks, notes: [...f.notes, ...(eol ? ['line endings changed'] : [])] }
+}
+
+/**
+ * A unified-diff source for the first lines of one hunk, with a header that
+ * counts just those lines, so `Code format="diff"` parses a hunk the drawing
+ * budget cut short. An empty run gives ''.
+ */
+export function hunkSource(lines: readonly DiffLine[]): string {
+  const first = lines[0]
+  if (!first) return ''
+  const oldCount = lines.filter(l => l.mark === ' ' || l.mark === '-').length
+  const newCount = lines.filter(l => l.mark === ' ' || l.mark === '+').length
+  const oldStart = oldCount === 0 ? Math.max(0, first.oldNo - 1) : first.oldNo
+  const newStart = newCount === 0 ? Math.max(0, first.newNo - 1) : first.newNo
+  const head = `@@ -${oldStart},${oldCount} +${newStart},${newCount} @@`
+  return [head, ...lines.map(l => l.mark + l.text)].join('\n')
+}

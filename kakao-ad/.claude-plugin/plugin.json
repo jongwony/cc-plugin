@@ -1,0 +1,9 @@
+{
+  "name": "kakao-ad",
+  "description": "The kakao plugin's KakaoTalk room commands run through a fixed subset of the agent-desktop CLI (list-windows, snapshot, get, set-value, click), with a small Swift helper for lock, presence and send-pacing checks, built to compare call-for-call with kakao",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

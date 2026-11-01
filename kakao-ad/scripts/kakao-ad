@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Builds the helper on first use (and whenever its sources change), then runs it.
+# Build output goes to a cache directory, never into the plugin tree.
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+src="$root/helper/Sources"
+cache="${KAKAO_AD_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/kakao-ad}"
+# Room state stays apart from the kakao plugin's, so the two never share a send clock or a draft.
+export KAKAO_STATE_DIR="${KAKAO_AD_STATE_DIR:-${KAKAO_STATE_DIR:-$HOME/.local/state/kakao-ad}}"
+
+if ! command -v swiftc >/dev/null 2>&1; then
+  echo '{"exit":9,"ok":false,"reason":"swiftc not found; install the Xcode command line tools: xcode-select --install","status":"unavailable"}'
+  exit 9
+fi
+
+sources=("$src"/Core/*.swift "$src"/Policy/*.swift "$src"/AgentDesktop/*.swift "$src"/CLI/main.swift)
+hash="$(cat "${sources[@]}" | shasum -a 256 | cut -c1-16)"
+bin="$cache/kakao-ad-$hash"
+
+if [ ! -x "$bin" ]; then
+  mkdir -p "$cache"
+  tmp="$bin.build.$$"
+  if ! swiftc -O -o "$tmp" "${sources[@]}" >&2; then
+    rm -f "$tmp"
+    echo '{"exit":9,"ok":false,"reason":"helper build failed; see stderr","status":"unavailable"}'
+    exit 9
+  fi
+  mv -f "$tmp" "$bin"
+fi
+
+exec "$bin" "$@"

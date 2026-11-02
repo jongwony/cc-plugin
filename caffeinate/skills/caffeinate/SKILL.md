@@ -5,6 +5,7 @@ description: >
   "caffeinate", "keep awake", "stop sleeping", "clamshell mode sleep prevention",
   "toggle caffeinate", or mentions system sleep prevention on macOS.
   Toggles caffeinate -ims (idle, disk, system sleep prevention; display sleep allowed for battery saving).
+disable-model-invocation: true
 ---
 
 # Caffeinate Toggle

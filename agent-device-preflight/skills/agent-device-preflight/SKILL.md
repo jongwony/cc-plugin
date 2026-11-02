@@ -14,6 +14,7 @@ description: |
   `agent-device open` can attach; hands command-level work back to the CLI. Pass the
   user's request verbatim — this skill reads a free-form request, not a subcommand.
 user_invocable: true
+disable-model-invocation: true
 ---
 
 # agent-device Preflight

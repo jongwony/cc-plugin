@@ -60,11 +60,6 @@
       "description": "Apple Notes handwriting reader — scan Apple Pencil drawings via NoteStore.sqlite and read them multimodally"
     },
     {
-      "name": "manim",
-      "source": "./manim",
-      "description": "Render short headless Manim animations (math / parametric / 3D / equations) to browser-embeddable mp4/webm/gif with a ready-to-paste embed snippet"
-    },
-    {
       "name": "unfold",
       "source": "./unfold",
       "description": "Linear chart writer — logs a decision at the moment the direction changes, collapses an accumulated open set into axes that each name what they absorbed, and closes a unit with its structure delta, closing note, and a letter of introduction for the follow-up; asks rather than infers what the user settled, reads the unit's chart before the first write, and writes only structure and decisions, never state"
@@ -73,11 +68,6 @@
       "name": "intake",
       "source": "./intake",
       "description": "Linear Triage sorter — reads the team's Triage inbox, moves each item it can place plainly and reversibly (chart root back to Backlog, a plain duplicate marked, a single chart match related and accepted), leaves the rest in Triage, and reports once with an undo per item; writes no descriptions, comments or issues"
-    },
-    {
-      "name": "comment-review",
-      "source": "./comment-review",
-      "description": "Browser-preview comment loop for markdown/HTML artifacts — right-click an element to anchor a comment by CSS selector, apply the queue back as edits, hot-reload"
     },
     {
       "name": "agent-device-preflight",

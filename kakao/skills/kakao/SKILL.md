@@ -1,8 +1,8 @@
 ---
 name: kakao
 description: >
-  Read, draft and send in one macOS KakaoTalk chat room window from this session,
-  through Accessibility only, while other sessions work other rooms in parallel.
+  Open, read, draft, send and screenshot one macOS KakaoTalk chat room window from
+  this session in the background, while other sessions work other rooms in parallel.
   Use when the user asks this session to talk in, watch, or send to a KakaoTalk
   chat room ("카톡 방", "카카오톡으로 보내", a chat room title).
 ---
@@ -11,9 +11,9 @@ description: >
 
 ## Prerequisites
 
-- macOS with KakaoTalk running and the room's chat window already open; this tool never opens, closes or raises a window, so a person opens it.
+- macOS with KakaoTalk running and its main window open (it holds the chat list a closed room is opened from).
 - `swiftc` on PATH (`xcode-select --install`); the helper builds itself on first run.
-- Accessibility permission for the terminal app that runs Claude Code (System Settings → Privacy & Security → Accessibility). Screen Recording for that app is optional and only enables a cross-check (`cg_cross_check`).
+- Accessibility permission for the terminal app that runs Claude Code (System Settings → Privacy & Security → Accessibility). Screen Recording for that app enables `shot` and the title cross-check (`cg_cross_check`).
 
 ## Running
 
@@ -21,12 +21,24 @@ description: >
 - Run one command at a time for the room and read its JSON before the next.
 - Text with newlines or quotes goes through `--text-file <path>` (or `--text-file -` with stdin) instead of `--text`.
 
+## Which path reaches KakaoTalk
+
+- The helper (Swift AX on one window) is the path wherever it reaches; OCU covers only the steps the helper cannot do.
+- This app's boundary — helper: find the room's row in the chat list and scroll it into view (`locate`), bind, read, draft, send, clear, capture (`shot`). OCU: the one double-click that opens a closed room, waking a dark display, and read-only looks when a handshake is incomplete.
+- OCU input on a chat window — click, set_value, type_text, press_key — is outside the boundary, as are keyboard events, AppleScript and raising a window: they act on whichever window has focus and break the other rooms.
+
+## Opening a room
+
+- `locate --room "<exact title>"` returns `already_open` with `window_id` when the room's window is open; go to Binding a room.
+- `status: "located"`: run OCU `get_app_state` on `com.kakao.KakaoTalkMac`, then one OCU `click` on that app at `screenshot_point` with `click_method: "sky_click"` and `click_count: 2`. It opens the room without raising KakaoTalk or taking focus from the person's foreground app. Then handshake.
+- Exit 10 from `locate`: the chat list holds zero or several rows with that exact title; ask the person.
+
 ## Binding a room
 
 - This session works one room. `handshake --room "<exact window title>"` binds it; keep `room` and `window_id` from the JSON and pass both to every later command.
 - Exit 3 (`handshake_incomplete`): `missing` names the element the helper could not settle and `candidates` lists what it saw. Look at the same window with OCU read-only tools (`get_app_state`, `query`), then rerun `handshake` with `--send-label <label>`, `--input-identifier <id>` or `--list-identifier <id>`. The hints are stored for the room.
 - Exit 9 `screen_locked`: with OCU Locked Use enabled, one OCU `get_app_state` call on KakaoTalk wakes the display; then retry the command once. If it is still locked, wait for a person to unlock the Mac.
-- When the helper cannot do something, report its JSON. KakaoTalk is reached only through this helper — not keyboard input, OCU click/set_value/type_text/press_key, AppleScript or coordinates — because those act on whichever window has focus and break the other rooms.
+- When the helper cannot do something, report its JSON.
 
 ## Sending and reading
 
@@ -36,11 +48,15 @@ description: >
 - `read` sees only the rows the window has loaded, around what is on screen; the tool never scrolls, so history beyond them is out of reach. Read often enough that new rows arrive before older ones leave.
 - `more: "newer"`: read again with the returned marker for the rest. `more: "older"`: loaded rows beyond `--limit` were left out; raise `--limit`. `marker_found: false`: the marker's rows left the loaded rows, so rows in between may have been missed and the rows loaded now come back instead; with `list_jumped: true` those rows are older than the marker, not new. `marker_ambiguous: true`: some returned rows may repeat earlier ones. `truncated: true`: the bubble ends in "…" and is cut; its full text is not reachable through this tool.
 
+## Showing the result
+
+- `shot --room <title> --window <id> [--out <path.png>]` writes a PNG of the room window without raising it (also while covered or minimized) and returns `path`; give the person that path after a draft, a send or a reply so they can check the window themselves.
+
 ## Exit codes
 
 | Exit | Status | Next |
 | -- | -- | -- |
-| 0 | ok, drafted, sent, cleared | continue |
+| 0 | ok, drafted, sent, cleared, located, already_open, captured | continue |
 | 2 | usage | fix the arguments |
 | 3 | handshake_incomplete | OCU read-only look, rerun handshake with hints |
 | 4 | handshake_again | rerun handshake; use the new `window_id`; `reason` says why |
@@ -48,5 +64,5 @@ description: >
 | 6 | draft_mismatch, send_button_disabled, clear_failed | nothing was sent; for draft_mismatch the box may hold text, so ask the person |
 | 7 | send_unconfirmed | do not send again; `read` and look for the text before any next step |
 | 8 | draft_changed, no_draft | the input is not this tool's draft; see draft-for-approval above |
-| 9 | unavailable, screen_locked | act on `reason` (permission, app not running, toolchain); for screen_locked see Binding a room |
-| 10 | room_not_unique | exactly one open window must carry the title; ask the person |
+| 9 | unavailable, screen_locked, capture_failed | act on `reason` (permission, app not running, toolchain, Screen Recording); for screen_locked see Binding a room |
+| 10 | room_not_unique | exactly one open window, or one chat-list row for `locate`, must carry the title; ask the person |

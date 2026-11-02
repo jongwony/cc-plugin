@@ -624,5 +624,76 @@ test("json: output is one object with ok/status/exit/command") {
     expect(obj["exit"] as? Int == 4 && obj["command"] as? String == "read", "fields")
 }
 
+/// A main window whose chat list scrolls: row i sits at y = 100 + 60*i - offset, the area shows y 100..400.
+func makeChatList(_ titles: [String], into e: Env) -> (bar: FakeNode, rows: [FakeNode]) {
+    let table = FakeNode("AXTable")
+    let bar = FakeNode("AXScrollBar")
+    let area = FakeNode("AXScrollArea", children: [table, bar])
+    area.frame = CGRect(x: 0, y: 100, width: 300, height: 300)
+    var rows: [FakeNode] = []
+    for t in titles {
+        let r = FakeNode("AXRow", children: [FakeNode("AXCell", children: [
+            FakeNode("AXButton", title: "프로필"), FakeNode("AXStaticText", value: t)])])
+        rows.append(r)
+        table.children.append(r)
+    }
+    func layout(_ v: Double) {
+        let offset = v * Double(max(rows.count - 1, 1)) * 60
+        for (i, r) in rows.enumerated() { r.frame = CGRect(x: 0, y: 100 + 60 * Double(i) - offset, width: 300, height: 60) }
+    }
+    layout(0)
+    bar.onNumber = layout
+    let main = FakeNode("AXWindow", title: "카카오톡", children: [area])
+    main.frame = CGRect(x: 0, y: 0, width: 300, height: 500)
+    e.driver.wins = [WindowInfo(windowID: 7, title: "카카오톡", isFocused: false, node: main)]
+    return (bar, rows)
+}
+
+test("locate: exact title row is scrolled into view and its point returned; nothing pressed") {
+    let e = makeEnv()
+    let titles = (0..<20).map { "room \($0)" } + [roomTitle] + ["after"]
+    let (bar, rows) = makeChatList(titles, into: e)
+    let o = e.engine.run(.locate(room: roomTitle))
+    expect(o.exit == .ok && o.body["status"] as? String == "located", o.json)
+    expect(bar.numberValue > 0, "scrolled")
+    expect(rows.allSatisfy { $0.pressCount == 0 }, "nothing pressed")
+    let sp = o.body["screenshot_point"] as? [String: Int]
+    let p = o.body["point"] as? [String: Int]
+    expect(sp?["x"] == (p?["x"] ?? 0) * 2, "screenshot point is the point times the scale")
+    if let y = p?["y"] { expect(y >= 100 && y <= 400, "inside the list: \(y)") }
+}
+
+test("locate: room already open → already_open with its id; absent or duplicated row → exit 10") {
+    let e = makeEnv()
+    let o = e.engine.run(.locate(room: roomTitle))
+    expect(o.body["status"] as? String == "already_open" && o.body["window_id"] as? Int == Int(windowID), o.json)
+    let f = makeEnv()
+    _ = makeChatList(["a", "b"], into: f)
+    expect(f.engine.run(.locate(room: roomTitle)).exit == .roomNotUnique, "absent")
+    let g = makeEnv()
+    _ = makeChatList([roomTitle, roomTitle], into: g)
+    expect(g.engine.run(.locate(room: roomTitle)).exit == .roomNotUnique, "duplicated")
+}
+
+test("shot: bound window captured to the given path; capture failure → exit 9") {
+    let e = makeEnv()
+    handshake(e)
+    let o = e.engine.run(.shot(room: roomTitle, window: windowID, out: "/tmp/x.png"))
+    expect(o.exit == .ok && o.body["path"] as? String == "/tmp/x.png", o.json)
+    expect(e.driver.captured.first?.0 == windowID, "captured the room window")
+    e.driver.captureOK = false
+    expect(e.engine.run(.shot(room: roomTitle, window: windowID, out: nil)).exit == .unavailable, "failure")
+}
+
+test("args: locate and shot parse") {
+    guard case .run(.locate(let r), _) = parseArguments(["locate", "--room", "R"], env: [:], readFile: noFile)
+    else { return expect(false, "locate") }
+    expect(r == "R", "room")
+    guard case .run(.shot(_, let w, let out), _) = parseArguments(
+        ["shot", "--room", "R", "--window", "3", "--out", "/tmp/a.png"], env: [:], readFile: noFile)
+    else { return expect(false, "shot") }
+    expect(w == 3 && out == "/tmp/a.png", "fields")
+}
+
 print(failed.isEmpty ? "\nall tests passed" : "\n\(failed.count) failure(s):\n" + failed.joined(separator: "\n"))
 exit(failed.isEmpty ? 0 : 1)

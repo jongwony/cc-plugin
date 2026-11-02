@@ -47,6 +47,25 @@ final class AXNode: UINode {
     func press() -> Bool {
         AXUIElementPerformAction(element, kAXPressAction as CFString) == .success
     }
+
+    var frame: CGRect? { axFrame(element) }
+
+    func setNumberValue(_ value: Double) -> Bool {
+        AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, NSNumber(value: value)) == .success
+    }
+}
+
+func axFrame(_ w: AXUIElement) -> CGRect? {
+    var pos: CFTypeRef?
+    var size: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(w, kAXPositionAttribute as CFString, &pos) == .success,
+          AXUIElementCopyAttributeValue(w, kAXSizeAttribute as CFString, &size) == .success,
+          let pv = pos, let sv = size, CFGetTypeID(pv) == AXValueGetTypeID(), CFGetTypeID(sv) == AXValueGetTypeID()
+    else { return nil }
+    var p = CGPoint.zero
+    var s = CGSize.zero
+    guard AXValueGetValue(pv as! AXValue, .cgPoint, &p), AXValueGetValue(sv as! AXValue, .cgSize, &s) else { return nil }
+    return CGRect(origin: p, size: s)
 }
 
 final class AXAppDriver: AppDriver {
@@ -137,6 +156,23 @@ final class AXAppDriver: AppDriver {
         return nil
     }
 
+    func backingScale(of frame: CGRect) -> Double? {
+        // AX frames have a top-left origin; NSScreen frames a bottom-left one on the primary screen.
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        let mid = CGPoint(x: frame.midX, y: primaryHeight - frame.midY)
+        return (NSScreen.screens.first { $0.frame.contains(mid) } ?? NSScreen.main).map { Double($0.backingScaleFactor) }
+    }
+
+    func capture(windowID: UInt32, to path: String) -> Bool {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+        p.arguments = ["-x", "-o", "-l", String(windowID), path]
+        do { try p.run() } catch { return false }
+        p.waitUntilExit()
+        let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int) ?? 0
+        return p.terminationStatus == 0 && size > 0
+    }
+
     // MARK: window ids
 
     private func cgWindows(pid: pid_t) -> [[String: Any]] {
@@ -161,18 +197,5 @@ final class AXAppDriver: AppDriver {
         }
         guard hits.count == 1, let n = hits[0][kCGWindowNumber as String] as? Int else { return nil }
         return UInt32(n)
-    }
-
-    private func axFrame(_ w: AXUIElement) -> CGRect? {
-        var pos: CFTypeRef?
-        var size: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(w, kAXPositionAttribute as CFString, &pos) == .success,
-              AXUIElementCopyAttributeValue(w, kAXSizeAttribute as CFString, &size) == .success,
-              let pv = pos, let sv = size, CFGetTypeID(pv) == AXValueGetTypeID(), CFGetTypeID(sv) == AXValueGetTypeID()
-        else { return nil }
-        var p = CGPoint.zero
-        var s = CGSize.zero
-        guard AXValueGetValue(pv as! AXValue, .cgPoint, &p), AXValueGetValue(sv as! AXValue, .cgSize, &s) else { return nil }
-        return CGRect(origin: p, size: s)
     }
 }

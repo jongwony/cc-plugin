@@ -15,6 +15,10 @@ public protocol UINode: AnyObject {
     func setStringValue(_ text: String) -> Bool
     /// Performs the element's press action. No pointer events.
     func press() -> Bool
+    /// The element's frame in screen points; nil when unreadable.
+    var frame: CGRect? { get }
+    /// Sets a numeric value attribute (a scroll bar's position). No focus change.
+    func setNumberValue(_ value: Double) -> Bool
 }
 
 public struct WindowInfo {
@@ -52,6 +56,10 @@ public protocol AppDriver {
     func cgTitleCount(_ title: String) -> Int?
     /// Seconds since the last keyboard or pointer input on this machine; nil if unknown.
     func secondsSinceLastInput() -> Double?
+    /// Backing scale of the display a frame lies on (2 on Retina); nil if unknown.
+    func backingScale(of frame: CGRect) -> Double?
+    /// Writes a PNG of one window by its id without raising it; true on a non-empty file.
+    func capture(windowID: UInt32, to path: String) -> Bool
 }
 
 public protocol Clock {
@@ -133,6 +141,8 @@ public enum Command {
     case draft(room: String, window: UInt32, text: String)
     case send(room: String, window: UInt32, text: String?, acceptEdited: Bool)
     case clear(room: String, window: UInt32)
+    case locate(room: String)
+    case shot(room: String, window: UInt32, out: String?)
 
     public var name: String {
         switch self {
@@ -141,6 +151,8 @@ public enum Command {
         case .draft: return "draft"
         case .send: return "send"
         case .clear: return "clear"
+        case .locate: return "locate"
+        case .shot: return "shot"
         }
     }
 }

@@ -2,13 +2,14 @@
 
 Several Claude sessions work several KakaoTalk (macOS) chat rooms at the same time: one session per room window. There is no server, no shared queue and no app-wide lock. A session binds its room once with a **handshake**, then reads, drafts and sends in that window directly.
 
-Every action goes through macOS Accessibility (AX) on that one window: set the input box's value, read it back, press that window's send button. The tool sends no keyboard events, never raises or activates a window, never clicks by coordinates and never closes a window. Key events and raising act on whichever window has focus, so they would break the other rooms.
+Every action goes through macOS Accessibility (AX) on that one window: set the input box's value, read it back, press that window's send button. On the room window the tool sends no keyboard events, never raises or activates a window, never clicks by coordinates and never closes a window. The one exception sits on the main window: opening a closed room is a single OCU `sky_click` double-click on its chat-list row, which the helper's `locate` has scrolled into view, because the row exposes no Accessibility action that opens it. Key events and raising act on whichever window has focus, so they would break the other rooms.
 
 ## Lifecycle
 
 ```mermaid
 flowchart TD
-  P[A person opens the room's chat window] --> H[handshake --room title]
+  L[locate --room title] -->|located| D[OCU sky_click double-click on the row] --> H[handshake --room title]
+  L -->|already_open| H
   H -->|exit 0| B[room + window_id + app version stored]
   H -->|exit 3: element not settled| O[look with OCU, read-only] --> HH[handshake again with hints] --> B
   B --> R[read --after marker]
@@ -117,7 +118,8 @@ What the run showed:
 - While the screen is locked, AX reports every KakaoTalk window under the app's name and the window-id call fails for every window; one `read` in that state returned old rows instead of new ones. The helper now stops with exit 9 `screen_locked` in that state: a `handshake` run with the screen still locked (login window in front) returned exactly that. `read` adds `list_jumped: true` when the rows it returns end earlier than its marker.
 - With OCU Locked Use enabled, one read-only OCU call (`get_app_state` on KakaoTalk) woke the display; right after it the login window was no longer in front, titles and ids read normally, and handshakes returned 0.
 - `read` stays slower in a chat of long bubbles (about 2.4 s for 29 loaded rows) than in a short one (0.4 s); the cost grows with the AX calls per row.
-- A closed chat window could be reopened from the main window through OCU, with its `sky_click` method (search field, friends tab, double-click on the row); default clicks did nothing in the background. This tool still never opens windows.
+- A closed chat window could be reopened from the main window through OCU, with its `sky_click` method (search field, friends tab, double-click on the row); default clicks did nothing in the background.
+- 2026-11-02, self-test bot room: the chat-list row exposes no press or open action (AXPress/AXOpen -25206; AXSelected and AXConfirm open nothing; AXShowMenu shows no menu in the background), so opening stays OCU's one step. `locate` (AX: exact-title row, scroll-bar value) then one OCU `sky_click` double-click opened the room with the person's foreground app unchanged; handshake/read/draft/send worked on it unchanged; `shot` (`screencapture -l`) captured it while covered and while minimized, and a bot reply arrived in `read --after` within about 5–10 s in both states.
 
 ## Not yet verified against the live app
 

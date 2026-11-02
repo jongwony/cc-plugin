@@ -42,6 +42,8 @@ public final class Engine {
             case .draft(let room, let w, let text): return try draft(room, w, text)
             case .send(let room, let w, let text, let edited): return try send(room, w, text, edited)
             case .clear(let room, let w): return try clear(room, w)
+            case .locate(let room): return try locate(room)
+            case .shot(let room, let w, let out): return try shot(room, w, out)
             }
         } catch let a as Abort {
             return a.outcome

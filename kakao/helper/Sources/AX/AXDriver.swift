@@ -47,6 +47,25 @@ final class AXNode: UINode {
     func press() -> Bool {
         AXUIElementPerformAction(element, kAXPressAction as CFString) == .success
     }
+
+    var frame: CGRect? { axFrame(element) }
+
+    func setNumberValue(_ value: Double) -> Bool {
+        AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, NSNumber(value: value)) == .success
+    }
+}
+
+func axFrame(_ w: AXUIElement) -> CGRect? {
+    var pos: CFTypeRef?
+    var size: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(w, kAXPositionAttribute as CFString, &pos) == .success,
+          AXUIElementCopyAttributeValue(w, kAXSizeAttribute as CFString, &size) == .success,
+          let pv = pos, let sv = size, CFGetTypeID(pv) == AXValueGetTypeID(), CFGetTypeID(sv) == AXValueGetTypeID()
+    else { return nil }
+    var p = CGPoint.zero
+    var s = CGSize.zero
+    guard AXValueGetValue(pv as! AXValue, .cgPoint, &p), AXValueGetValue(sv as! AXValue, .cgSize, &s) else { return nil }
+    return CGRect(origin: p, size: s)
 }
 
 final class AXAppDriver: AppDriver {
@@ -113,7 +132,8 @@ final class AXAppDriver: AppDriver {
                 if cg == nil { cg = self.cgWindows(pid: pid) }
                 return cg!
             }
-            return WindowInfo(windowID: id, title: node.title, isFocused: isFocused, node: node)
+            let minimized = (node.attr(kAXMinimizedAttribute) as? Bool) ?? false
+            return WindowInfo(windowID: id, title: node.title, isFocused: isFocused, isMinimized: minimized, node: node)
         }
     }
 
@@ -135,6 +155,26 @@ final class AXAppDriver: AppDriver {
             return Double(d.withUnsafeBytes { $0.loadUnaligned(as: UInt64.self) }) / 1_000_000_000
         }
         return nil
+    }
+
+    func isOnScreen(_ frame: CGRect) -> Bool {
+        // AX frames have a top-left origin; NSScreen frames a bottom-left one on the primary screen.
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        let mid = CGPoint(x: frame.midX, y: primaryHeight - frame.midY)
+        return NSScreen.screens.contains { $0.frame.contains(mid) }
+    }
+
+    func canCaptureScreen() -> Bool { CGPreflightScreenCaptureAccess() }
+
+    func capture(windowID: UInt32, to path: String) -> CaptureResult {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+        p.arguments = ["-x", "-o", "-l", String(windowID), path]
+        do { try p.run() } catch { return .failed("cannot run screencapture: \(error)") }
+        p.waitUntilExit()
+        guard p.terminationStatus == 0 else { return .failed("screencapture exited \(p.terminationStatus)") }
+        let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int) ?? 0
+        return size > 0 ? .ok : .failed("screencapture wrote no image")
     }
 
     // MARK: window ids
@@ -161,18 +201,5 @@ final class AXAppDriver: AppDriver {
         }
         guard hits.count == 1, let n = hits[0][kCGWindowNumber as String] as? Int else { return nil }
         return UInt32(n)
-    }
-
-    private func axFrame(_ w: AXUIElement) -> CGRect? {
-        var pos: CFTypeRef?
-        var size: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(w, kAXPositionAttribute as CFString, &pos) == .success,
-              AXUIElementCopyAttributeValue(w, kAXSizeAttribute as CFString, &size) == .success,
-              let pv = pos, let sv = size, CFGetTypeID(pv) == AXValueGetTypeID(), CFGetTypeID(sv) == AXValueGetTypeID()
-        else { return nil }
-        var p = CGPoint.zero
-        var s = CGSize.zero
-        guard AXValueGetValue(pv as! AXValue, .cgPoint, &p), AXValueGetValue(sv as! AXValue, .cgSize, &s) else { return nil }
-        return CGRect(origin: p, size: s)
     }
 }

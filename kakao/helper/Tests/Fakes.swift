@@ -14,6 +14,9 @@ final class FakeNode: UINode {
     var onPress: (() -> Bool)?
     var setCount = 0
     var pressCount = 0
+    var frame: CGRect?
+    var numberValue: Double = 0
+    var onNumber: ((Double) -> Void)?
 
     init(_ role: String, title: String? = nil, desc: String? = nil, id: String? = nil,
          value: String? = nil, settable: Bool = false, children: [FakeNode] = []) {
@@ -36,6 +39,12 @@ final class FakeNode: UINode {
     func press() -> Bool {
         pressCount += 1
         return onPress?() ?? true
+    }
+
+    func setNumberValue(_ value: Double) -> Bool {
+        numberValue = value
+        onNumber?(value)
+        return true
     }
 }
 
@@ -94,6 +103,13 @@ final class FakeDriver: AppDriver {
     func windows() -> [WindowInfo] { wins }
     func cgTitleCount(_ title: String) -> Int? { cg }
     func secondsSinceLastInput() -> Double? { idle }
+    var captured: [(UInt32, String)] = []
+    var captureResult: CaptureResult = .ok
+    var screenOK = true
+    var onScreen = true
+    func isOnScreen(_ frame: CGRect) -> Bool { onScreen }
+    func canCaptureScreen() -> Bool { screenOK }
+    func capture(windowID: UInt32, to path: String) -> CaptureResult { captured.append((windowID, path)); return captureResult }
 }
 
 final class FakeClock: Clock {

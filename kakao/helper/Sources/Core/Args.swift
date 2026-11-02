@@ -14,6 +14,8 @@ kakao — one KakaoTalk (macOS) chat window per caller, through Accessibility on
   kakao draft     --room <title> --window <id> (--text <text> | --text-file <path|->)
   kakao send      --room <title> --window <id> [--text <text> | --text-file <path|->] [--accept-edited]
   kakao clear     --room <title> --window <id>
+  kakao locate    --room <title>
+  kakao shot      --room <title> --window <id> [--out <path.png>]
 
 Common: [--state-dir <dir>] [--min-interval <seconds>] [--confirm-timeout <seconds>]
 Env: KAKAO_STATE_DIR, KAKAO_MIN_INTERVAL, KAKAO_BUNDLE_ID
@@ -25,7 +27,7 @@ Output: one JSON object on stdout. Exit codes: 0 ok, 2 usage, 3 handshake incomp
 private let valueFlags: Set<String> = [
     "--room", "--window", "--text", "--text-file", "--after", "--limit",
     "--send-label", "--input-identifier", "--list-identifier",
-    "--state-dir", "--min-interval", "--confirm-timeout",
+    "--state-dir", "--min-interval", "--confirm-timeout", "--out",
 ]
 private let boolFlags: Set<String> = ["--accept-edited"]
 private let commonFlags: Set<String> = ["--state-dir", "--min-interval", "--confirm-timeout"]
@@ -35,6 +37,8 @@ private let allowed: [String: Set<String>] = [
     "draft": ["--room", "--window", "--text", "--text-file"],
     "send": ["--room", "--window", "--text", "--text-file", "--accept-edited"],
     "clear": ["--room", "--window"],
+    "locate": ["--room"],
+    "shot": ["--room", "--window", "--out"],
 ]
 
 public let defaultMinInterval: Double = 20
@@ -96,6 +100,7 @@ public func parseArguments(_ argv: [String], env: [String: String],
                           listIdentifier: one("--list-identifier"))
         return .run(.handshake(room: room, hints: hints), config)
     }
+    if cmd == "locate" { return .run(.locate(room: room), config) }
 
     guard let ws = one("--window") else { return .usage("--window is required (from handshake)") }
     guard let window = UInt32(ws) else { return .usage("--window must be a window id number") }
@@ -127,6 +132,8 @@ public func parseArguments(_ argv: [String], env: [String: String],
     case "draft":
         guard let t = text else { return .usage("draft needs --text or --text-file") }
         return .run(.draft(room: room, window: window, text: t), config)
+    case "shot":
+        return .run(.shot(room: room, window: window, out: one("--out")), config)
     case "send":
         return .run(.send(room: room, window: window, text: text,
                           acceptEdited: bools.contains("--accept-edited")), config)

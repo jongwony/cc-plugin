@@ -37,7 +37,7 @@ mid-run, leaving no final report.
 ## Read
 
 A pass's report is its `-o` file. The run's tool record is the session's rollout file, which
-every resumed pass appends to; codex-plus's `codex-session` skill locates it by session id:
+every resumed pass appends to, found by session id:
 
 ```bash
 rollout=$(find "${CODEX_HOME:-$HOME/.codex}/sessions" -name "rollout-*-$thread_id.jsonl")

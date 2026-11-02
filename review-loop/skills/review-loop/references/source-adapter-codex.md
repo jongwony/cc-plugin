@@ -48,7 +48,7 @@ a nonzero exit or a missing or empty `review.txt` is not a successful review. Re
 review verbatim as an LLM, checking that it actually contains a review verdict on the
 requested surface. Read **all** stderr on every outcome, including success; state when
 it was empty. Where the outcome is unclear, the session's rollout file — located by the
-`session id: <uuid>` line on stderr, as codex-plus's `codex-session` skill does — holds
+`session id: <uuid>` line on stderr as `${CODEX_HOME:-~/.codex}/sessions/**/rollout-*-<uuid>.jsonl` — holds
 its full event record. Capture the results before removing the temporary directory;
 the rollout file stays in codex's own session store, which is the user's to remove. A
 terminal failure follows Phase 1's no-review path.

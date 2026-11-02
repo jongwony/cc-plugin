@@ -16,7 +16,7 @@ A checkpoint is one check at one minute, pushed to the phone ahead of time so no
 ## Server
 
 - Work-area tasks → `ntfy-work`; personal ones → `ntfy-personal`. The user's own area rules decide which side a task is on.
-- Publish without `topic`: each server's default topic is the user's subscription, and a topic in a tool argument would print in the transcript.
+- Publish without `topic`: each server's default topic is the user's subscription for that area.
 
 ## Message
 

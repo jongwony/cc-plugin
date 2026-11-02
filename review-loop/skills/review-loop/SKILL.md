@@ -193,7 +193,8 @@ unrepaired with their dispositions, and no repair is chosen or applied.
 - **Mechanical / Extension:** a verified bug with a self-evident localized fix, or
   another deterministic edit whose plausible shapes do not materially diverge.
   Apply and report without a disposition gate.
-- **Judgment / Constitution:** materially different repair trajectories, unresolved
+- **Judgment / Constitution:** materially different repair trajectories (withholding
+  a whole carrier, where another repair keeps part of what it delivers, is one), unresolved
   design trade-offs, or unentrusted scope/risk decisions. Present evidence first,
   then ask the live question in everyday language. Cluster findings by shared
   disposition; when repair shape is the live axis, ask about trajectories rather
@@ -264,7 +265,11 @@ so far, so the driving session records rather than re-derives it.
 1. The scan holder scans planned change points, adjacent interactions, and repeated
    instances. Derive each fix's predicate from the violated invariant and verified cause.
    Trace relevant state through production, transfer, invalidation, and consumption,
-   including transitions and interleavings; enumerate the predicate's sites. State the
+   including transitions and interleavings; where a repair changes what reaches whom,
+   the consumers are every recipient of that delivery — a host without the expected
+   input, a partial install, an inherited context, a fresh delegate, a seeded copy —
+   with its absence paths, not only the recipient the finding names. Enumerate the
+   predicate's sites. State the
    observation that would falsify the repair and select bounded checks from it. Return
    a live judgment about consistency or evidence support to Phase 3 before its
    dependent repair.
@@ -289,7 +294,9 @@ so far, so the driving session records rather than re-derives it.
    the reconsidered abstraction Phase 3 calls for, in that same judgment. Return to
    autonomous apply after a review without either pattern.
 4. Read every written and swept site against its disposition and exercise the repaired
-   invariant through the transitions and orderings identified by the scan. Repair a known
+   invariant through the transitions, orderings and recipients identified by the scan,
+   absence paths included; a check offered as a guard shows that it rejects the failure
+   it names. Repair a known
    discrepancy within the settled disposition and re-check the affected bundle before
    hand-forward; a live judgment returns to Phase 3. An explicitly accepted or deferred
    limit remains residual.

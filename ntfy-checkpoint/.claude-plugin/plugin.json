@@ -1,0 +1,46 @@
+{
+  "name": "ntfy-checkpoint",
+  "description": "Phone push at a set minute for a one-shot checkpoint, scheduled on ntfy ahead of time with no visible list, carrying only what to check and the session that can tell the rest — one ntfy MCP server per area, work and personal",
+  "version": "0.1.0",
+  "mcpServers": {
+    "ntfy-work": {
+      "command": "npx",
+      "args": ["-y", "ntfy-mcp-server"],
+      "env": {
+        "MCP_TRANSPORT_TYPE": "stdio",
+        "NTFY_BASE_URL": "https://ntfy.sh",
+        "NTFY_DEFAULT_TOPIC": "${user_config.work_topic}"
+      }
+    },
+    "ntfy-personal": {
+      "command": "npx",
+      "args": ["-y", "ntfy-mcp-server"],
+      "env": {
+        "MCP_TRANSPORT_TYPE": "stdio",
+        "NTFY_BASE_URL": "https://ntfy.sh",
+        "NTFY_DEFAULT_TOPIC": "${user_config.personal_topic}"
+      }
+    }
+  },
+  "userConfig": {
+    "work_topic": {
+      "type": "string",
+      "title": "Work topic",
+      "description": "ntfy topic the phone subscribes to for work checkpoints. The topic name is its password",
+      "sensitive": true,
+      "required": true
+    },
+    "personal_topic": {
+      "type": "string",
+      "title": "Personal topic",
+      "description": "ntfy topic the phone subscribes to for personal checkpoints. The topic name is its password",
+      "sensitive": true,
+      "required": true
+    }
+  },
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  },
+  "license": "MIT"
+}

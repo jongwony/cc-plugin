@@ -143,6 +143,11 @@
       "name": "kakao",
       "source": "./kakao",
       "description": "Several macOS KakaoTalk chat rooms in parallel, one Claude session per room window — handshake once, then read, draft and send through Accessibility alone, with no server, keyboard events or window raising"
+    },
+    {
+      "name": "ntfy-checkpoint",
+      "source": "./ntfy-checkpoint",
+      "description": "Phone push at a set minute for a one-shot checkpoint, scheduled on ntfy ahead of time with no visible list — one ntfy MCP server per area, work and personal"
     }
   ]
 }

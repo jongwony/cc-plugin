@@ -34,8 +34,9 @@ Carry the person's words about the video verbatim as the seed; invoked without t
 Invoke `/elicit` on the seed — the skill call itself. The decisions below hold for every kind of video. They are candidates `/elicit` draws on where the seed and the person's words leave them open, never a checklist walked in order. Each is phrased in the person's situation, with what happens if it is left unsaid:
 
 - **Where it will be shown** (aspect ratio, size) — "Where will people watch this: a phone feed, a web page, a slide?" Left unsaid, the builder picks a frame shape, and a vertical feed video built square loses half the screen.
+- **Camera** (view, framing) — "Should the view move — push in so each moment fills the frame, follow something across the scene — or stay still?" Left unsaid, the builder keeps one fixed full frame, and small things sit tiny on a large canvas.
 - **How long** (duration) — "About how many seconds?" Left unsaid, the builder picks a length, and every later timing hangs on it.
-- **What happens in what order** (scenes, beats) — "What should be seen first, what next, how does it end?" Left unsaid, the builder invents the sequence.
+- **What happens in what order** (scenes, beats, joins, pace) — "What should be seen first, what next, how does it end? Does each part cut to the next, turn into it, or is it all one unbroken shot? Calm, or something happening every moment?" Left unsaid, the builder invents the sequence, how its parts join, and its pace, and dead time or crowded moments follow.
 - **Sound** (music, effects, voice) — "Silent, music, or a voice? If music, do you have a track, and should the motion land on its beats?" Left unsaid, the builder chooses silence or synthesized sound.
 - **Look** (style reference, colors) — "Is there a video, brand, or site whose look you want? Any colors to use or avoid?" Left unsaid, the result tends toward a generic look.
 - **Words on screen** (text, typography) — "Must any exact words appear? Any font or brand lettering?" Left unsaid, the builder writes its own text.

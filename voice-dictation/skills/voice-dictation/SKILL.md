@@ -5,6 +5,7 @@ description: >
   "toggle voice dictation", "받아쓰기 켜", "받아쓰기 꺼", "음성 받아쓰기 토글",
   or mentions starting/stopping push-to-talk voice dictation.
   Toggles the push-to-talk whisper.cpp dictation daemon as a tracked background process.
+disable-model-invocation: true
 ---
 
 # Voice Dictation Toggle

@@ -1,6 +1,7 @@
 ---
 name: linkedin-polish
 description: "최종원(Jongwon Choi)의 LinkedIn 글 톤으로 초안을 윤문할 때 사용. LinkedIn 글, 링크드인 포스트, 톤 다듬기, 윤문, 내 말투로 고쳐줘 요청에 적용."
+disable-model-invocation: true
 ---
 
 # LinkedIn 윤문 스킬 — 최종원의 목소리

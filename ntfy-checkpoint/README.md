@@ -23,7 +23,7 @@
 
 1. Node.js(`npx`)를 준비합니다.
 2. 추측하기 어려운 토픽 두 개를 만들고, 휴대폰 ntfy 앱에서 둘 다 구독합니다. 토픽 이름이 곧 비밀번호입니다.
-3. `claude plugin configure ntfy-checkpoint`로 두 토픽을 넣습니다. 값은 OS 자격 증명 저장소에 들어가고 대화에는 나타나지 않습니다.
+3. `claude plugin configure ntfy-checkpoint`로 두 토픽을 넣습니다. 값은 OS 자격 증명 저장소에 들어갑니다. 조회·예약 도구의 응답에는 토픽과 URL이 그대로 나오므로 세션 기록에는 남습니다.
 
 ## 알아둘 점
 

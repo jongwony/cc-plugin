@@ -26,12 +26,14 @@ public struct WindowInfo {
     public let title: String?
     /// The app's focused window (AXFocusedWindow), which is not the same as frontmost on screen.
     public let isFocused: Bool
+    public let isMinimized: Bool
     public let node: UINode
 
-    public init(windowID: UInt32?, title: String?, isFocused: Bool, node: UINode) {
+    public init(windowID: UInt32?, title: String?, isFocused: Bool, isMinimized: Bool = false, node: UINode) {
         self.windowID = windowID
         self.title = title
         self.isFocused = isFocused
+        self.isMinimized = isMinimized
         self.node = node
     }
 }
@@ -56,10 +58,17 @@ public protocol AppDriver {
     func cgTitleCount(_ title: String) -> Int?
     /// Seconds since the last keyboard or pointer input on this machine; nil if unknown.
     func secondsSinceLastInput() -> Double?
-    /// Backing scale of the display a frame lies on (2 on Retina); nil if unknown.
-    func backingScale(of frame: CGRect) -> Double?
-    /// Writes a PNG of one window by its id without raising it; true on a non-empty file.
-    func capture(windowID: UInt32, to path: String) -> Bool
+    /// Whether a frame (screen points) lies on a connected display.
+    func isOnScreen(_ frame: CGRect) -> Bool
+    /// Whether this process may capture window contents (Screen Recording).
+    func canCaptureScreen() -> Bool
+    /// Writes a PNG of one window by its id without raising it.
+    func capture(windowID: UInt32, to path: String) -> CaptureResult
+}
+
+public enum CaptureResult: Equatable {
+    case ok
+    case failed(String)
 }
 
 public protocol Clock {
@@ -126,6 +135,10 @@ public struct Config {
     public var enablePoll: Double = 0.1
     public var personIdleThreshold: Double = 2.0
     public var defaultSendLabels: [String] = ["전송", "보내기", "Send"]
+    /// The main window's header text while its chat tab shows (the friends tab shows another).
+    public var chatTabHeaders: [String] = ["채팅", "Chats"]
+    /// How long `locate` holds the app-wide open lease for its room, until that room's handshake.
+    public var openLeaseSeconds: Double = 60
 
     public init(stateDir: String, bundleID: String, minInterval: Double, confirmTimeout: Double) {
         self.stateDir = stateDir

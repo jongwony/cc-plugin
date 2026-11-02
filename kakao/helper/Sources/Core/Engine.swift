@@ -235,6 +235,7 @@ public final class Engine {
                 lastSendAt: prior?.lastSendAt,
                 draftText: prior?.windowID == id ? prior?.draftText : nil))
         }
+        try OpenLeaseStore(stateDir: config.stateDir).release(room)
         return outcome(cmd, .ok, "ok", body)
     }
 

@@ -625,7 +625,9 @@ test("json: output is one object with ok/status/exit/command") {
 }
 
 /// A main window whose chat list scrolls: row i sits at y = 100 + 60*i - offset, the area shows y 100..400.
-func makeChatList(_ titles: [String], into e: Env) -> (bar: FakeNode, rows: [FakeNode]) {
+@discardableResult
+func makeChatList(_ titles: [String], into e: Env, header: String = "채팅", minimized: Bool = false,
+                  keep: [WindowInfo] = []) -> (bar: FakeNode, rows: [FakeNode]) {
     let table = FakeNode("AXTable")
     let bar = FakeNode("AXScrollBar")
     let area = FakeNode("AXScrollArea", children: [table, bar])
@@ -633,23 +635,23 @@ func makeChatList(_ titles: [String], into e: Env) -> (bar: FakeNode, rows: [Fak
     var rows: [FakeNode] = []
     for t in titles {
         let r = FakeNode("AXRow", children: [FakeNode("AXCell", children: [
-            FakeNode("AXButton", title: "프로필"), FakeNode("AXStaticText", value: t)])])
+            FakeNode("AXButton", title: "프로필"), FakeNode("AXStaticText", value: t), FakeNode("AXStaticText", value: "preview")])])
         rows.append(r)
         table.children.append(r)
     }
     func layout(_ v: Double) {
-        let offset = v * Double(max(rows.count - 1, 1)) * 60
-        for (i, r) in rows.enumerated() { r.frame = CGRect(x: 0, y: 100 + 60 * Double(i) - offset, width: 300, height: 60) }
+        let travel = max(Double(rows.count) * 60 - 300, 0)
+        for (i, r) in rows.enumerated() { r.frame = CGRect(x: 0, y: 100 + 60 * Double(i) - v * travel, width: 300, height: 60) }
     }
     layout(0)
     bar.onNumber = layout
-    let main = FakeNode("AXWindow", title: "카카오톡", children: [area])
+    let main = FakeNode("AXWindow", title: "카카오톡", children: [FakeNode("AXStaticText", value: header), area])
     main.frame = CGRect(x: 0, y: 0, width: 300, height: 500)
-    e.driver.wins = [WindowInfo(windowID: 7, title: "카카오톡", isFocused: false, node: main)]
+    e.driver.wins = keep + [WindowInfo(windowID: 7, title: "카카오톡", isFocused: false, isMinimized: minimized, node: main)]
     return (bar, rows)
 }
 
-test("locate: exact title row is scrolled into view and its point returned; nothing pressed") {
+test("locate: exact title row scrolled into view; returns the main window query, no coordinate; nothing pressed") {
     let e = makeEnv()
     let titles = (0..<20).map { "room \($0)" } + [roomTitle] + ["after"]
     let (bar, rows) = makeChatList(titles, into: e)
@@ -657,32 +659,99 @@ test("locate: exact title row is scrolled into view and its point returned; noth
     expect(o.exit == .ok && o.body["status"] as? String == "located", o.json)
     expect(bar.numberValue > 0, "scrolled")
     expect(rows.allSatisfy { $0.pressCount == 0 }, "nothing pressed")
-    let sp = o.body["screenshot_point"] as? [String: Int]
-    let p = o.body["point"] as? [String: Int]
-    expect(sp?["x"] == (p?["x"] ?? 0) * 2, "screenshot point is the point times the scale")
-    if let y = p?["y"] { expect(y >= 100 && y <= 400, "inside the list: \(y)") }
+    let q = o.body["query"] as? [String: Any]
+    expect(q?["window_id"] as? Int == 7 && q?["text"] as? String == roomTitle && q?["exact"] as? Bool == true, "query names the main window")
+    expect(o.body["screenshot_point"] == nil && o.body["point"] == nil, "no coordinate returned")
+    let r = rows[20].frame!
+    expect(r.midY >= 100 && r.midY <= 400, "inside the list: \(r.midY)")
 }
 
-test("locate: room already open → already_open with its id; absent or duplicated row → exit 10") {
+test("locate: converges on a long list") {
+    let e = makeEnv()
+    var titles = (0..<600).map { "room \($0)" }
+    titles[431] = roomTitle
+    let (_, rows) = makeChatList(titles, into: e)
+    let o = e.engine.run(.locate(room: roomTitle))
+    expect(o.body["status"] as? String == "located", o.json)
+    let r = rows[431].frame!
+    expect(r.midY >= 100 && r.midY <= 400, "inside the list: \(r.midY)")
+}
+
+test("locate: room already open → already_open; absent or duplicated row → exit 10") {
     let e = makeEnv()
     let o = e.engine.run(.locate(room: roomTitle))
     expect(o.body["status"] as? String == "already_open" && o.body["window_id"] as? Int == Int(windowID), o.json)
     let f = makeEnv()
-    _ = makeChatList(["a", "b"], into: f)
+    makeChatList(["a", "b"], into: f)
     expect(f.engine.run(.locate(room: roomTitle)).exit == .roomNotUnique, "absent")
     let g = makeEnv()
-    _ = makeChatList([roomTitle, roomTitle], into: g)
-    expect(g.engine.run(.locate(room: roomTitle)).exit == .roomNotUnique, "duplicated")
+    makeChatList([roomTitle, roomTitle], into: g)
+    let og = g.engine.run(.locate(room: roomTitle))
+    expect(og.exit == .roomNotUnique && og.body["reason"] != nil, og.json)
 }
 
-test("shot: bound window captured to the given path; capture failure → exit 9") {
+test("locate: minimized, off-screen main window and another tab each refuse with their own status") {
+    let a = makeEnv()
+    makeChatList([roomTitle], into: a, minimized: true)
+    expect(a.engine.run(.locate(room: roomTitle)).body["status"] as? String == "main_window_minimized", "minimized")
+    let b = makeEnv()
+    makeChatList([roomTitle], into: b)
+    b.driver.onScreen = false
+    expect(b.engine.run(.locate(room: roomTitle)).body["status"] as? String == "main_window_offscreen", "offscreen")
+    let c = makeEnv()
+    makeChatList([roomTitle], into: c, header: "친구")
+    let oc = c.engine.run(.locate(room: roomTitle))
+    expect(oc.body["status"] as? String == "chat_tab_not_showing" && oc.exit == .unavailable && oc.body["reason"] != nil, oc.json)
+}
+
+test("locate: another room's live open lease → exit 5 open_busy; handshake releases; expiry frees it") {
+    let e = makeEnv()
+    makeChatList(["Other", roomTitle], into: e)
+    expect(e.engine.run(.locate(room: "Other")).exit == .ok, "first locate holds the lease")
+    let o = e.engine.run(.locate(room: roomTitle))
+    expect(o.exit == .inputBusy && o.body["status"] as? String == "open_busy" && o.body["holder"] as? String == "Other", o.json)
+    e.clock.t += e.config.openLeaseSeconds + 1
+    expect(e.engine.run(.locate(room: roomTitle)).exit == .ok, "expired lease is taken over")
+    // The room's own handshake releases its lease.
+    let f = makeEnv()
+    let room = f.driver.wins
+    makeChatList([roomTitle], into: f)
+    expect(f.engine.run(.locate(room: roomTitle)).exit == .ok, "lease taken")
+    f.driver.wins = room
+    handshake(f)
+    makeChatList(["Other"], into: f)
+    expect(f.engine.run(.locate(room: "Other")).exit == .ok, "released by the handshake")
+}
+
+func tempPNG() -> String { (NSTemporaryDirectory() as NSString).appendingPathComponent("kakao-shot-\(UUID().uuidString).png") }
+
+test("shot: captured to the given path; permission, existing file, directory and capture failures each name themselves") {
     let e = makeEnv()
     handshake(e)
-    let o = e.engine.run(.shot(room: roomTitle, window: windowID, out: "/tmp/x.png"))
-    expect(o.exit == .ok && o.body["path"] as? String == "/tmp/x.png", o.json)
+    let p = tempPNG()
+    let o = e.engine.run(.shot(room: roomTitle, window: windowID, out: p))
+    expect(o.exit == .ok && o.body["path"] as? String == p, o.json)
     expect(e.driver.captured.first?.0 == windowID, "captured the room window")
-    e.driver.captureOK = false
-    expect(e.engine.run(.shot(room: roomTitle, window: windowID, out: nil)).exit == .unavailable, "failure")
+    e.driver.screenOK = false
+    expect(e.engine.run(.shot(room: roomTitle, window: windowID, out: tempPNG())).body["status"] as? String == "screen_recording_missing", "permission")
+    e.driver.screenOK = true
+    let existing = tempPNG()
+    FileManager.default.createFile(atPath: existing, contents: Data([1]))
+    let ox = e.engine.run(.shot(room: roomTitle, window: windowID, out: existing))
+    expect(ox.body["status"] as? String == "out_exists" && e.driver.captured.count == 1, ox.json)
+    let blocker = tempPNG()
+    FileManager.default.createFile(atPath: blocker, contents: Data([1]))
+    expect(e.engine.run(.shot(room: roomTitle, window: windowID, out: blocker + "/x.png")).body["status"] as? String == "capture_dir_failed", "dir")
+    e.driver.captureResult = .failed("screencapture exited 1")
+    let of = e.engine.run(.shot(room: roomTitle, window: windowID, out: tempPNG()))
+    expect(of.body["status"] as? String == "capture_failed" && of.body["reason"] as? String == "screencapture exited 1", of.json)
+}
+
+test("rowTitle: first non-empty static text, skipping the profile button") {
+    let row = FakeNode("AXRow", children: [FakeNode("AXCell", children: [
+        FakeNode("AXButton", title: "프로필"), FakeNode("AXStaticText", value: ""), FakeNode("AXStaticText", value: "Name"),
+        FakeNode("AXStaticText", value: "later")])])
+    expect(rowTitle(row) == "Name", "title")
 }
 
 test("args: locate and shot parse") {

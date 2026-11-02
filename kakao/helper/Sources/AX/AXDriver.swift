@@ -132,7 +132,8 @@ final class AXAppDriver: AppDriver {
                 if cg == nil { cg = self.cgWindows(pid: pid) }
                 return cg!
             }
-            return WindowInfo(windowID: id, title: node.title, isFocused: isFocused, node: node)
+            let minimized = (node.attr(kAXMinimizedAttribute) as? Bool) ?? false
+            return WindowInfo(windowID: id, title: node.title, isFocused: isFocused, isMinimized: minimized, node: node)
         }
     }
 
@@ -156,21 +157,24 @@ final class AXAppDriver: AppDriver {
         return nil
     }
 
-    func backingScale(of frame: CGRect) -> Double? {
+    func isOnScreen(_ frame: CGRect) -> Bool {
         // AX frames have a top-left origin; NSScreen frames a bottom-left one on the primary screen.
         let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
         let mid = CGPoint(x: frame.midX, y: primaryHeight - frame.midY)
-        return (NSScreen.screens.first { $0.frame.contains(mid) } ?? NSScreen.main).map { Double($0.backingScaleFactor) }
+        return NSScreen.screens.contains { $0.frame.contains(mid) }
     }
 
-    func capture(windowID: UInt32, to path: String) -> Bool {
+    func canCaptureScreen() -> Bool { CGPreflightScreenCaptureAccess() }
+
+    func capture(windowID: UInt32, to path: String) -> CaptureResult {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
         p.arguments = ["-x", "-o", "-l", String(windowID), path]
-        do { try p.run() } catch { return false }
+        do { try p.run() } catch { return .failed("cannot run screencapture: \(error)") }
         p.waitUntilExit()
+        guard p.terminationStatus == 0 else { return .failed("screencapture exited \(p.terminationStatus)") }
         let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int) ?? 0
-        return p.terminationStatus == 0 && size > 0
+        return size > 0 ? .ok : .failed("screencapture wrote no image")
     }
 
     // MARK: window ids

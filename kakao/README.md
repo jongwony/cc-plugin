@@ -2,13 +2,13 @@
 
 Several Claude sessions work several KakaoTalk (macOS) chat rooms at the same time: one session per room window. There is no server, no shared queue and no app-wide lock. A session binds its room once with a **handshake**, then reads, drafts and sends in that window directly.
 
-Every action goes through macOS Accessibility (AX) on that one window: set the input box's value, read it back, press that window's send button. On the room window the tool sends no keyboard events, never raises or activates a window, never clicks by coordinates and never closes a window. The one exception sits on the main window: opening a closed room is a single OCU `sky_click` double-click on its chat-list row, which the helper's `locate` has scrolled into view, because the row exposes no Accessibility action that opens it. Key events and raising act on whichever window has focus, so they would break the other rooms.
+Every action goes through macOS Accessibility (AX) on that one window: set the input box's value, read it back, press that window's send button. On the room window the tool sends no keyboard events, never raises or activates a window, never clicks by coordinates and never closes a window. The one exception sits on the main window: opening a closed room is a single OCU `sky_click` double-click on its chat-list row — named by an OCU `query` on the main window's id with the exact title, never by a coordinate — after the helper's `locate` has scrolled the row into view, because the row exposes no Accessibility action that opens it. Key events and raising act on whichever window has focus, so they would break the other rooms.
 
 ## Lifecycle
 
 ```mermaid
 flowchart TD
-  L[locate --room title] -->|located| D[OCU sky_click double-click on the row] --> H[handshake --room title]
+  L[locate --room title] -->|located| Q[OCU query: main window id, exact title] -->|one match| D[OCU sky_click double-click on that element] --> H[handshake --room title]
   L -->|already_open| H
   H -->|exit 0| B[room + window_id + app version stored]
   H -->|exit 3: element not settled| O[look with OCU, read-only] --> HH[handshake again with hints] --> B
@@ -32,7 +32,7 @@ xcode-select --install   # swiftc, if not already present
 ```
 
 - Grant **Accessibility** to the terminal app that runs Claude Code (System Settings → Privacy & Security → Accessibility).
-- **Screen Recording** for that app is optional. With it, the handshake cross-checks the title against the CoreGraphics window list; without it the check reports `unreadable` and the AX check alone decides.
+- **Screen Recording** for that app is needed for `shot`. It also lets the handshake cross-check the title against the CoreGraphics window list; without it that check reports `unreadable`, the AX check alone decides, and `shot` stops with `screen_recording_missing`.
 - The helper builds itself into `~/.cache/kakao/` on first use and rebuilds when its sources change (`KAKAO_CACHE` overrides the directory).
 
 ## Commands
@@ -46,6 +46,8 @@ All commands print one JSON object with `ok`, `status`, `exit` and `command`.
 | `draft --room <title> --window <id> --text <text>` | Puts the text into an empty input box and reads it back. |
 | `send --room <title> --window <id> [--text <text>] [--accept-edited]` | With text: draft, then press. Without: press for the draft already in the box. Then confirms the text appeared and the box emptied. |
 | `clear --room <title> --window <id>` | Empties the input box only when it holds exactly the draft this tool placed. |
+| `locate --room <title>` | For a closed room: takes the app-wide open lease, checks the main window is not minimized, is on a display and shows its chat tab, finds exactly one chat-list row with that title and scrolls it into view through the list's scroll-bar value. Returns the main window id and the `query` fields the opener uses; `already_open` when the room's window exists. Opens nothing. |
+| `shot --room <title> --window <id> [--out <path.png>]` | Captures the bound window with `screencapture -l` without raising it, also while covered or minimized. Refuses an existing `--out` file and reports missing Screen Recording, directory and capture failures separately. |
 
 Handshake hints, for when the defaults do not find an element: `--send-label <label>` (repeatable; default `전송`, `보내기`, `Send`), `--input-identifier <AXIdentifier>`, `--list-identifier <AXIdentifier>`.
 
@@ -62,11 +64,12 @@ Handshake hints, for when the defaults do not find an element: `--send-label <la
 | 7 | send unconfirmed — the button was pressed but the result is unknown |
 | 8 | draft changed — the box does not hold this tool's draft |
 | 9 | unavailable — no permission, app not running, no toolchain, or the screen is locked (`screen_locked`) |
-| 10 | room not unique — zero or several windows carry the title |
+| 10 | room not unique — zero or several windows (or, for `locate`, chat-list rows) carry the title |
 
 ## Safety rules
 
-- **No keyboard, no raising, no coordinates.** If the send button cannot be found, the send fails; it never falls back to Return.
+- **No keyboard, no raising, no coordinates.** If the send button cannot be found, the send fails; it never falls back to Return. The open step clicks a named element, not a point.
+- **One room opens at a time.** `locate` takes an app-wide lease that its room's handshake releases (or that expires after 60 s), so another session's scroll cannot move the row between a locate and its double-click.
 - **Other people's text is left alone.** If the input box holds text this tool did not place, the command stops. Cleanup removes only text that matches what this tool put there (line endings unified, outer whitespace ignored); when a draft reads back wrong, the tool removes its own result, or records it so `clear` can.
 - **A person at the keyboard wins.** If KakaoTalk is frontmost, this window is its focused window, and there was input in the last 2 seconds — or the idle time cannot be read — the command stops.
 - **Sent means seen.** `send` succeeds only when the box emptied and a bubble with the text appeared after the pre-press position. A matching bubble that was already there never counts.

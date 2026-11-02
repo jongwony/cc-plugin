@@ -104,9 +104,12 @@ final class FakeDriver: AppDriver {
     func cgTitleCount(_ title: String) -> Int? { cg }
     func secondsSinceLastInput() -> Double? { idle }
     var captured: [(UInt32, String)] = []
-    var captureOK = true
-    func backingScale(of frame: CGRect) -> Double? { 2 }
-    func capture(windowID: UInt32, to path: String) -> Bool { captured.append((windowID, path)); return captureOK }
+    var captureResult: CaptureResult = .ok
+    var screenOK = true
+    var onScreen = true
+    func isOnScreen(_ frame: CGRect) -> Bool { onScreen }
+    func canCaptureScreen() -> Bool { screenOK }
+    func capture(windowID: UInt32, to path: String) -> CaptureResult { captured.append((windowID, path)); return captureResult }
 }
 
 final class FakeClock: Clock {

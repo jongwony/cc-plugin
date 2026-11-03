@@ -30,9 +30,10 @@ codex-run.sh -S "$thread_id" -m "$model" -r "$effort" -C "$work_dir" \
   > "$run_dir/p$pass.stdout.txt" 2> "$run_dir/p$pass.stderr.txt"
 ```
 
-Run each pass through the host's background facility with a time bound sized to the research —
-75 minutes for a deep question. A host's default limit (30 minutes, for one) can stop a pass
-mid-run, leaving no final report.
+Run each pass through the host's background facility and bound it with that facility's own time
+limit — a deep question can take over an hour, and a host's default limit (30 minutes, for one)
+can stop a pass mid-run. macOS ships no `timeout` command, so the bound comes from the facility,
+not from wrapping the command.
 
 ## Read
 
@@ -51,6 +52,7 @@ beside it where the server returns one).
 
 ## Tavily
 
-The run reaches Tavily through the server configured in `~/.codex/config.toml`; per-call settings
-belong there too. The wrapper takes no MCP overrides, which keeps the server URL and its
-credentials out of the process arguments.
+The run reaches Tavily through the MCP server codex is configured with, and whether Tavily is
+available shows in the run's own Tavily calls. The configuration and the credentials it holds are
+not part of the research or the check, so they stay unread. The wrapper takes no MCP overrides,
+which keeps the server URL and its credentials out of the process arguments.

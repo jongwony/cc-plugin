@@ -21,13 +21,14 @@ The wrapper propagates codex's exit status. The session id is the `session id: <
 
 ## Continue
 
-The goal turn and every continuation resume that session by id. The goal turn follows the
+The goal turn and every continuation resume that session by id, each from its own message file in
+the thread's run directory. The goal turn follows the
 codex-plus `codex` skill's Goal Requests, with the goal condition as its intention, inquire named
 without its `$`, and a line that no person answers inside the run.
 
 ```bash
 codex-run.sh -S "$thread_id" -m "$model" -r "$effort" -C "$work_dir" \
-  -o "$run_dir/p$pass.last.txt" "$run_dir/message.txt" \
+  -o "$run_dir/p$pass.last.txt" "$run_dir/message-$pass.txt" \
   > "$run_dir/p$pass.stdout.txt" 2> "$run_dir/p$pass.stderr.txt"
 ```
 

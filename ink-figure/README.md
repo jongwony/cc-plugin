@@ -2,10 +2,13 @@
 
 A Claude Code output style and a mod that draws the figures it writes.
 
-- **Style** — *Epistemic Ink*, picked as the session's output style. It formats
-  replies with Ink's phase headers, gates and insights, and decides when a reply
-  needs a picture at all. It also flags, with a `↻` line, a departure that recurs
-  against the same clause of an extension the user maintains.
+- **Style** — *Epistemic Ink*, picked as the session's output style. It renders
+  what the epistemic protocols present — gate blocks, convergence blocks, the
+  markers a reader checks a judgment with — and decides when a reply needs a
+  picture at all. The protocols' `SKILL.md` contracts decide what a round carries;
+  the style decides only how it reaches the screen. It also flags, with a `↻` line,
+  a defect in the text of an extension the user maintains, once its admission
+  checks pass.
 - **Figure mod** — draws, in the terminal transcript, the figures a reply cannot
   write as text, right where the fence was.
 

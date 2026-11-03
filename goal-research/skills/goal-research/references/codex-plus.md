@@ -1,10 +1,10 @@
 # Codex Invocation through codex-plus
 
-One realization of the Phase 2 handoff on codex. It is platform realization, not contract: the
-contract stays in `SKILL.md`. The run goes through the codex-plus plugin — its `codex` skill's
-wrapper, `codex-run.sh`, launches and resumes the session, and the session's own rollout file is
-the tool record. Follow that skill's delegation rules for running the wrapper; the options below
-are the wrapper's, checked against `codex-run.sh -h`.
+One realization of the handoff on codex. It is platform realization, not contract: the contract
+stays in `SKILL.md`. The run goes through the codex-plus plugin — its `codex` skill's wrapper,
+`codex-run.sh`, launches and resumes the session, and the session's own rollout file is the tool
+record. Follow that skill's delegation rules for running the wrapper; the options below are the
+wrapper's, checked against `codex-run.sh -h`.
 
 ## Launch
 
@@ -22,7 +22,7 @@ prints to stderr.
 
 ## Continue
 
-The goal turn and every continuation resume that session by id:
+The goal turn, every continuation, and a correction from the person resume that session by id:
 
 ```bash
 codex-run.sh -S "$thread_id" -m "$model" -r "$effort" -C "$work_dir" \
@@ -37,8 +37,8 @@ not from wrapping the command.
 
 ## Read
 
-A pass's report is its `-o` file. The run's tool record is the session's rollout file, which
-every resumed pass appends to, found by session id:
+A pass's return is its `-o` file. The tool record the verifier reads is the session's rollout
+file, which every resumed pass appends to, found by session id:
 
 ```bash
 rollout=$(find "${CODEX_HOME:-$HOME/.codex}/sessions" -name "rollout-*-$thread_id.jsonl")
@@ -48,7 +48,8 @@ jq -c 'select(.type == "event_msg" and .payload.type == "item_completed"
 
 Each MCP call carries `server`, `tool`, `status`, `error`, and `result`; `result.isError` is the
 error flag, and the Tavily response is the text in `result.content[]` (with `structuredContent`
-beside it where the server returns one).
+beside it where the server returns one). A run the session spawns writes a rollout of its own
+under the same `sessions` directory.
 
 ## Tavily
 

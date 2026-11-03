@@ -51,7 +51,7 @@ The brief, with `{inquire}` set to `/inquire` for `claude` and `$inquire` for `c
 - the read-back as shown — the question quoted, how it is read, what it is for and what should come back;
 - the session ground the run cannot reach on its own, and entry points — paths, ids, links — to what it can;
 - that goal-research is already running in that session, delegated from here, so the run does not invoke it again;
-- the workflow: invoke `{inquire}` — the skill call itself — on the question, collecting external sources through Tavily search and extract; cite each source by its URL, and open the primary page a claim rests on with Tavily extract; read `${CLAUDE_PLUGIN_ROOT}/skills/goal-research/references/sources-academic.md`, `${CLAUDE_PLUGIN_ROOT}/skills/goal-research/references/sources-community.md`, or both, as the question and its use call for;
+- the workflow: invoke `{inquire}` — the skill call itself — on the question, collecting external sources through Tavily search and extract; cite each source by its URL; read `${CLAUDE_PLUGIN_ROOT}/skills/goal-research/references/sources-academic.md`, `${CLAUDE_PLUGIN_ROOT}/skills/goal-research/references/sources-community.md`, or both, as the question and its use call for;
 - that the run researches and reports only, changing no repository or external system;
 - that no person answers inside the run;
 - what to return: a compact result in the person's language, shaped by the stated use — what stands and on which sources, the weakest link the conclusions lean on, and each item left open with its question, how far it reached, and whose it is. The full working record stays in the run's own transcript.

@@ -16,7 +16,7 @@ codex-run.sh -m "$model" -r "$effort" -C "$work_dir" -o "$run_dir/p0.last.txt" \
   "$run_dir/brief.txt" > "$run_dir/p0.stdout.txt" 2> "$run_dir/p0.stderr.txt"
 ```
 
-The wrapper propagates codex's exit status. The session id is the `session id: <uuid>` line in
+The session id is the `session id: <uuid>` line in
 `p0.stderr.txt`.
 
 ## Continue

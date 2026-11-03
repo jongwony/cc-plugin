@@ -1,8 +1,9 @@
 ---
 name: motion
-description: "Someone wants a short motion-graphics video made from code but cannot yet say what it should be: /motion shows, in plain words, how it read the request — where and for whom the video is used, what it shows and how — builds it right away, lets them see what words cannot settle, renders an mp4, and shows them that mp4 to approve or change."
+description: "Someone wants a short motion-graphics video made from code but cannot yet say what it should be: /motion shows, in plain words through /elicit, how it read the request — where and for whom the video is used, what it shows and how — builds it right away without waiting on an answer, lets them see what words cannot settle, renders an mp4, and shows them that mp4 to approve or change."
 argument-hint: "[what the video is for, in any words]"
 skills:
+  - euporia:elicit
   - hypotyposis:sketch
   - proplasma:preview
   - horismos:bound
@@ -12,7 +13,7 @@ skills:
 
 Invoke with `/motion <what the video is for>`. The person may know nothing about motion graphics or about writing prompts; the skill is written for that person.
 
-**Composition**: `/sketch`, `/preview`, and `/bound` each carry their own contract and enter only where their deficit shows in this run. This skill supplies what is particular to a code-rendered video: how a request is read before anything is built, the decisions a video turns on, and how a page drawn from time becomes something to watch and then an mp4.
+**Composition**: `/elicit` carries the contract for what the person's intent turns on; its run stays open beside the build rather than ahead of it. `/sketch`, `/preview`, and `/bound` each carry their own contract and enter only where their deficit shows in this run. This skill supplies what is particular to a code-rendered video: how a request is read before anything is built, the decisions a video turns on, and how a page drawn from time becomes something to watch and then an mp4.
 
 Respond in the person's language.
 
@@ -21,15 +22,16 @@ Respond in the person's language.
 | Dependency | Install | Purpose |
 |------------|---------|---------|
 | epistemic-protocols marketplace | `/plugin marketplace add jongwony/epistemic-protocols` | Where the plugins below come from |
+| euporia plugin | `/plugin install euporia@epistemic-protocols` | `/elicit` |
 | hypotyposis plugin | `/plugin install hypotyposis@epistemic-protocols` | `/sketch` |
 | proplasma plugin | `/plugin install proplasma@epistemic-protocols` | `/preview` |
 | horismos plugin | `/plugin install horismos@epistemic-protocols` | `/bound` |
 
 ## Reading the request
 
-Carry the person's words about the video verbatim; invoked without them, ask once what the video is for.
+Carry the person's words about the video verbatim as the seed; invoked without them, ask once what the video is for.
 
-Before building, show in plain words how the request was read: where and for whom the video is used, what it shows and how it shows it, and what that reading rests on — the person's words quoted, and anything the builder supplied marked as its own. Then name, in one line, the value each remaining decision below takes. Close with one plain sentence on what happens next: the build starts now, a wrong reading is theirs to stop with an interrupt, and the mp4 comes back to watch and approve or change. Then build, without waiting for an answer.
+Invoke `/elicit` on the seed — the skill call itself. Its first surface is the reading of the request: where and for whom the video is used, what it shows and how it shows it, and what that reading rests on. The decisions below that the reading leaves open follow it briefly, each as an open question carrying the value the build takes for it. Close with one plain sentence on what happens next: the build starts now, a wrong reading is theirs to stop with an interrupt, and the mp4 comes back to watch and approve or change. Then build, without waiting for the run to close; what the person says from then on, about the mp4 included, is the `/elicit` run's to read.
 
 ## What the video turns on
 
@@ -65,4 +67,4 @@ Where `/sketch` ran, the page continues from the version the person took, never 
 
 Capture every frame of the page at the settled smoothness and encode the mp4 with its sound, however the builder sees fit; it lands beside the page and runs `DURATION`. Show the person that mp4. Beside it, show stills from it at the moments that carry the reading, each with its time, and say what the builder chose on its own: each value the person did not give, and any warning the build or the render saw. Whether the video is what was asked is the person's judgment, made on the mp4.
 
-Then stop for the person's turn. A change goes into the page and the mp4 is rendered again; their go-ahead ends the run with the file, its length and size.
+Then stop for the person's turn. A change goes into the page and the mp4 is rendered again; their go-ahead ends this skill's run with the file, its length and size, and closes the `/elicit` run only where their words say the intent is aligned enough.

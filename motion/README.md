@@ -1,10 +1,10 @@
 # motion
 
-For someone who wants a short motion-graphics video but can't yet say what it should be, and who may know nothing about motion design or prompting. `/motion` shows, in plain words, how it read the request — where and for whom the video is used, what it shows and how — names the values it takes for everything else, and starts building at once; a wrong reading is stopped with an interrupt. Where words run out, it lets the person see drafts or contrasting directions instead. It builds the video as a web page drawn from code, renders it as an mp4, and shows them that mp4 to approve or change.
+For someone who wants a short motion-graphics video but can't yet say what it should be, and who may know nothing about motion design or prompting. `/motion` shows, in plain words through `/elicit`, how it read the request — where and for whom the video is used, what it shows and how — puts what the reading leaves open as questions carrying the values it takes, and starts building at once; a wrong reading is stopped with an interrupt. Where words run out, it lets the person see drafts or contrasting directions instead. It builds the video as a web page drawn from code, renders it as an mp4, and shows them that mp4 to approve or change.
 
 ```mermaid
 flowchart LR
-  A[what the video is for] --> B["reading: where, for whom, what and how; other values in one line"]
+  A[what the video is for] --> B["/elicit: the reading — where, for whom, what and how; open questions with the values taken"]
   B -. wrong reading: interrupt .-> A
   B --> P[page drawn from time]
   B -. look or feel can't be said .-> S["/sketch: moving drafts"]
@@ -19,12 +19,13 @@ flowchart LR
   W -- go --> E[done]
 ```
 
-The dotted paths are taken only where the run shows that need. The build does not wait on the reading; the person's checkpoint is the mp4.
+The dotted paths are taken only where the run shows that need. The build does not wait for the `/elicit` run to close: it stays open beside the build, and the person's checkpoint is the mp4.
 
 ## Composition
 
 | Protocol | Enters when |
 |---|---|
+| `/elicit` | Always: it opens the run with the reading of the request, and the build does not wait for it to close |
 | `/sketch` | The look or the movement would be recognized on sight but cannot be described |
 | `/preview` | The person must commit to one of several directions they cannot judge from descriptions |
 | `/bound` | Who settles an open decision, or how far an install, download, or licensed asset may go, is unsettled |

@@ -8,22 +8,23 @@ wrapper's, checked against `codex-run.sh -h`.
 
 ## Launch
 
-Write the brief to a file in a run directory of this session's own, and launch with the working directory every later pass will use. Leave the
-sandbox at the wrapper's default: it is the mode with network access.
+Write the brief to a file in a run directory of this session's own, and launch with the working
+directory every later pass will use.
 
 ```bash
 codex-run.sh -m "$model" -r "$effort" -C "$work_dir" -o "$run_dir/p0.last.txt" \
   "$run_dir/brief.txt" > "$run_dir/p0.stdout.txt" 2> "$run_dir/p0.stderr.txt"
 ```
 
-The wrapper propagates codex's exit status.
+The wrapper propagates codex's exit status. The session id is the `session id: <uuid>` line in
+`p0.stderr.txt`.
 
 ## Continue
 
-The goal turn, every continuation, and a correction from the person resume that session by id.
-The goal turn's message is `$define-goal` with the goal condition as its intention — the route the
-codex-plus `codex` skill gives under Goal Requests; codex then sets the objective with its own goal
-tools.
+The goal turn, sent once per thread, and every continuation resume that session by id; a
+correction starts a new thread instead (`SKILL.md` Phase 1). The goal turn's message is
+`$define-goal` with the goal condition as its intention — the route the codex-plus `codex` skill
+gives under Goal Requests.
 
 ```bash
 codex-run.sh -S "$thread_id" -m "$model" -r "$effort" -C "$work_dir" \
@@ -31,10 +32,8 @@ codex-run.sh -S "$thread_id" -m "$model" -r "$effort" -C "$work_dir" \
   > "$run_dir/p$pass.stdout.txt" 2> "$run_dir/p$pass.stderr.txt"
 ```
 
-Run each pass through the host's background facility and bound it with that facility's own time
-limit — a deep question can take over an hour, and a host's default limit (30 minutes, for one)
-can stop a pass mid-run. macOS ships no `timeout` command, so the bound comes from the facility,
-not from wrapping the command.
+Run each pass through the host's background facility, which has no time limit of its own; a pass
+that has stopped progressing is this session's to stop.
 
 ## Read
 
@@ -50,14 +49,9 @@ jq -c 'select(.type == "event_msg" and .payload.type == "item_completed"
 Each MCP call carries `server`, `tool`, `status`, `error`, and `result`; `result.isError` is the
 error flag, and the Tavily response is the text in `result.content[]` (with `structuredContent`
 beside it where the server returns one). A run the session spawns writes a rollout of its own
-under the same `sessions` directory, whose first line names the parent thread:
-
-```bash
-for f in $(find "${CODEX_HOME:-$HOME/.codex}/sessions" -name 'rollout-*.jsonl'); do
-  head -1 "$f" | jq -e --arg t "$thread_id" \
-    '.payload.source.subagent.thread_spawn.parent_thread_id? == $t' > /dev/null 2>&1 && echo "$f"
-done
-```
+under the same `sessions` directory; its first line's
+`payload.source.subagent.thread_spawn.parent_thread_id` names the spawning thread, and runs those
+spawned link the same way.
 
 ## Tavily
 

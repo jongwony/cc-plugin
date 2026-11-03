@@ -8,8 +8,7 @@ wrapper's, checked against `codex-run.sh -h`.
 
 ## Launch
 
-Pick the model and effort for the question's depth, write the brief to a file in a run directory
-of this session's own, and launch with the working directory every later pass will use. Leave the
+Write the brief to a file in a run directory of this session's own, and launch with the working directory every later pass will use. Leave the
 sandbox at the wrapper's default: it is the mode with network access.
 
 ```bash
@@ -17,12 +16,14 @@ codex-run.sh -m "$model" -r "$effort" -C "$work_dir" -o "$run_dir/p0.last.txt" \
   "$run_dir/brief.txt" > "$run_dir/p0.stdout.txt" 2> "$run_dir/p0.stderr.txt"
 ```
 
-The wrapper propagates codex's exit status. The session id is the `session id: <uuid>` line codex
-prints to stderr.
+The wrapper propagates codex's exit status.
 
 ## Continue
 
-The goal turn, every continuation, and a correction from the person resume that session by id:
+The goal turn, every continuation, and a correction from the person resume that session by id.
+The goal turn's message is `$define-goal` with the goal condition as its intention — the route the
+codex-plus `codex` skill gives under Goal Requests; codex then sets the objective with its own goal
+tools.
 
 ```bash
 codex-run.sh -S "$thread_id" -m "$model" -r "$effort" -C "$work_dir" \
@@ -49,7 +50,14 @@ jq -c 'select(.type == "event_msg" and .payload.type == "item_completed"
 Each MCP call carries `server`, `tool`, `status`, `error`, and `result`; `result.isError` is the
 error flag, and the Tavily response is the text in `result.content[]` (with `structuredContent`
 beside it where the server returns one). A run the session spawns writes a rollout of its own
-under the same `sessions` directory.
+under the same `sessions` directory, whose first line names the parent thread:
+
+```bash
+for f in $(find "${CODEX_HOME:-$HOME/.codex}/sessions" -name 'rollout-*.jsonl'); do
+  head -1 "$f" | jq -e --arg t "$thread_id" \
+    '.payload.source.subagent.thread_spawn.parent_thread_id? == $t' > /dev/null 2>&1 && echo "$f"
+done
+```
 
 ## Tavily
 

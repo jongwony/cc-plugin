@@ -37,13 +37,13 @@ Before launching, show the person once, in their language:
 - what the research is for and what should come back, as far as the context says;
 - the runner.
 
-Then launch without waiting for an answer. A correction that arrives later goes to the same run as a continuation (Phase 3), carrying the corrected intent and the goal condition restated to match it. Invoked with no question, ask once for it.
+Then launch without waiting for an answer. A correction that arrives later goes to the same run as a continuation (Phase 3) once any pass in flight has ended, carrying the corrected intent and the goal condition restated to match it; for codex, a correction that changes the use also sends the goal turn again with the corrected condition. Invoked with no question, ask once for it.
 
 ## Phase 2: Brief and Launch
 
-**Goal condition**, which the run is held to and Phase 3 judges against, with `{use}` set to what the read-back stated:
+**Goal condition**, which the run is held to and Phase 3 judges against, with `{use}` set to what the read-back stated, or to the question itself where the context states no use:
 
-> `{inquire}`'s collection on the research question has reached what Tavily and the sources it leads to can reach, toward {use}. Each claim the result rests on cites a source the run's own Tavily calls retrieved, or returns open with how far it reached and what would settle it; what only the person can settle is marked as theirs.
+> `{inquire}`'s collection on the research question has reached what Tavily and the sources it leads to can reach, toward {use}. Each claim the result rests on cites a source the run's own Tavily calls retrieved, rests on session ground marked as such, or returns open with how far it reached and what would settle it; what only the person can settle is marked as theirs.
 
 The brief, with `{inquire}` set to `/inquire` for `claude` and `$inquire` for `codex`, carries:
 
@@ -51,25 +51,25 @@ The brief, with `{inquire}` set to `/inquire` for `claude` and `$inquire` for `c
 - the research question as the read-back quoted it, and the stated use;
 - the session ground the run cannot reach on its own, and entry points — paths, ids, links — to what it can;
 - that goal-research is already running in that session, delegated from here, so the run does not invoke it again;
-- the workflow: invoke `{inquire}` — the skill call itself — on the question, collecting through Tavily search and extract; cite each source by its URL, and open the primary page a claim rests on; read `references/sources-academic.md`, `references/sources-community.md`, or both, as the question and its use call for;
-- that no person answers inside the run, so what only the person can settle returns open as theirs;
+- the workflow: invoke `{inquire}` — the skill call itself — on the question, collecting external sources through Tavily search and extract; cite each source by its URL, and open the primary page a claim rests on with Tavily extract; read `${CLAUDE_PLUGIN_ROOT}/skills/goal-research/references/sources-academic.md`, `${CLAUDE_PLUGIN_ROOT}/skills/goal-research/references/sources-community.md`, or both, as the question and its use call for;
+- that no person answers inside the run;
 - what to return: a compact result shaped by the stated use — what stands and on which sources, the weakest link the conclusions lean on, and each item left open with its question, how far it reached, and whose it is. The full working record stays in the run's own transcript.
 
-Launch in the background, as a run this session can continue and whose transcript a verifier can read: a Claude subagent by default, or a Codex session through codex-plus when `codex` is designated ([invocation](references/codex-plus.md)). The goal turn follows the launch. For codex it is `/goal {goal condition}`, sent alone as its own turn, since the command reads everything after it as the objective. A Claude subagent receives no slash command through a message, so every continuation to it restates the goal condition in its text instead. A runner that cannot be launched is reported with what is missing, and the skill stops there.
+Launch in the background, as a run this session can continue and whose transcript a verifier can read: a Claude subagent by default, or a Codex session through codex-plus when `codex` is designated ([invocation](references/codex-plus.md)). For codex, the goal turn follows the launch as its own turn, setting the goal condition through codex-plus's goal route ([invocation](references/codex-plus.md)). A Claude subagent gets no separate goal turn: it receives no slash command through a message, so every continuation to it restates the goal condition in its text. A runner that cannot be launched is reported with what is missing, and the skill stops there.
 
 ## Phase 3: Check and Continue
 
-After each pass whose substantive return changed, a verifier — a fresh context, neither this session nor the run — checks the return against the run's tool record. Give it the return it checks and the record's location:
+After each pass whose return or retrievals changed, a verifier — a fresh context, neither this session nor the run — checks the return against the run's tool record. Give it the return it checks and the record's location:
 
-- Claude subagent: `~/.claude/projects/<project>/<session>/subagents/agent-<id>.jsonl`, with the tool outputs persisted beside it;
+- Claude subagent: `~/.claude/projects/<project>/<session>/subagents/agent-<id>.jsonl` with the persisted tool outputs it points to, and the transcript of any agent it spawned — that agent's `meta.json` names it as `parentAgentId`;
 - codex: the session's rollout file across every pass, and the rollout of any run it spawned ([invocation](references/codex-plus.md)).
 
-The verifier reads each claim of the return against what the run's Tavily search and extract calls returned, and hands back only a verdict and the discrepancies, each marked as its reading: a cited source the record does not hold; a source retrieved that does not support the claim as the return words it, a qualification lost in compression included; a claim with no citation; a Tavily call attempted that did not succeed; a record it could not read, reported as unread rather than as absent. The same verifier may be continued for later passes.
+The verifier reads each claim of the return against what the run's Tavily search and extract calls returned, and hands back only a verdict and the discrepancies, each marked as its reading: a cited source the record does not hold; a source retrieved that does not support the claim as the return words it, a qualification lost in compression included; a claim with no citation; a failed Tavily call a claim leans on; a record it could not read, reported as unread rather than as absent. A claim marked as resting on session ground is outside this check. The same verifier may be continued for later passes.
 
-Continue the same run while it is moving toward the goal condition, naming the discrepancies and what the condition still lacks. Stop when `{inquire}`'s collection has ended and no discrepancy stands, when the run has stopped moving toward the condition, or when execution fails — a pass that cannot start, a record that cannot be reached — and report a failure with its cause. A failure starts no new run and does not fall back to the other runner.
+Continue the same run while it is moving toward the goal condition, naming the discrepancies and what the condition still lacks, and asking for the compact result again, whole and updated. Stop when the goal condition holds with no discrepancy standing, when the run has stopped moving toward the condition, or when execution fails — a pass that cannot start, a pass that ends without a return (a non-zero exit, an abort, the time limit), a record that cannot be reached — and report a failure with its cause. A failure starts no new run and does not fall back to the other runner.
 
 ## Phase 4: Return
 
-Give the person, in their language: the compact result as the stated use shapes it — what the research established and on which sources, the weakest link, and each item left open with its question, how far it reached, and whose it is; one line carrying the verifier's verdict; and the paths of the run's and the verifier's transcripts. The full record is opened when the person asks for it.
+Give the person, in their language: the compact result as the stated use shapes it — what the research established and on which sources, the weakest link, and each item left open with its question, how far it reached, and whose it is; one line carrying the verifier's verdict, the passes run, and why the loop stopped; and the paths of the run's and the verifier's transcripts. The full record is opened when the person asks for it.
 
-What follows the return — integrating the result into the work at hand, follow-up questions, settling what is the person's — is this session's, outside the skill.
+What follows the return — integrating the result into the work at hand, follow-up questions, and what the person settles — happens in this session, outside the skill.

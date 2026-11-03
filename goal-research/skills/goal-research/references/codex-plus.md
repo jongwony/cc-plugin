@@ -21,10 +21,8 @@ The session id is the `session id: <uuid>` line in
 
 ## Continue
 
-The goal turn and every continuation each send their own message file in the thread's run
-directory. The goal turn follows the
-codex-plus `codex` skill's Goal Requests, with the goal condition as its intention and inquire named
-without its `$`.
+The goal turn follows the codex-plus `codex` skill's Goal Requests, with the goal condition as its
+intention and inquire named without its `$`.
 
 ```bash
 codex-run.sh -S "$thread_id" -m "$model" -r "$effort" -C "$work_dir" \

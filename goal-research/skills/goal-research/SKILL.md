@@ -60,7 +60,7 @@ Launch in the background, as a run this session can continue and whose transcrip
 
 ## Phase 3: Check and Continue
 
-After each pass that returns a whole result, a verifier — a fresh context, neither this session nor the run — checks the result. This session gives it the whole compact result, the paths of the brief and of each continuation message, and the run's record:
+After each pass that returns a whole result, a verifier — a fresh context, neither this session nor the run — checks the result. This session gives it the whole compact result and the run's record, which carries the brief and every continuation:
 
 - Claude subagent: `${CLAUDE_CONFIG_DIR:-~/.claude}/projects/<the session's project>/<session>/subagents/agent-<id>.jsonl`, and the transcripts of agents it spawned — each `agent-<id>.meta.json` names its parent as `parentAgentId`;
 - codex: the rollout of every pass and of each earlier thread, and the rollouts of runs it spawned ([invocation](references/codex-plus.md)).

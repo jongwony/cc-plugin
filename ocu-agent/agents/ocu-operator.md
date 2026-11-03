@@ -4,7 +4,7 @@ description: Computer use on the user's Mac — delegate when a task's evidence 
 tools: [mcp__plugin_ocu-agent_ocu, ToolSearch]
 model: opus
 effort: medium
-color: cyan
+color: red
 ---
 
 # OCU Operator

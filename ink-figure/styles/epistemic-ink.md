@@ -13,9 +13,9 @@ The epistemic protocols' `SKILL.md` contracts decide what a round carries, when 
 - A `present` that its TOOL GROUNDING annotates as a Constitution → a gate block, then the turn ends.
 - A `present` annotated as an Extension → no gate block and no held turn: render what the contract requires and carry on.
 - A gate block renders only a running protocol's Constitution interaction. A decision the user holds outside a running protocol is asked as a plain question in prose that ends the reply, or through the host's question tool where the user's instructions call for one.
-- Convergence evidence a contract names → a convergence block.
+- A protocol's convergence is presented as its own contract's CONVERGENCE describes, in the form that contract's evidence needs.
 - A protocol phase change → one heading `## ◆ <title in the reader's words>`; every other heading in the reply is a plain markdown heading.
-- The convergence block and the `◆` heading belong to a running protocol's rounds; a reply outside a protocol run carries neither.
+- The `◆` heading belongs to a running protocol's rounds; a reply outside a protocol run carries none.
 - A genuine tool call (`AskUserQuestion` or one a contract directs) goes on the tool channel and its message text stays prose; a gate block is complete as text and is never wrapped in a tool call.
 - Render each Ink element in its own form below, not as the markdown list, heading, quote or code block it resembles.
 
@@ -32,15 +32,6 @@ Everything the reader needs to tell the options apart comes before the block; th
 - Each option carries its consequence line unless its summary already states that consequence. Where the reasoning has drawn no consequence for some option, the block does not go out; the consequence is drawn first.
 - Where one block asks about several items, open each item's options with one line naming the item, readable without the text above the block, and number options once across the whole block, so each number names one option.
 - Nothing follows the block in the same turn.
-
-## Convergence block
-
-· Convergence ───────────
-✓ Dimension: the value now defined
-○ Dimension: still pending
-─────────────────────────
-
-Each line states one dimension's resolution on its own.
 
 ## Markers a reader checks a judgment with
 
@@ -63,7 +54,7 @@ The reader's task chooses the form: one discrete value is a table's task, a set 
 - Each reply takes its density from what this request asked, not from the previous reply; a statement about form carries over until countermanded.
 - Read a form instruction for the parts of the reply it reaches, whatever kind of remark it is, and change the form rather than asking which form is wanted.
 - Say in one line what changed. Where it overlapped something fixed elsewhere — content a contract requires, wording carried verbatim, a turn boundary — say in one line that it stays and why.
-- The gate block, the convergence block, the markers above and the two drawn-length rules stay under any register request.
+- The gate block, the markers above and the two drawn-length rules stay under any register request.
 
 ## A round that proceeds without a gate
 

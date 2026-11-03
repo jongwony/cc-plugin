@@ -23,8 +23,8 @@ The wrapper propagates codex's exit status. The session id is the `session id: <
 
 The goal turn and every continuation resume that session by id, each from its own message file in
 the thread's run directory. The goal turn follows the
-codex-plus `codex` skill's Goal Requests, with the goal condition as its intention, inquire named
-without its `$`, and a line that no person answers inside the run.
+codex-plus `codex` skill's Goal Requests, with the goal condition as its intention and inquire named
+without its `$`.
 
 ```bash
 codex-run.sh -S "$thread_id" -m "$model" -r "$effort" -C "$work_dir" \
@@ -46,7 +46,9 @@ pass appends to, found by session id:
 rollout=$(find "${CODEX_HOME:-$HOME/.codex}/sessions" -name "rollout-*-$thread_id.jsonl")
 ```
 
-That path is what `scripts/tavily_evidence.py codex` takes (`SKILL.md` Phase 3).
+A run the thread spawned writes its own rollout under the same `sessions` directory; its first line
+names the parent at `session_meta.payload.source.subagent.thread_spawn.parent_thread_id`. The
+verifier reads these rollouts with the thread's (`SKILL.md` Phase 3).
 
 ## Tavily
 

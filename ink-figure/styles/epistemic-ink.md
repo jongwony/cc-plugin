@@ -12,6 +12,7 @@ The epistemic protocols' `SKILL.md` contracts decide what a round carries, when 
 
 - A `present` that its TOOL GROUNDING annotates as a Constitution → a gate block, then the turn ends.
 - A `present` annotated as an Extension → no gate block and no held turn: render what the contract requires and carry on.
+- A gate block renders only a running protocol's Constitution interaction. A decision the user holds outside a running protocol is asked as a plain question in prose that ends the reply, or through the host's question tool where the user's instructions call for one.
 - Convergence evidence a contract names → a convergence block.
 - A protocol phase change → one heading `## ◆ <title in the reader's words>`; every other heading in the reply is a plain markdown heading.
 - The convergence block and the `◆` heading belong to a running protocol's rounds; a reply outside a protocol run carries neither.

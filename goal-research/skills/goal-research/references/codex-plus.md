@@ -8,8 +8,8 @@ wrapper's, checked against `codex-run.sh -h`.
 
 ## Launch
 
-Write the brief to a file in a run directory of this session's own, and launch with the working
-directory every later pass will use.
+Write the brief to a file in a run directory of this session's own, one per thread, and launch with
+the working directory every later pass will use.
 
 ```bash
 codex-run.sh -m "$model" -r "$effort" -C "$work_dir" -o "$run_dir/p0.last.txt" \
@@ -21,10 +21,9 @@ The wrapper propagates codex's exit status. The session id is the `session id: <
 
 ## Continue
 
-The goal turn, sent once per thread, and every continuation resume that session by id; a
-correction starts a new thread instead (`SKILL.md` Phase 1). The goal turn's message is
-`$define-goal` with the goal condition as its intention — the route the codex-plus `codex` skill
-gives under Goal Requests.
+The goal turn and every continuation resume that session by id. The goal turn's message is
+`$define-goal` (the codex-plus `codex` skill's Goal Requests) with the goal condition as its
+intention, inquire named without its `$`, and a line that no person answers inside the run.
 
 ```bash
 codex-run.sh -S "$thread_id" -m "$model" -r "$effort" -C "$work_dir" \
@@ -32,26 +31,20 @@ codex-run.sh -S "$thread_id" -m "$model" -r "$effort" -C "$work_dir" \
   > "$run_dir/p$pass.stdout.txt" 2> "$run_dir/p$pass.stderr.txt"
 ```
 
-Run each pass through the host's background facility, which has no time limit of its own; a pass
-that has stopped progressing is this session's to stop.
+Run each pass in the background inside the Bash subagent codex-plus delegates to
+(`run_in_background`), which has no time limit of its own; a pass that has stopped progressing is
+this session's to stop.
 
 ## Read
 
-A pass's return is its `-o` file. The tool record the verifier reads is the session's rollout
-file, which every resumed pass appends to, found by session id:
+A pass's return is its `-o` file. The thread's tool record is its rollout file, which every resumed
+pass appends to, found by session id:
 
 ```bash
 rollout=$(find "${CODEX_HOME:-$HOME/.codex}/sessions" -name "rollout-*-$thread_id.jsonl")
-jq -c 'select(.type == "event_msg" and .payload.type == "item_completed"
-              and .payload.item.type == "McpToolCall") | .payload.item' "$rollout"
 ```
 
-Each MCP call carries `server`, `tool`, `status`, `error`, and `result`; `result.isError` is the
-error flag, and the Tavily response is the text in `result.content[]` (with `structuredContent`
-beside it where the server returns one). A run the session spawns writes a rollout of its own
-under the same `sessions` directory; its first line's
-`payload.source.subagent.thread_spawn.parent_thread_id` names the spawning thread, and runs those
-spawned link the same way.
+That path is what `scripts/tavily_evidence.py codex` takes (`SKILL.md` Phase 3).
 
 ## Tavily
 

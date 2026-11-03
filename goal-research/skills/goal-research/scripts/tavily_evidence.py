@@ -18,10 +18,11 @@ thread's record of the same runner kind. Prints JSON:
              nor failed as far as the script can tell; an undecoded Tavily payload also carries
              its call's fields
   unread     each record, metadata file, saved payload or folder it could not open or list,
-             as `path` and `error`
+             as `path`, `error` and `role` — `record` for a record named on the command line,
+             `evidence` for anything found while following them
 
 A file or folder the script cannot read lands in `unread`; a line or header it cannot parse
-lands in `undecoded`. Exits non-zero when `unread` is not empty.
+lands in `undecoded`. Exits 2 when a record named on the command line cannot be read.
 """
 import json
 import os
@@ -298,9 +299,12 @@ def main(argv):
             read_claude(os.path.abspath(record), out, seen)
         else:
             read_codex(os.path.abspath(record), out, seen, children)
+    named = {os.path.abspath(r) for r in records}
+    for entry in out["unread"]:
+        entry["role"] = "record" if entry["path"] in named else "evidence"
     json.dump(out, sys.stdout, ensure_ascii=False, indent=1)
     sys.stdout.write("\n")
-    if out["unread"]:
+    if any(entry["role"] == "record" for entry in out["unread"]):
         sys.exit(2)
 
 

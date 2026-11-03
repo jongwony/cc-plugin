@@ -38,7 +38,7 @@ thread's run directory; the pass's session id stays in its stderr file.
 
 ## Read
 
-A pass's return is its `-o` file. The thread's tool record is its rollout file, which every resumed
+The thread's tool record is its rollout file, which every resumed
 pass appends to, found by session id:
 
 ```bash

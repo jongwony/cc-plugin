@@ -71,6 +71,6 @@ Continue the same run while it is moving toward the goal condition, naming the d
 
 ## Phase 4: Return
 
-Give the person the compact result as the brief shapes it (Phase 2), with each claim a discrepancy still stands on shown beside that discrepancy rather than among what was established; one line carrying the verifier's verdict, the passes run, and why the loop stopped; and the paths of the run's and the verifier's transcripts. The full record is opened when the person asks for it.
+Give the person the run's result as it returned it, shaped by the brief (Phase 2) — its open items with how far each reached and whose it is, and its detections, not a summary of them; how it is shown is this session's judgment. A claim a discrepancy still stands on is shown beside that discrepancy rather than among what was established. With the result go one line carrying the verifier's verdict, the passes run, and why the loop stopped; and the paths of the run's and the verifier's transcripts. The full record is opened when the person asks for it.
 
 What follows the return — integrating the result into the work at hand, follow-up questions, and what the person settles — happens in this session, outside the skill.

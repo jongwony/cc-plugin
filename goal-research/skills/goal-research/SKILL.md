@@ -48,7 +48,7 @@ Then launch without waiting for an answer. A correction that arrives later stops
 The brief, with `{inquire}` set to `/inquire` for `claude` and `$inquire` for `codex`, carries:
 
 - the goal condition;
-- the research question as the read-back quoted it, and the stated use;
+- the read-back as shown — the question quoted, how it is read, what it is for and what should come back;
 - the session ground the run cannot reach on its own, and entry points — paths, ids, links — to what it can;
 - that goal-research is already running in that session, delegated from here, so the run does not invoke it again;
 - the workflow: invoke `{inquire}` — the skill call itself — on the question, collecting external sources through Tavily search and extract; cite each source by its URL, and open the primary page a claim rests on with Tavily extract; read `${CLAUDE_PLUGIN_ROOT}/skills/goal-research/references/sources-academic.md`, `${CLAUDE_PLUGIN_ROOT}/skills/goal-research/references/sources-community.md`, or both, as the question and its use call for;

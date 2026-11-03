@@ -21,9 +21,9 @@ The wrapper propagates codex's exit status. The session id is the `session id: <
 
 ## Continue
 
-The goal turn and every continuation resume that session by id. The goal turn's message is
-`$define-goal` (the codex-plus `codex` skill's Goal Requests) with the goal condition as its
-intention, inquire named without its `$`, and a line that no person answers inside the run.
+The goal turn and every continuation resume that session by id. The goal turn follows the
+codex-plus `codex` skill's Goal Requests, with the goal condition as its intention, inquire named
+without its `$`, and a line that no person answers inside the run.
 
 ```bash
 codex-run.sh -S "$thread_id" -m "$model" -r "$effort" -C "$work_dir" \
@@ -33,7 +33,8 @@ codex-run.sh -S "$thread_id" -m "$model" -r "$effort" -C "$work_dir" \
 
 Run each pass in the background inside the Bash subagent codex-plus delegates to
 (`run_in_background`), which has no time limit of its own; a pass that has stopped progressing is
-this session's to stop.
+this session's to stop. Stopping a pass in flight ends the `codex` process whose arguments carry that
+thread's run directory; the pass's session id stays in its stderr file.
 
 ## Read
 

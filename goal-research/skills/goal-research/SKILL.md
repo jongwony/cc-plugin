@@ -39,7 +39,7 @@ Before launching, show the person once, in their language:
 - what the research is for and what should come back, as far as the context says;
 - the runner.
 
-Then launch without waiting for an answer. A correction that arrives later stops any pass in flight. For a Claude subagent it then goes to the same run as a continuation (Phase 3), carrying the corrected intent and the goal condition restated to match it. For codex, a correction, or research resumed after it ended, starts a new thread whose brief carries the corrected intent and the rollout path of every earlier thread. Invoked with no question, ask once for it.
+Then launch without waiting for an answer. A correction that arrives later stops any pass in flight. For a Claude subagent it then goes to the same run as a continuation (Phase 3), carrying the corrected intent and the goal condition restated to match it. For codex, a correction, or research resumed after the loop has stopped, starts a new thread whose brief carries the corrected intent and the rollout path of every earlier thread. Invoked with no question, ask once for it.
 
 ## Phase 2: Brief and Launch
 
@@ -61,14 +61,14 @@ Launch in the background, as a run this session can continue and whose transcrip
 
 ## Phase 3: Check and Continue
 
-After each pass whose return or retrievals changed, a verifier — a fresh context, neither this session nor the run — checks the result. This session runs `${CLAUDE_PLUGIN_ROOT}/skills/goal-research/scripts/tavily_evidence.py` on the run's record and gives the verifier its output with the whole compact result:
+After each pass whose return or retrievals changed, a verifier — a fresh context, neither this session nor the run — checks the result. This session runs `${CLAUDE_PLUGIN_ROOT}/skills/goal-research/scripts/tavily_evidence.py` on the run's record and gives the verifier its output with the whole compact result and the paths of the brief and of each continuation message:
 
 - Claude subagent: `claude ${CLAUDE_CONFIG_DIR:-~/.claude}/projects/<the session's project>/<session>/subagents/agent-<id>.jsonl`;
 - codex: `codex <this thread's rollout>`, with `--also <rollout>` for each earlier thread ([invocation](references/codex-plus.md)).
 
 The script lists, for each Tavily search and extract call, the URLs it returned and those it failed, following the runs the run spawned, and lists apart each payload it could not decode with its file and line. The verifier reads every claim of the result, cited or not, against that evidence, and hands back only a verdict and the discrepancies, each marked as its reading: a cited source the evidence does not hold; a source that does not support the claim as the result words it — its scope, a qualification lost in compression; a claim with no citation; a failed call a claim leans on; a claim on session ground that the brief and continuations do not carry. It opens the record line where the list marks a payload undecoded or where a claim needs the page text, and reports what it could not read as unread rather than as absent. The same verifier may be continued for later passes.
 
-Continue the same run while it is moving toward the goal condition, naming the discrepancies and what the condition still lacks, and asking for the compact result again, whole and updated. An acknowledgement, or a reply carrying only what changed, is not a result: the latest whole result stays current. Stop when the goal condition holds with no discrepancy standing, when the run has stopped moving toward the condition, or when execution fails — a pass that cannot start, a pass that ends without a return (a non-zero exit, an abort, a pass this session stopped as stalled), a run that cannot reach Tavily, a record that cannot be reached — and report a failure with its cause. A failure starts no new run and does not fall back to the other runner.
+Continue the same run while it is moving toward the goal condition, naming the discrepancies and what the condition still lacks, and asking for the compact result again, whole and updated. An acknowledgement, or a reply carrying only what changed, is not a result: the latest whole result stays current. Stop when the goal condition holds with no discrepancy standing, when the run has stopped moving toward the condition, or when execution fails — a pass that cannot start, a pass that ends without a return (a non-zero exit, an abort, a pass this session stopped as stalled), a run that reports, after trying, that it cannot reach Tavily (a tool missing from a listing establishes nothing), a record that cannot be reached, which includes script output whose `unread` is not empty — and report a failure with its cause. A failure starts no new run and does not fall back to the other runner.
 
 ## Phase 4: Return
 

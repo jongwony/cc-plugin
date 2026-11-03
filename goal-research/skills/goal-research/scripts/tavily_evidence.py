@@ -7,7 +7,19 @@ Usage:
 
 Follows the records the run spawned (Claude: `agent-<id>.meta.json` naming `parentAgentId`;
 codex: first-line `thread_spawn.parent_thread_id`), recursively. `--also` adds an earlier
-thread's record of the same runner kind. Prints JSON: `records`, `calls`, `undecoded`.
+thread's record of the same runner kind. Prints JSON:
+
+  records    each record read: `file`, `runner`, and its `agent` or `thread`
+  calls      each decoded Tavily call: `file`, `line`, `tool`, `requested`, `error`, `results`
+             (`url`, `title`, `content_chars`), `failed_results`, `persisted` where the payload was
+             saved apart; codex calls also carry `pass`
+  undecoded  each Tavily payload or record line it could not decode: `file`, `line`, `reason`,
+             `chars`, and `urls_status_unknown` — URLs found in the raw text, neither retrieved
+             nor failed as far as the script can tell; an undecoded Tavily payload also carries
+             its call's fields
+  unread     each record, metadata file or folder it could not open
+
+Exits non-zero when `unread` is not empty.
 """
 import json
 import os
@@ -17,11 +29,11 @@ import sys
 TAVILY_TOOLS = {"tavily_search", "tavily-search", "tavily_extract", "tavily-extract"}
 SECRET_KEY = re.compile(r"(api[_-]?key|token|secret|authorization|password)", re.I)
 URL_IN_RAW = re.compile(r'"url\\*"\s*:\s*\\*"(https?://[^"\\]+)')
-PERSISTED = re.compile(r"(/\S+/tool-results/\S+?)(?=[\s\"']|$)")
+PERSISTED = re.compile(r"(/[^\s\"'\\]+/tool-results/[^\s\"'\\]+)")
 
 
 def tool_name(name):
-    tail = name.rsplit("__", 1)[-1]
+    tail = str(name or "").rsplit("__", 1)[-1]
     return tail if tail in TAVILY_TOOLS else None
 
 
@@ -34,7 +46,7 @@ def scrub(value):
 
 
 def requested(args):
-    args = args or {}
+    args = args if isinstance(args, dict) else {}
     out = {}
     for key in ("urls", "query"):
         if key in args:
@@ -79,9 +91,15 @@ def raw_text(payload):
     return payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
 
 
+def undecoded(out, file, line, reason, text):
+    out["undecoded"].append({"file": file, "line": line, "reason": reason, "chars": len(text),
+                             "urls_status_unknown": sorted(set(URL_IN_RAW.findall(text)))})
+
+
 def add_call(out, file, line, pass_no, tool, args, error, payload):
-    base = {"file": file, "line": line, "pass": pass_no, "tool": tool,
-            "requested": requested(args), "error": error}
+    base = {"file": file, "line": line, "tool": tool, "requested": requested(args), "error": error}
+    if pass_no is not None:
+        base["pass"] = pass_no
     decoded = decode(payload)
     if decoded is None:
         text = raw_text(payload)
@@ -93,8 +111,8 @@ def add_call(out, file, line, pass_no, tool, args, error, payload):
             base["persisted"] = persisted.group(1)
     if decoded is None:
         text = raw_text(payload)
-        out["undecoded"].append(dict(base, chars=len(text),
-                                     urls_seen_in_raw=sorted(set(URL_IN_RAW.findall(text)))))
+        out["undecoded"].append(dict(base, reason="Tavily payload not decoded", chars=len(text),
+                                     urls_status_unknown=sorted(set(URL_IN_RAW.findall(text)))))
         return
     results, failed = summarize(decoded)
     out["calls"].append(dict(base, results=results, failed_results=failed))
@@ -109,46 +127,58 @@ def read_claude(path, out, seen):
     seen.add(path)
     agent = os.path.basename(path)[len("agent-"):-len(".jsonl")]
     out["records"].append({"file": path, "runner": "claude", "agent": agent})
-    uses, pass_no = {}, -1
-    with open(path, encoding="utf-8") as fh:
+    uses = {}
+    with open(path, encoding="utf-8", errors="replace") as fh:
         for line_no, line in enumerate(fh, 1):
+            if not line.strip():
+                continue
             try:
                 entry = json.loads(line)
             except ValueError:
+                undecoded(out, path, line_no, "record line is not JSON", line)
                 continue
-            content = (entry.get("message") or {}).get("content")
-            if entry.get("type") == "user" and not entry.get("isMeta") and (isinstance(content, str) or (
-                    isinstance(content, list) and any(c.get("type") == "text" for c in content))):
-                pass_no += 1
+            message = entry.get("message") if isinstance(entry, dict) else None
+            content = message.get("content") if isinstance(message, dict) else None
             if not isinstance(content, list):
                 continue
             for part in content:
+                if not isinstance(part, dict):
+                    continue
                 if part.get("type") == "tool_use":
                     uses[part.get("id")] = (part.get("name", ""), part.get("input"))
-                elif part.get("type") == "tool_result" and part.get("tool_use_id") in uses:
+                elif part.get("type") == "tool_result" and isinstance(part.get("tool_use_id"), str) \
+                        and part["tool_use_id"] in uses:
                     name, args = uses[part["tool_use_id"]]
                     tool = tool_name(name)
                     if tool:
-                        add_call(out, path, line_no, max(pass_no, 0), tool, args,
+                        add_call(out, path, line_no, None, tool, args,
                                  bool(part.get("is_error")), part.get("content"))
     folder = os.path.dirname(path)
-    for meta in sorted(os.listdir(folder)):
+    try:
+        metas = sorted(os.listdir(folder))
+    except OSError:
+        out["unread"].append(folder)
+        return
+    for meta in metas:
         if meta.endswith(".meta.json"):
             try:
-                with open(os.path.join(folder, meta), encoding="utf-8") as fh:
-                    parent = json.load(fh).get("parentAgentId")
+                with open(os.path.join(folder, meta), encoding="utf-8", errors="replace") as fh:
+                    loaded = json.load(fh)
             except (OSError, ValueError):
+                out["unread"].append(os.path.join(folder, meta))
                 continue
+            parent = loaded.get("parentAgentId") if isinstance(loaded, dict) else None
             if parent == agent:
                 read_claude(os.path.join(folder, meta[:-len(".meta.json")] + ".jsonl"), out, seen)
 
 
 def codex_first_line(path):
     try:
-        with open(path, encoding="utf-8") as fh:
-            return json.loads(fh.readline())
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            first = json.loads(fh.readline())
     except (OSError, ValueError):
         return {}
+    return first if isinstance(first, dict) else {}
 
 
 def read_codex(path, out, seen, sessions):
@@ -158,17 +188,21 @@ def read_codex(path, out, seen, sessions):
         out["unread"].append(path)
         return
     seen.add(path)
-    meta = codex_first_line(path).get("payload") or {}
+    meta = codex_first_line(path).get("payload")
+    meta = meta if isinstance(meta, dict) else {}
     thread = meta.get("id") or os.path.basename(path)[-len("00000000-0000-0000-0000-000000000000.jsonl"):-6]
     out["records"].append({"file": path, "runner": "codex", "thread": thread})
     turns = []
-    with open(path, encoding="utf-8") as fh:
+    with open(path, encoding="utf-8", errors="replace") as fh:
         for line_no, line in enumerate(fh, 1):
+            if not line.strip():
+                continue
             try:
                 entry = json.loads(line)
             except ValueError:
+                undecoded(out, path, line_no, "record line is not JSON", line)
                 continue
-            payload = entry.get("payload") or {}
+            payload = entry.get("payload") if isinstance(entry, dict) else None
             turn = payload.get("turn_id") if isinstance(payload, dict) else None
             if turn and turn not in turns:
                 turns.append(turn)
@@ -176,10 +210,11 @@ def read_codex(path, out, seen, sessions):
             if not (isinstance(item, dict) and item.get("type") == "McpToolCall"
                     and payload.get("type") == "item_completed"):
                 continue
-            tool = tool_name(item.get("tool", ""))
+            tool = tool_name(item.get("tool"))
             if not tool:
                 continue
-            result = item.get("result") or {}
+            result = item.get("result")
+            result = result if isinstance(result, dict) else {}
             error = bool(item.get("error")) or bool(result.get("isError")) or item.get("status") != "completed"
             structured = result.get("structuredContent")
             add_call(out, path, line_no, turns.index(turn) if turn in turns else None, tool,
@@ -190,7 +225,8 @@ def read_codex(path, out, seen, sessions):
         for name in files:
             if name.startswith("rollout-") and name.endswith(".jsonl"):
                 child = os.path.join(root, name)
-                source = ((codex_first_line(child).get("payload") or {}).get("source") or {})
+                head = codex_first_line(child).get("payload")
+                source = head.get("source") if isinstance(head, dict) else None
                 sub = source.get("subagent") if isinstance(source, dict) else None
                 spawn = sub.get("thread_spawn") if isinstance(sub, dict) else None
                 if isinstance(spawn, dict) and spawn.get("parent_thread_id") == thread:
@@ -218,6 +254,8 @@ def main(argv):
             read_codex(os.path.abspath(record), out, seen, sessions)
     json.dump(out, sys.stdout, ensure_ascii=False, indent=1)
     sys.stdout.write("\n")
+    if out["unread"]:
+        sys.exit(2)
 
 
 if __name__ == "__main__":

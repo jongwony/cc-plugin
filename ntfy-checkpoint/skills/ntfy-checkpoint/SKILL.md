@@ -27,6 +27,7 @@ A checkpoint is one check at one minute, pushed to the phone ahead of time so no
 
 ## Timing
 
+- When work hands the user a check at a known minute, schedule the push to the user's own topic without asking first, then report in the session each scheduled push's local time and title, with one line that the user can ask to change it.
 - The push minute and any window it names come from the act's real latencies: the user's response after the push lands (minutes, never zero), the act's own lead time (a merge's rollout, a deploy), and slack before the moment it must be done by.
 - A window narrower than those latencies is not handed to the user: push earlier by the lead time, move to a moment where acting late is still safe, or widen the window; the body says what acting late costs.
 - `delay` takes a Unix timestamp; a bare clock time is read in the server's zone, UTC on ntfy.sh.

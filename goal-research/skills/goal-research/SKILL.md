@@ -1,15 +1,15 @@
 ---
 name: goal-research
-description: Delegate academic-literature research to a background Claude or Codex run using Aitesis and Tavily; check its citations against its Tavily record until the goal holds. User-invoked via /goal-research.
+description: Delegate a research question to a background Claude or Codex run that reaches external sources through Aitesis (/inquire) and Tavily, hold the run to its stated goal, and have a separate context check its citations against the run's own tool record. User-invoked via /goal-research.
 skills:
   - aitesis:inquire
 ---
 
 # Goal Research
 
-Invoke directly with `/goal-research [runner] <research question>` when the user wants a research question — typically one about the scholarly literature — investigated by a background run that drives Aitesis with Tavily search and extract, and wants the run's citations checked against what its own Tavily calls returned.
+Invoke directly with `/goal-research [runner] <research question>` when the person wants a question investigated against external sources — papers, official documentation, specifications, issue trackers, community discussion — by a background run, and wants back what the research reached without this session carrying the run's whole record.
 
-**Why this composition**: `/inquire` carries the epistemic contract — its reading of each uncertainty, its record of what collection reached, and what stays open for the person to settle. goal-research refines that contract for academic research in a background run; it adds no second reading beside it. A research run can answer fluently and cite papers it never opened, and nothing in its narrative distinguishes that from a searched answer. So the run's own tool record, never its account of itself, says which Tavily calls succeeded and what they returned; whether a cited source is among them is this session's reading, marked as such.
+`/inquire` carries the epistemic contract: its reading of each uncertainty, what collection reached, and what stays open for the person. This skill adds the delegation, a goal the run is held to, and a check whose ground is the run's own tool record, never its account of itself: a cited source absent from that record is unestablished, not thereby false.
 
 ## Dependency
 
@@ -18,7 +18,7 @@ Invoke directly with `/goal-research [runner] <research question>` when the user
 - **codex-plus** (this marketplace) — the `codex` runner is launched, continued, and
   read through it; install it to designate `codex`.
 
-## Caller Signature
+## Runner
 
 ```
 /goal-research [runner?] <research question>
@@ -26,100 +26,51 @@ Invoke directly with `/goal-research [runner] <research question>` when the user
 runner : claude | codex        (claude when none is designated)
 ```
 
-Read the runner designation from the request's words as well as its arguments. A leading `claude` or `codex` designates the runner only when it stands as a separate leading argument and what follows reads as the whole question; wording outside the research question designates as well. Where the leading word could instead open the question — `Claude Shannon's 1948 paper…`, `codex CLI sandbox defaults` — ask once which it is. Nothing is removed from inside the question. With no designation, the runner is `claude`.
+Read the designation from the request's words as well as its arguments. A leading `claude` or `codex` designates the runner only when it stands as a separate leading argument and what follows reads as the whole question; where the leading word could instead open the question — `Claude Shannon's 1948 paper…`, `codex CLI sandbox defaults` — ask once which it is.
 
-## Phase 1: Argument Capture
+## Phase 1: Intent Read-back
 
-1. If `/goal-research` is invoked with an argument, the research question is that argument after a leading runner designation, read as the Caller Signature says, carried verbatim — nothing is removed from inside it.
-2. If invoked without a research question, ask the user once for it, then proceed.
+Before launching, show the person once, in their language:
 
-The research question is passed unchanged into the research brief — paraphrasing is prohibited.
+- the research question, quoted from their own words in this session, which are what the run receives wherever the skill's arguments differ from them;
+- how the question is read;
+- what the research is for and what should come back, as far as the context says;
+- the runner.
+
+Then launch without waiting for an answer. A correction that arrives later stops any pass in flight. For a Claude subagent it then goes to the same run as a continuation (Phase 3), carrying the corrected intent and the goal condition restated to match it. For codex, a correction, or research resumed after the loop has stopped, starts a new thread whose brief carries the corrected intent and the rollout path of every earlier thread. Invoked with no question, ask once for it.
 
 ## Phase 2: Brief and Launch
 
-**Goal condition**, the one this session judges each pass against in Phase 3:
+**Goal condition**, which the run is held to and Phase 3 judges against, with `{use}` set to what the read-back stated, or to the question itself where the context states no use:
 
-> Every uncertainty the run's research target turns on is either filled by a citation to a source the run's Tavily calls returned, or returned open with its reach and what would settle it. Among the open items, those that are the person's to settle are marked as theirs.
+> `{inquire}`'s collection on the research question has reached what Tavily and the sources it leads to can reach, toward {use}. Each claim the result rests on cites a source the run's own Tavily search and extract calls retrieved, rests on session ground marked as such, or returns open with how far it reached and what would settle it; what only the person can settle is marked as theirs.
 
-The run receives this brief as its whole task, with `{inquire}` set to `/inquire` for `claude` and `$inquire` for `codex`, and `{goal condition}` set to the sentence above:
+The brief, with `{inquire}` set to `/inquire` for `claude` and `$inquire` for `codex`, carries:
 
-```
-Research goal condition: {goal condition}
+- the goal condition;
+- the read-back as shown — the question quoted, how it is read, what it is for and what should come back;
+- the session ground the run cannot reach on its own, and entry points — paths, ids, links — to what it can;
+- that goal-research is already running in that session, delegated from here, so the run does not invoke it again;
+- the workflow: invoke `{inquire}` — the skill call itself — on the question, collecting external sources through Tavily search and extract; cite each source by its URL; read `${CLAUDE_PLUGIN_ROOT}/skills/goal-research/references/sources-academic.md`, `${CLAUDE_PLUGIN_ROOT}/skills/goal-research/references/sources-community.md`, or both, as the question and its use call for;
+- that the run researches and reports only, changing no repository or external system;
+- that no person answers inside the run;
+- what to return: a compact result in the person's language, shaped by the stated use — what stands and on which sources, the weakest link the conclusions lean on, and each item left open with its question, how far it reached, and whose it is. The full working record stays in the run's own transcript.
 
-This session is the research session the goal-research skill has already delegated to — goal-research is already running here, so do not invoke it again in this session.
+Launch in the background, as a run this session can continue and whose transcript a verifier can read: a Claude subagent by default, or a Codex session through codex-plus when `codex` is designated ([invocation](references/codex-plus.md)). For codex, the goal turn follows the launch as its own turn, once per thread, setting the goal condition through codex-plus's goal route ([invocation](references/codex-plus.md)). A Claude subagent gets no separate goal turn: it receives no slash command through a message, so every continuation to it restates the goal condition in its text. A runner that cannot be launched is reported with what is missing, and the skill stops there.
 
-Research target:
-{research_question}
+## Phase 3: Check and Continue
 
-Workflow:
-1. Invoke {inquire} — the Aitesis skill call itself — on the research target, collecting external evidence through Tavily search and Tavily extract. Its reading of each uncertainty, its reach record, and what it leaves open are the report's substance; the lines below refine them for academic research and add no second reading.
-2. Open the page of each primary source a filled claim rests on — the paper itself, or its publisher or repository page — with Tavily extract; a search-result snippet alone fills a claim only as "mostly".
-3. No person answers in this session. An uncertainty {inquire} reads as the person's to settle — a value, preference, or scope only they hold, or an unknown that is their own — is neither answered nor settled here: it returns open, with its reach and what would settle it. Fill no held value yourself; a candidate you see is shown as the runner's candidate, beside what decides it.
-4. Cite each external source by its URL.
+After each pass that returns a whole result, a verifier — a fresh context, neither this session nor the run — checks the result. This session gives it the whole compact result and the run's record, which carries the brief and every continuation:
 
-Report {inquire}'s whole record as it stands at completion — and again, whole and updated, each time this session is continued — refined as follows:
-- An uncertainty filled by an external citation carries its source URL(s) and how far the citation reaches:
-  - verified: the claim's primary source — its page opened with Tavily extract in this session — states it; an opened secondary page supports the claim at most as mostly
-  - mostly: the source was seen only as a search-result snippet, or its page checked the core claim while surrounding detail is synthesized
-- A detail from recall (a volume, issue, page range, date, or number that no source in this session gave) is not a citation. Mark it reconstructed, as your own inference, and leave its item open, needing a spot-check.
-- The weakest link: the claim or detail the conclusions lean on that stands weakest, named explicitly.
-- An absence or novelty claim ("no study has…", "untested", "novel", "first to…") reaches only as far as {inquire}'s reach record for it; carry that record beside the claim.
-- For each empirical effect cited: its replication status and any retraction, where checkable in this session, otherwise "not checked". An effect that failed replication is reported as a design warning, not a quantitative law.
-- Open: every item still open — the person's to settle, reconstructed, or short of ground — each with its reach, the person's marked as theirs.
-```
+- Claude subagent: `${CLAUDE_CONFIG_DIR:-~/.claude}/projects/<the session's project>/<session>/subagents/agent-<id>.jsonl`, and the transcripts of agents it spawned — each `agent-<id>.meta.json` names its parent as `parentAgentId`;
+- codex: the rollout of every pass and of each earlier thread, and the rollouts of runs it spawned ([invocation](references/codex-plus.md)).
 
-Run the brief in the background, in its own context rather than as a fork of this conversation: a Claude run by default — a Claude subagent where the host offers one, else the `claude` CLI — or a Codex session run through the codex-plus plugin when codex is designated ([invocation](references/codex-plus.md)). Whichever runs, the handoff needs a run this session can continue in the same session and whose own tool record it can read. Where the runner has a goal command, the first continuation is the goal turn, sent once: `/goal {goal condition}` alone, with what remains named in the next message (Phase 3) — a goal command reads everything after `/goal` as its objective, within a length limit the brief can exceed. Every continuation goes to the same session. A runner that cannot be launched is reported with what is missing, and the skill stops there.
+The verifier reads every claim of the result, cited or not, against the record, and hands back only a verdict and the discrepancies, each marked as its reading: a cited source no Tavily search or extract call retrieved — what a call retrieved is what its response returned, structured or as formatted text, and a completed extract can still name a URL it failed to fetch; a source that does not support the claim as the result words it — its scope, a qualification lost in compression; a claim with no citation; a failed call a claim leans on; a claim on session ground that the brief and continuations do not carry. What it cannot read it reports as unread rather than as absent. The same verifier may be continued for later passes.
 
-## Phase 3: Reading and Continuation
+Continue the same run while it is moving toward the goal condition, naming the discrepancies and what the condition still lacks, and asking for the compact result again, whole and updated. An acknowledgement, or a reply carrying only what changed, is not a result: the latest whole result stays current. Stop when the goal condition holds with no discrepancy standing, when the run has stopped moving toward the condition, or when execution fails — a pass that cannot start, a pass that ends without a return (a non-zero exit, an abort, a pass this session stopped as stalled), a run that reports, after trying, that it cannot reach Tavily (a tool missing from a listing establishes nothing), a record of the run that cannot be reached — and report a failure with its cause. A failure starts no new run and does not fall back to the other runner.
 
-After each pass — the launch, the goal turn, each continuation — has ended:
+## Phase 4: Return
 
-1. **The pass.** Read what the runner delivered: its exit or completion status and its final report. The pass **failed** where the status is not a success, its last turn ended in an error, or it was aborted. A report is **whole** where it restates the research report as a whole; the **current report** is the latest whole one. A pass whose report is not whole — a goal turn's acknowledgement — leaves the current report as it was; until a pass delivers a whole report there is none, and the goal is unmet. What Phase 4 shows of a report is shown verbatim — nothing rewrites it.
-2. **The record.** Read the run's own tool record — its transcript or event stream — across every pass of the run, the launch, the goal turn, and each continuation, so the current report is read against everything the run returned. A **successful Tavily call** completed without an error flag and is Tavily's search or extract tool on whatever server provides it: its name, or its last `__` segment, is exactly `tavily_search`, `tavily-search`, `tavily_extract`, or `tavily-extract`; research, crawl, and map calls and every other tool are not counted. A structured response — JSON carrying a `results` array — lists what the call returned: each entry's `url`, verbatim; what a call asked for is never read. Any other response — formatted text, as some Tavily servers return — is read by this session itself in step 3. A page the run fetched another way — a built-in web search, a shell `curl` — is outside this record.
-3. **The reading.** Read the current report against the URLs the record returned and extracted, and against each call's response that is not structured — a source found there counts as returned or extracted by this session's reading: each citation is **returned by this run**, **extracted by this run**, or **not found in this run's Tavily record**, and a `verified` label on a source this run did not extract is said so. Matching a citation to the record is this session's reading: variants of one source — a DOI link and the publisher page, http and https, a trailing slash — are the same source; another version of a paper is another source, unless the record shows the claim's text in the version the run extracted. Note what the report's form misses: a claim with no citation, an absence or novelty claim with no reach record, an empirical effect with no replication or retraction status, a recalled detail not marked reconstructed. Every judgment here is this session's reading, marked as such.
-4. **Continue or stop.** The **gaps** are the citations not found, the `verified` labels on sources not extracted, the uncertainties neither filled by a citation nor returned open with their reach, and what the report's form misses (step 3); an item that is the person's to settle is never a gap. A **failure** is shown only by positive evidence: a failed pass, one whose record is truncated or malformed included; no successful Tavily call in the run; or Tavily shown unavailable to the run — only on positive evidence: the run's own report, after trying, that it has no Tavily tool, or the runner's server error showing the Tavily server failing to start, connect, or authenticate; a tool absent from a listing does not establish it. The goal is met when the latest pass delivered a whole report with no gaps and no failure stands — a failure stands until a later pass recovers it; a pass that returns only part of the report leaves the goal unmet. Otherwise continue the same run while it is moving toward the goal condition — this session's judgment. Every continuation but the goal turn names everything still missing: failures first, then a reply that was not whole — ask for the whole report — then the current gaps. A problem already named once that is still there after the next pass is not named again: stop, and report it with what remains. Only the goal turn's acknowledgement is exempt, since it answers no named problem. A **harness failure** — the launch cannot start, or the run's record cannot be reached — is reported directly, with its cause. What remains returns open to the user.
+Give the person the run's result as it returned it, shaped by the brief (Phase 2) — its open items with how far each reached and whose it is, and its detections, not a summary of them; how it is shown is this session's judgment. A claim a discrepancy still stands on is shown beside that discrepancy rather than among what was established. With the result go one line carrying the verifier's verdict, the passes run, and why the loop stopped; and the paths of the run's and the verifier's transcripts. The full record is opened when the person asks for it.
 
-A continuation goes to the same run, not a new one, with this message:
-
-```
-The goal condition is not met yet. Continue toward it in this same session, then return the whole report again, updated.
-What to address:
-- {each failure and gap, one line each}
-```
-
-A failure is named plainly with what to do — "no Tavily call succeeded — use Tavily search and extract for the sources", "your last turn ended in an error — continue and return your whole report". Naming each problem once bounds the repeats; whether the run is still moving toward the goal is this session's judgment, and a pass that only trades one gap for another is not moving — stop, and report what remains.
-
-When the loop has ended and the result is presented, remove what this skill wrote; a session a CLI keeps in its own store is the user's to remove.
-
-## Phase 4: Output
-
-Present the source check first, then the items the run returned as the user's to settle, then the trace:
-
-```
-## Goal Research Result
-
-Target: {research_question}
-Runner: {what ran — a Claude subagent, the `claude` CLI, or codex}
-Passes: {passes} — stopped: {goal met | a named problem persisted | not moving | harness failure: {cause}}
-
---- Source Check ---
-{which pass's report is current, or that no pass delivered a whole report; then any failure, raw — "no successful Tavily call: nothing in the report was retrieved through the designated route; its claims stand as the runner's own, open, unchecked", a failed pass, a harness failure;
- otherwise the record: {calls} successful Tavily calls, {unstructured} with responses that are not structured;
- then, as this session's reading: each citation not found in this run's Tavily record, each `verified` label on a source this run did not extract, what the report form is missing, and the gaps that remain}
-
---- Yours to Settle ---
-{each item the run returned as the user's, with what it needs; or "none returned"}
-
---- Trace ---
-{the current report in full, headed "Pass k" — with no current report, each pass's reply verbatim; every pass after it verbatim, a failed pass with its raw error; from passes before it, each reply that was not whole, verbatim, and each failed pass with its raw error; whole reports the current one superseded, listed by pass number only}
-```
-
-The items to settle are lifted from the trace and presented to the user as theirs; neither the runner nor this session answers or settles them, and work that rests on one waits for the user's words.
-
-## Rules
-
-- The research question is embedded verbatim — no paraphrasing before passing it to the runner.
-- The runner is the designated one, `claude` when none is designated; the research runs in the background, so the main session is free until each pass ends.
-- A run is not required to succeed in one pass; a failure is not masked, does not start a new run, and does not fall back to the other runner.
-- The record is read for what is unambiguous there; citations are checked against it by this session, each judgment marked as its reading; the report itself is forwarded unedited.
-- The skill is a delegation channel only — interpretation, follow-up questions, and downstream protocol routing belong to the main session after the trace returns.
+What follows the return — integrating the result into the work at hand, follow-up questions, and what the person settles — happens in this session, outside the skill.

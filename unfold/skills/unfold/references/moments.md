@@ -63,9 +63,12 @@ section, and it changes no direction.
    decide. Items that differ only in when or where they surfaced belong to one
    axis; a source (an open question, an immediate repair, a design sketch) is
    not an axis.
-2. **Every axis names what it absorbed.** Under each axis, list the original
-   items it took. The absorbed list is written to the chart, not just shown
-   in the draft.
+2. **Every axis names what it absorbed and who settles it.** Under each axis,
+   list the original items it took. The absorbed list is written to the
+   chart, not just shown in the draft. Who settles the axis — a person or a
+   team — is carried over from what the absorbed items and the chart record;
+   where they name no one, or name different holders, it is asked before
+   drafting, as `decide` asks an unfilled slot.
 3. **Classify every item that is not an axis by *why* it is not, and give the
    two kinds different dispositions:**
    - **Projection onto another axis** — it looked independent but is
@@ -85,12 +88,12 @@ section, and it changes no direction.
    then restarts from step 0 against the chart that line is on. A rewritten
    section must not carry a settled axis as open.
 5. Draft the rewritten Open questions section — axes with their absorbed
-   lists, projections as values of the axis that determines them, departures
+   lists and who settles each, projections as values of the axis that determines them, departures
    with their per-item destinations — together with the content each
    relocation write will carry, not just where it goes. Cull it under
    SKILL.md §Output discipline (derivable, mechanical, off-intent —
-   derivability does not reach an axis's representation or its absorbed
-   list). On confirmation, or directly where standing authorization covers
+   derivability does not reach an axis's representation, its absorbed
+   list, or who settles it). On confirmation, or directly where standing authorization covers
    the writes, they land in this order:
    - a departure to another section of the same root description rides in the
      same `save_issue` as the rewritten Open questions;
@@ -104,6 +107,7 @@ Write template for one axis:
 
 > **축 N — <the question this axis decides>**
 > 흡수: <original item>; <original item>; <original item>
+> 정하는 쪽: <the person or team who settles this axis>
 > 값: <projection written as a value of this axis>
 >
 > 이 단위의 물음이 아님: <item> → <where its contents went>

@@ -120,9 +120,9 @@ Detailed per-moment procedures and write templates live in
   user culls it. In both branches three reasons drop a line: it is derivable by reasoning from what is already recorded, it
   is the product of a mechanical fix rather than a choice, or it does not
   match the unit's intent. Derivability drops an assertion, never a
-  representation a moment is required to produce: a `group` axis and the list
-  of what it absorbed are derivable from the originals by construction, and
-  that is what they are for. Only the slow layer is written — structure and
+  representation a moment is required to produce: a `group` axis, the list
+  of what it absorbed, and who settles it are carried over from the
+  originals by construction, and that is what they are for. Only the slow layer is written — structure and
   decisions — never a state the next read would refresh anyway.
 - When the pre-write read reveals stale structure (an edge or runbook
   contradicting reality), surface it as a proposed structure fix — do not

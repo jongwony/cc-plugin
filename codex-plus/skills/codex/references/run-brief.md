@@ -40,6 +40,6 @@ a decision, an execution, an end-to-end check — and holds what the prompt owes
 ## Choosing the model and effort
 
 - A model or effort the caller already named is the answer; pass it through.
-- Otherwise choose per request from the descriptions and effort ladders
-  `codex debug models` lists. An end-to-end or browser run goes to `gpt-6-luna`.
+- Otherwise the model is `gpt-6-astra`; an end-to-end or browser run goes to
+  `gpt-6-luna`.
 - Start effort at `medium` and move it by the task's reasoning depth.

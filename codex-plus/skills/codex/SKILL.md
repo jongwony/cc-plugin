@@ -32,7 +32,7 @@ When the delegated task is to define, create, or refine a Codex goal — a goal-
 - Read the Codex Goals cookbook — https://developers.openai.com/cookbook/examples/codex/using_goals_in_codex — for what a strong goal carries: outcome, verification surface, constraints, boundaries, iteration policy, and the blocked condition.
 
 ## Running a Task
-1. Choose the model and effort. Whatever the caller named upstream — a model, an effort, a service tier, several models at once — IS the answer: pass it through and do not re-ask it. Otherwise choose per request, as `references/run-brief.md` § Choosing the model and effort says.
+1. Choose the model and effort. Whatever the caller named upstream — a model, an effort, a service tier, several models at once — IS the answer: pass it through and do not re-ask it. Otherwise take the model and effort `references/run-brief.md` § Choosing the model and effort names.
 
    What a choice may name:
    - **Model** — any slug `codex debug models` lists.

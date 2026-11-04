@@ -15,15 +15,15 @@ Invoke directly with `/goal-research [runner] <research question>` when the pers
 
 - **Aitesis** (`/inquire`; `$inquire` on Codex) — the run drives it, so the
   epistemic-protocols `aitesis` plugin must be installed where the run executes.
-- **codex-plus** (this marketplace) — the `codex` runner is launched, continued, and
-  read through it; install it to designate `codex`.
+- **codex-plus** (this marketplace) — the `codex` runner, the default from Claude Code, is
+  launched, continued, and read through it; where it is absent, designate `claude`.
 
 ## Runner
 
 ```
 /goal-research [runner?] <research question>
 
-runner : claude | codex        (claude when none is designated)
+runner : claude | codex        (none designated: the model family other than this session's — codex from Claude Code)
 ```
 
 Read the designation from the request's words as well as its arguments. A leading `claude` or `codex` designates the runner only when it stands as a separate leading argument and what follows reads as the whole question; where the leading word could instead open the question — `Claude Shannon's 1948 paper…`, `codex CLI sandbox defaults` — ask once which it is.
@@ -56,7 +56,7 @@ The brief, with `{inquire}` set to `/inquire` for `claude` and `$inquire` for `c
 - that no person answers inside the run;
 - what to return: a compact result in the person's language, shaped by the stated use — what stands and on which sources, the weakest link the conclusions lean on, and each item left open with its question, how far it reached, and whose it is. The full working record stays in the run's own transcript.
 
-Launch in the background, as a run this session can continue and whose transcript a verifier can read: a Claude subagent by default, or a Codex session through codex-plus when `codex` is designated ([invocation](references/codex-plus.md)). For codex, the goal turn follows the launch as its own turn, once per thread, setting the goal condition through codex-plus's goal route ([invocation](references/codex-plus.md)). A Claude subagent gets no separate goal turn: it receives no slash command through a message, so every continuation to it restates the goal condition in its text. A runner that cannot be launched is reported with what is missing, and the skill stops there.
+Launch in the background, as a run this session can continue and whose transcript a verifier can read: a Codex session through codex-plus ([invocation](references/codex-plus.md)) or a Claude subagent, as Runner settles. For codex, the goal turn follows the launch as its own turn, once per thread, setting the goal condition through codex-plus's goal route ([invocation](references/codex-plus.md)). A Claude subagent gets no separate goal turn: it receives no slash command through a message, so every continuation to it restates the goal condition in its text. A runner that cannot be launched is reported with what is missing, and the skill stops there.
 
 ## Phase 3: Check and Continue
 

@@ -25,6 +25,20 @@
 2. 추측하기 어려운 토픽 두 개를 만들고, 휴대폰 ntfy 앱에서 둘 다 구독합니다. 토픽 이름이 곧 비밀번호입니다.
 3. `claude plugin configure ntfy-checkpoint`로 두 토픽을 넣습니다. 값은 OS 자격 증명 저장소에 들어갑니다. 조회·예약 도구의 응답에는 토픽과 URL이 그대로 나오므로 세션 기록에는 남습니다.
 
+## 체크포인트 기록
+
+세션은 깨어 있지 않습니다. 대신 예약한 세션의 기록에 체크포인트마다 한 줄씩 상태를 남기고, 다음 세션은 push 본문의 세션 id로 그 줄을 찾아 이어갑니다. sequence id는 `<run>-<step>` 꼴이라 다른 run의 push를 대체하지 않습니다.
+
+```
+intent ──발행──▶ accepted <id> ──시각 경과──▶ delivered ──확인──▶ checked: <근거>
+   │
+   └─결과 대신 오류─▶ 몇 초 뒤 조회 ─┬─ 있음 ─▶ accepted <id>
+                                    └─ 없음·조회 실패 ─▶ unconfirmed (세션에 보고)
+```
+
+- 서버가 받았다(accepted), 휴대폰으로 나갔다(delivered), 확인했다(checked)는 각각 따로 기록합니다. 앞의 상태가 뒤의 상태를 뜻하지 않습니다.
+- 조회 결과가 비어도 아무 상태도 정해지지 않습니다. ntfy.sh는 메시지를 약 12시간만 보관합니다.
+
 ## 알아둘 점
 
 - ntfy.sh는 종단 간 암호화를 지원하지 않습니다([binwiederhier/ntfy#69](https://github.com/binwiederhier/ntfy/issues/69)). 그래서 본문은 맥락 없이는 의미가 없는 포인터로만 채웁니다.

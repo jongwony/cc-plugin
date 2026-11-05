@@ -1,6 +1,6 @@
 ---
 name: ntfy-checkpoint
-description: Schedule a phone push for a one-shot check the user must make at a set minute — a cutover step, a first run, a reset to confirm — through the ntfy-work or ntfy-personal server. Use when the user asks to be alerted at a time to check something, or when work hands them a check that falls at a known minute.
+description: Schedule a phone push for a one-shot check the user must make at a set minute — a cutover step, a first run, a reset to confirm — through the ntfy-work or ntfy-personal server. Use when the user asks to be alerted at a time to check something, when work hands them a check that falls at a known minute, or when the user's notification rule calls for a push.
 ---
 
 # ntfy checkpoint
@@ -9,9 +9,10 @@ A checkpoint is one check at one minute, pushed to the phone ahead of time so no
 
 ## Scope
 
+- A checkpoint is scheduled from a background session: `$CLAUDE_JOB_DIR` is set, and its basename is the session's short id, the one `claude attach` takes. A session without it schedules no checkpoint; it says so and names `claude --bg --resume <session id>` to continue in the background.
 - A check due at a set minute, once → a checkpoint.
+- A push the user's notification rule calls for at once → composed as below, with no delay.
 - A block of 30 minutes or more → the user's calendar.
-- Claude's own notices that a task finished or needs input → the harness's notification channel, so a checkpoint is never mistaken for one.
 
 ## Server
 
@@ -21,9 +22,11 @@ A checkpoint is one check at one minute, pushed to the phone ahead of time so no
 ## Message
 
 - Title: the check, in a few words.
-- Body: one line of what to check, then a pointer — the scheduling session's `$CLAUDE_CODE_SESSION_ID` and the checkpoint's sequence id — so the user's next session can collect the rest with `/recollect` or `/inquire`.
+- Body: one line of what to check, then a pointer — `claude attach <short id>`, the session's `$CLAUDE_CODE_SESSION_ID` and the checkpoint's sequence id — so the user can wake the owning session, or collect the rest with `/recollect` or `/inquire`.
+- Click and `view` action: where the user's notification rule says a tap lands. The owning session's link is `https://claude.ai/code/$CLAUDE_CODE_BRIDGE_SESSION_ID`, present when that variable is set.
 - Nothing past that pointer: ntfy.sh stores the body in plaintext, and the pointer carries no meaning without the session record.
-- Sequence id: `<run>-<step>` — a run part no other run shares (the first 8 characters of `$CLAUDE_CODE_SESSION_ID`, or the run's own id) and the step label, chosen at scheduling. It names the checkpoint for its whole life: every reschedule, update and settled state reuses it, while each publish gets its own message `id`.
+- Sequence id: `<short id>-<step>` — the scheduling session's short id and the step label, chosen at scheduling. It names the checkpoint for its whole life: every reschedule, update and settled state reuses it, while each publish gets its own message `id`.
+- The session the short id names owns the checkpoint. Another session changes it through the owner — `claude attach <short id>`, or `claude --bg --resume <session id>` once the owner has stopped — and never publishes under its sequence id.
 
 ## Timing
 

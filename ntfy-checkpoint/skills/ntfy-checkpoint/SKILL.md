@@ -49,7 +49,7 @@ A checkpoint is one check at one minute, pushed to the phone ahead of time so no
 ## Publish outcome
 
 - A publish result is the receipt: record `accepted` and fetch nothing (`ntfy-guide` Gate 4).
-- A failure after the request was sent — a timeout with no response, a dropped connection — may have gone out. In the same turn, wait a few seconds, fetch with `scheduled: true`, and look for the sequence id: found → `accepted` with that message's id; not found → `unconfirmed`, reported in the session with its minute. A failure before connecting sent nothing; publish again.
+- A publish that returns an error instead of a result may have gone out: the tool retries before it reports, and its error reads the same whether or not a request reached the server. In the same turn, wait a few seconds, fetch with `scheduled: true`, and look for the sequence id: found → `accepted` with that message's id; not found, or the fetch fails too → `unconfirmed`, reported in the session with its minute.
 - The confirming fetch belongs to the active turn; the session leaves no later wake to confirm it.
 - An update carries only the fields it sets: resend title, tags and every other field the push keeps (`ntfy-guide` Gate 3).
 

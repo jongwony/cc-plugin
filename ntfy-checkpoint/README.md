@@ -32,8 +32,8 @@
 ```
 intent ──발행──▶ accepted <id> ──시각 경과──▶ delivered ──확인──▶ checked: <근거>
    │
-   └─응답 없이 끊김─▶ 몇 초 뒤 조회 ─┬─ 있음 ─▶ accepted <id>
-                                    └─ 없음 ─▶ unconfirmed (세션에 보고)
+   └─결과 대신 오류─▶ 몇 초 뒤 조회 ─┬─ 있음 ─▶ accepted <id>
+                                    └─ 없음·조회 실패 ─▶ unconfirmed (세션에 보고)
 ```
 
 - 서버가 받았다(accepted), 휴대폰으로 나갔다(delivered), 확인했다(checked)는 각각 따로 기록합니다. 앞의 상태가 뒤의 상태를 뜻하지 않습니다.

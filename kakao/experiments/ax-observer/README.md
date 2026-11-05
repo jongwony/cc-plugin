@@ -1,6 +1,9 @@
 # KakaoTalk AXObserver experiments — 2026-11-05
 
-Historical measurement code, preserved byte-for-byte from three temporary probes.
+Historical measurement code copied from three temporary probes. The operator
+compared these sources against the original /tmp files when archiving them. The
+committed hashes verify archive consistency, not independent provenance of those
+original files.
 These are standalone experiments, outside the production helper and skill. They
 are not a message receiver, incremental reader, daemon, or installed service.
 
@@ -23,7 +26,10 @@ source and decompressed-log SHA-256 plus counts.
 
 All dates are 2026-11-05. Table durations begin after registration. Probe setup
 began 01:16:47 and cleanup finished 01:19:55; the other two finished at the listed
-end times. Each process exited 0. These are separate time windows with different
+end times. The operator observed exit status 0 in the execution-tool results for
+all three runs; exit codes are not fields in the archived JSONL. The finished
+records independently show that each program reached its normal cleanup path.
+These are separate time windows with different
 UI activity, not a controlled comparison of performance or power use.
 
 - Broad: 33,109 AXValueChanged / AXImage; 1 destroyed element of unknown role.
@@ -38,6 +44,8 @@ UI activity, not a controlled comparison of performance or power use.
 - Table: unique table at Main Window/AXWindow[12]/AXScrollArea[0], 81 children at
   both ends. Registration returned 0 for all six candidate notifications but no
   callback arrived. This proves registration acceptance, not useful delivery.
+  Paths encode the parent role followed by the child index, not the child role;
+  AXWindow[12] means child 12 of the main window.
 
 ## Later UI cross-check (not an observer event)
 
@@ -45,7 +53,9 @@ After the table run ended, separately authorized computer use found seven unread
 messages in one existing chat. Message labels included 17:19 and 17:20 KST on
 2026-11-05, within the table observation interval (17:18:20–17:21:20 KST).
 The Mac timezone was verified as Asia/Seoul (+0900). Opening the chat cleared the
-seven-message unread badge. No messages were sent. Contents and identities are
+seven-message unread badge and may have transmitted read receipts. This was a
+separately authorized UI inspection outside the probes, not part of their
+no-opening behavior. No messages were sent. Contents and identities are
 intentionally omitted here.
 
 This is evidence against relying on this table-only subscription, but message
@@ -56,9 +66,13 @@ message delivery during the live observation or as a successful detector.
 ## Reproduce
 
 Requirements: macOS, running logged-in KakaoTalk with its main chat-list window
-already open, Swift compiler, and existing Accessibility permission for the
-actual launching app/process. Permission granted to another terminal is not
+already open, Swift compiler, Python 3 for check.sh, and existing Accessibility
+permission for the actual launching app/process. Permission granted to another terminal is not
 necessarily inherited. These programs do not prompt to grant permission.
+
+Install missing compiler prerequisites with `xcode-select --install`; if Python 3
+is unavailable, install it from https://www.python.org/downloads/macos/. Installation
+and permission changes are separate setup actions, not performed by these checks.
 
 From this directory, compile without contacting KakaoTalk:
 
@@ -96,9 +110,10 @@ These artifacts preserve the measured implementation, including its limits:
   this is a heuristic, not a semantic guarantee across app versions/views.
 - StaticText/TextArea descendant notifications are not guaranteed to bubble to a
   table subscription. A new message in an existing room need not change row count.
-- Registration/cleanup and callback AX calls are synchronous. The observation
-  interval is bounded, but there is no hard wall-clock watchdog for the complete
-  process. Callback volume and per-call logging can perturb measurements.
+- Registration/cleanup and callback AX calls are synchronous. The AX messaging
+  timeout is set on the application element, not explicitly on every child. The
+  observation interval is bounded, but there is no hard wall-clock watchdog for
+  the complete process. Callback volume and per-call logging can perturb measurements.
 - No CPU, energy, idle-wakeup, battery, loss-rate or latency benchmark was taken.
   No reliable new-message detection, no-loss capture or power savings are proven.
 
@@ -114,5 +129,8 @@ approved body-reading test. Stop and verify teardown after each run.
 
 Preservation only; production CLI/skill behavior is unchanged. Local compile and
 archive-integrity checks are provided. Any future production change needs its
-own implementation tests and the repository's version-bump checks. No commit,
-push, PR, deployment or persistent watcher is part of this experiment archive.
+own implementation tests and the repository's version-bump checks. The archive
+is intentionally colocated under Kakao at the user request; plugin
+installations therefore also receive about 340 KB of compressed evidence. It is
+not loaded by the production helper. No persistent watcher is installed.
+See REVIEW.md for the independent review and its disposition.

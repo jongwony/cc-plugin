@@ -20,6 +20,18 @@ for item in json.loads((root / 'evidence/summary.json').read_text()):
     events = [r for r in rows if r['kind'] == 'event']
     counts = collections.Counter((r['event'], r['role']) for r in events)
     assert counts == {(r['event'], r['role']): r['count'] for r in item['events']}
-    assert rows[-1]['kind'] == 'finished' and rows[-1]['events'] == len(events)
+    lifecycle = [r for r in rows if r['kind'] in ('start', 'ready', 'finished')]
+    assert lifecycle == item['lifecycle'], f'{mode}: lifecycle summary mismatch'
+    ready = [r for r in rows if r['kind'] == 'ready']
+    assert len(ready) == 1 and rows[-1]['kind'] == 'finished'
+    assert rows[-1]['events'] == len(events)
+    successful = sum(r.get('count', 1) for r in rows if r['kind'] == 'registration'
+                     and (r.get('result') == 0 or
+                          r.get('scope_role_notification_result', '').endswith('|0')))
+    assert successful == ready[0]['registered'], f'{mode}: registration count mismatch'
+    if mode == 'table':
+        targets = [r for r in rows if r['kind'] == 'target']
+        assert len(targets) == 1 and targets[0]['role'] == 'AXTable'
+        assert targets[0]['initial_child_count'] == rows[-1]['final_child_count'] == 81
     print(f'verified: {mode}, {len(events)} callbacks')
 PY

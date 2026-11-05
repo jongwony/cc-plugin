@@ -1,0 +1,129 @@
+[
+  {
+    "mode": "probe",
+    "source_sha256": "1ade6f2137d41a40bdedf87833313499c6169adae3e82ce070a24a5969dfa8e8",
+    "log_sha256": "230d39292775135b996ba28a80cfa4a432f4f06c25e5b9299e0dd4c1c163abf1",
+    "lifecycle": [
+      {
+        "duration_s": 150,
+        "kind": "start",
+        "time": "2026-11-05T01:16:47Z",
+        "windows": 1
+      },
+      {
+        "kind": "ready",
+        "registered": 4410,
+        "time": "2026-11-05T01:17:05Z",
+        "visited": 646
+      },
+      {
+        "events": 33110,
+        "kind": "finished",
+        "time": "2026-11-05T01:19:55Z"
+      }
+    ],
+    "events": [
+      {
+        "event": "AXUIElementDestroyed",
+        "role": "unknown",
+        "count": 1
+      },
+      {
+        "event": "AXValueChanged",
+        "role": "AXImage",
+        "count": 33109
+      }
+    ]
+  },
+  {
+    "mode": "narrow",
+    "source_sha256": "fd91a6e900870379988e2c70d31a82b72af2050c34f13a09d6ca7b4a594bbe52",
+    "log_sha256": "3625f3a8b62f81b03ea193a81b497b70e7f847948f20640bbfcbab02b08ea889",
+    "lifecycle": [
+      {
+        "duration_s": 300,
+        "kind": "start",
+        "time": "2026-11-05T01:21:27Z",
+        "windows": 1
+      },
+      {
+        "kind": "ready",
+        "registered": 50,
+        "time": "2026-11-05T01:21:27Z",
+        "visited": 38
+      },
+      {
+        "events": 84,
+        "kind": "finished",
+        "time": "2026-11-05T01:26:27Z"
+      }
+    ],
+    "events": [
+      {
+        "event": "AXCreated",
+        "role": "AXWindow",
+        "count": 13
+      },
+      {
+        "event": "AXRowCountChanged",
+        "role": "AXTable",
+        "count": 4
+      },
+      {
+        "event": "AXSelectedChildrenChanged",
+        "role": "AXList",
+        "count": 4
+      },
+      {
+        "event": "AXSelectedChildrenChanged",
+        "role": "AXMenu",
+        "count": 1
+      },
+      {
+        "event": "AXSelectedRowsChanged",
+        "role": "AXTable",
+        "count": 1
+      },
+      {
+        "event": "AXUIElementDestroyed",
+        "role": "unknown",
+        "count": 55
+      },
+      {
+        "event": "AXValueChanged",
+        "role": "AXStaticText",
+        "count": 2
+      },
+      {
+        "event": "AXValueChanged",
+        "role": "AXTextArea",
+        "count": 1
+      },
+      {
+        "event": "AXValueChanged",
+        "role": "unknown",
+        "count": 3
+      }
+    ]
+  },
+  {
+    "mode": "table",
+    "source_sha256": "f0497e3a2cc2362b145842090834510182c321dc67f9b0ac3186a02b95c05216",
+    "log_sha256": "d6462fe960324a94f9df38c1de175219319ca1bad3d8653c730d1ccd72c5a318",
+    "lifecycle": [
+      {
+        "duration_s": 180,
+        "kind": "ready",
+        "registered": 6,
+        "time": "2026-11-05T08:18:20Z"
+      },
+      {
+        "events": 0,
+        "final_child_count": 81,
+        "kind": "finished",
+        "time": "2026-11-05T08:21:20Z"
+      }
+    ],
+    "events": []
+  }
+]

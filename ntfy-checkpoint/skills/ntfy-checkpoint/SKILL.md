@@ -32,9 +32,11 @@ A checkpoint is one check at one minute, pushed to the phone ahead of time so no
 - A window narrower than those latencies is not handed to the user: push earlier by the lead time, move to a moment where acting late is still safe, or widen the window; the body says what acting late costs.
 - `delay` takes a Unix timestamp; a bare clock time is read in the server's zone, UTC on ntfy.sh.
 
-## At fire time
+## After scheduling
 
-- When the scheduling session is still running at that minute and has observed the state, publish the observed state under the same sequence id with no delay; it takes the pending message's place.
+- The session keeps no wake for a push — no background command, sleep or poller. The pending message is the user's check; the user opens a session from it when it lands.
+- When a later turn changes what a pending push covers — its minute moves, its check is settled early, its step is dropped — read the pending messages from the server (`ntfy_fetch_messages` with `scheduled: true`) and adjust them there: republish under the same sequence id with the new minute or text, or publish the settled state with no delay.
+- A publish under a sequence id whose scheduled message is still pending cancels that message, so the settled state replaces the push instead of being overwritten by it.
 - In a run the user is not watching, leave a pending message to fire rather than deleting it: a delete asks for confirmation the run cannot give.
 
 ## Prerequisites

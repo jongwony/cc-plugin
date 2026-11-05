@@ -21,9 +21,9 @@ A checkpoint is one check at one minute, pushed to the phone ahead of time so no
 ## Message
 
 - Title: the check, in a few words.
-- Body: one line of what to check, then a pointer — the scheduling session's `$CLAUDE_CODE_SESSION_ID` and the run or step label — so the user's next session can collect the rest with `/recollect` or `/inquire`.
+- Body: one line of what to check, then a pointer — the scheduling session's `$CLAUDE_CODE_SESSION_ID` and the checkpoint's sequence id — so the user's next session can collect the rest with `/recollect` or `/inquire`.
 - Nothing past that pointer: ntfy.sh stores the body in plaintext, and the pointer carries no meaning without the session record.
-- Sequence id: the step label, chosen at scheduling.
+- Sequence id: `<run>-<step>` — a run part no other run shares (the first 8 characters of `$CLAUDE_CODE_SESSION_ID`, or the run's own id) and the step label, chosen at scheduling. It names the checkpoint for its whole life: every reschedule, update and settled state reuses it, while each publish gets its own message `id`.
 
 ## Timing
 
@@ -32,10 +32,31 @@ A checkpoint is one check at one minute, pushed to the phone ahead of time so no
 - A window narrower than those latencies is not handed to the user: push earlier by the lead time, move to a moment where acting late is still safe, or widen the window; the body says what acting late costs.
 - `delay` takes a Unix timestamp; a bare clock time is read in the server's zone, UTC on ntfy.sh.
 
+## Record
+
+- The scheduling session's transcript is the checkpoint's record; the pointer in the body reaches it. Each change to a checkpoint is one line in the session's reply, and the latest line for a sequence id is its current state:
+  `checkpoint <sequence id> · <minute> <zone> · <what to check> · <state> · next: <next action>`
+- Write the line with state `intent` before the publish, and a new line with the outcome after it.
+- State is one of the following; each is recorded on its own evidence and none implies the next:
+  - `intent` — about to publish.
+  - `accepted <message id>` — the publish result, or a confirming fetch, returned this message.
+  - `unconfirmed` — the outcome stays unknown after the confirming fetch.
+  - `delivered` — past its minute, the message appears in a fetch without `scheduled`.
+  - `checked: <evidence>` — the user or the session did the check; the evidence is what showed it.
+- A fetch with `scheduled: true` returns delivered messages as well as pending ones; only a fetch without it tells `delivered` from pending.
+- An empty fetch settles no state: ntfy.sh keeps messages about 12 hours (`expires` in each result), and the line in the transcript stands after the cache drops the message.
+
+## Publish outcome
+
+- A publish result is the receipt: record `accepted` and fetch nothing (`ntfy-guide` Gate 4).
+- A failure after the request was sent — a timeout with no response, a dropped connection — may have gone out. In the same turn, wait a few seconds, fetch with `scheduled: true`, and look for the sequence id: found → `accepted` with that message's id; not found → `unconfirmed`, reported in the session with its minute. A failure before connecting sent nothing; publish again.
+- The confirming fetch belongs to the active turn; the session leaves no later wake to confirm it.
+- An update carries only the fields it sets: resend title, tags and every other field the push keeps (`ntfy-guide` Gate 3).
+
 ## After scheduling
 
 - The session keeps no wake for a push — no background command, sleep or poller. The pending message is the user's check; the user opens a session from it when it lands.
-- When a later turn changes what a pending push covers — its minute moves, its check is settled early, its step is dropped — read the pending messages from the server (`ntfy_fetch_messages` with `scheduled: true`) and adjust them there: republish under the same sequence id with the new minute or text, or publish the settled state with no delay.
+- When a later turn changes what a pending push covers — its minute moves, its check is settled early, its step is dropped — read the pending messages from the server (`ntfy_fetch_messages` with `scheduled: true`) and adjust them there: republish under the same sequence id with the new minute or text, or publish the settled state with no delay; record each as a new line.
 - A publish under a sequence id whose scheduled message is still pending cancels that message, so the settled state replaces the push instead of being overwritten by it.
 - In a run the user is not watching, leave a pending message to fire rather than deleting it: a delete asks for confirmation the run cannot give.
 

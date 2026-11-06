@@ -7,17 +7,14 @@ window, Devices tab and device-list region, and resolve the requested device
 names exactly. A map annotation and a device-list row may name the same device;
 count the intended row domain, not every occurrence of its name in the app.
 
-One installation's device-list rows used `AXIdentifier` beginning
-`ListEntityRow` and `AXDescription` beginning the exact device name followed by a
-comma; this is not a portable schema. Re-observe the
-role, identifier and delimiter on the current app before adopting it. A prefix
-without that verified delimiter can include a different device.
+Before adopting a row locator, re-observe on the current app the row role, its
+identifier and the delimiter that follows the device name. A prefix without that
+verified delimiter can include a different device.
 
-The adapter's filter has exact-equality semantics; a prefix predicate belongs in
-a target's `match`, not in `filter`. If returned rows cannot be assigned to the
-confirmed list region, leave domain uniqueness unresolved. Where an existing
-Find My helper already checks tab, window, row multiplicity or session state,
-retain those checks and treat this adapter as additional evidence.
+If returned rows cannot be assigned to the confirmed list region, leave domain
+uniqueness unresolved. Where an existing Find My helper already checks tab,
+window, row multiplicity or session state, retain those checks and treat this
+adapter as additional evidence.
 
 Preserve the displayed location and update/offline/paused wording. Separately
 state whether the display indicates a current or last-known location, and leave

@@ -52,12 +52,12 @@ def contract_check(c):
     return c
 
 
-def command(c):
+def command(c, pid):
     attributes = set(c['filter'])
     for t in c['targets']:
         attributes.update(t['match'])
         attributes.update(t['attributes'])
-    return {'command': 'collectAll', 'command_id': 'validated-read', 'application': c['application'],
+    return {'command': 'collectAll', 'command_id': 'validated-read', 'pid': pid,
             'max_depth': c.get('max_depth', 20), 'filter_criteria': c['filter'], 'attributes': sorted(attributes)}
 
 
@@ -78,6 +78,25 @@ def log_level(entry):
     return m.group(1) if m else None
 
 
+ASN_LINE = re.compile(r'ASN:0x[0-9a-fA-F]+-0x[0-9a-fA-F]+-".*":')
+PID_FIELD = re.compile(r'\bpid = (\d+)\b')
+
+
+def resolve_pid(application, lsappinfo, timeout):
+    """Return the pid of the one running instance of the exact bundle ID, None, or 'ambiguous'."""
+    found = subprocess.run([lsappinfo, 'find', 'bundleid=' + application], capture_output=True, text=True, timeout=timeout)
+    lines = [x.strip() for x in found.stdout.splitlines() if x.strip()]
+    require(found.returncode == 0 and all(ASN_LINE.fullmatch(x) for x in lines), 'unrecognized lsappinfo find output')
+    if not lines:
+        return None
+    if len(lines) > 1:
+        return 'ambiguous'
+    info = subprocess.run([lsappinfo, 'info', '-only', 'pid', lines[0]], capture_output=True, text=True, timeout=timeout)
+    pids = PID_FIELD.findall(info.stdout)
+    require(info.returncode == 0 and len(pids) == 1 and int(pids[0]) > 0, 'unrecognized lsappinfo info output')
+    return int(pids[0])
+
+
 def envelope(**fields):
     out = {'status': 'rejected', 'coverage': 'returned_elements_only',
            'source_completeness': 'unproven', 'service_freshness': 'not_checked', 'targets': []}
@@ -95,9 +114,14 @@ def validate(c, response, exit_code=0, stderr='', include_values=False):
     logs = response.get('debug_logs', [])
     if not isinstance(logs, list) or not all(isinstance(x, str) for x in logs):
         return dict(out, reason='invalid_diagnostics')
+    rest = stderr
+    for entry in logs:
+        i = rest.find(entry) if entry else -1
+        if i >= 0:
+            rest = rest[:i] + rest[i + len(entry):]
     benign_stderr = {x.strip() for x in logs} | {'--- Debug Logs (axorc run end) ---', '--- End Debug Logs ---', ''}
     unknown_stderr = any(line.strip() not in benign_stderr and not BANNER.fullmatch(line.strip())
-                         for line in stderr.splitlines())
+                         for line in rest.splitlines())
     if unknown_stderr or any(log_level(x) not in BENIGN_LEVELS for x in logs):
         return dict(out, source_completeness='incomplete_or_diagnostic', reason='source_diagnostic')
     data = response.get('data')
@@ -165,6 +189,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--contract', required=True)
     parser.add_argument('--axorc', default='axorc', help='Trusted installed AXorcist executable')
+    parser.add_argument('--lsappinfo', default='lsappinfo', help='macOS lsappinfo used to resolve the bundle ID to one pid')
     parser.add_argument('--timeout', type=float, default=20)
     parser.add_argument('--include-values', action='store_true', help='Print only requested target values; potentially private')
     args = parser.parse_args()
@@ -173,9 +198,15 @@ def main():
         require(0 < args.timeout <= 60, 'timeout must be >0 and <=60 seconds')
         with open(args.contract, encoding='utf-8') as f:
             c = contract_check(load_json(f.read()))
-        # Fixed read-only command; the contract cannot introduce actions or a shell.
-        p = subprocess.run([args.axorc, 'raw', '--debug', '--json', json.dumps(command(c))], capture_output=True, text=True, timeout=args.timeout)
-        result = validate(c, load_json(p.stdout), p.returncode, p.stderr, args.include_values)
+        pid = resolve_pid(c['application'], args.lsappinfo, args.timeout)
+        if pid is None:
+            result = envelope(reason='app_not_running')
+        elif pid == 'ambiguous':
+            result = envelope(reason='app_ambiguous')
+        else:
+            # Fixed read-only command; the contract cannot introduce actions or a shell.
+            p = subprocess.run([args.axorc, 'raw', '--debug', '--json', json.dumps(command(c, pid))], capture_output=True, text=True, timeout=args.timeout)
+            result = validate(c, load_json(p.stdout), p.returncode, p.stderr, args.include_values)
     except subprocess.TimeoutExpired:
         result = envelope(reason='process_timeout', source_completeness='incomplete')
     except (OSError, ValueError, RecursionError) as e:

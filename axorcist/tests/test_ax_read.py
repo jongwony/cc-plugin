@@ -21,6 +21,17 @@ def node(identifier='alpha', value='A'):
     return {'attributes':{k:{'any_value':v} for k,v in {'AXRole':'AXStaticText', 'AXIdentifier':identifier, 'AXValue':value}.items()}}
 
 
+def fake_lsappinfo(root, instances=1, pid=4242):
+    path=root/'lsappinfo'
+    asns=['ASN:0x0-0x%x-"Fixture App":'%(0x1000+i) for i in range(instances)]
+    path.write_text('#!'+sys.executable+'\nimport sys\na=sys.argv[1:]\n'
+        'if a[:1]==["find"]:\n    assert a[1]=="bundleid=local.test.fixture",a\n    print('+repr('\n'.join(asns))+' if '+repr(instances)+' else "")\n'
+        'elif a[:3]==["info","-only","pid"]:\n    print("[ NULL ]  [ NULL ]  \\n    bundleID=[ NULL ] \\n    pid = '+str(pid)+' !cgsConnection !signalled type=[ NULL ]")\n'
+        'else:\n    sys.exit(2)\n')
+    path.chmod(0o755)
+    return path
+
+
 def response(*nodes):
     return {'status':'success','data':{'count':len(nodes),'elements':list(nodes)}}
 
@@ -151,8 +162,9 @@ class Reads(unittest.TestCase):
         with self.assertRaises(ax.Invalid):ax.contract_check(c)
 
     def test_command_is_read_only_and_requests_validation_attributes(self):
-        cmd=ax.command(C)
+        cmd=ax.command(C,4242)
         self.assertEqual(cmd['command'],'collectAll')
+        self.assertEqual(cmd['pid'],4242);self.assertNotIn('application',cmd)
         self.assertEqual(cmd['attributes'],['AXIdentifier','AXRole','AXValue'])
 
     def test_private_values_and_source_errors_not_in_default_output(self):
@@ -176,8 +188,8 @@ class Reads(unittest.TestCase):
     def test_cli_fake_process_success_error_and_timeout(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);contract=root/'contract.json';contract.write_text(json.dumps(C))
-            fake=root/'axorc';fake.write_text('#!'+sys.executable+'\nimport json,sys\nassert sys.argv[1:4]==["raw","--debug","--json"]\nprint('+repr(json.dumps(response(node())))+')\n');fake.chmod(0o755)
-            cmd=[sys.executable,str(SCRIPT),'--contract',str(contract),'--axorc',str(fake)]
+            fake=root/'axorc';fake.write_text('#!'+sys.executable+'\nimport json,sys\nassert sys.argv[1:4]==["raw","--debug","--json"]\nq=json.loads(sys.argv[4])\nassert q["pid"]==4242 and "application" not in q,q\nprint('+repr(json.dumps(response(node())))+')\n');fake.chmod(0o755)
+            cmd=[sys.executable,str(SCRIPT),'--contract',str(contract),'--lsappinfo',str(fake_lsappinfo(root)),'--axorc',str(fake)]
             p=subprocess.run(cmd,capture_output=True,text=True);self.assertEqual(p.returncode,0,p.stdout)
             self.assertEqual(json.loads(p.stdout)['status'],'observed')
             fake.write_text('#!'+sys.executable+'\nimport time\ntime.sleep(2)\n')
@@ -210,7 +222,7 @@ class Reads(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);contract=root/'contract.json';contract.write_text(json.dumps(C))
             fake=root/'axorc';fake.write_text('#!'+sys.executable+'\nimport time\ntime.sleep(2)\n');fake.chmod(0o755)
-            cmd=[sys.executable,str(SCRIPT),'--contract',str(contract),'--axorc',str(fake)]
+            cmd=[sys.executable,str(SCRIPT),'--contract',str(contract),'--lsappinfo',str(fake_lsappinfo(root)),'--axorc',str(fake)]
             outs=[json.loads(subprocess.run(cmd+['--timeout','.05'],capture_output=True,text=True).stdout),
                   json.loads(subprocess.run(cmd[:-1]+[str(root/'missing')],capture_output=True,text=True).stdout)]
             contract.write_text('{broken')
@@ -218,5 +230,28 @@ class Reads(unittest.TestCase):
         self.assertEqual([o['reason'] for o in outs],['process_timeout','invalid_input_or_execution','invalid_input_or_execution'])
         for o in outs:
             self.assertTrue(keys<=set(o),o);self.assertEqual(o['status'],'rejected');self.assertEqual(o['targets'],[])
+
+    def test_app_resolution_pins_one_running_instance(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);contract=root/'contract.json';contract.write_text(json.dumps(C))
+            marker=root/'axorc-ran'
+            fake=root/'axorc';fake.write_text('#!'+sys.executable+'\nopen('+repr(str(marker))+',"w").close()\nprint('+repr(json.dumps(response(node())))+')\n');fake.chmod(0o755)
+            for n,reason in [(0,'app_not_running'),(2,'app_ambiguous')]:
+                lsa=root/('lsa%d'%n);fake_lsappinfo(root,n).rename(lsa)
+                p=subprocess.run([sys.executable,str(SCRIPT),'--contract',str(contract),'--lsappinfo',str(lsa),'--axorc',str(fake)],capture_output=True,text=True)
+                o=json.loads(p.stdout);self.assertEqual((p.returncode,o['reason'],o['status']),(1,reason,'rejected'))
+                self.assertFalse(marker.exists())
+            bad=root/'lsabad';bad.write_text('#!'+sys.executable+'\nprint("unexpected")\n');bad.chmod(0o755)
+            p=subprocess.run([sys.executable,str(SCRIPT),'--contract',str(contract),'--lsappinfo',str(bad),'--axorc',str(fake)],capture_output=True,text=True)
+            self.assertEqual(json.loads(p.stdout)['reason'],'invalid_input_or_execution');self.assertFalse(marker.exists())
+            p=subprocess.run([sys.executable,str(SCRIPT),'--contract',str(contract),'--lsappinfo',str(fake_lsappinfo(root,1)),'--axorc',str(fake)],capture_output=True,text=True)
+            self.assertEqual(json.loads(p.stdout)['status'],'observed');self.assertTrue(marker.exists())
+
+    def test_multiline_log_entry_is_one_benign_entry(self):
+        r=response(node());entry='[2026-11-06T00:00:00.000Z] [INFO] - Root title Fixture\nWorkspace'
+        r['debug_logs']=[entry]
+        stderr='AXORCMain.run: AXorc version 0.2.3 build 2611060511, Detail level: normal.\n--- Debug Logs (axorc run end) ---\n'+entry+'\n--- End Debug Logs ---\n'
+        self.assertEqual(self.check(r,stderr=stderr)['status'],'observed')
+        self.assertEqual(self.check(r,stderr=stderr+'Workspace\n')['reason'],'source_diagnostic')
 
 if __name__=='__main__':unittest.main()

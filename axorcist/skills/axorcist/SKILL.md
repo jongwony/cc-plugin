@@ -46,7 +46,8 @@ limits inclusion, not traversal or permissions. It cannot enforce a window/root
 boundary in this adapter. Use it only when application-wide traversal is within
 the requested read scope; otherwise report that this path cannot honor the scope.
 Request only necessary attributes and keep the candidate filter narrow enough
-that target predicates can be evaluated on every included element.
+that every target predicate can be evaluated on every included element, unless
+another predicate of that target already excludes it.
 
 ## Read and validate
 
@@ -65,8 +66,8 @@ selectors out of version control and remove task-temporary files after use.
 Read the fields separately:
 
 - `cardinality`: `single`, `duplicate`, `not_returned`, or `indeterminate` within
-  the returned set. Missing predicate attributes leave candidates indeterminate.
-  The same element matching two target definitions rejects the contract.
+  the returned set. A candidate with a missing or non-string predicate attribute,
+  not excluded by another predicate, makes the target `indeterminate`.
 - `attributes`: all required values must be present as strings; empty strings
   remain empty. `accuracy` compares exact expected strings when supplied;
   `not_checked` means there was no independent expected-value check.

@@ -7,9 +7,9 @@ window, Devices tab and device-list region, and resolve the requested device
 names exactly. A map annotation and a device-list row may name the same device;
 count the intended row domain, not every occurrence of its name in the app.
 
-The prior host observation used `AXIdentifier` beginning `ListEntityRow` and
-`AXDescription` beginning the exact device name followed by a comma. This is an
-observed locator from one installation, not a portable schema. Re-observe the
+One installation's device-list rows used `AXIdentifier` beginning
+`ListEntityRow` and `AXDescription` beginning the exact device name followed by a
+comma; this is not a portable schema. Re-observe the
 role, identifier and delimiter on the current app before adopting it. A prefix
 without that verified delimiter can include a different device.
 

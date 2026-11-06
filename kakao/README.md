@@ -132,3 +132,9 @@ What the run showed:
 - Whether AX reaches a window on another Space or a minimized window.
 - The bounds-based fallback for the window id, for when the private `_AXUIElementGetWindow` call fails (the private call worked in the run above).
 - The title string of group chat windows (a member count or similar may be added). `room_not_unique` lists the titles the app reports.
+
+## AXObserver experiments
+
+Historical observer probes, metadata-only evidence, and their limitations are
+preserved separately in [experiments/ax-observer](experiments/ax-observer/README.md).
+They do not implement production message monitoring.

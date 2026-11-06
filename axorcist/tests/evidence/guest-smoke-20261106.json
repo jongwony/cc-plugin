@@ -1,0 +1,266 @@
+{
+  "started_at": "2026-11-06T05:11:05.653428+00:00",
+  "environment": "TerminalMac guest; synthetic fixture only",
+  "adapter_sha256": "8dc574b6b1b747ecb724b811b4cd657abc8984276af7458ce2108a6f0e6a122c",
+  "cases": [
+    {
+      "scenario": "baseline",
+      "expected_status": "observed",
+      "exit": 0,
+      "result": {
+        "status": "observed",
+        "coverage": "returned_elements_only",
+        "source_completeness": "unproven",
+        "service_freshness": "not_checked",
+        "targets": [
+          {
+            "key": "alpha",
+            "matches": 1,
+            "unknown_candidates": 0,
+            "cardinality": "single",
+            "attributes": "present",
+            "accuracy": "matches_expected",
+            "expected_attributes": [
+              "AXValue"
+            ],
+            "overlaps_target": false
+          }
+        ],
+        "reason": "returned_rows_match_contract",
+        "observed_at": "2026-11-06T05:11:09.331095+00:00",
+        "elapsed_ms": 253.11
+      },
+      "session_before": {
+        "display_asleep": false,
+        "fixture_frontmost": true,
+        "on_console": true,
+        "screen_locked": false
+      },
+      "session_after": {
+        "display_asleep": false,
+        "fixture_frontmost": true,
+        "on_console": true,
+        "screen_locked": false
+      },
+      "pass": true
+    },
+    {
+      "scenario": "duplicate",
+      "expected_status": "rejected",
+      "exit": 1,
+      "result": {
+        "status": "rejected",
+        "coverage": "returned_elements_only",
+        "source_completeness": "unproven",
+        "service_freshness": "not_checked",
+        "targets": [
+          {
+            "key": "alpha",
+            "matches": 2,
+            "unknown_candidates": 0,
+            "cardinality": "duplicate",
+            "attributes": "not_checked",
+            "accuracy": "not_checked",
+            "expected_attributes": [
+              "AXValue"
+            ],
+            "overlaps_target": false
+          }
+        ],
+        "reason": "target_validation_failed",
+        "observed_at": "2026-11-06T05:11:09.618435+00:00",
+        "elapsed_ms": 88.16
+      },
+      "session_before": {
+        "display_asleep": false,
+        "fixture_frontmost": true,
+        "on_console": true,
+        "screen_locked": false
+      },
+      "session_after": {
+        "display_asleep": false,
+        "fixture_frontmost": true,
+        "on_console": true,
+        "screen_locked": false
+      },
+      "pass": true
+    },
+    {
+      "scenario": "missing",
+      "expected_status": "rejected",
+      "exit": 1,
+      "result": {
+        "status": "rejected",
+        "coverage": "returned_elements_only",
+        "source_completeness": "unproven",
+        "service_freshness": "not_checked",
+        "targets": [
+          {
+            "key": "beta",
+            "matches": 0,
+            "unknown_candidates": 0,
+            "cardinality": "not_returned",
+            "attributes": "not_checked",
+            "accuracy": "not_checked",
+            "expected_attributes": [
+              "AXValue"
+            ],
+            "overlaps_target": false
+          }
+        ],
+        "reason": "target_validation_failed",
+        "observed_at": "2026-11-06T05:11:10.004557+00:00",
+        "elapsed_ms": 88.09
+      },
+      "session_before": {
+        "display_asleep": false,
+        "fixture_frontmost": true,
+        "on_console": true,
+        "screen_locked": false
+      },
+      "session_after": {
+        "display_asleep": false,
+        "fixture_frontmost": true,
+        "on_console": true,
+        "screen_locked": false
+      },
+      "pass": true
+    },
+    {
+      "scenario": "nested",
+      "expected_status": "observed",
+      "exit": 0,
+      "result": {
+        "status": "observed",
+        "coverage": "returned_elements_only",
+        "source_completeness": "unproven",
+        "service_freshness": "not_checked",
+        "targets": [
+          {
+            "key": "alpha",
+            "matches": 1,
+            "unknown_candidates": 0,
+            "cardinality": "single",
+            "attributes": "present",
+            "accuracy": "matches_expected",
+            "expected_attributes": [
+              "AXValue"
+            ],
+            "overlaps_target": false
+          }
+        ],
+        "reason": "returned_rows_match_contract",
+        "observed_at": "2026-11-06T05:11:10.412794+00:00",
+        "elapsed_ms": 103.14
+      },
+      "session_before": {
+        "display_asleep": false,
+        "fixture_frontmost": true,
+        "on_console": true,
+        "screen_locked": false
+      },
+      "session_after": {
+        "display_asleep": false,
+        "fixture_frontmost": true,
+        "on_console": true,
+        "screen_locked": false
+      },
+      "pass": true
+    },
+    {
+      "scenario": "updated",
+      "expected_status": "observed",
+      "exit": 0,
+      "result": {
+        "status": "observed",
+        "coverage": "returned_elements_only",
+        "source_completeness": "unproven",
+        "service_freshness": "not_checked",
+        "targets": [
+          {
+            "key": "alpha",
+            "matches": 1,
+            "unknown_candidates": 0,
+            "cardinality": "single",
+            "attributes": "present",
+            "accuracy": "matches_expected",
+            "expected_attributes": [
+              "AXValue"
+            ],
+            "overlaps_target": false
+          }
+        ],
+        "reason": "returned_rows_match_contract",
+        "observed_at": "2026-11-06T05:11:10.798786+00:00",
+        "elapsed_ms": 88.51
+      },
+      "session_before": {
+        "display_asleep": false,
+        "fixture_frontmost": true,
+        "on_console": true,
+        "screen_locked": false
+      },
+      "session_after": {
+        "display_asleep": false,
+        "fixture_frontmost": true,
+        "on_console": true,
+        "screen_locked": false
+      },
+      "pass": true
+    },
+    {
+      "scenario": "mismatch",
+      "expected_status": "rejected",
+      "exit": 1,
+      "result": {
+        "status": "rejected",
+        "coverage": "returned_elements_only",
+        "source_completeness": "unproven",
+        "service_freshness": "not_checked",
+        "targets": [
+          {
+            "key": "alpha",
+            "matches": 1,
+            "unknown_candidates": 0,
+            "cardinality": "single",
+            "attributes": "present",
+            "accuracy": "mismatch",
+            "expected_attributes": [
+              "AXValue"
+            ],
+            "overlaps_target": false
+          }
+        ],
+        "reason": "target_validation_failed",
+        "observed_at": "2026-11-06T05:11:11.021042+00:00",
+        "elapsed_ms": 83.75
+      },
+      "session_before": {
+        "display_asleep": false,
+        "fixture_frontmost": true,
+        "on_console": true,
+        "screen_locked": false
+      },
+      "session_after": {
+        "display_asleep": false,
+        "fixture_frontmost": true,
+        "on_console": true,
+        "screen_locked": false
+      },
+      "pass": true
+    }
+  ],
+  "permissions": {
+    "accessibility": true
+  },
+  "complete": true,
+  "finished_at": "2026-11-06T05:11:11.065500+00:00",
+  "versions": {
+    "axorcist": "0.2.3",
+    "terminal_mac": "0.2.0 build 6",
+    "guest_os": "macOS 27.2 (26B123)",
+    "architecture": "arm64"
+  },
+  "fixture_source_sha256": "a2c91206bd2488783cd318db33a974df8bce513a6f0cc8248000b385e4d36180",
+  "scope": "One live call per case; pre-existing synthetic AppKit app with Alpha/Beta text fields. Filter exact AXRole plus AXIdentifier. No real Find My or Kakao data. Timings are smoke observations, not a repeated performance benchmark."
+}

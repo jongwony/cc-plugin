@@ -204,7 +204,7 @@ def main():
         result = envelope(reason='invalid_input_or_execution', error_type=type(e).__name__)
     result['observed_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     result['elapsed_ms'] = round((time.monotonic() - started) * 1000, 2)
-    print(json.dumps(result, ensure_ascii=False))
+    print(json.dumps(result))
     return 0 if result['status'] == 'observed' else 1
 
 

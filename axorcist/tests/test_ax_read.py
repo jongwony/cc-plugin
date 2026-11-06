@@ -1,6 +1,7 @@
 import copy
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -171,6 +172,20 @@ class Reads(unittest.TestCase):
     def test_duplicate_json_keys_and_nonfinite_rejected(self):
         for text in ['{"a":1,"a":2}','{"x":NaN}']:
             with self.assertRaises(ax.Invalid):ax.load_json(text)
+
+    def test_output_survives_ascii_stdout_and_lone_surrogate(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);c=copy.deepcopy(C);del c['targets'][0]['expected']
+            contract=root/'contract.json';contract.write_text(json.dumps(c))
+            text=json.dumps(response(node(value='\ud800 \ud55c\uad6d')))
+            fake=root/'axorc';fake.write_text('#!'+sys.executable+'\nprint('+repr(text)+')\n');fake.chmod(0o755)
+            cmd=[sys.executable,str(SCRIPT),'--contract',str(contract),'--lsappinfo',str(fake_lsappinfo(root)),'--axorc',str(fake),'--include-values']
+            env=dict(os.environ,PYTHONIOENCODING='ascii')
+            p=subprocess.run(cmd,capture_output=True,text=True,env=env)
+            self.assertEqual(p.returncode,0,p.stderr)
+            r=json.loads(p.stdout)
+            self.assertTrue({'status','coverage','source_completeness','service_freshness','targets','reason'}<=set(r))
+            self.assertEqual(r['targets'][0]['values']['AXValue'],'\ud800 \ud55c\uad6d')
 
     def test_cli_fake_process_success_error_and_timeout(self):
         with tempfile.TemporaryDirectory() as d:

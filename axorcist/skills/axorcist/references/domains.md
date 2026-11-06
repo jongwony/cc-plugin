@@ -13,9 +13,8 @@ observed locator from one installation, not a portable schema. Re-observe the
 role, identifier and delimiter on the current app before adopting it. A prefix
 without that verified delimiter can include a different device.
 
-Use application-wide collection only if the authorized scope permits it. The
-adapter's filter has exact-equality semantics; a prefix predicate belongs in a
-target's `match`, not in `filter`. If returned rows cannot be assigned to the
+The adapter's filter has exact-equality semantics; a prefix predicate belongs in
+a target's `match`, not in `filter`. If returned rows cannot be assigned to the
 confirmed list region, leave domain uniqueness unresolved. Where an existing
 Find My helper already checks tab, window, row multiplicity or session state,
 retain those checks and treat this adapter as additional evidence.

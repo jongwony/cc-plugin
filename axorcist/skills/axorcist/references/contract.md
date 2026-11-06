@@ -11,7 +11,6 @@ predicate must be evaluable on a candidate unless another predicate definitively
 excludes it. Missing/ill-typed values otherwise produce `indeterminate`.
 `expected` is an independent exact-value oracle, not another selector: using the
 expected value as the only selector would turn a wrong value into a missing row.
-No expected value means accuracy is untested, even when a required value exists.
 
 Synthetic example (replace bindings with current authorized app evidence):
 
@@ -32,9 +31,7 @@ Synthetic example (replace bindings with current authorized app evidence):
 The helper requests the union of filter, predicate and value attributes. It
 rejects source errors, process timeout, diagnostic output, unexpected collection
 shape, count mismatches, unverifiable filters, missing/duplicate/overlapping
-matches, missing required values and expected-value mismatches. `not_returned`
-means zero returned matches; `indeterminate` keeps potential unreadable matches
-visible. These are not app-wide absence or uniqueness certificates.
+matches, missing required values and expected-value mismatches.
 
 `--axorc /trusted/path/axorc` selects an already installed executable;
 `--timeout` bounds the process (default20, maximum60 seconds). The command is
@@ -42,7 +39,5 @@ fixed to `raw --debug --json` with `collectAll`; the contract cannot provide an
 action command. This is a workflow adapter, not an OS security boundary: callers
 still have their own tool permissions and responsibility for authorized scope.
 
-Output contains requested target values only with `--include-values`. It never
-prints unfiltered raw trees, selector values, source error messages or diagnostic
-logs, which can contain private UI data. Keep emitted values and temporary
-contracts under the current task's data-handling rules.
+Output never prints unfiltered raw trees, selector values, source error messages
+or diagnostic logs, which can contain private UI data.

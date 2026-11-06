@@ -199,4 +199,24 @@ class Reads(unittest.TestCase):
             self.assertEqual(json.loads(p.stdout)['reason'],'invalid_input_or_execution')
 
 
+    def test_every_exit_path_carries_one_envelope(self):
+        keys={'status','coverage','source_completeness','service_freshness','targets','reason'}
+        early=[self.check({'status':'error'}),self.check({'status':'success','debug_logs':[1]}),
+               self.check(response(node()),stderr='unexpected'),self.check({'status':'success','data':[]}),
+               self.check(response(None))]
+        n=node();n['attributes']['AXRole']='AXButton';early.append(self.check(response(n)))
+        early.append(self.check(response(node())))
+        for r in early:self.assertTrue(keys<=set(r),r)
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);contract=root/'contract.json';contract.write_text(json.dumps(C))
+            fake=root/'axorc';fake.write_text('#!'+sys.executable+'\nimport time\ntime.sleep(2)\n');fake.chmod(0o755)
+            cmd=[sys.executable,str(SCRIPT),'--contract',str(contract),'--axorc',str(fake)]
+            outs=[json.loads(subprocess.run(cmd+['--timeout','.05'],capture_output=True,text=True).stdout),
+                  json.loads(subprocess.run(cmd[:-1]+[str(root/'missing')],capture_output=True,text=True).stdout)]
+            contract.write_text('{broken')
+            outs.append(json.loads(subprocess.run(cmd,capture_output=True,text=True).stdout))
+        self.assertEqual([o['reason'] for o in outs],['process_timeout','invalid_input_or_execution','invalid_input_or_execution'])
+        for o in outs:
+            self.assertTrue(keys<=set(o),o);self.assertEqual(o['status'],'rejected');self.assertEqual(o['targets'],[])
+
 if __name__=='__main__':unittest.main()

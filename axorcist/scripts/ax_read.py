@@ -78,10 +78,16 @@ def log_level(entry):
     return m.group(1) if m else None
 
 
-def validate(c, response, exit_code=0, stderr='', include_values=False):
-    contract_check(c)
+def envelope(**fields):
     out = {'status': 'rejected', 'coverage': 'returned_elements_only',
            'source_completeness': 'unproven', 'service_freshness': 'not_checked', 'targets': []}
+    out.update(fields)
+    return out
+
+
+def validate(c, response, exit_code=0, stderr='', include_values=False):
+    contract_check(c)
+    out = envelope()
     if exit_code != 0 or not isinstance(response, dict) or response.get('status') != 'success' or response.get('error'):
         return dict(out, reason='source_error')
     # AXorcist can return success with a traversal-timeout diagnostic. Diagnostics
@@ -171,9 +177,9 @@ def main():
         p = subprocess.run([args.axorc, 'raw', '--debug', '--json', json.dumps(command(c))], capture_output=True, text=True, timeout=args.timeout)
         result = validate(c, load_json(p.stdout), p.returncode, p.stderr, args.include_values)
     except subprocess.TimeoutExpired:
-        result = {'status': 'rejected', 'reason': 'process_timeout', 'source_completeness': 'incomplete'}
+        result = envelope(reason='process_timeout', source_completeness='incomplete')
     except (OSError, ValueError, RecursionError) as e:
-        result = {'status': 'rejected', 'reason': 'invalid_input_or_execution', 'error_type': type(e).__name__}
+        result = envelope(reason='invalid_input_or_execution', error_type=type(e).__name__)
     result['observed_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     result['elapsed_ms'] = round((time.monotonic() - started) * 1000, 2)
     print(json.dumps(result, ensure_ascii=False))

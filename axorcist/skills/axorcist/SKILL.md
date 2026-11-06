@@ -38,8 +38,8 @@ evidence. Re-establish them after a structural or session change.
 Include every user-requested target in the contract. Set the success contract
 before the call: which returned candidate set is being
 examined, the expected number of each target, the required attributes, and any
-independent expected values. Exact strings preserve whitespace and Unicode;
-use a prefix only when that prefix carries the intended domain boundary.
+independent expected values. Use a prefix only when that prefix carries the
+intended domain boundary.
 
 `collectAll` starts at the **application** root. Its exact attribute filter
 limits inclusion, not traversal or permissions. It cannot enforce a window/root
@@ -71,9 +71,9 @@ Read the fields separately:
   remain empty. `accuracy` compares exact expected strings when supplied;
   `not_checked` means there was no independent expected-value check.
 - `source_completeness`: `unproven` even on exit 0. AXorcist 0.2.3 can stop at
-  depth/time/AX limitations without a complete-traversal certificate. The adapter
-  rejects diagnostics and malformed/count-inconsistent output, but silence is
-  not proof of completeness. A zero match is not proof of absence from the app.
+  depth/time/AX limitations without a complete-traversal certificate; a run with
+  no diagnostics is not proof of completeness. A zero match is not proof of
+  absence from the app.
 - `service_freshness`: `not_checked`. `observed_at` is the observation time,
   not the time a service measured or updated its data.
 

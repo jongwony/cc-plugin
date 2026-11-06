@@ -29,18 +29,16 @@ fi
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 cd "$(git rev-parse --show-toplevel)"
 
-# Skip during conflict states (diff is unreliable). `git rev-parse --git-path`
-# resolves correctly even in linked worktrees / submodules, where .git is a file
-# and the real heads live under .git/worktrees/<name>/.
-# A rebase in progress is marked by the rebase-merge / rebase-apply directory,
-# not by REBASE_HEAD.
-for h in MERGE_HEAD CHERRY_PICK_HEAD rebase-merge rebase-apply; do
-  p=$(git rev-parse --git-path "$h" 2>/dev/null) || p=""
+# Index mode only: skip while a merge is in progress. Range mode never skips.
+# `git rev-parse --git-path` resolves MERGE_HEAD in linked worktrees and
+# submodules, where .git is a file.
+if [ -z "$base" ]; then
+  p=$(git rev-parse --git-path MERGE_HEAD 2>/dev/null) || p=""
   if [ -n "$p" ] && [ -e "$p" ]; then
-    echo "→ version-bump check: $h present — skipping"
+    echo "→ version-bump check: MERGE_HEAD present — skipping"
     exit 0
   fi
-done
+fi
 
 # Resolve the comparison baseline per mode. ":" is the staged index.
 # In range mode the changed-file set uses three-dot (merge-base) semantics, so the

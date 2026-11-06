@@ -34,10 +34,10 @@ Synthetic example (replace bindings with current authorized app evidence):
 ```
 
 The helper requests the union of filter, predicate and value attributes. It
-rejects a missing or ambiguous app, source errors, process timeout, diagnostic
-output, unexpected collection shape, count mismatches, unverifiable filters,
-missing/duplicate/overlapping matches, missing required values and
-expected-value mismatches.
+rejects a missing or ambiguous app, source errors, process timeout,
+warning-or-higher or unreadable AXorcist log entries, unexpected collection
+shape, count mismatches, unverifiable filters, missing/duplicate/overlapping
+matches, missing required values and expected-value mismatches.
 
 `--axorc /trusted/path/axorc` selects an already installed executable;
 `--timeout` bounds the process (default20, maximum60 seconds). The command is

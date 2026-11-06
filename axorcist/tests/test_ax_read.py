@@ -115,7 +115,6 @@ class Reads(unittest.TestCase):
     def test_success_with_timeout_warning_is_not_success(self):
         r=response(node());r['debug_logs']=['[2026-11-06T00:00:00.123Z] [WARNING] - HandleCollectAll: traversal timeout (20.0s) reached. Aborting traversal.']
         self.assertEqual(self.check(r)['reason'],'source_diagnostic')
-        self.assertEqual(self.check(response(node()),stderr='unexpected diagnostic')['status'],'rejected')
 
     def test_error_and_critical_levels_rejected(self):
         for level in ['ERROR','CRITICAL']:
@@ -131,18 +130,6 @@ class Reads(unittest.TestCase):
         c=copy.deepcopy(C);c['application']='local.test.errorviewer'
         r=response(node());r['debug_logs']=["[2026-11-06T00:00:00.5Z] [INFO] [AXorcist.swift:159] - HandleCollectAll: Starting collection for app 'local.test.errorviewer' timeout truncated warning"]
         self.assertEqual(ax.validate(c,r)['status'],'observed')
-
-    def test_normal_debug_stderr_accepted_but_unknown_rejected(self):
-        r=response(node());r['debug_logs']=['[2026-11-06T00:00:00Z] [INFO] - Collected 1 elements']
-        stderr='AXORCMain.run: AXorc version 0.2.3 build 2611060511, Detail level: normal.\n\n--- Debug Logs (axorc run end) ---\n'+r['debug_logs'][0]+'\n--- End Debug Logs ---\n'
-        self.assertEqual(self.check(r,stderr=stderr)['status'],'observed')
-        self.assertEqual(self.check(r,stderr=stderr+'unrecognized warning')['status'],'rejected')
-
-    def test_banner_with_injected_text_rejected(self):
-        for banner in ['AXORCMain.run: AXorc version 0.2.3 build abc WARNING: traversal timed out | Detail level: normal.',
-                       'AXORCMain.run: AXorc version 0.2.3 build 2611060511 WARNING, Detail level: normal.',
-                       'AXORCMain.run: AXorc version 0.2.3 build 2611060511, Detail level: normal. timeout']:
-            self.assertEqual(self.check(response(node()),stderr=banner)['reason'],'source_diagnostic')
 
     def test_case_and_unicode_are_exact(self):
         for identity in ['ALPHA','alpha ','αlpha']:
@@ -214,7 +201,7 @@ class Reads(unittest.TestCase):
     def test_every_exit_path_carries_one_envelope(self):
         keys={'status','coverage','source_completeness','service_freshness','targets','reason'}
         early=[self.check({'status':'error'}),self.check({'status':'success','debug_logs':[1]}),
-               self.check(response(node()),stderr='unexpected'),self.check({'status':'success','data':[]}),
+               self.check({'status':'success','data':[]}),
                self.check(response(None))]
         n=node();n['attributes']['AXRole']='AXButton';early.append(self.check(response(n)))
         early.append(self.check(response(node())))
@@ -247,11 +234,11 @@ class Reads(unittest.TestCase):
             p=subprocess.run([sys.executable,str(SCRIPT),'--contract',str(contract),'--lsappinfo',str(fake_lsappinfo(root,1)),'--axorc',str(fake)],capture_output=True,text=True)
             self.assertEqual(json.loads(p.stdout)['status'],'observed');self.assertTrue(marker.exists())
 
-    def test_multiline_log_entry_is_one_benign_entry(self):
-        r=response(node());entry='[2026-11-06T00:00:00.000Z] [INFO] - Root title Fixture\nWorkspace'
-        r['debug_logs']=[entry]
-        stderr='AXORCMain.run: AXorc version 0.2.3 build 2611060511, Detail level: normal.\n--- Debug Logs (axorc run end) ---\n'+entry+'\n--- End Debug Logs ---\n'
-        self.assertEqual(self.check(r,stderr=stderr)['status'],'observed')
-        self.assertEqual(self.check(r,stderr=stderr+'Workspace\n')['reason'],'source_diagnostic')
+    def test_stderr_text_is_not_classified(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);contract=root/'contract.json';contract.write_text(json.dumps(C))
+            fake=root/'axorc';fake.write_text('#!'+sys.executable+'\nimport sys\nsys.stderr.write("AXorc version 9.9 WARNING: unrelated\\n")\nprint('+repr(json.dumps(response(node())))+')\n');fake.chmod(0o755)
+            p=subprocess.run([sys.executable,str(SCRIPT),'--contract',str(contract),'--lsappinfo',str(fake_lsappinfo(root,1)),'--axorc',str(fake)],capture_output=True,text=True)
+            self.assertEqual(json.loads(p.stdout)['status'],'observed')
 
 if __name__=='__main__':unittest.main()

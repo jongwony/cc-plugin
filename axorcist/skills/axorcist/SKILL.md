@@ -57,8 +57,8 @@ Create a temporary contract using [contract.md](references/contract.md). Run:
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/ax_read.py" --contract /path/to/contract.json
 ```
 
-The adapter runs one read-only `collectAll` call, captures its exit status and
-diagnostics, and validates its response. It prints metadata by default. Add
+The adapter runs one read-only `collectAll` call and validates its exit status,
+response and AXorcist log levels. It prints metadata by default. Add
 `--include-values` only when the task needs the requested target strings in the
 conversation; that output may be private. Keep contract files with personal
 selectors out of version control and remove task-temporary files after use.

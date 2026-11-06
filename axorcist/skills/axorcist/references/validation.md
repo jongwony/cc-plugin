@@ -4,8 +4,8 @@ Run `python3 -m unittest discover -s axorcist/tests -v` and
 `python3 axorcist/tests/check_package.py` from the repository root. The offline
 suite exercises duplicated identical values, absent targets, wrong/empty values,
 unknown attributes, overlapping selectors, malformed/partial/error output,
-diagnostics classified by AXorcist's log level and banner grammar, deeply nested
-input, privacy of default output, and subprocess timeout. The package check
+diagnostics classified by AXorcist's log level, deeply nested input, privacy of
+default output, and subprocess timeout. The package check
 confirms marketplace delivery, reference resolution and opt-in installation.
 Neither runs a live AX read.
 

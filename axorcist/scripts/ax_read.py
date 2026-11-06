@@ -67,8 +67,7 @@ def unwrap(value):
     return value
 
 
-# AXorcist 0.2.3 log grammar: AXORCMain.logDebugVersion and AXLogEntry.formattedForTextLog.
-BANNER = re.compile(r'AXORCMain\.run: AXorc version 0\.2\.3 build \d{10}, Detail level: (?:minimal|normal|verbose)\.')
+# AXorcist 0.2.3 log entry grammar: AXLogEntry.formattedForTextLog.
 LOG_ENTRY = re.compile(r'\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})\] \[([A-Z]+)\] ')
 BENIGN_LEVELS = {'DEBUG', 'INFO'}
 
@@ -104,7 +103,7 @@ def envelope(**fields):
     return out
 
 
-def validate(c, response, exit_code=0, stderr='', include_values=False):
+def validate(c, response, exit_code=0, include_values=False):
     contract_check(c)
     out = envelope()
     if exit_code != 0 or not isinstance(response, dict) or response.get('status') != 'success' or response.get('error'):
@@ -114,15 +113,7 @@ def validate(c, response, exit_code=0, stderr='', include_values=False):
     logs = response.get('debug_logs', [])
     if not isinstance(logs, list) or not all(isinstance(x, str) for x in logs):
         return dict(out, reason='invalid_diagnostics')
-    rest = stderr
-    for entry in logs:
-        i = rest.find(entry) if entry else -1
-        if i >= 0:
-            rest = rest[:i] + rest[i + len(entry):]
-    benign_stderr = {x.strip() for x in logs} | {'--- Debug Logs (axorc run end) ---', '--- End Debug Logs ---', ''}
-    unknown_stderr = any(line.strip() not in benign_stderr and not BANNER.fullmatch(line.strip())
-                         for line in rest.splitlines())
-    if unknown_stderr or any(log_level(x) not in BENIGN_LEVELS for x in logs):
+    if any(log_level(x) not in BENIGN_LEVELS for x in logs):
         return dict(out, source_completeness='incomplete_or_diagnostic', reason='source_diagnostic')
     data = response.get('data')
     if not isinstance(data, dict) or not isinstance(data.get('elements'), list) or type(data.get('count')) is not int or data['count'] != len(data['elements']):
@@ -206,7 +197,7 @@ def main():
         else:
             # Fixed read-only command; the contract cannot introduce actions or a shell.
             p = subprocess.run([args.axorc, 'raw', '--debug', '--json', json.dumps(command(c, pid))], capture_output=True, text=True, timeout=args.timeout)
-            result = validate(c, load_json(p.stdout), p.returncode, p.stderr, args.include_values)
+            result = validate(c, load_json(p.stdout), p.returncode, args.include_values)
     except subprocess.TimeoutExpired:
         result = envelope(reason='process_timeout', source_completeness='incomplete')
     except (OSError, ValueError, RecursionError) as e:

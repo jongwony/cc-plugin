@@ -2,7 +2,7 @@
 
 ## The kind of video
 
-The kind is itself a decision a newcomer rarely names. The reading names the kind it took.
+The reading names the kind it took.
 
 ## Real examples to point at
 

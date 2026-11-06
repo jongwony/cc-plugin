@@ -1,12 +1,12 @@
 # motion
 
-For someone who wants a short motion-graphics video but can't yet say what it should be, and who may know nothing about motion design or prompting. `/motion` shows, in plain words through `/elicit`, how it read the request — where and for whom the video is used, what it shows and how — puts what the reading leaves open as questions carrying the values it takes, and starts building at once; a wrong reading is stopped with an interrupt. It builds the video as a web page drawn from code, renders it as an mp4, and shows them that mp4 to approve or change; where a change cannot be settled in words, it lets the person see variants or contrasting directions of the video instead.
+For someone who wants a motion-graphics video made from code. `/motion` reads back through `/elicit`, at the level the person's own words show, how it took the request — where and for whom the video is used, what it shows and how — puts what the reading leaves open as questions carrying the values it takes, and starts building at once; a wrong reading is stopped with an interrupt. The video is made to the craft its use calls for, as a HyperFrames project where HyperFrames is installed and otherwise as a web page drawn from code; it is rendered as an mp4 and shown to approve or change; where a change cannot be settled in words, the person sees variants or contrasting directions of the video instead.
 
 ```mermaid
 flowchart LR
   A[what the video is for] --> B["/elicit: the reading — where, for whom, what and how; open questions with the values taken"]
   B -. wrong reading: interrupt .-> A
-  B --> P[page drawn from time]
+  B --> P["page drawn from time (a HyperFrames project where installed)"]
   P -. an act outside this session .-> D["/bound"]
   D -.-> P
   P --> M[mp4]
@@ -44,4 +44,4 @@ claude plugin marketplace add jongwony/cc-plugin
 claude plugin install motion@cc-plugin
 ```
 
-Then install the protocol plugins `skills/motion/SKILL.md` lists under Prerequisites.
+Then install the protocol plugins `skills/motion/SKILL.md` lists under Prerequisites. HyperFrames is optional: with it installed, the video is built and rendered as a HyperFrames project.

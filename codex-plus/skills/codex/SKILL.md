@@ -19,8 +19,10 @@ When the delegated task is image generation or image editing:
 
 - Include `$imagegen` in the prompt so downstream clients treat it as an explicit image-generation request.
 - Keep the local prompt here minimal and task-specific.
-- Defer prompt construction details to the installed `imagegen` skill when available. Codex's bundled copy predates GPT-Image-2.5: it names `gpt-image-2` as the CLI/API default and routes a transparent background to `gpt-image-1.5`. Name `gpt-image-2.5-flare` instead — GPT-Image-2 quality or better at roughly half the latency — and `gpt-image-2.5-sunburst` where the cost of the task is a retry on an edit: multi-turn editing, identity or layout that has to survive several passes, campaign and product work where the precision is what is being paid for. 2.5 renders alpha natively from `background: "transparent"` with `output_format` `png` or `webp`, and its quality ladder runs `low|medium|high|xhigh|max|auto`.
-- Read OpenAI's GPT Image 2.5 prompting guide — https://developers.openai.com/api/docs/guides/image-prompting — for model parameters, per-use-case prompt structure, text rendering, edits, multi-image workflows, and migrating a workflow off an earlier model. It carries reference sections for GPT Image 2, 1.5 and 1 as well.
+- Codex renders through its built-in `image_gen` tool, whose only parameters are `prompt`, `referenced_image_paths`, `num_last_images_to_include` and `transparent_background`. The image model is chosen server-side and not reported, so a model, quality or output format named in the prompt never reaches the call. Carry size, layout, exact text, style and transparency as words in the prompt.
+- The image is saved under `$CODEX_HOME/generated_images/<session-id>/`. When the caller needs the file, the prompt tells codex to copy it into the `-C` directory.
+- A named GPT Image model, `quality`, `complexity`, SVG or GIF output and markup edits live only on the Images API, which the `imagegen` skill reaches through its CLI fallback — only when the prompt asks for CLI mode and `OPENAI_API_KEY` is set. That fallback's `scripts/image_gen.py` takes quality `low|medium|high|auto` and none of the rest.
+- For prompt wording — structure per use case, text rendering, edit instructions, multiple reference images — read https://developers.openai.com/api/docs/guides/image-prompting.
 
 ## Goal Requests
 

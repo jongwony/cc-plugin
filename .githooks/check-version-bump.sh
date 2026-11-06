@@ -32,7 +32,9 @@ cd "$(git rev-parse --show-toplevel)"
 # Skip during conflict states (diff is unreliable). `git rev-parse --git-path`
 # resolves correctly even in linked worktrees / submodules, where .git is a file
 # and the real heads live under .git/worktrees/<name>/.
-for h in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD; do
+# A rebase in progress is marked by the rebase-merge / rebase-apply directory,
+# not by REBASE_HEAD.
+for h in MERGE_HEAD CHERRY_PICK_HEAD rebase-merge rebase-apply; do
   p=$(git rev-parse --git-path "$h" 2>/dev/null) || p=""
   if [ -n "$p" ] && [ -e "$p" ]; then
     echo "→ version-bump check: $h present — skipping"

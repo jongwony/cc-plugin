@@ -67,6 +67,17 @@ def unwrap(value):
     return value
 
 
+# AXorcist 0.2.3 log grammar: AXORCMain.logDebugVersion and AXLogEntry.formattedForTextLog.
+BANNER = re.compile(r'AXORCMain\.run: AXorc version 0\.2\.3 build \d{10}, Detail level: (?:minimal|normal|verbose)\.')
+LOG_ENTRY = re.compile(r'\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})\] \[([A-Z]+)\] ')
+BENIGN_LEVELS = {'DEBUG', 'INFO'}
+
+
+def log_level(entry):
+    m = LOG_ENTRY.match(entry)
+    return m.group(1) if m else None
+
+
 def validate(c, response, exit_code=0, stderr='', include_values=False):
     contract_check(c)
     out = {'status': 'rejected', 'coverage': 'returned_elements_only',
@@ -78,11 +89,10 @@ def validate(c, response, exit_code=0, stderr='', include_values=False):
     logs = response.get('debug_logs', [])
     if not isinstance(logs, list) or not all(isinstance(x, str) for x in logs):
         return dict(out, reason='invalid_diagnostics')
-    benign_stderr = set(logs) | {'--- Debug Logs (axorc run end) ---', '--- End Debug Logs ---', ''}
-    unknown_stderr = any(line.strip() not in benign_stderr and not re.fullmatch(
-        r'AXORCMain\.run: AXorc version 0\.2\.3 build .*Detail level: normal\.', line.strip())
-        for line in stderr.splitlines())
-    if unknown_stderr or any(re.search(r'warning|error|timeout|timed out|aborting|truncat', x, re.I) for x in logs):
+    benign_stderr = {x.strip() for x in logs} | {'--- Debug Logs (axorc run end) ---', '--- End Debug Logs ---', ''}
+    unknown_stderr = any(line.strip() not in benign_stderr and not BANNER.fullmatch(line.strip())
+                         for line in stderr.splitlines())
+    if unknown_stderr or any(log_level(x) not in BENIGN_LEVELS for x in logs):
         return dict(out, source_completeness='incomplete_or_diagnostic', reason='source_diagnostic')
     data = response.get('data')
     if not isinstance(data, dict) or not isinstance(data.get('elements'), list) or type(data.get('count')) is not int or data['count'] != len(data['elements']):
@@ -162,7 +172,7 @@ def main():
         result = validate(c, load_json(p.stdout), p.returncode, p.stderr, args.include_values)
     except subprocess.TimeoutExpired:
         result = {'status': 'rejected', 'reason': 'process_timeout', 'source_completeness': 'incomplete'}
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, RecursionError) as e:
         result = {'status': 'rejected', 'reason': 'invalid_input_or_execution', 'error_type': type(e).__name__}
     result['observed_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     result['elapsed_ms'] = round((time.monotonic() - started) * 1000, 2)

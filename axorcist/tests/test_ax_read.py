@@ -102,15 +102,36 @@ class Reads(unittest.TestCase):
         self.assertEqual(self.check(r)['reason'],'source_error')
 
     def test_success_with_timeout_warning_is_not_success(self):
-        r=response(node());r['debug_logs']=['[WARNING] HandleCollectAll: traversal timeout reached']
+        r=response(node());r['debug_logs']=['[2026-11-06T00:00:00.123Z] [WARNING] - HandleCollectAll: traversal timeout (20.0s) reached. Aborting traversal.']
         self.assertEqual(self.check(r)['reason'],'source_diagnostic')
         self.assertEqual(self.check(response(node()),stderr='unexpected diagnostic')['status'],'rejected')
 
+    def test_error_and_critical_levels_rejected(self):
+        for level in ['ERROR','CRITICAL']:
+            r=response(node());r['debug_logs']=['[2026-11-06T00:00:00Z] [%s] - collection failed' % level]
+            self.assertEqual(self.check(r)['reason'],'source_diagnostic')
+
+    def test_unparseable_log_line_rejected(self):
+        for line in ['[INFO] Collected 1 elements','Collected 1 elements','[2026-11-06T00:00:00Z] [info] - x']:
+            r=response(node());r['debug_logs']=[line]
+            self.assertEqual(self.check(r)['reason'],'source_diagnostic')
+
+    def test_info_message_text_does_not_classify(self):
+        c=copy.deepcopy(C);c['application']='local.test.errorviewer'
+        r=response(node());r['debug_logs']=["[2026-11-06T00:00:00.5Z] [INFO] [AXorcist.swift:159] - HandleCollectAll: Starting collection for app 'local.test.errorviewer' timeout truncated warning"]
+        self.assertEqual(ax.validate(c,r)['status'],'observed')
+
     def test_normal_debug_stderr_accepted_but_unknown_rejected(self):
         r=response(node());r['debug_logs']=['[2026-11-06T00:00:00Z] [INFO] - Collected 1 elements']
-        stderr='AXORCMain.run: AXorc version 0.2.3 build abc | Detail level: normal.\n\n--- Debug Logs (axorc run end) ---\n'+r['debug_logs'][0]+'\n--- End Debug Logs ---\n'
+        stderr='AXORCMain.run: AXorc version 0.2.3 build 2611060511, Detail level: normal.\n\n--- Debug Logs (axorc run end) ---\n'+r['debug_logs'][0]+'\n--- End Debug Logs ---\n'
         self.assertEqual(self.check(r,stderr=stderr)['status'],'observed')
         self.assertEqual(self.check(r,stderr=stderr+'unrecognized warning')['status'],'rejected')
+
+    def test_banner_with_injected_text_rejected(self):
+        for banner in ['AXORCMain.run: AXorc version 0.2.3 build abc WARNING: traversal timed out | Detail level: normal.',
+                       'AXORCMain.run: AXorc version 0.2.3 build 2611060511 WARNING, Detail level: normal.',
+                       'AXORCMain.run: AXorc version 0.2.3 build 2611060511, Detail level: normal. timeout']:
+            self.assertEqual(self.check(response(node()),stderr=banner)['reason'],'source_diagnostic')
 
     def test_case_and_unicode_are_exact(self):
         for identity in ['ALPHA','alpha ','αlpha']:
@@ -165,6 +186,17 @@ class Reads(unittest.TestCase):
             contract.write_text('{broken')
             p=subprocess.run(cmd,capture_output=True,text=True);self.assertEqual(p.returncode,1)
             self.assertNotIn('Traceback',p.stderr)
+            for depth in (2000, 200000):
+                contract.write_text('['*depth+']'*depth)
+                p=subprocess.run(cmd,capture_output=True,text=True);self.assertEqual(p.returncode,1)
+                self.assertNotIn('Traceback',p.stderr)
+                self.assertEqual(json.loads(p.stdout)['reason'],'invalid_input_or_execution')
+            contract.write_text(json.dumps(C))
+            nested='['*200000+']'*200000
+            fake.write_text('#!'+sys.executable+'\nimport sys\nsys.stdout.write('+repr(nested)+')\n')
+            p=subprocess.run(cmd,capture_output=True,text=True);self.assertEqual(p.returncode,1)
+            self.assertNotIn('Traceback',p.stderr)
+            self.assertEqual(json.loads(p.stdout)['reason'],'invalid_input_or_execution')
 
 
 if __name__=='__main__':unittest.main()

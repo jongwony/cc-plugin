@@ -1,0 +1,24 @@
+{
+  "name": "findmy-location",
+  "description": "The user's current location as context, read from the macOS Find My app's device list — the phone, or a fallback device — with place label, address, distance from this Mac and how fresh it is",
+  "version": "0.1.0",
+  "userConfig": {
+    "primary_device": {
+      "type": "string",
+      "title": "Primary device",
+      "description": "Device name exactly as Find My's device list shows it, usually the phone",
+      "required": true
+    },
+    "fallback_device": {
+      "type": "string",
+      "title": "Fallback device",
+      "description": "Device read when the primary one has no fresh location, such as a watch; leave empty for none",
+      "required": false
+    }
+  },
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  },
+  "license": "MIT"
+}

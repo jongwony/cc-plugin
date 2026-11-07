@@ -138,6 +138,11 @@
       "name": "ntfy-checkpoint",
       "source": "./ntfy-checkpoint",
       "description": "Phone push at a set minute for a one-shot checkpoint, scheduled on ntfy ahead of time with no visible list — one ntfy MCP server per area, work and personal"
+    },
+    {
+      "name": "findmy-location",
+      "source": "./findmy-location",
+      "description": "The user's current location as context, read from macOS Find My's device list — phone or fallback device, with place, address, distance and freshness"
     }
   ]
 }

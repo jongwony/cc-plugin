@@ -32,14 +32,26 @@ nodeRepl.write(row ? "selected" : "not_found");
 """
 
 
-def parse_row(line, devices):
+def row_head(line):
     head = line.split(" ID: ListEntityRow", 1)[0].strip()
     head = re.sub(r"^\d+\s+", "", head)
     head = re.sub(r"^\S+\s+(\(selected\)\s+)?", "", head)
-    head = re.sub(r"^Description:\s*", "", head)
-    name = next((d for d in sorted(devices, key=len, reverse=True) if head.startswith(d + ", ")), None)
-    if name is None:
-        return None
+    return re.sub(r"^Description:\s*", "", head)
+
+
+def match_rows(lines, devices):
+    heads = [row_head(line) for line in lines]
+    rows = []
+    for name in devices:
+        hits = [h for h in heads if h.startswith(name + ", ")]
+        if len(hits) == 1:
+            rows.append(parse_row(hits[0], name))
+        elif hits:
+            rows.append({"name": name, "ambiguous": True, "freshness": None})
+    return rows
+
+
+def parse_row(head, name):
     rest = head[len(name) + 2:]
     if rest.startswith("세부사항 열기, "):
         rest = rest[len("세부사항 열기, "):]
@@ -100,7 +112,7 @@ def read_rows(devices, timeout=30):
         lines = None
     if not isinstance(lines, list) or not all(isinstance(line, str) for line in lines):
         raise OcuError("unreadable ocu js output: " + out.strip()[-200:])
-    return [row for row in (parse_row(line, devices) for line in lines) if row]
+    return match_rows(lines, devices)
 
 
 def select(name):
@@ -130,19 +142,22 @@ def front_app():
     return (bundle or None), reason
 
 
-def restore_focus(front, front_reason):
+def restore_focus(front, front_reason, result):
     if front is None:
-        return {"focus_restored": False, "focus_note": "front app unknown: " + (front_reason or "")}
-    if front == FINDMY:
-        return {"focus_restored": True}
-    _, reason = run_bounded(["open", "-b", front])
-    return {"focus_restored": True} if reason is None else {"focus_restored": False, "focus_note": reason}
+        result.update(focus_restored=False, focus_note="front app unknown: " + (front_reason or ""))
+        return
+    _, reason = (None, None) if front == FINDMY else run_bounded(["open", "-b", front])
+    result.update(focus_restored=reason is None, focus_note=reason)
 
 
-def refresh(devices, front, front_reason):
+def refresh(devices, front, front_reason, result):
     """Bring Find My forward until a configured device is fresh, then return focus."""
-    rows, target, focus = [], None, {}
-    run_bounded(["open", "-b", FINDMY])
+    _, reason = run_bounded(["open", "-b", FINDMY])
+    if reason:
+        result["activation_error"] = reason
+        raise OcuError("Find My could not be brought forward: " + reason)
+    result["activated_findmy"] = True
+    rows, target = [], None
     try:
         deadline = time.monotonic() + WAIT_S
         while target is None:
@@ -158,8 +173,8 @@ def refresh(devices, front, front_reason):
                 raise
             target = pick(rows, devices)
     finally:
-        focus = restore_focus(front, front_reason)
-    return rows, target, focus
+        restore_focus(front, front_reason, result)
+    return rows, target
 
 
 def configured(value):
@@ -168,6 +183,12 @@ def configured(value):
 
 
 def main(argv=None, stdin=None):
+    started = time.monotonic()
+    result = {
+        "status": "error", "device": None, "candidates": {}, "ambiguous": [], "message": None,
+        "activated_findmy": False, "activation_error": None, "focus_restored": None, "focus_note": None,
+        "read_at": None, "elapsed_s": None,
+    }
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--devices-stdin", action="store_true", help="read the primary and fallback device names from stdin, one per line")
     parser.add_argument("--primary", default=os.environ.get("CLAUDE_PLUGIN_OPTION_PRIMARY_DEVICE"))
@@ -177,28 +198,28 @@ def main(argv=None, stdin=None):
         lines = (stdin or sys.stdin).read().splitlines() + ["", ""]
         args.primary, args.fallback = lines[0], lines[1]
     devices = [d for d in (configured(args.primary), configured(args.fallback)) if d]
-    if not devices:
-        print(json.dumps({"status": "unconfigured", "message": "set primary_device with:\n" + CONFIGURE}))
-        return 2
-    started = time.monotonic()
-    result = {"status": "error"}
-    try:
-        result.update(locate(devices))
-    except OcuError as exc:
-        result["message"] = str(exc)
+    invalid = [d for d in devices if ", " in d]
+    if not devices or invalid:
+        result["status"] = "unconfigured"
+        why = "device names cannot contain \", \": %s" % invalid if invalid else "no device name is set"
+        result["message"] = why + "; set them with:\n" + CONFIGURE
+    else:
+        try:
+            locate(devices, result)
+        except OcuError as exc:
+            result.update(status="error", message=str(exc))
     result["read_at"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
     result["elapsed_s"] = round(time.monotonic() - started, 1)
     print(json.dumps(result, ensure_ascii=False))
-    return {"ok": 0, "stale_or_missing": 1}.get(result["status"], 3)
+    return {"ok": 0, "stale_or_missing": 1, "unconfigured": 2}.get(result["status"], 3)
 
 
-def locate(devices):
+def locate(devices, result):
     front, front_reason = front_app()
     rows = read_rows(devices)
-    target, activated, focus = pick(rows, devices), False, {}
+    target = pick(rows, devices)
     if target is None:
-        activated = True
-        rows, target, focus = refresh(devices, front, front_reason)
+        rows, target = refresh(devices, front, front_reason, result)
     if target and not target["address"] and select(target["name"]):
         try:
             reread = next((r for r in read_rows(devices) if r["name"] == target["name"]), None)
@@ -206,14 +227,12 @@ def locate(devices):
             reread = None
         if is_fresh(reread):
             target = reread
-    return {
-        "status": "ok" if target else "stale_or_missing",
-        "device": target,
-        "candidates": {r["name"]: r["freshness"] for r in rows},
-        "activated_findmy": activated,
-        **focus,
-    }
-
+    result.update(
+        status="ok" if target else "stale_or_missing",
+        device=target,
+        candidates={r["name"]: r["freshness"] for r in rows if not r.get("ambiguous")},
+        ambiguous=[r["name"] for r in rows if r.get("ambiguous")],
+    )
 
 if __name__ == "__main__":
     sys.exit(main())

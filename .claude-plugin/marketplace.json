@@ -142,7 +142,7 @@
     {
       "name": "findmy-location",
       "source": "./findmy-location",
-      "description": "The user's current location as context, read from macOS Find My's device list — phone or fallback device, with place, address, distance and freshness"
+      "description": "Read where the user is right now from the macOS Find My app, when a task needs the user's current location as context"
     }
   ]
 }

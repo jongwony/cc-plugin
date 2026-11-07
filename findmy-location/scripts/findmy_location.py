@@ -21,7 +21,6 @@ WAIT_S = 15
 FOCUS_TIMEOUT_S = 5
 WAKE = ["caffeinate", "-u", "-t", "120"]
 WAKE_SETTLE_S = 2
-RELOCK_WAIT_S = 5
 UNOBSERVED = "could not observe a protected GUI session becoming unlocked"
 CONFIGURE = (
     "claude plugin configure findmy-location@cc-plugin --values-stdin <<'FINDMY_LOCATION_CONFIG_END'\n"
@@ -181,22 +180,6 @@ def wake_display(force=False):
     time.sleep(WAKE_SETTLE_S)
 
 
-def relock(result):
-    _, reason = run_bounded(["pmset", "displaysleepnow"])
-    deadline = time.monotonic() + RELOCK_WAIT_S
-    state = None
-    while reason is None and time.monotonic() < deadline:
-        status = locked_use_status()
-        state = status[0] if status else None
-        if state == "locked":
-            break
-        time.sleep(0.5)
-    result["relocked"] = state == "locked"
-    if not result["relocked"]:
-        note = reason or "session state after pmset displaysleepnow: %s" % (state or "unreadable")
-        result["message"] = ((result["message"] + "; ") if result["message"] else "") + "Mac not locked again: " + note
-
-
 def front_app():
     bundle, reason = run_bounded(["osascript", "-e", 'tell application "System Events" to get bundle identifier of first process whose frontmost is true'])
     if reason is None and not bundle:
@@ -249,7 +232,7 @@ def main(argv=None, stdin=None):
     result = {
         "status": "error", "device": None, "candidates": {}, "ambiguous": [], "message": None,
         "activated_findmy": False, "activation_error": None, "focus_restored": None, "focus_note": None,
-        "locked_session": False, "relocked": None, "read_at": None, "elapsed_s": None,
+        "locked_session": False, "read_at": None, "elapsed_s": None,
     }
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--devices-stdin", action="store_true", help="read the primary and fallback device names from stdin, one per line")
@@ -275,9 +258,6 @@ def main(argv=None, stdin=None):
             locate(devices, result)
         except OcuError as exc:
             result.update(status="error", message=str(exc))
-        finally:
-            if locked and status[1]:
-                relock(result)
     result["read_at"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
     result["elapsed_s"] = round(time.monotonic() - started, 1)
     print(json.dumps(result, ensure_ascii=False))

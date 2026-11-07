@@ -392,44 +392,25 @@ class Subprocesses(unittest.TestCase):
 
 
 
-RELOCK = ["pmset", "displaysleepnow"]
-
-
 class LockedSession(unittest.TestCase):
-    def test_locked_and_available_wakes_reads_and_relocks(self):
+    def test_locked_and_available_wakes_and_reads(self):
         code, out, calls = run_main(reads_of([row(SELECTED_WITH_BATTERY)]),
-                                    lock_states=[("locked", True, None), ("locked", True, None)])
-        self.assertEqual((code, out["status"], out["locked_session"], out["relocked"]), (0, "ok", True, True))
+                                    lock_states=[("locked", True, None)])
+        self.assertEqual((code, out["status"], out["locked_session"]), (0, "ok", True))
         self.assertEqual(run_main.woke, [False])
-        self.assertIn(RELOCK, calls)
-
-    def test_relock_that_does_not_take_is_reported(self):
-        _, out, calls = run_main(reads_of([row(SELECTED_WITH_BATTERY)]),
-                                 lock_states=[("locked", True, None), ("unlocked", True, None)])
-        self.assertEqual((out["status"], out["relocked"]), ("ok", False))
-        self.assertIn("Mac not locked again", out["message"])
 
     def test_locked_and_unavailable_is_an_error_without_ocu(self):
         def never(devices, timeout=30):
             raise AssertionError("ocu must not be called")
 
         code, out, calls = run_main(never, lock_states=[("locked", False, "plugin not installed")])
-        self.assertEqual((code, out["status"], out["locked_session"], out["relocked"]), (3, "error", True, None))
+        self.assertEqual((code, out["status"], out["locked_session"]), (3, "error", True))
         self.assertIn("Locked Use is not available: plugin not installed", out["message"])
         self.assertEqual((run_main.woke, calls), ([], []))
 
-    def test_unlocked_session_neither_wakes_nor_relocks(self):
+    def test_unlocked_session_does_not_wake(self):
         _, out, calls = run_main(reads_of([row(SELECTED_WITH_BATTERY)]))
-        self.assertEqual((out["locked_session"], out["relocked"], run_main.woke), (False, None, []))
-        self.assertNotIn(RELOCK, calls)
-
-    def test_read_error_while_locked_still_relocks(self):
-        def fail(devices, timeout=30):
-            raise fl.OcuError("boom")
-
-        _, out, calls = run_main(fail, lock_states=[("locked", True, None), ("locked", True, None)])
-        self.assertEqual((out["status"], out["relocked"]), ("error", True))
-        self.assertIn(RELOCK, calls)
+        self.assertEqual((out["locked_session"], run_main.woke), (False, []))
 
 
 class UnobservedRetry(unittest.TestCase):

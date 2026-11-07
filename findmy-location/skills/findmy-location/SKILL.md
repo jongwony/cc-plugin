@@ -31,7 +31,7 @@ FINDMY_LOCATION_DEVICES_END
 
 - When no configured device shows a fresh location, the script brings Find My to the front for up to 15 seconds and then returns focus to the app that was in front (`activated_findmy: true`). `focus_restored: false` means focus could not be returned (`focus_note` says why); tell the user Find My may still be in front.
 - When the chosen device's row shows no address, it selects that row in Find My's list to reveal it.
-- On a locked Mac it wakes the display so Open Computer Use's Locked Use can read Find My, then locks the Mac again (`locked_session: true`). `relocked: false` means the Mac stayed unlocked; tell the user.
+- On a locked Mac it wakes the display so Open Computer Use's Locked Use can read Find My (`locked_session: true`); the Mac's own auto-lock closes the session again.
 
 ## Privacy
 

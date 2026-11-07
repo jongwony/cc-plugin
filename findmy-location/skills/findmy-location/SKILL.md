@@ -9,7 +9,7 @@ description: Read where the user is right now from the macOS Find My app. Use wh
 
 - macOS with the Find My app signed in to the user's Apple Account.
 - Python 3, standard library only (`brew install python` if missing).
-- Open Computer Use 1.1.3 or later (`npm i -g open-computer-use`), granted Accessibility (`ocu doctor`).
+- Open Computer Use 1.1.3 or later (`npm i -g open-computer-use`), granted Accessibility (`ocu doctor`); reading while the Mac is locked needs its Locked Use (`ocu locked-use enable`).
 - Find My's interface in Korean; other languages are untested.
 - The plugin's `primary_device` option set to the name exactly as Find My lists it, usually the phone; `fallback_device` is optional.
 
@@ -31,6 +31,7 @@ FINDMY_LOCATION_DEVICES_END
 
 - When no configured device shows a fresh location, the script brings Find My to the front for up to 15 seconds and then returns focus to the app that was in front (`activated_findmy: true`). `focus_restored: false` means focus could not be returned (`focus_note` says why); tell the user Find My may still be in front.
 - When the chosen device's row shows no address, it selects that row in Find My's list to reveal it.
+- On a locked Mac it wakes the display so Open Computer Use's Locked Use can read Find My, then locks the Mac again (`locked_session: true`). `relocked: false` means the Mac stayed unlocked; tell the user.
 
 ## Privacy
 

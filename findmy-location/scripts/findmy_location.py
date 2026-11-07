@@ -19,6 +19,10 @@ DISTANCE = re.compile(r"^\d+(\.\d+)?\s*k?m$")
 ROW_START = re.compile(r"^(세부사항 열기|\d+(\.\d+)?\s*k?m), ")
 WAIT_S = 15
 FOCUS_TIMEOUT_S = 5
+WAKE = ["caffeinate", "-u", "-t", "120"]
+WAKE_SETTLE_S = 2
+RELOCK_WAIT_S = 5
+UNOBSERVED = "could not observe a protected GUI session becoming unlocked"
 CONFIGURE = (
     "claude plugin configure findmy-location@cc-plugin --values-stdin <<'FINDMY_LOCATION_CONFIG_END'\n"
     '{"primary_device": "<name>", "fallback_device": "<name>"}\n'
@@ -101,7 +105,7 @@ class OcuError(Exception):
         self.timed_out = timed_out
 
 
-def ocu_js(args, stdin=None, timeout=30):
+def ocu_js(args, stdin=None, timeout=30, retried=False):
     try:
         proc = subprocess.run(["ocu", "js", *args], input=stdin, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -110,6 +114,9 @@ def ocu_js(args, stdin=None, timeout=30):
         raise OcuError("ocu js could not start: %s" % exc)
     if proc.returncode != 0:
         tail = (proc.stderr.strip() or proc.stdout.strip())[-200:]
+        if UNOBSERVED in tail and not retried:
+            wake_display(force=True)
+            return ocu_js(args, stdin, timeout, retried=True)
         raise OcuError("ocu js exited %d: %s" % (proc.returncode, tail or "no output"))
     return proc.stdout
 
@@ -146,6 +153,48 @@ def run_bounded(cmd):
     if proc.returncode != 0:
         return None, "%s exited %d: %s" % (cmd[0], proc.returncode, (proc.stderr.strip() or "no output")[-200:])
     return proc.stdout.strip(), None
+
+
+def locked_use_status():
+    """Return (session_state, available, blocker) from Locked Use, or None when it cannot be read."""
+    out, _ = run_bounded(["open-computer-use", "locked-use", "status", "--json"])
+    try:
+        status = json.loads(out) if out else None
+    except ValueError:
+        status = None
+    if not isinstance(status, dict):
+        return None
+    session = status.get("session") if isinstance(status.get("session"), dict) else {}
+    blockers = status.get("blockers") if isinstance(status.get("blockers"), list) else []
+    return session.get("state"), status.get("available") is True, (str(blockers[0]) if blockers else None)
+
+
+def wake_display(force=False):
+    if not force:
+        running, _ = run_bounded(["pgrep", "-f", " ".join(WAKE)])
+        if running:
+            return
+    try:
+        subprocess.Popen(WAKE, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    except OSError:
+        return
+    time.sleep(WAKE_SETTLE_S)
+
+
+def relock(result):
+    _, reason = run_bounded(["pmset", "displaysleepnow"])
+    deadline = time.monotonic() + RELOCK_WAIT_S
+    state = None
+    while reason is None and time.monotonic() < deadline:
+        status = locked_use_status()
+        state = status[0] if status else None
+        if state == "locked":
+            break
+        time.sleep(0.5)
+    result["relocked"] = state == "locked"
+    if not result["relocked"]:
+        note = reason or "session state after pmset displaysleepnow: %s" % (state or "unreadable")
+        result["message"] = ((result["message"] + "; ") if result["message"] else "") + "Mac not locked again: " + note
 
 
 def front_app():
@@ -200,7 +249,7 @@ def main(argv=None, stdin=None):
     result = {
         "status": "error", "device": None, "candidates": {}, "ambiguous": [], "message": None,
         "activated_findmy": False, "activation_error": None, "focus_restored": None, "focus_note": None,
-        "read_at": None, "elapsed_s": None,
+        "locked_session": False, "relocked": None, "read_at": None, "elapsed_s": None,
     }
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--devices-stdin", action="store_true", help="read the primary and fallback device names from stdin, one per line")
@@ -214,10 +263,21 @@ def main(argv=None, stdin=None):
     if not devices:
         result.update(status="unconfigured", message="no device name is set; set them with:\n" + CONFIGURE)
     else:
+        status = locked_use_status()
+        locked = bool(status and status[0] == "locked")
+        result["locked_session"] = locked
         try:
+            if locked and not status[1]:
+                raise OcuError("the Mac is locked and Open Computer Use's Locked Use is not available"
+                               + (": " + status[2] if status[2] else "") + "; unlock the Mac or enable Locked Use (ocu locked-use enable)")
+            if locked:
+                wake_display()
             locate(devices, result)
         except OcuError as exc:
             result.update(status="error", message=str(exc))
+        finally:
+            if locked and status[1]:
+                relock(result)
     result["read_at"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
     result["elapsed_s"] = round(time.monotonic() - started, 1)
     print(json.dumps(result, ensure_ascii=False))

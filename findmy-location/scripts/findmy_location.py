@@ -14,6 +14,7 @@ FINDMY = "com.apple.findmy"
 READ = pathlib.Path(__file__).with_name("read_rows.mjs")
 MARKER = "FINDMY_ROWS "
 FRESH = re.compile(r"^(지금|\d+\s*분 전)$")
+NOW = "지금"
 SEP = re.compile(r"[\s ]*·[\s ]*")
 DISTANCE = re.compile(r"^\d+(\.\d+)?\s*k?m$")
 ROW_START = re.compile(r"^(세부사항 열기|\d+(\.\d+)?\s*k?m), ")
@@ -91,6 +92,10 @@ def parse_row(head, name):
 
 def is_fresh(row):
     return bool(row and FRESH.match(row.get("freshness") or ""))
+
+
+def is_now(row):
+    return bool(row and row.get("freshness") == NOW)
 
 
 def pick(rows, devices):
@@ -195,17 +200,17 @@ def restore_focus(front, front_reason, result):
     result.update(focus_restored=reason is None, focus_note=reason)
 
 
-def refresh(devices, front, front_reason, result):
-    """Bring Find My forward until a configured device is fresh, then return focus."""
+def refresh(devices, front, front_reason, result, rows=(), best=None):
+    """Bring Find My forward and re-read, within one WAIT_S budget, until the picked device reads 지금; then return focus."""
     _, reason = run_bounded(["open", "-b", FINDMY])
     if reason:
         result["activation_error"] = reason
         raise OcuError("Find My could not be brought forward: " + reason)
     result["activated_findmy"] = True
-    rows, target = [], None
+    rows, target = list(rows), best
     try:
         deadline = time.monotonic() + WAIT_S
-        while target is None:
+        while not is_now(target):
             time.sleep(1)
             remaining = deadline - time.monotonic()
             if remaining <= 0:
@@ -216,7 +221,7 @@ def refresh(devices, front, front_reason, result):
                 if exc.timed_out and time.monotonic() >= deadline:
                     break
                 raise
-            target = pick(rows, devices)
+            target = pick(rows, devices) or target
     finally:
         restore_focus(front, front_reason, result)
     return rows, target
@@ -268,8 +273,8 @@ def locate(devices, result):
     front, front_reason = front_app()
     rows = read_rows(devices)
     target = pick(rows, devices)
-    if target is None:
-        rows, target = refresh(devices, front, front_reason, result)
+    if target is None or (result["locked_session"] and not is_now(target)):
+        rows, target = refresh(devices, front, front_reason, result, rows, target)
     if target and not target["address"] and select(target["text"]):
         try:
             reread = next((r for r in read_rows(devices) if r["name"] == target["name"]), None)

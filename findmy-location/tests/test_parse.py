@@ -21,6 +21,7 @@ SELECTED_WITH_BATTERY = f"13 버튼 (selected) Phone A, 세부사항 열기, 집
 NOT_FOUND = "14 텍스트 Description: Phone A, 발견된 위치 없음 ID: ListEntityRow"
 OLD = f"15 텍스트 Description: Phone A, 6.3km, 집{NB}· 5개월 전 ID: ListEntityRow"
 PAUSED = f"16 텍스트 Description: Phone A, 6.3km, 집{NB}· 일시 정지됨 ID: ListEntityRow"
+MIN30 = f"18 텍스트 Description: Phone A, 6.3km, 집{NB}· 30분 전 ID: ListEntityRow"
 OTHER = f"17 텍스트 Description: Buds D, 6.3km, 집{NB}· 지금 ID: ListEntityRow"
 ODD_NAMES = ['Phone, A', 'Phone "A"', "User's iPhone", "Phone $DEVICE_COLOR", "Phone []"]
 
@@ -411,6 +412,33 @@ class LockedSession(unittest.TestCase):
     def test_unlocked_session_does_not_wake(self):
         _, out, calls = run_main(reads_of([row(SELECTED_WITH_BATTERY)]))
         self.assertEqual((out["locked_session"], run_main.woke), (False, []))
+
+
+class WaitForNow(unittest.TestCase):
+    def test_woken_find_my_waits_until_now(self):
+        code, out, calls = run_main(reads_of([row(PAUSED)], [row(MIN30)], [row(MIN30)], [row(LIST_ROW)],
+                                             [row(SELECTED_WITH_BATTERY)]))
+        self.assertEqual((code, out["device"]["freshness"], out["activated_findmy"]), (0, "지금", True))
+        self.assertEqual(calls, [ACTIVATE, RESTORE])
+
+    def test_woken_find_my_that_never_reads_now_returns_the_fresh_value_at_the_deadline(self):
+        clock = FakeClock()
+        code, out, calls = run_main(lambda devices, timeout=30: [row(MIN30)], clock=clock,
+                                    lock_states=[("locked", True, None)])
+        self.assertEqual((code, out["status"], out["device"]["freshness"]), (0, "ok", "30분 전"))
+        self.assertEqual(calls, [ACTIVATE, RESTORE])
+        self.assertLessEqual(clock.now, fl.WAIT_S + 1)
+
+    def test_locked_session_with_an_old_fresh_value_wakes_find_my(self):
+        code, out, calls = run_main(reads_of([row(MIN30)], [row(LIST_ROW)], [row(SELECTED_WITH_BATTERY)]),
+                                    lock_states=[("locked", True, None)])
+        self.assertEqual((code, out["device"]["freshness"], out["activated_findmy"]), (0, "지금", True))
+
+    def test_unwoken_find_my_returns_at_once(self):
+        clock = FakeClock()
+        code, out, calls = run_main(reads_of([row(MIN30)], [row(MIN30)]), clock=clock)
+        self.assertEqual((code, out["device"]["freshness"], out["activated_findmy"]), (0, "30분 전", False))
+        self.assertEqual((calls, clock.now), ([], 0.0))
 
 
 class UnobservedRetry(unittest.TestCase):

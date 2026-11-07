@@ -9,13 +9,13 @@ Mac의 Find My 앱에서 지금 내 휴대폰(또는 지정한 보조 기기)의
 3. Find My가 백그라운드에서 위치를 `일시 정지됨`으로 두고 있으면, Find My를 최대 15초 앞으로 가져와 갱신을 기다린 뒤 원래 앱으로 돌립니다.
 4. 고른 기기 행에 주소가 없으면 그 행을 선택해 주소를 받습니다.
 
-최신 위치가 없으면 `stale_or_missing`으로 끝나고, 예전 값을 대신 내놓지 않습니다.
+최신 위치가 없으면 `stale_or_missing`으로 끝나고, 예전 값을 대신 내놓지 않습니다. Find My를 읽지 못하면(접근성 권한 없음, ocu 실패·시간 초과) `error`와 이유를 돌려줍니다.
 
 ## 설치와 설정
 
 ```
 /plugin install findmy-location --marketplace jongwony/cc-plugin
-claude plugin configure findmy-location@cc-plugin
+echo '{"primary_device":"<기기 이름>","fallback_device":"<기기 이름>"}' | claude plugin configure findmy-location@cc-plugin --values-stdin
 ```
 
 - `primary_device`: Find My 목록에 보이는 이름 그대로(보통 휴대폰)
@@ -29,4 +29,4 @@ claude plugin configure findmy-location@cc-plugin
 python3 -m unittest discover -s findmy-location/tests -v
 ```
 
-행 파서와 신선도 판정을 실제 AX 행 형식의 예시로 검사합니다. 실제 Find My를 읽는 경로는 테스트에 들어 있지 않습니다.
+행 파서와 신선도 판정은 실제 AX 행 형식의 예시로, 대기·포커스 복귀·ocu 실패 처리는 ocu와 시계를 흉내 낸 테스트로 검사합니다. 실제 Find My를 읽는 경로는 테스트에 들어 있지 않습니다.

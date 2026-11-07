@@ -15,7 +15,7 @@ READ = pathlib.Path(__file__).with_name("read_rows.mjs")
 FRESH = re.compile(r"^(지금|\d+\s*분 전)$")
 SEP = re.compile(r"[\s ]*·[\s ]*")
 WAIT_S = 15
-CONFIGURE = "claude plugin configure findmy-location@cc-plugin"
+CONFIGURE = "echo '{\"primary_device\":\"<name>\",\"fallback_device\":\"<name>\"}' | claude plugin configure findmy-location@cc-plugin --values-stdin"
 SELECT = """
 const app = await cua.getApp("com.apple.findmy", { initialState: false });
 const q = await app.query({ text: NAME + ", ", role: "AXStaticText", maxNodes: 2000, limit: 5 });
@@ -60,20 +60,66 @@ def pick(rows, devices):
     return next((by_name[d] for d in devices if is_fresh(by_name.get(d))), None)
 
 
-def ocu_js(args, stdin=None):
-    return subprocess.run(["ocu", "js", *args], input=stdin, capture_output=True, text=True, timeout=30).stdout
+class OcuError(Exception):
+    def __init__(self, message, timed_out=False):
+        super().__init__(message)
+        self.timed_out = timed_out
 
 
-def read_rows():
-    out = ocu_js(["--file", str(READ)])
-    start = out.rfind('["')
-    if start < 0:
-        start = out.rfind("[]")
-    return [parse_row(line) for line in json.loads(out[start:].strip())] if start >= 0 else []
+def ocu_js(args, stdin=None, timeout=30):
+    try:
+        proc = subprocess.run(["ocu", "js", *args], input=stdin, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise OcuError("ocu js timed out after %gs" % timeout, timed_out=True)
+    except OSError as exc:
+        raise OcuError("ocu js could not start: %s" % exc)
+    if proc.returncode != 0:
+        tail = (proc.stderr.strip() or proc.stdout.strip())[-200:]
+        raise OcuError("ocu js exited %d: %s" % (proc.returncode, tail or "no output"))
+    return proc.stdout
+
+
+def read_rows(timeout=30):
+    out = ocu_js(["--file", str(READ)], timeout=timeout)
+    start = max(out.rfind('["'), out.rfind("[]"))
+    try:
+        lines = json.loads(out[start:].strip()) if start >= 0 else None
+    except ValueError:
+        lines = None
+    if not isinstance(lines, list):
+        raise OcuError("unreadable ocu js output: " + out.strip()[-200:])
+    return [parse_row(line) for line in lines]
 
 
 def select(name):
-    return "selected" in ocu_js(["-"], "const NAME = " + json.dumps(name, ensure_ascii=False) + ";" + SELECT)
+    try:
+        return "selected" in ocu_js(["-"], "const NAME = " + json.dumps(name, ensure_ascii=False) + ";" + SELECT)
+    except OcuError:
+        return False
+
+
+def refresh(devices, front):
+    """Bring Find My forward until a configured device is fresh, then return focus."""
+    rows, target = [], None
+    subprocess.run(["open", "-b", FINDMY])
+    try:
+        deadline = time.monotonic() + WAIT_S
+        while target is None:
+            time.sleep(1)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                rows = read_rows(timeout=max(1, remaining))
+            except OcuError as exc:
+                if exc.timed_out and time.monotonic() >= deadline:
+                    break
+                raise
+            target = pick(rows, devices)
+    finally:
+        if front and front != FINDMY:
+            subprocess.run(["open", "-b", front])
+    return rows, target
 
 
 def osa(script):
@@ -95,31 +141,37 @@ def main(argv=None):
         print(json.dumps({"status": "unconfigured", "message": "set primary_device with `" + CONFIGURE + "`"}))
         return 2
     started = time.monotonic()
+    result = {"status": "error"}
+    try:
+        result.update(locate(devices))
+    except OcuError as exc:
+        result["message"] = str(exc)
+    result["read_at"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+    result["elapsed_s"] = round(time.monotonic() - started, 1)
+    print(json.dumps(result, ensure_ascii=False))
+    return {"ok": 0, "stale_or_missing": 1}.get(result["status"], 3)
+
+
+def locate(devices):
     front = osa('tell application "System Events" to get bundle identifier of first process whose frontmost is true')
     rows = read_rows()
     target, activated = pick(rows, devices), False
     if target is None:
-        subprocess.run(["open", "-b", FINDMY])
         activated = True
-        deadline = time.monotonic() + WAIT_S
-        while target is None and time.monotonic() < deadline:
-            time.sleep(1)
-            rows = read_rows()
-            target = pick(rows, devices)
-        if front and front != FINDMY:
-            subprocess.run(["open", "-b", front])
+        rows, target = refresh(devices, front)
     if target and not target["address"] and select(target["name"]):
-        rows = read_rows()
-        target = next((r for r in rows if r["name"] == target["name"]), target)
-    print(json.dumps({
+        try:
+            reread = next((r for r in read_rows() if r["name"] == target["name"]), None)
+        except OcuError:
+            reread = None
+        if is_fresh(reread):
+            target = reread
+    return {
         "status": "ok" if target else "stale_or_missing",
         "device": target,
         "candidates": {r["name"]: r["freshness"] for r in rows if r["name"] in devices},
         "activated_findmy": activated,
-        "read_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
-        "elapsed_s": round(time.monotonic() - started, 1),
-    }, ensure_ascii=False))
-    return 0 if target else 1
+    }
 
 
 if __name__ == "__main__":

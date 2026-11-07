@@ -1,16 +1,15 @@
 # findmy-location
 
-Mac의 Find My 앱에서 지금 내 휴대폰(또는 지정한 보조 기기)의 위치를 읽어, Claude가 작업 컨텍스트로 쓰게 하는 플러그인입니다. 장소 라벨, 주소, 이 Mac과의 거리, 그리고 그 위치가 얼마나 최신인지(`지금`, `N분 전`)를 JSON 한 줄로 돌려줍니다.
+Mac의 Find My 앱에서 지금 내 휴대폰(또는 지정한 보조 기기)의 위치를 읽어, Claude가 작업 컨텍스트로 쓰게 하는 플러그인입니다.
 
 ## 동작
 
-1. Find My의 기기 목록을 접근성(AX) 트리로 읽습니다. 스크린샷은 찍지 않습니다.
-2. 설정한 기기 중 위치가 최신인 첫 기기를 고릅니다.
-3. 설정한 기기 중 최신 위치가 보이는 기기가 없으면(예: Find My가 백그라운드에서 위치를 `일시 정지됨`으로 둔 경우), Find My를 최대 15초 앞으로 가져와 갱신을 기다린 뒤 원래 앱으로 돌립니다.
-4. 고른 기기 행에 주소가 없으면 그 행을 선택해 주소를 받습니다.
-5. Mac이 잠겨 있으면 먼저 디스플레이를 켜서(`caffeinate -u`) Open Computer Use의 Locked Use가 Find My를 읽게 합니다. 결과의 `locked_session`이 이를 알려 줍니다. Locked Use가 연 세션은 Mac의 자동 잠금이 다시 닫습니다.
+1. 스크립트는 Find My의 기기 목록을 접근성(AX) 트리로 읽어, 목록 행의 텍스트만 화면에 보이는 그대로 JSON 한 줄(`rows`)로 돌려줍니다. 스크린샷은 찍지 않고, 행을 해석하지도 않습니다.
+2. 행을 읽고 판단하는 것은 Claude입니다. 설정한 기기 이름으로 시작하는 행에서 장소, 이 Mac과의 거리, 얼마 전 위치인지를 읽습니다.
+3. 위치가 `일시 정지됨`이거나 작업에 쓰기에 오래됐으면 `--refresh`로 한 번 더 읽습니다. Find My를 10초 동안 앞으로 가져와 갱신하게 한 뒤, 원래 앞에 있던 앱으로 돌립니다.
+4. Mac이 잠겨 있으면 먼저 디스플레이를 켜서(`caffeinate -u`) Open Computer Use의 Locked Use가 Find My를 읽게 합니다. Locked Use가 연 세션은 Mac의 자동 잠금이 다시 닫습니다.
 
-최신 위치가 없으면 `stale_or_missing`으로 끝나고, 예전 값을 대신 내놓지 않습니다. Find My를 읽지 못하면(접근성 권한 없음, ocu 실패·시간 초과) `error`와 이유를 돌려줍니다.
+Find My를 읽지 못하면(접근성 권한 없음, ocu 실패·시간 초과, Locked Use 없이 잠긴 Mac) `status: error`와 이유를 돌려줍니다.
 
 ## 설치와 설정
 
@@ -21,16 +20,17 @@ claude plugin configure findmy-location@cc-plugin --values-stdin <<'FINDMY_LOCAT
 FINDMY_LOCATION_CONFIG_END
 ```
 
-값은 JSON 객체입니다. 같은 이름의 기기가 Find My 목록에 둘 이상 있으면 그 기기는 건너뛰고 `ambiguous`로 알려 줍니다.
-
 - `primary_device`: Find My 목록에 보이는 이름 그대로(보통 휴대폰)
-- `fallback_device`: 휴대폰 위치가 최신이 아닐 때 읽을 기기(예: Apple Watch). 비워 둬도 됩니다.
+- `fallback_device`: 휴대폰 위치가 최근 것이 아닐 때 읽을 기기(예: Apple Watch). 비워 둬도 됩니다.
 
-필요한 것: macOS, Python 3, Open Computer Use 1.1.3 이상(`npm i -g open-computer-use`, 접근성 권한), Find My 로그인. Mac이 잠긴 동안 읽으려면 Locked Use(`ocu locked-use enable`)가 켜져 있어야 합니다. Find My가 한국어 화면일 때만 확인했습니다.
+두 값은 스크립트가 아니라 skill 안내문에 들어가, Claude가 어느 행을 읽을지 정하는 데 씁니다.
+
+필요한 것: macOS, Python 3, Open Computer Use 1.1.3 이상(`npm i -g open-computer-use`, 접근성 권한), Find My 로그인. Mac이 잠긴 동안 읽으려면 Locked Use(`ocu locked-use enable`)가 켜져 있어야 합니다.
 
 ## 한계
 
-Find My의 접근성 행에는 기기 이름만 따로 담긴 칸이 없고, 이름과 거리·장소가 `, `로 이어진 한 줄만 있습니다. 그래서 설정한 이름 뒤에 `, <거리>`가 붙은 이름의 다른 기기(예: 설정 이름 `Phone`, 다른 기기 `Phone, 2km`)는 구별하지 못합니다. 설정하는 이름은 다른 기기 이름의 그런 앞부분이 되지 않게 고릅니다.
+- 목록 행의 주소는 보통 시·동 수준입니다. 더 자세한 주소는 Find My에서 그 기기가 선택된 행(`세부사항 열기`가 들어 있는 행)에만 나옵니다.
+- Find My가 한국어 화면일 때만 확인했습니다.
 
 ## 테스트
 
@@ -38,4 +38,4 @@ Find My의 접근성 행에는 기기 이름만 따로 담긴 칸이 없고, 이
 python3 -m unittest discover -s findmy-location/tests -v
 ```
 
-행 파서와 신선도 판정은 실제 AX 행 형식의 예시로, 대기·포커스 복귀·ocu 실패 처리는 ocu와 시계를 흉내 낸 테스트로 검사합니다. 실제 Find My를 읽는 경로는 테스트에 들어 있지 않습니다.
+행 텍스트를 걸러 내는 부분, 잠긴 Mac 처리, `--refresh`의 포커스 복귀, 오류 출력을 검사합니다. 실제 Find My를 읽는 경로는 테스트에 들어 있지 않습니다.

@@ -11,27 +11,21 @@ description: Read where the user is right now from the macOS Find My app. Use wh
 - Python 3, standard library only (`brew install python` if missing).
 - Open Computer Use 1.1.3 or later (`npm i -g open-computer-use`), granted Accessibility (`ocu doctor`); reading while the Mac is locked needs its Locked Use (`ocu locked-use enable`).
 - Find My's interface in Korean; other languages are untested.
-- The plugin's `primary_device` option set to the name exactly as Find My lists it, usually the phone; `fallback_device` is optional.
+- The plugin's `primary_device` option set to the name exactly as Find My lists it, usually the phone; `fallback_device` is optional. Set them with `claude plugin configure findmy-location@cc-plugin`.
 
 ## Read
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/findmy_location.py" --devices-stdin <<'FINDMY_LOCATION_DEVICES_END'
-${user_config.primary_device}
-${user_config.fallback_device}
-FINDMY_LOCATION_DEVICES_END
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/findmy_location.py"
 ```
 
-- `status: ok` — a fresh location (`지금` or `N분 전`) from the first configured device that has one. Use `device.address` (or `device.place_label`) as the user's whereabouts, with its freshness.
-- `status: stale_or_missing` — no configured device has a fresh location. Say so; do not reuse an earlier reading or guess from `candidates`. A name in `ambiguous` matched more than one Find My row; ask the user for the device's full name.
-- `status: unconfigured` — no device name is set; relay the script's `message` to the user.
-- `status: error` — reading Find My failed (`message` says how, for example a missing Accessibility grant). Report it rather than retrying unchanged.
+It prints one JSON line; `rows` holds Find My's device-list rows as the app shows them.
 
-## Side effects
-
-- When no configured device shows a fresh location, the script brings Find My to the front for up to 15 seconds and then returns focus to the app that was in front (`activated_findmy: true`). `focus_restored: false` means focus could not be returned (`focus_note` says why); tell the user Find My may still be in front.
-- When the chosen device's row shows no address, it selects that row in Find My's list to reveal it.
-- On a locked Mac it wakes the display so Open Computer Use's Locked Use can read Find My (`locked_session: true`); the Mac's own auto-lock closes the session again.
+- Take the row that starts with `${user_config.primary_device}, `; use the one starting with `${user_config.fallback_device}, ` when the primary's row shows no recent location. A row reads `<name>, [세부사항 열기,] [<place> | ]<distance from this Mac>, <place or address> · <how long ago>`. Read it as written rather than reconstructing it.
+- When that location reads `일시 정지됨`, or is older than the task can use, run the script once more with `--refresh`: Find My comes to the front for 10 seconds so its locations update, then focus returns to the app that was in front (`focus_restored: false` means it did not; tell the user Find My may still be in front).
+- Report the place, the distance and how long ago it was seen. When no row gives a recent location, say so; do not reuse an earlier reading.
+- `status: error` — reading Find My failed; `message` says how. Report it rather than retrying unchanged.
+- On a locked Mac the script wakes the display so Open Computer Use's Locked Use can read Find My (`locked_session: true`); the Mac's own auto-lock closes the session again.
 
 ## Privacy
 

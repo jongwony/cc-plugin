@@ -43,6 +43,23 @@ class ParseRow(unittest.TestCase):
         parsed = row(SELECTED_WITH_BATTERY)
         self.assertEqual((parsed["address"], parsed["freshness"]), ("예시시 견본동", "지금"))
 
+    def test_selected_row_away_from_a_named_place(self):
+        line = ("21 버튼 (selected) Phone A, 세부사항 열기, 43km, 예시시 견본리, 지금 ID: ListEntityRow-ListEntityRow, "
+                "Secondary Actions: Cancel, Scroll Down, Scroll Up, 세부사항 열기, 36분, 재생")
+        parsed = row(line)
+        self.assertEqual({k: parsed[k] for k in ("name", "place_label", "distance", "address", "freshness")},
+                         {"name": "Phone A", "place_label": None, "distance": "43km", "address": "예시시 견본리", "freshness": "지금"})
+        self.assertTrue(fl.is_fresh(parsed))
+
+    def test_selected_row_away_with_battery_and_comma_address(self):
+        parsed = row(f"21 버튼 (selected) Phone A, 세부사항 열기, 43km, 예시시, 견본리, 3분 전{NB}· 4분의 3 충전된 배터리 ID: ListEntityRow")
+        self.assertEqual((parsed["place_label"], parsed["distance"], parsed["address"], parsed["freshness"]), (None, "43km", "예시시, 견본리", "3분 전"))
+
+    def test_list_row_without_distance_at_a_place(self):
+        parsed = row(f"12 텍스트 Description: Watch B, 집{NB}· 4시간 전 ID: ListEntityRow")
+        self.assertEqual((parsed["distance"], parsed["place_label"], parsed["freshness"]), (None, "집", "4시간 전"))
+        self.assertFalse(fl.is_fresh(parsed))
+
     def test_not_found_row(self):
         self.assertEqual(row(NOT_FOUND)["freshness"], "발견된 위치 없음")
 

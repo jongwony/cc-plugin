@@ -61,16 +61,19 @@ def belongs(head, name):
 
 def parse_row(head, name):
     rest = head[len(name) + 2:]
-    if rest.startswith("세부사항 열기, "):
+    selected = rest.startswith("세부사항 열기, ")
+    if selected:
         rest = rest[len("세부사항 열기, "):]
     place = distance = address = freshness = None
-    if " | " in rest:
-        place, after = rest.split(" | ", 1)
-        distance, _, tail = after.partition(", ")
-        if tail:
-            middle, _, last = tail.rpartition(", ")
-            address = middle or None
-            freshness = SEP.split(last)[0]
+    if selected:
+        if " | " in rest:
+            place, rest = rest.split(" | ", 1)
+        first, _, remainder = rest.partition(", ")
+        if remainder and DISTANCE.match(first):
+            distance, rest = first, remainder
+        middle, _, last = rest.rpartition(", ")
+        address = middle or None
+        freshness = SEP.split(last)[0]
     elif "·" in rest:
         first, _, remainder = rest.partition(", ")
         if remainder and DISTANCE.match(first):

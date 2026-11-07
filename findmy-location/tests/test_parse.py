@@ -167,9 +167,16 @@ RESTORE = ["open", "-b", "com.example.front"]
 ACTIVATE = ["open", "-b", fl.FINDMY]
 
 
-def run_main(read_rows, clock=None, front=("com.example.front", None), restore_reason=None, activate_reason=None):
+def run_main(read_rows, clock=None, front=("com.example.front", None), restore_reason=None, activate_reason=None,
+             lock_states=(("unlocked", True, None),)):
     clock = clock or FakeClock()
-    calls, run_at, selected = [], [], []
+    calls, run_at, selected, woke = [], [], [], []
+    lock_states = iter(lock_states)
+    last_state = [None]
+
+    def lock_status():
+        last_state[0] = next(lock_states, last_state[0])
+        return last_state[0]
 
     def bounded(cmd):
         calls.append(cmd)
@@ -182,6 +189,8 @@ def run_main(read_rows, clock=None, front=("com.example.front", None), restore_r
         stack.enter_context(mock.patch.object(fl, "select", side_effect=lambda text: selected.append(text) or True))
         stack.enter_context(mock.patch.object(fl, "front_app", return_value=front))
         stack.enter_context(mock.patch.object(fl, "run_bounded", side_effect=bounded))
+        stack.enter_context(mock.patch.object(fl, "locked_use_status", side_effect=lock_status))
+        stack.enter_context(mock.patch.object(fl, "wake_display", side_effect=lambda force=False: woke.append(force)))
         stack.enter_context(mock.patch.object(fl.time, "monotonic", side_effect=clock.monotonic))
         stack.enter_context(mock.patch.object(fl.time, "sleep", side_effect=clock.sleep))
         out = io.StringIO()
@@ -189,6 +198,7 @@ def run_main(read_rows, clock=None, front=("com.example.front", None), restore_r
             code = fl.main(["--primary", "Phone A", "--fallback", "Watch B"])
     run_main.run_at = run_at
     run_main.selected = selected
+    run_main.woke = woke
     return code, json.loads(out.getvalue()), calls
 
 
@@ -380,6 +390,57 @@ class Subprocesses(unittest.TestCase):
         self.assertIn("read_at", out)
         self.assertEqual(calls, [])
 
+
+
+class LockedSession(unittest.TestCase):
+    def test_locked_and_available_wakes_and_reads(self):
+        code, out, calls = run_main(reads_of([row(SELECTED_WITH_BATTERY)]),
+                                    lock_states=[("locked", True, None)])
+        self.assertEqual((code, out["status"], out["locked_session"]), (0, "ok", True))
+        self.assertEqual(run_main.woke, [False])
+
+    def test_locked_and_unavailable_is_an_error_without_ocu(self):
+        def never(devices, timeout=30):
+            raise AssertionError("ocu must not be called")
+
+        code, out, calls = run_main(never, lock_states=[("locked", False, "plugin not installed")])
+        self.assertEqual((code, out["status"], out["locked_session"]), (3, "error", True))
+        self.assertIn("Locked Use is not available: plugin not installed", out["message"])
+        self.assertEqual((run_main.woke, calls), ([], []))
+
+    def test_unlocked_session_does_not_wake(self):
+        _, out, calls = run_main(reads_of([row(SELECTED_WITH_BATTERY)]))
+        self.assertEqual((out["locked_session"], run_main.woke), (False, []))
+
+
+class UnobservedRetry(unittest.TestCase):
+    def proc(self, code=0, stdout="", stderr=""):
+        return subprocess.CompletedProcess(["x"], code, stdout, stderr)
+
+    UNOBSERVED = "Error: Locked Use could not observe a protected GUI session becoming unlocked."
+
+    def test_retries_once_after_waking(self):
+        woke = []
+        results = [self.proc(1, "", self.UNOBSERVED), self.proc(0, fl.MARKER + "[]\n")]
+        with mock.patch.object(fl.subprocess, "run", side_effect=results), \
+                mock.patch.object(fl, "wake_display", side_effect=lambda force=False: woke.append(force)):
+            self.assertEqual(fl.read_rows(["Phone A"]), [])
+        self.assertEqual(woke, [True])
+
+    def test_second_unobserved_failure_is_the_error(self):
+        with mock.patch.object(fl.subprocess, "run", return_value=self.proc(1, "", self.UNOBSERVED)) as run, \
+                mock.patch.object(fl, "wake_display"):
+            with self.assertRaises(fl.OcuError) as ctx:
+                fl.read_rows(["Phone A"])
+        self.assertEqual(run.call_count, 2)
+        self.assertIn("could not observe", str(ctx.exception))
+
+    def test_other_failures_are_not_retried(self):
+        with mock.patch.object(fl.subprocess, "run", return_value=self.proc(1, "", "Accessibility not granted")) as run, \
+                mock.patch.object(fl, "wake_display") as wake:
+            with self.assertRaises(fl.OcuError):
+                fl.read_rows(["Phone A"])
+        self.assertEqual((run.call_count, wake.call_count), (1, 0))
 
 
 @unittest.skipUnless(shutil.which("node"), "node is not installed")

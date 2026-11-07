@@ -1,7 +1,7 @@
 {
   "name": "findmy-location",
   "description": "Read where the user is right now from the macOS Find My app, when a task needs the user's current location as context",
-  "version": "0.1.6",
+  "version": "0.1.8",
   "userConfig": {
     "primary_device": {
       "type": "string",

@@ -8,6 +8,7 @@ Mac의 Find My 앱에서 지금 내 휴대폰(또는 지정한 보조 기기)의
 2. 설정한 기기 중 위치가 최신인 첫 기기를 고릅니다.
 3. 설정한 기기 중 최신 위치가 보이는 기기가 없으면(예: Find My가 백그라운드에서 위치를 `일시 정지됨`으로 둔 경우), Find My를 최대 15초 앞으로 가져와 갱신을 기다린 뒤 원래 앱으로 돌립니다.
 4. 고른 기기 행에 주소가 없으면 그 행을 선택해 주소를 받습니다.
+5. Mac이 잠겨 있으면 먼저 디스플레이를 켜서(`caffeinate -u`) Open Computer Use의 Locked Use가 Find My를 읽게 합니다. 결과의 `locked_session`이 이를 알려 줍니다. Locked Use가 연 세션은 Mac의 자동 잠금이 다시 닫습니다.
 
 최신 위치가 없으면 `stale_or_missing`으로 끝나고, 예전 값을 대신 내놓지 않습니다. Find My를 읽지 못하면(접근성 권한 없음, ocu 실패·시간 초과) `error`와 이유를 돌려줍니다.
 
@@ -25,7 +26,7 @@ FINDMY_LOCATION_CONFIG_END
 - `primary_device`: Find My 목록에 보이는 이름 그대로(보통 휴대폰)
 - `fallback_device`: 휴대폰 위치가 최신이 아닐 때 읽을 기기(예: Apple Watch). 비워 둬도 됩니다.
 
-필요한 것: macOS, Python 3, Open Computer Use 1.1.3 이상(`npm i -g open-computer-use`, 접근성 권한), Find My 로그인. Find My가 한국어 화면일 때만 확인했습니다.
+필요한 것: macOS, Python 3, Open Computer Use 1.1.3 이상(`npm i -g open-computer-use`, 접근성 권한), Find My 로그인. Mac이 잠긴 동안 읽으려면 Locked Use(`ocu locked-use enable`)가 켜져 있어야 합니다. Find My가 한국어 화면일 때만 확인했습니다.
 
 ## 한계
 

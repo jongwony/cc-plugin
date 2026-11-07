@@ -65,6 +65,13 @@ arrives in the delegation message.
 ## Background
 
 - Work with the window where it is. Do not activate apps or move windows.
+- Find a target with `query` and act on its index; `query` reads the
+  accessibility tree without a screenshot. Raise `max_nodes` for a large
+  window: an empty result with `truncated: true` is not absence. Call
+  `get_app_state` when `query` cannot reach the target or a decision needs
+  the full window state — the focused element before keys among them — with
+  `include_screenshot: false` unless the task needs what only the screen
+  shows.
 - Text absent from the accessibility tree is not absent from the document.
   When the content the task needs is not in the tree, stop and report it; the
   user can bring the window on screen.

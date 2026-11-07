@@ -15,12 +15,12 @@ Mac의 Find My 앱에서 지금 내 휴대폰(또는 지정한 보조 기기)의
 
 ```
 /plugin install findmy-location --marketplace jongwony/cc-plugin
-claude plugin configure findmy-location@cc-plugin --values-stdin <<'EOF'
+claude plugin configure findmy-location@cc-plugin --values-stdin <<'FINDMY_LOCATION_CONFIG_END'
 {"primary_device": "<기기 이름>", "fallback_device": "<기기 이름>"}
-EOF
+FINDMY_LOCATION_CONFIG_END
 ```
 
-값은 JSON 객체입니다. 기기 이름에는 `, `가 들어갈 수 없고, 이름 하나가 Find My 목록의 여러 행과 앞부분이 겹치면 그 기기는 건너뛰고 `ambiguous`로 알려 줍니다.
+값은 JSON 객체입니다. 같은 이름의 기기가 Find My 목록에 둘 이상 있으면 그 기기는 건너뛰고 `ambiguous`로 알려 줍니다.
 
 - `primary_device`: Find My 목록에 보이는 이름 그대로(보통 휴대폰)
 - `fallback_device`: 휴대폰 위치가 최신이 아닐 때 읽을 기기(예: Apple Watch). 비워 둬도 됩니다.

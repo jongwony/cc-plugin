@@ -16,12 +16,13 @@ MARKER = "FINDMY_ROWS "
 FRESH = re.compile(r"^(지금|\d+\s*분 전)$")
 SEP = re.compile(r"[\s ]*·[\s ]*")
 DISTANCE = re.compile(r"^\d+(\.\d+)?\s*k?m$")
+ROW_START = re.compile(r"^(세부사항 열기|\d+(\.\d+)?\s*k?m), ")
 WAIT_S = 15
 FOCUS_TIMEOUT_S = 5
 CONFIGURE = (
-    "claude plugin configure findmy-location@cc-plugin --values-stdin <<'EOF'\n"
+    "claude plugin configure findmy-location@cc-plugin --values-stdin <<'FINDMY_LOCATION_CONFIG_END'\n"
     '{"primary_device": "<name>", "fallback_device": "<name>"}\n'
-    "EOF"
+    "FINDMY_LOCATION_CONFIG_END"
 )
 SELECT = """
 const app = await cua.getApp("com.apple.findmy", { initialState: false });
@@ -43,12 +44,19 @@ def match_rows(lines, devices):
     heads = [row_head(line) for line in lines]
     rows = []
     for name in devices:
-        hits = [h for h in heads if h.startswith(name + ", ")]
+        hits = [h for h in heads if belongs(h, name)]
         if len(hits) == 1:
             rows.append(parse_row(hits[0], name))
         elif hits:
             rows.append({"name": name, "ambiguous": True, "freshness": None})
     return rows
+
+
+def belongs(head, name):
+    if not head.startswith(name + ", "):
+        return False
+    rest = head[len(name) + 2:]
+    return bool(ROW_START.match(rest)) or ", " not in rest
 
 
 def parse_row(head, name):
@@ -198,11 +206,8 @@ def main(argv=None, stdin=None):
         lines = (stdin or sys.stdin).read().splitlines() + ["", ""]
         args.primary, args.fallback = lines[0], lines[1]
     devices = [d for d in (configured(args.primary), configured(args.fallback)) if d]
-    invalid = [d for d in devices if ", " in d]
-    if not devices or invalid:
-        result["status"] = "unconfigured"
-        why = "device names cannot contain \", \": %s" % invalid if invalid else "no device name is set"
-        result["message"] = why + "; set them with:\n" + CONFIGURE
+    if not devices:
+        result.update(status="unconfigured", message="no device name is set; set them with:\n" + CONFIGURE)
     else:
         try:
             locate(devices, result)

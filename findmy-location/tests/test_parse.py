@@ -21,7 +21,7 @@ NOT_FOUND = "14 텍스트 Description: Phone A, 발견된 위치 없음 ID: List
 OLD = f"15 텍스트 Description: Phone A, 6.3km, 집{NB}· 5개월 전 ID: ListEntityRow"
 PAUSED = f"16 텍스트 Description: Phone A, 6.3km, 집{NB}· 일시 정지됨 ID: ListEntityRow"
 OTHER = f"17 텍스트 Description: Buds D, 6.3km, 집{NB}· 지금 ID: ListEntityRow"
-ODD_NAMES = ['Phone "A"', "User's iPhone", "Phone $DEVICE_COLOR", "Phone []"]
+ODD_NAMES = ['Phone, A', 'Phone "A"', "User's iPhone", "Phone $DEVICE_COLOR", "Phone []"]
 
 
 def row(line, devices=DEVICES):
@@ -53,8 +53,22 @@ class ParseRow(unittest.TestCase):
             parsed = row(f"13 버튼 (selected) {name}, 세부사항 열기, 집 | 6.3km, 예시시 견본동, 지금 ID: ListEntityRow", [name])
             self.assertEqual((parsed["name"], parsed["address"]), (name, "예시시 견본동"), name)
 
-    def test_name_prefixing_two_rows_is_ambiguous_and_not_picked(self):
-        lines = [f"12 텍스트 Description: Phone, 6.3km, 집{NB}· 지금 ID: ListEntityRow", f"13 텍스트 Description: Phone, A, 6.3km, 집{NB}· 지금 ID: ListEntityRow"]
+    def test_name_is_anchored_by_the_row_grammar(self):
+        other = [f"12 텍스트 Description: Phone, A, 6.3km, 집{NB}· 지금 ID: ListEntityRow",
+                 "13 버튼 (selected) Phone, A, 세부사항 열기, 집 | 6.3km, 예시시 견본동, 지금 ID: ListEntityRow",
+                 "14 텍스트 Description: Phone, A, 발견된 위치 없음 ID: ListEntityRow"]
+        for line in other:
+            self.assertEqual(fl.match_rows([line], ["Phone"]), [], line)
+        own = [f"12 텍스트 Description: Phone, 6.3km, 집{NB}· 지금 ID: ListEntityRow",
+               "13 버튼 (selected) Phone, 세부사항 열기, 집 | 6.3km, 예시시 견본동, 지금 ID: ListEntityRow",
+               "14 텍스트 Description: Phone, 발견된 위치 없음 ID: ListEntityRow"]
+        for line in own:
+            self.assertEqual([r["name"] for r in fl.match_rows([line], ["Phone"])], ["Phone"], line)
+        both = fl.match_rows([own[0], other[0]], ["Phone", "Phone, A"])
+        self.assertEqual([(r["name"], r["freshness"]) for r in both], [("Phone", "지금"), ("Phone, A", "지금")])
+
+    def test_two_rows_of_one_name_are_ambiguous_and_not_picked(self):
+        lines = [f"12 텍스트 Description: Phone, 6.3km, 집{NB}· 지금 ID: ListEntityRow", f"13 텍스트 Description: Phone, 2.1km, 회사{NB}· 지금 ID: ListEntityRow"]
         rows = fl.match_rows(lines, ["Phone"])
         self.assertEqual(rows, [{"name": "Phone", "ambiguous": True, "freshness": None}])
         self.assertIsNone(fl.pick(rows, ["Phone"]))
@@ -108,13 +122,8 @@ class Config(unittest.TestCase):
         code, seen, out = self.devices_from(["--devices-stdin"], "\n\n")
         self.assertEqual((code, seen), (2, []))
         message = json.loads(out)["message"]
-        self.assertIn("--values-stdin <<'EOF'", message)
+        self.assertIn("--values-stdin <<'FINDMY_LOCATION_CONFIG_END'", message)
         self.assertIn('"primary_device"', message)
-
-    def test_name_with_comma_is_invalid_config(self):
-        code, seen, out = self.devices_from(["--devices-stdin"], "Phone, A\nWatch B\n")
-        self.assertEqual((code, seen, json.loads(out)["status"]), (2, [], "unconfigured"))
-        self.assertIn("cannot contain", json.loads(out)["message"])
 
     def test_flags_still_work(self):
         _, seen, _ = self.devices_from(["--primary", "Phone A", "--fallback", ""])

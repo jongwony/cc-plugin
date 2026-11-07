@@ -1,7 +1,7 @@
 {
   "name": "findmy-location",
   "description": "Read where the user is right now from the macOS Find My app, when a task needs the user's current location as context",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "userConfig": {
     "primary_device": {
       "type": "string",
@@ -12,7 +12,7 @@
     "fallback_device": {
       "type": "string",
       "title": "Fallback device",
-      "description": "Device read when the primary one has no fresh location, such as a watch; leave empty for none",
+      "description": "Device read when the primary one has no recent location, such as a watch; leave empty for none",
       "required": false
     }
   },

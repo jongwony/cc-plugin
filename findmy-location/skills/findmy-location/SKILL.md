@@ -11,13 +11,7 @@ description: Read where the user is right now from the macOS Find My app. Use wh
 - Python 3, standard library only (`brew install python` if missing).
 - Open Computer Use 1.1.3 or later (`npm i -g open-computer-use`), granted Accessibility (`ocu doctor`).
 - Find My's interface in Korean; other languages are untested.
-- The device names, saved once as a JSON object. `primary_device` is the name exactly as Find My lists it, usually the phone; `fallback_device` is optional.
-
-  ```bash
-  claude plugin configure findmy-location@cc-plugin --values-stdin <<'FINDMY_LOCATION_CONFIG_END'
-  {"primary_device": "<name>", "fallback_device": "<name>"}
-  FINDMY_LOCATION_CONFIG_END
-  ```
+- The plugin's `primary_device` option set to the name exactly as Find My lists it, usually the phone; `fallback_device` is optional.
 
 ## Read
 
@@ -30,7 +24,7 @@ FINDMY_LOCATION_DEVICES_END
 
 - `status: ok` — a fresh location (`지금` or `N분 전`) from the first configured device that has one. Use `device.address` (or `device.place_label`) as the user's whereabouts, with its freshness.
 - `status: stale_or_missing` — no configured device has a fresh location. Say so; do not reuse an earlier reading or guess from `candidates`. A name in `ambiguous` matched more than one Find My row; ask the user for the device's full name.
-- `status: unconfigured` — no device name is set; give the user the configure command from `message`.
+- `status: unconfigured` — no device name is set; relay the script's `message` to the user.
 - `status: error` — reading Find My failed (`message` says how, for example a missing Accessibility grant). Report it rather than retrying unchanged.
 
 ## Side effects

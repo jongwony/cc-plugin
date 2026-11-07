@@ -27,6 +27,10 @@ FINDMY_LOCATION_CONFIG_END
 
 필요한 것: macOS, Python 3, Open Computer Use 1.1.3 이상(`npm i -g open-computer-use`, 접근성 권한), Find My 로그인. Find My가 한국어 화면일 때만 확인했습니다.
 
+## 한계
+
+Find My의 접근성 행에는 기기 이름만 따로 담긴 칸이 없고, 이름과 거리·장소가 `, `로 이어진 한 줄만 있습니다. 그래서 설정한 이름 뒤에 `, <거리>`가 붙은 이름의 다른 기기(예: 설정 이름 `Phone`, 다른 기기 `Phone, 2km`)는 구별하지 못합니다. 설정하는 이름은 다른 기기 이름의 그런 앞부분이 되지 않게 고릅니다.
+
 ## 테스트
 
 ```

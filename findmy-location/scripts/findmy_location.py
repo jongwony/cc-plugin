@@ -26,8 +26,8 @@ CONFIGURE = (
 )
 SELECT = """
 const app = await cua.getApp("com.apple.findmy", { initialState: false });
-const q = await app.query({ text: NAME + ", ", role: "AXStaticText", maxNodes: 2000, limit: 5 });
-const row = q.matches.find(m => /ListEntityRow/.test(m.identifier || "") && (m.title || "").startsWith(NAME + ", "));
+const q = await app.query({ text: TEXT, role: "AXStaticText", maxNodes: 2000, limit: 5 });
+const row = q.matches.find(m => /ListEntityRow/.test(m.identifier || "") && m.title === TEXT);
 if (row) await app.click(row.index, { clickMethod: "accessibility" });
 nodeRepl.write(row ? "selected" : "not_found");
 """
@@ -80,7 +80,7 @@ def parse_row(head, name):
         freshness = fields[1] if len(fields) > 1 else None
     else:
         freshness = rest
-    return {"name": name, "place_label": place, "distance": distance, "address": address, "freshness": freshness}
+    return {"name": name, "place_label": place, "distance": distance, "address": address, "freshness": freshness, "text": head}
 
 
 def is_fresh(row):
@@ -118,14 +118,16 @@ def read_rows(devices, timeout=30):
         lines = json.loads(payload[-1]) if payload else None
     except ValueError:
         lines = None
+    if isinstance(lines, dict) and lines.get("error"):
+        raise OcuError("Find My AX read failed: " + str(lines["error"]))
     if not isinstance(lines, list) or not all(isinstance(line, str) for line in lines):
         raise OcuError("unreadable ocu js output: " + out.strip()[-200:])
     return match_rows(lines, devices)
 
 
-def select(name):
+def select(text):
     try:
-        return "selected" in ocu_js(["-"], "const NAME = " + json.dumps(name, ensure_ascii=False) + ";" + SELECT)
+        return "selected" in ocu_js(["-"], "const TEXT = " + json.dumps(text, ensure_ascii=False) + ";" + SELECT)
     except OcuError:
         return False
 
@@ -225,7 +227,7 @@ def locate(devices, result):
     target = pick(rows, devices)
     if target is None:
         rows, target = refresh(devices, front, front_reason, result)
-    if target and not target["address"] and select(target["name"]):
+    if target and not target["address"] and select(target["text"]):
         try:
             reread = next((r for r in read_rows(devices) if r["name"] == target["name"]), None)
         except OcuError:
@@ -234,7 +236,7 @@ def locate(devices, result):
             target = reread
     result.update(
         status="ok" if target else "stale_or_missing",
-        device=target,
+        device={k: v for k, v in target.items() if k != "text"} if target else None,
         candidates={r["name"]: r["freshness"] for r in rows if not r.get("ambiguous")},
         ambiguous=[r["name"] for r in rows if r.get("ambiguous")],
     )

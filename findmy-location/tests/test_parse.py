@@ -3,6 +3,7 @@ import importlib.util
 import io
 import json
 import pathlib
+import shutil
 import subprocess
 import unittest
 from unittest import mock
@@ -31,10 +32,12 @@ def row(line, devices=DEVICES):
 
 class ParseRow(unittest.TestCase):
     def test_list_row(self):
-        self.assertEqual(row(LIST_ROW), {"name": "Phone A", "place_label": "집", "distance": "6.3km", "address": None, "freshness": "지금"})
+        self.assertEqual(row(LIST_ROW), {"name": "Phone A", "place_label": "집", "distance": "6.3km", "address": None, "freshness": "지금",
+                                         "text": f"Phone A, 6.3km, 집{NB}· 지금{NB}· 4분의 3 충전된 배터리"})
 
     def test_selected_row_has_address(self):
-        self.assertEqual(row(SELECTED_ROW), {"name": "Watch B", "place_label": "집", "distance": "6.3km", "address": "예시시 견본동", "freshness": "지금"})
+        self.assertEqual(row(SELECTED_ROW), {"name": "Watch B", "place_label": "집", "distance": "6.3km", "address": "예시시 견본동", "freshness": "지금",
+                                             "text": "Watch B, 세부사항 열기, 집 | 6.3km, 예시시 견본동, 지금"})
 
     def test_selected_row_drops_battery(self):
         parsed = row(SELECTED_WITH_BATTERY)
@@ -149,7 +152,7 @@ ACTIVATE = ["open", "-b", fl.FINDMY]
 
 def run_main(read_rows, clock=None, front=("com.example.front", None), restore_reason=None, activate_reason=None):
     clock = clock or FakeClock()
-    calls, run_at = [], []
+    calls, run_at, selected = [], [], []
 
     def bounded(cmd):
         calls.append(cmd)
@@ -159,7 +162,7 @@ def run_main(read_rows, clock=None, front=("com.example.front", None), restore_r
 
     with contextlib.ExitStack() as stack:
         stack.enter_context(mock.patch.object(fl, "read_rows", side_effect=read_rows))
-        stack.enter_context(mock.patch.object(fl, "select", return_value=True))
+        stack.enter_context(mock.patch.object(fl, "select", side_effect=lambda text: selected.append(text) or True))
         stack.enter_context(mock.patch.object(fl, "front_app", return_value=front))
         stack.enter_context(mock.patch.object(fl, "run_bounded", side_effect=bounded))
         stack.enter_context(mock.patch.object(fl.time, "monotonic", side_effect=clock.monotonic))
@@ -168,6 +171,7 @@ def run_main(read_rows, clock=None, front=("com.example.front", None), restore_r
         with contextlib.redirect_stdout(out):
             code = fl.main(["--primary", "Phone A", "--fallback", "Watch B"])
     run_main.run_at = run_at
+    run_main.selected = selected
     return code, json.loads(out.getvalue()), calls
 
 
@@ -188,6 +192,11 @@ class Orchestration(unittest.TestCase):
     def test_fresh_reread_supplies_address(self):
         code, out, _ = run_main(reads_of([row(LIST_ROW)], [row(SELECTED_WITH_BATTERY)]))
         self.assertEqual(out["device"]["address"], "예시시 견본동")
+        self.assertNotIn("text", out["device"])
+
+    def test_select_gets_the_matched_row_text(self):
+        run_main(reads_of([row(LIST_ROW)], [row(SELECTED_WITH_BATTERY)]))
+        self.assertEqual(run_main.selected, [row(LIST_ROW)["text"]])
 
     def test_activation_reports_restored_focus(self):
         code, out, calls = run_main(reads_of([row(PAUSED)], [row(LIST_ROW)], [row(SELECTED_WITH_BATTERY)]))
@@ -312,6 +321,11 @@ class Subprocesses(unittest.TestCase):
             with self.assertRaisesRegex(fl.OcuError, "unreadable"):
                 fl.read_rows(DEVICES)
 
+    def test_extractor_error_payload_is_an_error(self):
+        with mock.patch.object(fl.subprocess, "run", return_value=self.proc(0, fl.MARKER + '{"error": "getAXState returned object, not text"}\n')):
+            with self.assertRaisesRegex(fl.OcuError, "getAXState returned object"):
+                fl.read_rows(DEVICES)
+
     def test_nonzero_exit_is_an_error_with_stderr_tail(self):
         with mock.patch.object(fl.subprocess, "run", return_value=self.proc(1, "", "Accessibility not granted")):
             with self.assertRaisesRegex(fl.OcuError, "Accessibility not granted"):
@@ -348,6 +362,50 @@ class Subprocesses(unittest.TestCase):
         self.assertEqual((code, out["status"]), (3, "error"))
         self.assertIn("read_at", out)
         self.assertEqual(calls, [])
+
+
+
+@unittest.skipUnless(shutil.which("node"), "node is not installed")
+class JavaScript(unittest.TestCase):
+    def run_js(self, prelude, body):
+        code = prelude + "\n" + body
+        proc = subprocess.run(["node", "--input-type=module", "-e", code], capture_output=True, text=True, timeout=30)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        return proc.stdout
+
+    def fake_app(self, state="\"\"", matches="[]"):
+        return (
+            "const out = []; const clicked = [];\n"
+            "globalThis.nodeRepl = { write: s => out.push(s) };\n"
+            "globalThis.cua = { getApp: async () => ({\n"
+            "  getAXState: async () => " + state + ",\n"
+            "  query: async () => ({ matches: " + matches + " }),\n"
+            "  click: async i => clicked.push(i) }) };\n"
+            "process.on('beforeExit', () => console.log(JSON.stringify({ out, clicked })));\n"
+        )
+
+    def test_select_clicks_the_exact_row_not_the_first_prefix(self):
+        text = f"Phone, 6.3km, 집{NB}· 지금"
+        matches = json.dumps([
+            {"index": 1, "title": f"Phone, A, 6.3km, 집{NB}· 지금", "identifier": "ListEntityRow"},
+            {"index": 2, "title": text, "identifier": "ListEntityRow"},
+        ])
+        out = json.loads(self.run_js(self.fake_app(matches=matches), "const TEXT = " + json.dumps(text) + ";" + fl.SELECT))
+        self.assertEqual((out["clicked"], out["out"]), ([2], ["selected"]))
+
+    def test_select_without_an_exact_row_clicks_nothing(self):
+        matches = json.dumps([{"index": 1, "title": "Phone, A, 6.3km, 집 · 지금", "identifier": "ListEntityRow"}])
+        out = json.loads(self.run_js(self.fake_app(matches=matches), 'const TEXT = "Phone, 6.3km, 집 · 지금";' + fl.SELECT))
+        self.assertEqual((out["clicked"], out["out"]), ([], ["not_found"]))
+
+    def test_extractor_keeps_list_rows_from_text_state(self):
+        state = json.dumps("\t\t12 텍스트 Description: Phone A, 6.3km ID: ListEntityRow-ListEntityRow\n\t\t13 generic element Description: Phone A ID: VKPointFeature")
+        out = json.loads(self.run_js(self.fake_app(state=state), fl.READ.read_text()))
+        self.assertEqual(out["out"], ["\n" + fl.MARKER + json.dumps(["12 텍스트 Description: Phone A, 6.3km ID: ListEntityRow-ListEntityRow"], ensure_ascii=False, separators=(",", ":")) + "\n"])
+
+    def test_extractor_reports_a_non_text_state(self):
+        out = json.loads(self.run_js(self.fake_app(state="({ text: 'x' })"), fl.READ.read_text()))
+        self.assertIn('"error":"getAXState returned object, not text"', out["out"][0])
 
 
 if __name__ == "__main__":

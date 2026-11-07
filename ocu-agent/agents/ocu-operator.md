@@ -49,18 +49,17 @@ arrives in the delegation message.
   stop and report it.
 - **Locked session.** Window tools reach a locked Mac only through Locked Use,
   which `ocu locked-use status` reports as available; enabling it is the
-  user's act. This plugin's PreToolUse hook covers the window tools: while the
-  session is locked it keeps the display on when Locked Use is available and
-  denies the call with the cause when it is not.
+  user's act. Locked Use needs the display on, and this run has no shell to
+  wake it: the delegating session wakes it before delegating.
 
 ## Locked session
 
-- **A hook denial ends GUI work.** Report its reason verbatim and stop.
 - **"Locked Use could not observe a protected GUI session becoming unlocked."**
-  means the display went off. Retry that call once: the hook wakes the display
-  again when its previous 120 s wake has ended, which a long gap between calls
-  outlasts. The same failure on the retry is the finding; report it with that
-  cause.
+  means the display went off, which this run cannot undo. Stop GUI work and
+  report the error verbatim, so the delegating session can wake the display
+  and delegate again.
+- **A locked session without Locked Use ends GUI work.** Report the cause the
+  tool returned and stop.
 
 ## Background
 

@@ -13,47 +13,103 @@ fl = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fl)
 
 NB = " "
+DEVICES = ["Phone A", "Watch B"]
 LIST_ROW = f"\t\t\t\t12 텍스트 Description: Phone A, 6.3km, 집{NB}· 지금{NB}· 4분의 3 충전된 배터리 ID: ListEntityRow-ListEntityRow"
 SELECTED_ROW = "13 버튼 (selected) Watch B, 세부사항 열기, 집 | 6.3km, 예시시 견본동, 지금 ID: ListEntityRow-ListEntityRow"
 SELECTED_WITH_BATTERY = f"13 버튼 (selected) Phone A, 세부사항 열기, 집 | 6.3km, 예시시 견본동, 지금{NB}· 4분의 3 충전된 배터리 ID: ListEntityRow"
-NOT_FOUND = "14 텍스트 Description: Tag C, 발견된 위치 없음 ID: ListEntityRow"
-OLD = f"15 텍스트 Description: Buds D, 6.3km, 집{NB}· 5개월 전 ID: ListEntityRow"
+NOT_FOUND = "14 텍스트 Description: Phone A, 발견된 위치 없음 ID: ListEntityRow"
+OLD = f"15 텍스트 Description: Phone A, 6.3km, 집{NB}· 5개월 전 ID: ListEntityRow"
 PAUSED = f"16 텍스트 Description: Phone A, 6.3km, 집{NB}· 일시 정지됨 ID: ListEntityRow"
+OTHER = f"17 텍스트 Description: Buds D, 6.3km, 집{NB}· 지금 ID: ListEntityRow"
+ODD_NAMES = ['Phone, A', 'Phone "A"', "User's iPhone", "Phone $DEVICE_COLOR", "Phone []"]
+
+
+def row(line, devices=DEVICES):
+    return fl.parse_row(line, devices)
 
 
 class ParseRow(unittest.TestCase):
     def test_list_row(self):
-        self.assertEqual(fl.parse_row(LIST_ROW), {"name": "Phone A", "place_label": "집", "distance": "6.3km", "address": None, "freshness": "지금"})
+        self.assertEqual(row(LIST_ROW), {"name": "Phone A", "place_label": "집", "distance": "6.3km", "address": None, "freshness": "지금"})
 
     def test_selected_row_has_address(self):
-        self.assertEqual(fl.parse_row(SELECTED_ROW), {"name": "Watch B", "place_label": "집", "distance": "6.3km", "address": "예시시 견본동", "freshness": "지금"})
+        self.assertEqual(row(SELECTED_ROW), {"name": "Watch B", "place_label": "집", "distance": "6.3km", "address": "예시시 견본동", "freshness": "지금"})
 
     def test_selected_row_drops_battery(self):
-        row = fl.parse_row(SELECTED_WITH_BATTERY)
-        self.assertEqual((row["address"], row["freshness"]), ("예시시 견본동", "지금"))
+        parsed = row(SELECTED_WITH_BATTERY)
+        self.assertEqual((parsed["address"], parsed["freshness"]), ("예시시 견본동", "지금"))
 
     def test_not_found_row(self):
-        self.assertEqual(fl.parse_row(NOT_FOUND)["freshness"], "발견된 위치 없음")
+        self.assertEqual(row(NOT_FOUND)["freshness"], "발견된 위치 없음")
+
+    def test_row_of_an_unconfigured_device_is_ignored(self):
+        self.assertIsNone(row(OTHER))
+
+    def test_names_with_punctuation(self):
+        for name in ODD_NAMES:
+            parsed = row(f"12 텍스트 Description: {name}, 6.3km, 집{NB}· 지금 ID: ListEntityRow", [name])
+            self.assertEqual((parsed["name"], parsed["distance"], parsed["place_label"], parsed["freshness"]), (name, "6.3km", "집", "지금"), name)
+            parsed = row(f"13 버튼 (selected) {name}, 세부사항 열기, 집 | 6.3km, 예시시 견본동, 지금 ID: ListEntityRow", [name])
+            self.assertEqual((parsed["name"], parsed["address"]), (name, "예시시 견본동"), name)
+
+    def test_longest_configured_name_wins(self):
+        self.assertEqual(row(f"12 텍스트 Description: Phone, A, 6.3km, 집{NB}· 지금 ID: ListEntityRow", ["Phone", "Phone, A"])["name"], "Phone, A")
+
+    def test_place_and_address_with_comma(self):
+        parsed = row(f"12 텍스트 Description: Phone A, 6.3km, 예시시, 견본동{NB}· 지금 ID: ListEntityRow")
+        self.assertEqual((parsed["distance"], parsed["place_label"]), ("6.3km", "예시시, 견본동"))
+        parsed = row("13 버튼 (selected) Phone A, 세부사항 열기, 집 | 6.3km, 예시시, 견본동, 지금 ID: ListEntityRow")
+        self.assertEqual((parsed["address"], parsed["freshness"]), ("예시시, 견본동", "지금"))
+
+    def test_list_row_without_distance(self):
+        parsed = row(f"12 텍스트 Description: Phone A, 집{NB}· 지금 ID: ListEntityRow")
+        self.assertEqual((parsed["distance"], parsed["place_label"], parsed["freshness"]), (None, "집", "지금"))
 
     def test_freshness_gate(self):
-        self.assertTrue(fl.is_fresh(fl.parse_row(LIST_ROW)))
+        self.assertTrue(fl.is_fresh(row(LIST_ROW)))
         self.assertTrue(fl.is_fresh({"freshness": "3분 전"}))
         for line in (OLD, PAUSED, NOT_FOUND):
-            self.assertFalse(fl.is_fresh(fl.parse_row(line)), line)
+            self.assertFalse(fl.is_fresh(row(line)), line)
 
     def test_pick_prefers_primary_then_fallback(self):
-        rows = [fl.parse_row(PAUSED), fl.parse_row(SELECTED_ROW)]
-        self.assertEqual(fl.pick(rows, ["Phone A", "Watch B"])["name"], "Watch B")
+        rows = [row(PAUSED), row(SELECTED_ROW)]
+        self.assertEqual(fl.pick(rows, DEVICES)["name"], "Watch B")
         self.assertIsNone(fl.pick(rows, ["Phone A"]))
-        rows = [fl.parse_row(LIST_ROW), fl.parse_row(SELECTED_ROW)]
-        self.assertEqual(fl.pick(rows, ["Phone A", "Watch B"])["name"], "Phone A")
+        rows = [row(LIST_ROW), row(SELECTED_ROW)]
+        self.assertEqual(fl.pick(rows, DEVICES)["name"], "Phone A")
 
-    def test_unsubstituted_option_counts_as_unset(self):
-        self.assertEqual(fl.configured("${user_config.primary_device}"), "")
-        self.assertEqual(fl.configured(" Phone A "), "Phone A")
 
-    def test_unconfigured_exits_without_reading_find_my(self):
-        self.assertEqual(fl.main(["--primary", "", "--fallback", ""]), 2)
+class Config(unittest.TestCase):
+    def devices_from(self, argv, stdin=""):
+        seen = []
+        with mock.patch.object(fl, "locate", side_effect=lambda devices: seen.append(devices) or {"status": "ok"}):
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                code = fl.main(argv, io.StringIO(stdin))
+        return code, seen, out.getvalue()
+
+    def test_stdin_keeps_names_as_data(self):
+        for name in ODD_NAMES:
+            code, seen, _ = self.devices_from(["--devices-stdin"], name + "\nWatch B\n")
+            self.assertEqual((code, seen), (0, [[name, "Watch B"]]), name)
+
+    def test_unsubstituted_or_empty_line_counts_as_unset(self):
+        _, seen, _ = self.devices_from(["--devices-stdin"], "${user_config.primary_device}\nWatch B\n")
+        self.assertEqual(seen, [["Watch B"]])
+        _, seen, _ = self.devices_from(["--devices-stdin"], "Phone A\n${user_config.fallback_device}\n")
+        self.assertEqual(seen, [["Phone A"]])
+        _, seen, _ = self.devices_from(["--devices-stdin"], "Phone A\n")
+        self.assertEqual(seen, [["Phone A"]])
+
+    def test_unconfigured_names_the_stdin_setup(self):
+        code, seen, out = self.devices_from(["--devices-stdin"], "\n\n")
+        self.assertEqual((code, seen), (2, []))
+        message = json.loads(out)["message"]
+        self.assertIn("--values-stdin <<'EOF'", message)
+        self.assertIn('"primary_device"', message)
+
+    def test_flags_still_work(self):
+        _, seen, _ = self.devices_from(["--primary", "Phone A", "--fallback", ""])
+        self.assertEqual(seen, [["Phone A"]])
 
 
 class FakeClock:
@@ -67,15 +123,23 @@ class FakeClock:
         self.now += seconds
 
 
-def run_main(read_rows, select=lambda name: True, clock=None):
+RESTORE = ["open", "-b", "com.example.front"]
+
+
+def run_main(read_rows, clock=None, front=("com.example.front", None), restore_reason=None):
     clock = clock or FakeClock()
-    calls = []
-    run_at = []
+    calls, run_at = [], []
+
+    def bounded(cmd):
+        calls.append(cmd)
+        run_at.append(clock.now)
+        return (None, restore_reason) if cmd == RESTORE and restore_reason else ("", None)
+
     with contextlib.ExitStack() as stack:
         stack.enter_context(mock.patch.object(fl, "read_rows", side_effect=read_rows))
-        stack.enter_context(mock.patch.object(fl, "select", side_effect=select))
-        stack.enter_context(mock.patch.object(fl, "osa", return_value="com.example.front"))
-        stack.enter_context(mock.patch.object(fl.subprocess, "run", side_effect=lambda cmd, **kw: (calls.append(cmd), run_at.append(clock.now))))
+        stack.enter_context(mock.patch.object(fl, "select", return_value=True))
+        stack.enter_context(mock.patch.object(fl, "front_app", return_value=front))
+        stack.enter_context(mock.patch.object(fl, "run_bounded", side_effect=bounded))
         stack.enter_context(mock.patch.object(fl.time, "monotonic", side_effect=clock.monotonic))
         stack.enter_context(mock.patch.object(fl.time, "sleep", side_effect=clock.sleep))
         out = io.StringIO()
@@ -85,32 +149,35 @@ def run_main(read_rows, select=lambda name: True, clock=None):
     return code, json.loads(out.getvalue()), calls
 
 
-RESTORE = ["open", "-b", "com.example.front"]
+def reads_of(*batches):
+    batches = iter(batches)
+    return lambda devices, timeout=30: next(batches)
 
 
 class Orchestration(unittest.TestCase):
     def test_reread_that_turned_stale_keeps_fresh_target(self):
-        reads = iter([[fl.parse_row(LIST_ROW)], [fl.parse_row(PAUSED)]])
-        code, out, _ = run_main(lambda timeout=30: next(reads))
+        code, out, _ = run_main(reads_of([row(LIST_ROW)], [row(PAUSED)]))
         self.assertEqual((code, out["status"], out["device"]["freshness"]), (0, "ok", "지금"))
 
     def test_reread_without_the_row_keeps_fresh_target(self):
-        reads = iter([[fl.parse_row(LIST_ROW)], []])
-        code, out, _ = run_main(lambda timeout=30: next(reads))
+        code, out, _ = run_main(reads_of([row(LIST_ROW)], []))
         self.assertEqual((code, out["device"]["name"]), (0, "Phone A"))
 
     def test_fresh_reread_supplies_address(self):
-        selected = SELECTED_WITH_BATTERY
-        reads = iter([[fl.parse_row(LIST_ROW)], [fl.parse_row(selected)]])
-        code, out, _ = run_main(lambda timeout=30: next(reads))
+        code, out, _ = run_main(reads_of([row(LIST_ROW)], [row(SELECTED_WITH_BATTERY)]))
         self.assertEqual(out["device"]["address"], "예시시 견본동")
 
-    def test_focus_returns_when_a_read_fails_in_the_wait(self):
-        reads = iter([[fl.parse_row(PAUSED)]])
+    def test_activation_reports_restored_focus(self):
+        code, out, calls = run_main(reads_of([row(PAUSED)], [row(LIST_ROW)], [row(SELECTED_WITH_BATTERY)]))
+        self.assertEqual((code, out["activated_findmy"], out["focus_restored"]), (0, True, True))
+        self.assertEqual(calls, [["open", "-b", fl.FINDMY], RESTORE])
 
-        def read(timeout=30):
+    def test_focus_returns_when_a_read_fails_in_the_wait(self):
+        batches = iter([[row(PAUSED)]])
+
+        def read(devices, timeout=30):
             try:
-                return next(reads)
+                return next(batches)
             except StopIteration:
                 raise fl.OcuError("ocu js exited 1: permission denied")
 
@@ -123,26 +190,25 @@ class Orchestration(unittest.TestCase):
         clock = FakeClock()
         timeouts = []
 
-        def read(timeout=30):
+        def read(devices, timeout=30):
             timeouts.append(timeout)
             clock.now += min(timeout, 4)
-            return [fl.parse_row(PAUSED)]
+            return [row(PAUSED)]
 
         code, out, calls = run_main(read, clock=clock)
         self.assertEqual((code, out["status"], out["activated_findmy"]), (1, "stale_or_missing", True))
         self.assertTrue(all(t <= fl.WAIT_S for t in timeouts[1:]))
-        foreground = run_main.run_at[-1] - run_main.run_at[0]
         self.assertEqual(calls[0], ["open", "-b", fl.FINDMY])
-        self.assertLessEqual(foreground, fl.WAIT_S + 1)
+        self.assertLessEqual(run_main.run_at[-1] - run_main.run_at[0], fl.WAIT_S + 1)
         self.assertEqual(calls[-1], RESTORE)
 
     def test_timeout_at_the_deadline_ends_the_wait_as_stale(self):
         clock = FakeClock()
-        reads = iter([[fl.parse_row(PAUSED)]])
+        batches = iter([[row(PAUSED)]])
 
-        def read(timeout=30):
+        def read(devices, timeout=30):
             try:
-                return next(reads)
+                return next(batches)
             except StopIteration:
                 clock.now += timeout
                 raise fl.OcuError("ocu js timed out", timed_out=True)
@@ -151,33 +217,71 @@ class Orchestration(unittest.TestCase):
         self.assertEqual((code, out["status"]), (1, "stale_or_missing"))
         self.assertEqual(calls[-1], RESTORE)
 
+    def test_unknown_front_app_is_reported_not_restored(self):
+        code, out, calls = run_main(reads_of([row(PAUSED)], [row(LIST_ROW)], [row(SELECTED_WITH_BATTERY)]), front=(None, "osascript exited 1: not authorized"))
+        self.assertEqual((code, out["focus_restored"]), (0, False))
+        self.assertIn("not authorized", out["focus_note"])
+        self.assertEqual(calls, [["open", "-b", fl.FINDMY]])
 
-class OcuFailures(unittest.TestCase):
+    def test_failed_restore_is_reported(self):
+        code, out, _ = run_main(reads_of([row(PAUSED)], [row(LIST_ROW)], [row(SELECTED_WITH_BATTERY)]), restore_reason="open exited 1: no such app")
+        self.assertEqual((out["focus_restored"], out["focus_note"]), (False, "open exited 1: no such app"))
+
+    def test_no_activation_carries_no_focus_fields(self):
+        _, out, calls = run_main(reads_of([row(SELECTED_WITH_BATTERY)]))
+        self.assertNotIn("focus_restored", out)
+        self.assertEqual(calls, [])
+
+
+class Subprocesses(unittest.TestCase):
     def proc(self, code=0, stdout="", stderr=""):
-        return subprocess.CompletedProcess(["ocu"], code, stdout, stderr)
+        return subprocess.CompletedProcess(["x"], code, stdout, stderr)
+
+    def test_marker_line_is_decoded_whatever_the_payload(self):
+        lines = [f"12 텍스트 Description: {n}, 6.3km, 집{NB}· 지금 ID: ListEntityRow" for n in ODD_NAMES]
+        stdout = "help: returns [] or [\"x\"]\nFINDMY_ROWS [\"stale\"]\n" + fl.MARKER + json.dumps(lines) + "\n"
+        with mock.patch.object(fl.subprocess, "run", return_value=self.proc(0, stdout)):
+            self.assertEqual([r["name"] for r in fl.read_rows(ODD_NAMES)], ODD_NAMES)
+
+    def test_empty_marker_payload_is_no_rows(self):
+        with mock.patch.object(fl.subprocess, "run", return_value=self.proc(0, "help []\n" + fl.MARKER + "[]\n")):
+            self.assertEqual(fl.read_rows(DEVICES), [])
+
+    def test_output_without_marker_is_an_error(self):
+        with mock.patch.object(fl.subprocess, "run", return_value=self.proc(0, '["Phone A, 지금"]')):
+            with self.assertRaisesRegex(fl.OcuError, "unreadable"):
+                fl.read_rows(DEVICES)
 
     def test_nonzero_exit_is_an_error_with_stderr_tail(self):
         with mock.patch.object(fl.subprocess, "run", return_value=self.proc(1, "", "Accessibility not granted")):
             with self.assertRaisesRegex(fl.OcuError, "Accessibility not granted"):
-                fl.read_rows()
+                fl.read_rows(DEVICES)
 
     def test_timeout_is_an_error(self):
         with mock.patch.object(fl.subprocess, "run", side_effect=subprocess.TimeoutExpired("ocu", 5)):
             with self.assertRaises(fl.OcuError) as caught:
-                fl.read_rows(timeout=5)
+                fl.read_rows(DEVICES, timeout=5)
         self.assertTrue(caught.exception.timed_out)
 
-    def test_unparsable_output_is_an_error(self):
-        with mock.patch.object(fl.subprocess, "run", return_value=self.proc(0, "help text, no rows")):
-            with self.assertRaisesRegex(fl.OcuError, "unreadable"):
-                fl.read_rows()
+    def test_front_app_failures_carry_a_reason(self):
+        cases = [
+            (self.proc(1, "", "not authorized"), "not authorized"),
+            (subprocess.TimeoutExpired("osascript", 5), "timed out"),
+            (self.proc(0, "\n"), "no front app"),
+        ]
+        for outcome, reason in cases:
+            kwargs = {"side_effect": outcome} if isinstance(outcome, Exception) else {"return_value": outcome}
+            with mock.patch.object(fl.subprocess, "run", **kwargs):
+                front, why = fl.front_app()
+            self.assertIsNone(front)
+            self.assertIn(reason, why)
 
-    def test_empty_list_is_rows_not_an_error(self):
-        with mock.patch.object(fl.subprocess, "run", return_value=self.proc(0, "[]\n")):
-            self.assertEqual(fl.read_rows(), [])
+    def test_front_app_success(self):
+        with mock.patch.object(fl.subprocess, "run", return_value=self.proc(0, "com.example.front\n")):
+            self.assertEqual(fl.front_app(), ("com.example.front", None))
 
     def test_first_read_failure_prints_error_and_exits_3(self):
-        def read(timeout=30):
+        def read(devices, timeout=30):
             raise fl.OcuError("ocu js exited 1: boom")
 
         code, out, calls = run_main(read)

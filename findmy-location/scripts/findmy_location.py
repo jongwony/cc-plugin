@@ -12,42 +12,54 @@ import time
 
 FINDMY = "com.apple.findmy"
 READ = pathlib.Path(__file__).with_name("read_rows.mjs")
+MARKER = "FINDMY_ROWS "
 FRESH = re.compile(r"^(지금|\d+\s*분 전)$")
 SEP = re.compile(r"[\s ]*·[\s ]*")
+DISTANCE = re.compile(r"^\d+(\.\d+)?\s*k?m$")
 WAIT_S = 15
-CONFIGURE = "echo '{\"primary_device\":\"<name>\",\"fallback_device\":\"<name>\"}' | claude plugin configure findmy-location@cc-plugin --values-stdin"
+FOCUS_TIMEOUT_S = 5
+CONFIGURE = (
+    "claude plugin configure findmy-location@cc-plugin --values-stdin <<'EOF'\n"
+    '{"primary_device": "<name>", "fallback_device": "<name>"}\n'
+    "EOF"
+)
 SELECT = """
 const app = await cua.getApp("com.apple.findmy", { initialState: false });
 const q = await app.query({ text: NAME + ", ", role: "AXStaticText", maxNodes: 2000, limit: 5 });
-const row = q.matches.find(m => /ListEntityRow/.test(m.identifier || "") && (m.title || "").startsWith(NAME + ","));
+const row = q.matches.find(m => /ListEntityRow/.test(m.identifier || "") && (m.title || "").startsWith(NAME + ", "));
 if (row) await app.click(row.index, { clickMethod: "accessibility" });
 nodeRepl.write(row ? "selected" : "not_found");
 """
 
 
-def parse_row(line):
+def parse_row(line, devices):
     head = line.split(" ID: ListEntityRow", 1)[0].strip()
     head = re.sub(r"^\d+\s+", "", head)
     head = re.sub(r"^\S+\s+(\(selected\)\s+)?", "", head)
     head = re.sub(r"^Description:\s*", "", head)
-    parts = head.split(", ")
-    name = parts.pop(0)
-    rest = [p for p in parts if p != "세부사항 열기"]
+    name = next((d for d in sorted(devices, key=len, reverse=True) if head.startswith(d + ", ")), None)
+    if name is None:
+        return None
+    rest = head[len(name) + 2:]
+    if rest.startswith("세부사항 열기, "):
+        rest = rest[len("세부사항 열기, "):]
     place = distance = address = freshness = None
-    if rest and " | " in rest[0]:
-        place, distance = rest[0].split(" | ", 1)
-        if len(rest) > 1:
-            freshness = SEP.split(rest[-1])[0]
-        if len(rest) > 2:
-            address = ", ".join(rest[1:-1])
-    elif rest and "·" in rest[-1]:
-        if len(rest) >= 2:
-            distance = rest[0]
-        fields = SEP.split(rest[-1])
+    if " | " in rest:
+        place, after = rest.split(" | ", 1)
+        distance, _, tail = after.partition(", ")
+        if tail:
+            middle, _, last = tail.rpartition(", ")
+            address = middle or None
+            freshness = SEP.split(last)[0]
+    elif "·" in rest:
+        first, _, remainder = rest.partition(", ")
+        if remainder and DISTANCE.match(first):
+            distance, rest = first, remainder
+        fields = SEP.split(rest)
         place = fields[0]
         freshness = fields[1] if len(fields) > 1 else None
-    elif rest:
-        freshness = rest[-1]
+    else:
+        freshness = rest
     return {"name": name, "place_label": place, "distance": distance, "address": address, "freshness": freshness}
 
 
@@ -79,16 +91,16 @@ def ocu_js(args, stdin=None, timeout=30):
     return proc.stdout
 
 
-def read_rows(timeout=30):
+def read_rows(devices, timeout=30):
     out = ocu_js(["--file", str(READ)], timeout=timeout)
-    start = max(out.rfind('["'), out.rfind("[]"))
+    payload = [line[len(MARKER):] for line in out.splitlines() if line.startswith(MARKER)]
     try:
-        lines = json.loads(out[start:].strip()) if start >= 0 else None
+        lines = json.loads(payload[-1]) if payload else None
     except ValueError:
         lines = None
-    if not isinstance(lines, list):
+    if not isinstance(lines, list) or not all(isinstance(line, str) for line in lines):
         raise OcuError("unreadable ocu js output: " + out.strip()[-200:])
-    return [parse_row(line) for line in lines]
+    return [row for row in (parse_row(line, devices) for line in lines) if row]
 
 
 def select(name):
@@ -98,10 +110,39 @@ def select(name):
         return False
 
 
-def refresh(devices, front):
+def run_bounded(cmd):
+    """Run a short command; return (stdout, None) on success or (None, reason)."""
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=FOCUS_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        return None, "%s timed out after %ds" % (cmd[0], FOCUS_TIMEOUT_S)
+    except OSError as exc:
+        return None, "%s could not start: %s" % (cmd[0], exc)
+    if proc.returncode != 0:
+        return None, "%s exited %d: %s" % (cmd[0], proc.returncode, (proc.stderr.strip() or "no output")[-200:])
+    return proc.stdout.strip(), None
+
+
+def front_app():
+    bundle, reason = run_bounded(["osascript", "-e", 'tell application "System Events" to get bundle identifier of first process whose frontmost is true'])
+    if reason is None and not bundle:
+        reason = "osascript returned no front app"
+    return (bundle or None), reason
+
+
+def restore_focus(front, front_reason):
+    if front is None:
+        return {"focus_restored": False, "focus_note": "front app unknown: " + (front_reason or "")}
+    if front == FINDMY:
+        return {"focus_restored": True}
+    _, reason = run_bounded(["open", "-b", front])
+    return {"focus_restored": True} if reason is None else {"focus_restored": False, "focus_note": reason}
+
+
+def refresh(devices, front, front_reason):
     """Bring Find My forward until a configured device is fresh, then return focus."""
-    rows, target = [], None
-    subprocess.run(["open", "-b", FINDMY])
+    rows, target, focus = [], None, {}
+    run_bounded(["open", "-b", FINDMY])
     try:
         deadline = time.monotonic() + WAIT_S
         while target is None:
@@ -110,20 +151,15 @@ def refresh(devices, front):
             if remaining <= 0:
                 break
             try:
-                rows = read_rows(timeout=max(1, remaining))
+                rows = read_rows(devices, timeout=max(1, remaining))
             except OcuError as exc:
                 if exc.timed_out and time.monotonic() >= deadline:
                     break
                 raise
             target = pick(rows, devices)
     finally:
-        if front and front != FINDMY:
-            subprocess.run(["open", "-b", front])
-    return rows, target
-
-
-def osa(script):
-    return subprocess.run(["osascript", "-e", script], capture_output=True, text=True).stdout.strip()
+        focus = restore_focus(front, front_reason)
+    return rows, target, focus
 
 
 def configured(value):
@@ -131,14 +167,18 @@ def configured(value):
     return "" if value.startswith("${") else value
 
 
-def main(argv=None):
+def main(argv=None, stdin=None):
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--devices-stdin", action="store_true", help="read the primary and fallback device names from stdin, one per line")
     parser.add_argument("--primary", default=os.environ.get("CLAUDE_PLUGIN_OPTION_PRIMARY_DEVICE"))
     parser.add_argument("--fallback", default=os.environ.get("CLAUDE_PLUGIN_OPTION_FALLBACK_DEVICE"))
     args = parser.parse_args(argv)
+    if args.devices_stdin:
+        lines = (stdin or sys.stdin).read().splitlines() + ["", ""]
+        args.primary, args.fallback = lines[0], lines[1]
     devices = [d for d in (configured(args.primary), configured(args.fallback)) if d]
     if not devices:
-        print(json.dumps({"status": "unconfigured", "message": "set primary_device with `" + CONFIGURE + "`"}))
+        print(json.dumps({"status": "unconfigured", "message": "set primary_device with:\n" + CONFIGURE}))
         return 2
     started = time.monotonic()
     result = {"status": "error"}
@@ -153,15 +193,15 @@ def main(argv=None):
 
 
 def locate(devices):
-    front = osa('tell application "System Events" to get bundle identifier of first process whose frontmost is true')
-    rows = read_rows()
-    target, activated = pick(rows, devices), False
+    front, front_reason = front_app()
+    rows = read_rows(devices)
+    target, activated, focus = pick(rows, devices), False, {}
     if target is None:
         activated = True
-        rows, target = refresh(devices, front)
+        rows, target, focus = refresh(devices, front, front_reason)
     if target and not target["address"] and select(target["name"]):
         try:
-            reread = next((r for r in read_rows() if r["name"] == target["name"]), None)
+            reread = next((r for r in read_rows(devices) if r["name"] == target["name"]), None)
         except OcuError:
             reread = None
         if is_fresh(reread):
@@ -169,8 +209,9 @@ def locate(devices):
     return {
         "status": "ok" if target else "stale_or_missing",
         "device": target,
-        "candidates": {r["name"]: r["freshness"] for r in rows if r["name"] in devices},
+        "candidates": {r["name"]: r["freshness"] for r in rows},
         "activated_findmy": activated,
+        **focus,
     }
 
 

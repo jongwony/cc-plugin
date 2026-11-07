@@ -15,8 +15,12 @@ Mac의 Find My 앱에서 지금 내 휴대폰(또는 지정한 보조 기기)의
 
 ```
 /plugin install findmy-location --marketplace jongwony/cc-plugin
-echo '{"primary_device":"<기기 이름>","fallback_device":"<기기 이름>"}' | claude plugin configure findmy-location@cc-plugin --values-stdin
+claude plugin configure findmy-location@cc-plugin --values-stdin <<'EOF'
+{"primary_device": "<기기 이름>", "fallback_device": "<기기 이름>"}
+EOF
 ```
+
+기기 이름에 `"`나 `\`가 있으면 JSON 규칙대로 `\"`, `\\`로 씁니다. 작은따옴표(`'`)나 `$`는 그대로 써도 됩니다.
 
 - `primary_device`: Find My 목록에 보이는 이름 그대로(보통 휴대폰)
 - `fallback_device`: 휴대폰 위치가 최신이 아닐 때 읽을 기기(예: Apple Watch). 비워 둬도 됩니다.

@@ -150,8 +150,9 @@ judgment for the user to decide.
 
 **Runtime halt.** Approval binds to the target itself, not to its name or
 number. Immediately before each irreversible operation, re-establish that the
-target is the one approved; after it, wait until its effects have settled, then
-run its unit's checks. Stop when an operation fails, a check fails, a target
+target is the one approved; after it, wait until its effects have settled and
+check the post-state that operation should leave. Run a unit's checks once all
+of its operations are done. Stop when an operation fails, a check fails, a target
 cannot be re-established as the one approved, a removed service returns, or
 anything the contract does not name appears. On a stop, leave the remaining
 units unrun, report what deviated and the state reached, and wait. Continue
@@ -162,7 +163,7 @@ contract; an answer that informs or clarifies does not authorize continuing.
 When the session cannot answer a `sudo` password prompt, hand over only the
 blocked operation, in its place in the order, with its re-check, as a command
 the user runs with the `!` prefix at the Claude Code prompt; continue once the
-user reports it ran and its check passes.
+user reports it ran and its post-state checks out.
 
 Merismos does not order units; run them in this order (KeepAlive-aware):
 

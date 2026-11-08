@@ -26,7 +26,7 @@ Respond in the person's language.
 | hypotyposis plugin | `/plugin install hypotyposis@epistemic-protocols` | `/sketch` |
 | proplasma plugin | `/plugin install proplasma@epistemic-protocols` | `/preview` |
 | horismos plugin | `/plugin install horismos@epistemic-protocols` | `/bound` |
-| Node ≥ 22, Chrome or Chromium, ffmpeg | Already on the machine; nothing to install (`CHROME` overrides the browser lookup) | `scripts/render.mjs`: page → mp4 and stills |
+| Node ≥ 22, Chrome or Chromium, ffmpeg | Node from nodejs.org or `brew install node`; Chrome from google.com/chrome; ffmpeg from ffmpeg.org or `brew install ffmpeg`. `CHROME` overrides the browser lookup | `scripts/render.mjs`: page → mp4 and stills |
 
 ## Reading the request
 

@@ -19,16 +19,15 @@ Safely identify, investigate, and remove macOS programs through a structured
 workflow: target identification, comprehensive investigation, removal approach
 selection, risk-assessed execution, and verification.
 
-## Dependency
+## Prerequisite
 
-This skill delegates execution of irreversible operations (file deletion, service
-removal) to **Prosoche** (`/attend`). The epistemic-protocols plugin must be
-installed for safe execution gating.
+Splitting the removal into units uses Merismos (`/apportion`) from the
+epistemic-protocols marketplace: `/plugin install merismos@epistemic-protocols`.
 
 ## Workflow Overview
 
 ```
-Target Identification → Investigation → Report → Approach Selection → /attend Execution → Verification
+Target Identification → Investigation → Report → Approach Selection → Apportion → Execution → Verification
 ```
 
 ## Phase 1: Target Identification
@@ -126,12 +125,27 @@ Present options based on findings:
 2. **Manual Removal** — Direct removal of all identified components.
    Appropriate when no uninstaller exists.
 
-## Phase 5: Execution via Prosoche
+## Phase 5: Apportion and Execute
 
-Invoke `/attend` with the removal task list. Prosoche will classify each task
-for risk and gate irreversible operations through user judgment.
+When the report leaves nothing to remove, say in plain words that the removal
+step is skipped because nothing is left, give the Phase 6 status from the
+investigation itself, and end there.
 
-**Typical task ordering** (KeepAlive-aware):
+Otherwise hand the removal to `/apportion` as one goal: remove the components
+the report lists, by the approach the user selected. The Phase 6 verification
+items for each component are the checks its unit's done is derived from. The
+user takes the plan Merismos returns — units, each with its checks, accepted
+gaps and held-open judgments — and execution follows that plan.
+
+**Safety gate.** Every irreversible operation — file deletion, service removal,
+process kill, `pkgutil --forget`, anything under `sudo` — runs only with the
+user's explicit approval of that operation and its target. List each one by
+target in the authority the apportion sheet shows; the user's taking of the plan
+approves exactly what it lists. An operation found after the taking (a leftover
+the uninstaller did not remove, a newly seen plist) goes back to the user before
+it runs.
+
+Merismos does not order units; run them in this order (KeepAlive-aware):
 
 1. Unload services — `launchctl bootout`/`unload` for KeepAlive plist (before kill)
 2. Run uninstaller — `open /path/to/Uninstaller.app` (if selected)

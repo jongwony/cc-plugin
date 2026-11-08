@@ -53,13 +53,7 @@ Detection: after identifying the primary program's Application Support directory
 
 ## Non-Interactive sudo Limitation
 
-Claude Code subagents run in non-interactive terminals where `sudo` password prompts fail.
-
-**Mitigation strategy:**
-1. Execute all non-sudo operations first (`kill`, `launchctl remove`)
-2. Collect remaining sudo commands into a single block
-3. Present to user with `! <command>` prefix instructions for Claude Code prompt execution
-4. Verify after user executes
+Claude Code subagents run in non-interactive terminals where `sudo` password prompts fail. How a blocked `sudo` step is handed to the user is defined once, in SKILL.md Phase 5 (**Every path**).
 
 ## Process Identification Aids
 

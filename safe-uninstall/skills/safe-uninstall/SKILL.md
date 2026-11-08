@@ -139,24 +139,30 @@ gaps and held-open judgments — and execution follows that plan.
 
 **Contract.** The plan the user takes is the contract for execution. In the
 authority the apportion sheet shows, list every irreversible operation — file
-deletion, service removal, process kill, `pkgutil --forget`, anything under
-`sudo` — with its exact target (path, PID, launchd label, receipt id) and the
-conditions that halt execution. Only what the contract lists runs.
+deletion, service removal, process kill, uninstaller run, `pkgutil --forget`,
+anything under `sudo` — with the target it acts on and the conditions that halt
+execution. Only what the contract lists runs, and an approved operation
+authorizes only the effects established before approval. Where an operation's
+effects cannot be bounded beforehand — a recursive delete over contents not yet
+inventoried, an uninstaller whose removals are unknown — establish its scope
+before the user takes the plan, or leave it out of the plan as a held-open
+judgment for the user to decide.
 
-**Runtime halt.** Before each irreversible operation, re-check that its target
-still matches the contract: the path exists, the PID, label or receipt is the
-same one. After each unit, run its checks. Stop when any of these occurs:
+**Runtime halt.** Approval binds to the target itself, not to its name or
+number. Immediately before each irreversible operation, re-establish that the
+target is the one approved; after it, wait until its effects have settled, then
+run its unit's checks. Stop when an operation fails, a check fails, a target
+cannot be re-established as the one approved, a removed service returns, or
+anything the contract does not name appears. On a stop, leave the remaining
+units unrun, report what deviated and the state reached, and wait. Continue
+only on the user's explicit authorization to proceed under the amended
+contract; an answer that informs or clarifies does not authorize continuing.
 
-- an operation returns an error, other than a `sudo` password prompt the
-  session cannot answer, which goes to Handling sudo Failures
-- a unit's check fails
-- a target has changed or is gone
-- a KeepAlive service respawns
-- an item the contract does not list appears
-
-On a stop, leave the remaining units unrun, report what deviated and the state
-reached, and wait for the user. Execution resumes only on the user's answer,
-which amends the contract.
+**Every path.** A step handed to the user carries the same contract and halt.
+When the session cannot answer a `sudo` password prompt, hand over only the
+blocked operation, in its place in the order, with its re-check, as a command
+the user runs with the `!` prefix at the Claude Code prompt; continue once the
+user reports it ran and its check passes.
 
 Merismos does not order units; run them in this order (KeepAlive-aware):
 
@@ -169,23 +175,14 @@ Merismos does not order units; run them in this order (KeepAlive-aware):
 7. Remove browser plugins — `sudo rm` symlinks and plugin bundles
 8. Forget package receipts — `sudo pkgutil --forget <id>`
 
-### Handling sudo Failures
-
-Non-interactive terminal sessions cannot accept sudo passwords.
-When sudo operations fail:
-
-1. Complete all non-sudo operations (kill, launchctl remove)
-2. Collect failed sudo commands into a single executable block
-3. Present to user as a copy-paste command with `!` prefix for Claude Code prompt
-4. After user executes, proceed to verification
-
 ## Phase 6: Verification
 
-Run a comprehensive post-removal check against all previously identified items:
+Check the post-state the contract named, for every item it lists: a removed
+item is absent where it was found.
 
 1. Processes: `ps aux | grep -i -E "<patterns>" | grep -v grep`
 2. Services: `launchctl list 2>/dev/null | grep -i -E "<patterns>"`
-3. Files: Check each previously found path exists
+3. Files: each removed path no longer exists
 4. Package receipts: `pkgutil --pkgs | grep -i -E "<patterns>"`
 
 Present final status:

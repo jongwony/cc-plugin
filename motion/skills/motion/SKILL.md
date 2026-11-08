@@ -26,6 +26,7 @@ Respond in the person's language.
 | hypotyposis plugin | `/plugin install hypotyposis@epistemic-protocols` | `/sketch` |
 | proplasma plugin | `/plugin install proplasma@epistemic-protocols` | `/preview` |
 | horismos plugin | `/plugin install horismos@epistemic-protocols` | `/bound` |
+| Node ≥ 22, Chrome or Chromium, ffmpeg | Node from nodejs.org or `brew install node`; Chrome from google.com/chrome; ffmpeg from ffmpeg.org or `brew install ffmpeg`. `CHROME` overrides the browser lookup | `scripts/render.mjs`: page → mp4 and stills |
 
 ## Reading the request
 
@@ -57,7 +58,7 @@ Where the build needs an act that reaches outside this session — installing a 
 
 ## Render and watch
 
-Capture every frame of the page at the settled smoothness and encode the mp4 with its sound, however the builder sees fit; it lands beside the page and runs `DURATION`. Show the person that mp4. Beside it, show stills from it at the moments that carry the reading, each with its time, and say what the builder chose on its own: each value the person did not give, and any warning the build or the render saw. Whether the video is what was asked is the person's judgment, made on the mp4.
+Capture every frame of the page at the settled smoothness and encode the mp4 with its sound; it lands beside the page and runs `DURATION`. `node "${CLAUDE_PLUGIN_ROOT}/scripts/render.mjs" <page.html> <out.mp4> --size WxH [--fps N] [--audio FILE]` does this across parallel headless Chrome processes, and `--stills t1,t2` captures stills; where the page needs what the script does not do, the way is the builder's. Show the person that mp4. Beside it, show stills from it at the moments that carry the reading, each with its time, and say what the builder chose on its own: each value the person did not give, and any warning the build or the render saw. Whether the video is what was asked is the person's judgment, made on the mp4.
 
 Then stop for the person's turn. A change goes into the page and the mp4 is rendered again. A video's look and movement are often recognized on sight long before they can be described; read the person's turn on the mp4 for where that shows:
 

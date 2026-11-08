@@ -19,16 +19,15 @@ Safely identify, investigate, and remove macOS programs through a structured
 workflow: target identification, comprehensive investigation, removal approach
 selection, risk-assessed execution, and verification.
 
-## Dependency
+## Prerequisite
 
-This skill delegates execution of irreversible operations (file deletion, service
-removal) to **Prosoche** (`/attend`). The epistemic-protocols plugin must be
-installed for safe execution gating.
+Splitting the removal into units uses Merismos (`/apportion`) from the
+epistemic-protocols marketplace: `/plugin install merismos@epistemic-protocols`.
 
 ## Workflow Overview
 
 ```
-Target Identification → Investigation → Report → Approach Selection → /attend Execution → Verification
+Target Identification → Investigation → Report → Approach Selection → Apportion → Execution → Verification
 ```
 
 ## Phase 1: Target Identification
@@ -126,12 +125,40 @@ Present options based on findings:
 2. **Manual Removal** — Direct removal of all identified components.
    Appropriate when no uninstaller exists.
 
-## Phase 5: Execution via Prosoche
+## Phase 5: Apportion and Execute
 
-Invoke `/attend` with the removal task list. Prosoche will classify each task
-for risk and gate irreversible operations through user judgment.
+When the report leaves nothing to remove, say in plain words that the removal
+step is skipped because nothing is left, give the Phase 6 status from the
+investigation itself, and end there.
 
-**Typical task ordering** (KeepAlive-aware):
+Otherwise hand the removal to `/apportion` as one goal: remove the components
+the report lists, by the approach the user selected. The Phase 6 verification
+items for each component are the checks its unit's done is derived from. The
+user takes the plan Merismos returns — units, each with its checks, accepted
+gaps and held-open judgments — and execution follows that plan.
+
+**Contract.** The plan the user takes is the contract for execution. In the
+authority the apportion sheet shows, list every irreversible operation — file
+deletion, service removal, process kill, `pkgutil --forget`, anything under
+`sudo` — with its exact target (path, PID, launchd label, receipt id) and the
+conditions that halt execution. Only what the contract lists runs.
+
+**Runtime halt.** Before each irreversible operation, re-check that its target
+still matches the contract: the path exists, the PID, label or receipt is the
+same one. After each unit, run its checks. Stop when any of these occurs:
+
+- an operation returns an error, other than a `sudo` password prompt the
+  session cannot answer, which goes to Handling sudo Failures
+- a unit's check fails
+- a target has changed or is gone
+- a KeepAlive service respawns
+- an item the contract does not list appears
+
+On a stop, leave the remaining units unrun, report what deviated and the state
+reached, and wait for the user. Execution resumes only on the user's answer,
+which amends the contract.
+
+Merismos does not order units; run them in this order (KeepAlive-aware):
 
 1. Unload services — `launchctl bootout`/`unload` for KeepAlive plist (before kill)
 2. Run uninstaller — `open /path/to/Uninstaller.app` (if selected)

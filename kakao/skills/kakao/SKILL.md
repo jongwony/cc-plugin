@@ -24,7 +24,7 @@ description: >
 ## Which path reaches KakaoTalk
 
 - The helper (Swift AX on one window) is the path wherever it reaches; OCU covers only the steps the helper cannot do.
-- This app's boundary — helper: find the room's row in the chat list and scroll it into view (`locate`), bind, read, draft, send, clear, capture (`shot`). OCU: naming and double-clicking that row to open a closed room, waking a dark display, and read-only looks when a handshake is incomplete.
+- This app's boundary — helper: find the room's row in the chat list and scroll it into view (`locate`), bind, read, draft, send, clear, capture (`shot`). OCU: switching the main window to its chat tab, naming and double-clicking that row to open a closed room, waking a dark display, read-only looks when a handshake is incomplete, and reading a room that has no input field.
 - OCU input on a chat window — click, set_value, type_text, press_key — is outside the boundary, as are keyboard events, AppleScript and raising a window: they act on whichever window has focus and break the other rooms.
 
 ## Opening a room
@@ -34,6 +34,7 @@ description: >
   1. OCU `query` on `com.kakao.KakaoTalkMac` with the returned `query` fields (`window_id` = the main window, `text` = the room, `exact: true`). Go on only when it returns exactly one match with role `AXStaticText`; otherwise stop and run `locate` again.
   2. OCU `click` on that app with `element_index` = that match's `index`, `click_method: "sky_click"`, `click_count: 2`. It acts on that element of the main window, not on a coordinate or on whichever window is key, and opens the room without raising KakaoTalk or taking focus.
   3. `handshake --room` the same title; its exact-title check confirms the room that opened. An exit 10 there with no window carrying the title means nothing opened: run `locate` again.
+- `chat_tab_not_showing` (exit 9): switch the tab, then run `locate` again. OCU `query` on the app with `window_id` = the returned `main_window_id` and `role: "AXButton"`; take the one match whose `identifier` is `chatrooms` and `click` it with `element_index`, `click_method: "sky_click"`, `click_count: 1`.
 - `open_busy` (exit 5): another session is opening a room; retry after `retry_after_seconds`.
 
 ## Binding a room
@@ -41,6 +42,7 @@ description: >
 - This session works one room. `handshake --room "<exact window title>"` binds it; keep `room` and `window_id` from the JSON and pass both to every later command.
 - Exit 3 (`handshake_incomplete`): `missing` names the element the helper could not settle and `candidates` lists what it saw. Look at the same window with OCU read-only tools (`get_app_state`, `query`), then rerun `handshake` with `--send-label <label>`, `--input-identifier <id>` or `--list-identifier <id>`. The hints are stored for the room.
 - Exit 9 `screen_locked`: with OCU Locked Use enabled, one OCU `get_app_state` call on KakaoTalk wakes the display; then retry the command once. If it is still locked, wait for a person to unlock the Mac.
+- A channel room (알림톡 from a business, e.g. a bank) has no input field: `handshake` exits 3 with `missing: ["input"]` and no hint settles it, so the helper cannot bind or `read` it. Read it with OCU `query` on that window (`window_id`, `role: "AXTextArea"`); each bubble's text is the match's `value`. Only bubbles the window has rendered are returned, and the Mac app holds an alimtalk's text only if it arrived while this Mac was signed in — the rest show "알림톡 도착 / 모바일에서 확인해 주세요." and their text is on the phone only.
 - When the helper cannot do something, report its JSON.
 
 ## Sending and reading
@@ -67,5 +69,5 @@ description: >
 | 6 | draft_mismatch, send_button_disabled, clear_failed | nothing was sent; for draft_mismatch the box may hold text, so ask the person |
 | 7 | send_unconfirmed | do not send again; `read` and look for the text before any next step |
 | 8 | draft_changed, no_draft | the input is not this tool's draft; see draft-for-approval above |
-| 9 | unavailable, screen_locked, main_window_missing, main_window_minimized, main_window_offscreen, chat_tab_not_showing, chat_list_missing, row_not_visible, screen_recording_missing, capture_dir_failed, capture_failed | act on `reason`; the main-window statuses and screen_recording_missing need the person; for screen_locked see Binding a room |
+| 9 | unavailable, screen_locked, main_window_missing, main_window_minimized, main_window_offscreen, chat_tab_not_showing, chat_list_missing, row_not_visible, screen_recording_missing, capture_dir_failed, capture_failed | act on `reason`; main_window_missing, main_window_minimized, main_window_offscreen and screen_recording_missing need the person; for chat_tab_not_showing see Opening a room, for screen_locked see Binding a room |
 | 10 | room_not_unique | exactly one open window, or one chat-list row for `locate`, must carry the title; ask the person |

@@ -50,8 +50,8 @@ extension Engine {
         let header = main.node.children.first { $0.role == "AXStaticText" }?.stringValue
         guard let h = header, config.chatTabHeaders.contains(h) else {
             throw abort(cmd, .unavailable, "chat_tab_not_showing", [
-                "room": room, "header": header ?? NSNull(),
-                "reason": "the main window does not show its chat tab; a person switches it to 채팅",
+                "room": room, "header": header ?? NSNull(), "main_window_id": Int(mainID),
+                "reason": "the main window does not show its chat tab (채팅)",
             ])
         }
         // The chat list: the table inside a scroll area that also holds a scroll bar.

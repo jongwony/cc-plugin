@@ -15,14 +15,21 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
 const argv = process.argv.slice(2);
-const flag = (name, dflt) => { const i = argv.indexOf(`--${name}`); return i < 0 ? dflt : argv.splice(i, 2)[1]; };
+const USAGE = 'usage: render.mjs <page.html> <out.mp4> --size WxH [--fps 30] [--jobs N] [--audio FILE] | --stills t1,t2';
+const flag = (name, dflt) => {
+  const i = argv.indexOf(`--${name}`);
+  if (i < 0) return dflt;
+  const v = argv.splice(i, 2)[1];
+  if (v === undefined || v.startsWith('--')) { console.error(USAGE); process.exit(2); }
+  return v;
+};
 const size = flag('size', ''), fps = +flag('fps', 30), audio = flag('audio'), stillsArg = flag('stills');
 const jobs = +flag('jobs', Math.max(1, Math.min(8, Math.floor(availableParallelism() / 2))));
 const [pageArg, outArg] = argv;
 const dims = size.match(/^(\d+)x(\d+)$/);
 const posInt = n => Number.isInteger(n) && n > 0;
 if (!pageArg || !dims || (!outArg && !stillsArg) || !(fps > 0) || !posInt(jobs)) {
-  console.error('usage: render.mjs <page.html> <out.mp4> --size WxH [--fps 30] [--jobs N] [--audio FILE] | --stills t1,t2');
+  console.error(USAGE);
   process.exit(2);
 }
 const [W, H] = [+dims[1], +dims[2]];
@@ -85,6 +92,7 @@ async function open() {
     for (const p of pending.values()) p.rej(e);
     pending.clear();
     waiters.splice(0).forEach(w => w.rej(e));
+    if (!finishing) { console.error(e.message); finish(1); }
   };
   ws.addEventListener('close', () => fail(new Error('DevTools connection closed')));
   proc.on('exit', c => fail(new Error(`chrome exited (${c}) during the render`)));

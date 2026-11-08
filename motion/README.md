@@ -36,7 +36,7 @@ The dotted paths are taken only where the run shows that need. The build does no
 |---|---|
 | `skills/motion/SKILL.md` | How the request is read, decisions every video turns on, where the other protocols enter, and page → mp4 → watch |
 | `skills/motion/references/fast-axes.md` | Decisions that change with the kind of video, and real examples to point at |
-| `scripts/render.mjs` | Page → mp4 and stills: every frame captured from parallel headless Chrome, encoded with ffmpeg; nothing to install |
+| `scripts/render.mjs` | Page → mp4 and stills: every frame captured from parallel headless Chrome, encoded with ffmpeg; no npm dependencies (Node, Chrome and ffmpeg per the skill's Prerequisites) |
 
 ## Install
 

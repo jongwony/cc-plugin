@@ -137,13 +137,26 @@ items for each component are the checks its unit's done is derived from. The
 user takes the plan Merismos returns — units, each with its checks, accepted
 gaps and held-open judgments — and execution follows that plan.
 
-**Safety gate.** Every irreversible operation — file deletion, service removal,
-process kill, `pkgutil --forget`, anything under `sudo` — runs only with the
-user's explicit approval of that operation and its target. List each one by
-target in the authority the apportion sheet shows; the user's taking of the plan
-approves exactly what it lists. An operation found after the taking (a leftover
-the uninstaller did not remove, a newly seen plist) goes back to the user before
-it runs.
+**Contract.** The plan the user takes is the contract for execution. In the
+authority the apportion sheet shows, list every irreversible operation — file
+deletion, service removal, process kill, `pkgutil --forget`, anything under
+`sudo` — with its exact target (path, PID, launchd label, receipt id) and the
+conditions that halt execution. Only what the contract lists runs.
+
+**Runtime halt.** Before each irreversible operation, re-check that its target
+still matches the contract: the path exists, the PID, label or receipt is the
+same one. After each unit, run its checks. Stop when any of these occurs:
+
+- an operation returns an error, other than a `sudo` password prompt the
+  session cannot answer, which goes to Handling sudo Failures
+- a unit's check fails
+- a target has changed or is gone
+- a KeepAlive service respawns
+- an item the contract does not list appears
+
+On a stop, leave the remaining units unrun, report what deviated and the state
+reached, and wait for the user. Execution resumes only on the user's answer,
+which amends the contract.
 
 Merismos does not order units; run them in this order (KeepAlive-aware):
 

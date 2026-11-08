@@ -701,7 +701,8 @@ test("locate: minimized, off-screen main window and another tab each refuse with
     let c = makeEnv()
     makeChatList([roomTitle], into: c, header: "친구")
     let oc = c.engine.run(.locate(room: roomTitle))
-    expect(oc.body["status"] as? String == "chat_tab_not_showing" && oc.exit == .unavailable && oc.body["reason"] != nil, oc.json)
+    expect(oc.body["status"] as? String == "chat_tab_not_showing" && oc.exit == .unavailable && oc.body["reason"] != nil
+           && oc.body["main_window_id"] as? Int != nil, oc.json)
 }
 
 test("locate: another room's live open lease → exit 5 open_busy; handshake releases; expiry frees it") {

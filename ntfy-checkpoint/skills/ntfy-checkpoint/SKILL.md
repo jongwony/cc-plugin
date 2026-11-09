@@ -5,7 +5,7 @@ description: Schedule a phone push for a one-shot check the user must make at a 
 
 # ntfy checkpoint
 
-A checkpoint is one check at one minute, pushed to the phone ahead of time so nothing waits in a visible list. The `ntfy_*` tools and their server's `ntfy-guide` resource own how a message is scheduled, replaced, and read back; this skill holds which push goes where and what it carries.
+A checkpoint is one check at one minute, pushed to the phone ahead of time so nothing waits in a visible list. The `ntfy_*` tools and their server's `ntfy-guide` resource own how a message is scheduled, replaced, and read back; this skill holds which push goes where and what it carries, and how a push is changed or cancelled once sent (After scheduling), in place of the guide's delete.
 
 ## Scope
 
@@ -59,9 +59,10 @@ A checkpoint is one check at one minute, pushed to the phone ahead of time so no
 ## After scheduling
 
 - The session keeps no wake for a push — no background command, sleep or poller. The pending message is the user's check; the user opens a session from it when it lands.
-- When a later turn changes what a pending push covers — its minute moves, its check is settled early, its step is dropped — read the pending messages from the server (`ntfy_fetch_messages` with `scheduled: true`) and adjust them there: republish under the same sequence id with the new minute or text, or publish the settled state with no delay; record each as a new line.
-- A publish under a sequence id whose scheduled message is still pending cancels that message, so the settled state replaces the push instead of being overwritten by it.
-- In a run the user is not watching, leave a pending message to fire rather than deleting it: a delete asks for confirmation the run cannot give.
+- When a later turn changes what a push covers — its minute moves, its check is settled early, its step is dropped, its text is superseded — read the pending messages from the server (`ntfy_fetch_messages` with `scheduled: true`) and change the push with `ntfy_publish_message` under its own sequence id; record each as a new line. `ntfy_manage_message` (clear, delete) is not used for this.
+  - Delivered, superseded → publish the new state under the same sequence id; the phone replaces the notification.
+  - Pending, minute moves → publish the replacement with the new `delay` under the same sequence id; the server deletes the pending message, and only the replacement is delivered.
+  - Pending, no longer needed → publish the settled state under the same sequence id with no delay and `priority: 1`; the pending message is deleted and never delivered, and the phone receives that one min-priority notification (no sound or vibration) in its place.
 
 ## Prerequisites
 

@@ -43,3 +43,4 @@ intent ──발행──▶ accepted <id> ──시각 경과──▶ delivere
 
 - ntfy.sh는 종단 간 암호화를 지원하지 않습니다([binwiederhier/ntfy#69](https://github.com/binwiederhier/ntfy/issues/69)). 그래서 본문은 맥락 없이는 의미가 없는 포인터로만 채웁니다.
 - 예약 한도는 ntfy.sh 기본값 기준 10초~3일입니다.
+- 예약한 push의 시각을 옮기거나 취소할 때는 지우지 않고, 같은 sequence id로 다시 발행합니다. 대기 중인 메시지는 서버에서 지워지고 새 메시지만 도착합니다. 취소할 때는 지연 없이 priority 1로 보냅니다. 휴대폰에는 소리와 진동 없는 알림 하나만 남습니다. 지우기(`ntfy_manage_message`)는 호출할 때마다 확인 창을 띄우기 때문에 쓰지 않습니다.

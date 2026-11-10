@@ -40,6 +40,7 @@ Text a person reads to understand: `README.md`, PR body, Notion page, handoff, m
 - **Briefings** (readers deciding direction or coordinating dependencies) open with a TL;DR and carry conclusions; rationale, measurements, procedures and the decision record live in the work's record — in work orgs, the Linear project description and its issues — and the page links there.
 - A flow change is drawn as one picture of the flow with the changes marked on it.
 - Briefing sentences follow ASD-STE100.
+- **A title names the change, and the body explains it.** A commit subject, a PR title or a heading says in one clause what was done to what, in literal verbs and the repository's established terms, at the level that covers the whole change. The reason, the conditions and the parts go to the body.
 - **Every referent is named in full, in the text itself.** A session-local label (a milestone's letter, an option number, an issue identifier standing in for its title) and a demonstrative pointing back into the session each become the noun they stand for.
 - A number the system computes (milestone %, issue count) is read from the system at write time; for a Linear status update, the diff Linear renders beside it is the check.
 - A skill's human-facing file is its `README.md`, and the lifecycle drawing lives there.

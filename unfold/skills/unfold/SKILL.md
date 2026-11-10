@@ -36,15 +36,24 @@ boundary — and the read each write needs first.
   % are system-maintained. Dependency edges are not — they are stored
   structure, written by hand under the bullet above. A write reads what it is
   about to change, immediately before changing it.
+- **An issue completes on one PR's merge**: under the team's default Git
+  mapping, a merge moves to Done every issue its PR links, so a new
+  workstream issue carries only completion criteria that merge satisfies.
+  Work complete only after a merge — a measurement, a shadow comparison, a
+  post-deploy check, an alert test — is its own issue: a sibling with a
+  `blockedBy` edge on the implementation issue, not its sub-issue, since
+  parent-to-child auto-complete can close a sub-issue with its parent. An
+  issue whose criteria would mix the two is split before it is written.
 - **Never hand-write state**: do not set issue status, milestone completion,
   or live-system facts (deploy/image existence) in Linear. Status flows from
   PR events; live facts are read from their source (CI, registry, ArgoCD)
   at need. Hand-mirrored state drifts, and stale state read back as "the
-  whole picture" pollutes downstream judgment. Sole exception: the initial
-  state of a backfilled issue — one created for work finished before the
-  issue existed — is set once at creation, because no PR event will ever
-  fire for it; this is a one-time creation fact, not ongoing mirroring,
-  and automation owns the state from then on.
+  whole picture" pollutes downstream judgment. Two exceptions, each an issue
+  no PR event will ever move: the initial state of a backfilled issue — one
+  created for work finished before the issue existed — set once at creation,
+  after which automation owns it; and the close of an issue no PR completes
+  (the post-merge work above), which the person makes, or the session on
+  their word, once the issue carries its result.
 
 ## Invocation
 

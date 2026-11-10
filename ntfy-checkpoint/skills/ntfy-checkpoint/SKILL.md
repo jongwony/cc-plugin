@@ -18,19 +18,21 @@ A checkpoint is one check at one minute, pushed to the phone ahead of time so no
 ## Sender
 
 - `aiward-send` on PATH → it is the one sender, and the `ntfy_*` tools are not called. Not on PATH → **Without aiward**, below.
-- One push is one call:
-  `aiward-send --severity blocked --area <work|personal> --title "<title>" --click "<owning session link>" --sequence-id "<short id>-<step>" [--at <Unix time>] [--priority <1-5>] session "<body>"`
-- `--severity blocked` is what makes aiward push it as written, with no judgment in between; the push options are refused under any other severity.
-- `--area`: work-area tasks → `work`; personal ones → `personal`. The user's own area rules decide which side a task is on.
-- `--at` omitted → the push goes out now (a handoff). `--at` given → ntfy holds it until that time (a checkpoint).
-- `--priority` omitted → 5, aiward's own default for a `blocked` push.
-- `--event-id` is left out, so each send is its own event.
+- `--area`, on every call: work-area tasks → `work`; personal ones → `personal`. The user's own area rules decide which side a task is on.
+- **A handoff** goes out at once, as written, with no judgment in between:
+  `aiward-send --severity blocked --area <work|personal> --title "<title>" --click "<owning session link>" session "<body>"`
+  `--title` and `--click` are refused under any other severity. `--event-id` is left out, so each handoff is its own event.
+- **A checkpoint** is a request the aiward session schedules — an ordinary event, never `blocked`:
+  `aiward-send --area <work|personal> --event-id "cp-<sequence id, lowercased>-$(date +%s)" session "<request line>"`
+  The request line carries all the aiward session needs, since it sends the push itself: `push at <local time> <zone> (Unix <seconds>) · sequence_id <sequence id> · title: <title> · <body>`.
+- **A change to a checkpoint** — moved, settled early, dropped, superseded — is another such event under the same sequence id, its line opening with the new state: `move to <local time> <zone> (Unix <seconds>)`, `settled: <evidence>`, `dropped`, or `supersede:` and the new title and body.
+- Every checkpoint event carries its own event id, as above. An event sent under the id of one still pending is answered `duplicate` and dropped, and the `aiward:report` skill's report already holds the session's own id.
 
 ## Message
 
 - Title: the check, in a few words.
 - Body: one line of what to check, then a pointer — `claude attach <short id>`, the session's `$CLAUDE_CODE_SESSION_ID` and the checkpoint's sequence id — so the user can wake the owning session, or collect the rest with `/recollect` or `/inquire`.
-- Click: the owning session's link, `https://claude.ai/code/$CLAUDE_CODE_BRIDGE_SESSION_ID`, present when that variable is set; `--click` takes no other address. Where the user's notification rule lands the tap on a page, the owning session holds that page's address.
+- Click: the owning session's link, `https://claude.ai/code/$CLAUDE_CODE_BRIDGE_SESSION_ID`, present when that variable is set; `--click` takes no other address, and a checkpoint's request line names the link for the aiward session to pass on. Where the user's notification rule lands the tap on a page, the owning session holds that page's address.
 - Nothing past that pointer: ntfy.sh stores the body in plaintext, and the pointer carries no meaning without the session record.
 - Title and body are each at most 1 KB.
 - Sequence id: `<short id>-<step>` — the scheduling session's short id and the step label, chosen at scheduling, from letters, digits, `_` and `-`, at most 64 characters. It names the checkpoint for its whole life: every reschedule, update and settled state reuses it.
@@ -41,7 +43,7 @@ A checkpoint is one check at one minute, pushed to the phone ahead of time so no
 - When work hands the user a check at a known minute, schedule the push without asking first, then report in the session each scheduled push's local time and title, with one line that the user can ask to change it.
 - The push minute and any window it names come from the act's real latencies: the user's response after the push lands (minutes, never zero), the act's own lead time (a merge's rollout, a deploy), and slack before the moment it must be done by.
 - A window narrower than those latencies is not handed to the user: push earlier by the lead time, move to a moment where acting late is still safe, or widen the window; the body says what acting late costs.
-- `--at` takes a Unix timestamp, at most 3 days ahead; one closer than 10 seconds, or already past, goes out now.
+- The time in a request is at most 3 days ahead and more than 10 seconds away: the aiward session's `notify` refuses any other.
 
 ## Record
 
@@ -50,20 +52,22 @@ A checkpoint is one check at one minute, pushed to the phone ahead of time so no
 - Write the line with state `intent` before the send, and a new line with the outcome after it.
 - State is one of the following; each is recorded on its own evidence and none implies the next:
   - `intent` — about to send.
-  - `queued <event id>` — `aiward-send` printed `ok <event id>`: aiward holds the push and retries until ntfy takes it.
-  - `accepted direct` — `aiward-send` printed `direct`: no channel was listening and ntfy took the push from the sender itself.
-  - `unsent: <reason>` — `aiward-send` exited 1 or 3: neither the channel nor ntfy took it. Reported in the session with its minute; the next action is the resend.
+  - `queued <event id>` — `aiward-send` printed `ok <event id>`: aiward holds the event. For a handoff its push is queued with it and retried until ntfy takes it. For a checkpoint only the request is held: the push exists once the aiward session has read the request and scheduled it.
+  - `scheduled: <the aiward session's words>` — a message from the aiward session says it scheduled or changed the push. Without such a message the state stays `queued`.
+  - `accepted direct` — `aiward-send` printed `direct`: no channel was listening and ntfy took a handoff from the sender itself.
+  - `unsent: <reason>` — `aiward-send` exited 1 or 3 and nothing took it. Reported in the session with its minute. Exit 1 names what to fix in the event. Exit 3 on a checkpoint → send it through **Without aiward** under the same sequence id.
   - `checked: <evidence>` — the user or the session did the check; the evidence is what showed it.
-- `queued` does not say ntfy has the message, and nothing sent through aiward says it reached the phone: the session reads no ntfy history, so a `delivered` state is not recorded.
+- `duplicate <event id>` → an event with that id is still pending and this one was dropped: send again under a fresh id.
+- Nothing sent through aiward says the push reached ntfy or the phone: the session reads no ntfy history, so a `delivered` state is not recorded.
 - Exit 2 → the call was malformed: fix it and send again. Exit 4 → this session is aiward itself, which pushes with its own `notify` tool.
 
 ## After scheduling
 
 - The session keeps no wake for a push — no background command, sleep or poller. The pending message is the user's check; the user opens a session from it when it lands.
-- When a later turn changes what a push covers — its minute moves, its check is settled early, its step is dropped, its text is superseded — the latest Record line for its sequence id says what is pending, and the push is changed by sending again under that sequence id; record each as a new line.
-  - Delivered, superseded → send the new state under the same sequence id; the phone replaces the notification.
-  - Pending, minute moves → send the replacement with the new `--at` under the same sequence id; ntfy drops the pending message, and only the replacement is delivered.
-  - Pending, no longer needed → send the settled state under the same sequence id with no `--at` and `--priority 1`; the pending message is dropped and never delivered, and the phone receives that one min-priority notification (no sound or vibration) in its place.
+- When a later turn changes what a push covers — its minute moves, its check is settled early, its step is dropped, its text is superseded — the latest Record line for its sequence id says what is pending, and the change goes out as a new event under that sequence id (Sender); record each as a new line.
+  - Delivered, superseded → the aiward session sends the new state under the same sequence id; the phone replaces the notification.
+  - Pending, minute moves → it schedules the replacement under the same sequence id; ntfy drops the pending message, and only the replacement is delivered.
+  - Pending, no longer needed → it sends the settled state under the same sequence id, now, at priority 1; the pending message is dropped and never delivered, and the phone receives that one min-priority notification (no sound or vibration) in its place.
 
 ## Without aiward
 

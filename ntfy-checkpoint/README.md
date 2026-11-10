@@ -8,7 +8,7 @@
 
 ## 보내는 길
 
-- `aiward-send`가 PATH에 있으면(aiward 플러그인이 설치된 기기) push는 전부 aiward를 거칩니다. 세션은 ntfy 도구를 부르지 않고, 토픽은 `--area work|personal`로 고릅니다. 예약은 `--at`, 고쳐 보내기는 `--sequence-id`입니다.
+- `aiward-send`가 PATH에 있으면(aiward 플러그인이 설치된 기기) push는 전부 aiward를 거칩니다. 세션은 ntfy 도구를 부르지 않고, 토픽은 `--area work|personal`로 고릅니다. choi만 할 수 있는 일은 `--severity blocked`로 바로 나갑니다. 정해진 시각의 확인과 그 변경은 평범한 이벤트로 요청하고, aiward 세션이 예약하고 고쳐 보냅니다.
 - 없으면 아래 두 ntfy 서버로 직접 보냅니다.
 - aiward를 거칠 때는 세션이 ntfy 기록을 읽지 않습니다. 그래서 상태는 `queued`(aiward가 받아 둠), `accepted direct`(채널이 멎어 보내는 쪽이 직접 보냄), `unsent`(어디에도 닿지 않음), `checked`까지만 기록하고, 휴대폰으로 나갔다는 `delivered`는 기록하지 않습니다. 탭은 예약한 세션으로만 갑니다.
 

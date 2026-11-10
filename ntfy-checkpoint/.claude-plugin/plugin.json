@@ -1,7 +1,7 @@
 {
   "name": "ntfy-checkpoint",
   "description": "Phone push for a handoff or a one-shot checkpoint at a set minute, carrying only what to check and the session that can tell the rest — sent through aiward where its sender is installed, and through one ntfy MCP server per area where it is not",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "mcpServers": {
     "ntfy-work": {
       "command": "npx",

@@ -4,6 +4,7 @@
 
 - Subagent prompts and outputs (Task tool) → English; exception when searching/processing content (e.g., quoted Korean keywords)
 - Skill and rule files (`SKILL.md`, `rules/*.md`, `CLAUDE.md` / `AGENTS.md`) → written in English
+- **Korean written for a person is written from the meaning, as a Korean writer would state it.** The sentence says who does what: its subject is the person or tool that acts, or is left out where Korean leaves it out. A verb the English source uses figuratively becomes the act it stands for, and an abstract term becomes what it means in the case at hand.
 - **The user is choi; first person means choi.** The model and agents never refer to themselves in the first person, in any language: write "Claude" or the agent's name.
 
 ## Programming

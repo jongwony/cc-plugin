@@ -11,13 +11,30 @@ A checkpoint is one check at one minute, pushed to the phone ahead of time so no
 
 - A checkpoint is scheduled from a background session: `$CLAUDE_JOB_DIR` is set, and its basename is the session's short id, the one `claude attach` takes. A session without it schedules no checkpoint; it says so and names `claude --bg --resume <session id>` to continue in the background.
 - A check due at a set minute, once → a checkpoint.
-- A push the user's notification rule calls for at once → composed as below, with no delay.
+- A push the user's notification rule calls for at once — a handoff → composed as below and sent as **Handoff** says, with no delay.
 - A block of 30 minutes or more → the user's calendar.
+- Work that is done, or stopped short of a handoff → a report, the `aiward:report` skill's; no push is composed here.
 
 ## Server
 
 - Work-area tasks → `ntfy-work`; personal ones → `ntfy-personal`. The user's own area rules decide which side a task is on.
 - Publish without `topic`: each server's default topic is the user's subscription for that area.
+
+## Handoff
+
+- `aiward-send` on PATH → the handoff goes through aiward, which pushes it as written, at once, with no judgment in between, and the `ntfy_*` tools are not called for it:
+  `aiward-send --severity blocked --area <work|personal> --title "<title>" --click "<owning session link>" session "<body>"`
+  - `--area` follows **Server**: work-area tasks → `work`; personal ones → `personal`.
+  - `--click` takes the owning session's link and no other address; where the user's notification rule lands the tap on a page, the owning session holds that page's address.
+  - `--event-id` is left out, so each handoff is its own event; under an id still pending it would be answered `duplicate` and dropped. Title and body are each at most 1 KB.
+- Not on PATH → the machine has no aiward: publish it on the area's server (**Server**) with no delay.
+- What the sender then knows, said in the session's reply with the handoff:
+  - `ok <event id>`, exit 0 → aiward holds the event and has queued its push, which it retries until ntfy takes it.
+  - `direct`, exit 0 → no channel answered and ntfy took the push from the sender itself. After a channel that was listening and did not answer, whether it also took the event is unknown: the push may arrive twice.
+  - exit 1 → the event was refused and nothing was sent; the message names what to fix. Fix it and send again.
+  - exit 3 → the channel did not answer and the sender's own push failed too. Whether the event was received is unknown: publish the handoff on the area's server (**Server**) and say it may arrive twice.
+  - exit 2 → the call was malformed: fix it and send again. exit 4 → this session is aiward itself, which pushes with its own `notify` tool.
+- A checkpoint is not sent this way: it is scheduled with the `ntfy_*` tools, as the sections below say.
 
 ## Message
 

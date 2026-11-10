@@ -6,6 +6,12 @@
 - Claude의 완료·입력 대기 알림 → Claude Code 알림 (섞이지 않게)
 - 분 단위 일회성 확인 → 이 플러그인
 
+## handoff는 aiward로
+
+- choi만 할 수 있는 일에서 멈췄을 때 바로 나가는 push(handoff)는, `aiward-send`가 PATH에 있으면(aiward 플러그인이 설치된 기기) `aiward-send --severity blocked`로 보냅니다. aiward가 판단 없이 바로 push하고, 토픽은 `--area work|personal`로 고릅니다. 탭은 그 세션으로 갑니다.
+- `aiward-send`가 없으면 아래 ntfy 서버로 직접 보냅니다.
+- 정해진 시각의 확인(checkpoint)은 aiward를 거치지 않습니다. 지금처럼 세션이 아래 ntfy 서버에 직접 예약합니다.
+
 ## 구성
 
 | 서버 | 용도 | 토픽 |

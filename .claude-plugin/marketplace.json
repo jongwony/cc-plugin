@@ -132,7 +132,7 @@
     {
       "name": "ntfy-checkpoint",
       "source": "./ntfy-checkpoint",
-      "description": "Phone push for a handoff or a one-shot checkpoint at a set minute — sent through aiward where its sender is installed, and through one ntfy MCP server per area where it is not"
+      "description": "Phone push at a set minute for a one-shot checkpoint, scheduled on ntfy ahead of time with no visible list — one ntfy MCP server per area, work and personal; a handoff goes through aiward where its sender is installed"
     },
     {
       "name": "findmy-location",

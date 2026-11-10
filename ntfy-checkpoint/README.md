@@ -6,15 +6,13 @@
 - Claude의 완료·입력 대기 알림 → Claude Code 알림 (섞이지 않게)
 - 분 단위 일회성 확인 → 이 플러그인
 
-## 보내는 길
+## handoff는 aiward로
 
-- `aiward-send`가 PATH에 있으면(aiward 플러그인이 설치된 기기) push는 전부 aiward를 거칩니다. 세션은 ntfy 도구를 부르지 않고, 토픽은 `--area work|personal`로 고릅니다. choi만 할 수 있는 일은 `--severity blocked`로 바로 나갑니다. 정해진 시각의 확인과 그 변경은 평범한 이벤트로 요청하고, aiward 세션이 예약하고 고쳐 보냅니다.
-- 없으면 아래 두 ntfy 서버로 직접 보냅니다.
-- aiward를 거칠 때는 세션이 ntfy 기록을 읽지 않습니다. 그래서 상태는 `queued`(aiward가 받아 둠), `accepted direct`(채널이 멎어 보내는 쪽이 직접 보냄), `unsent`(어디에도 닿지 않음), `checked`까지만 기록하고, 휴대폰으로 나갔다는 `delivered`는 기록하지 않습니다. 탭은 예약한 세션으로만 갑니다.
+- choi만 할 수 있는 일에서 멈췄을 때 바로 나가는 push(handoff)는, `aiward-send`가 PATH에 있으면(aiward 플러그인이 설치된 기기) `aiward-send --severity blocked`로 보냅니다. aiward가 판단 없이 바로 push하고, 토픽은 `--area work|personal`로 고릅니다. 탭은 그 세션으로 갑니다.
+- `aiward-send`가 없으면 아래 ntfy 서버로 직접 보냅니다.
+- 정해진 시각의 확인(checkpoint)은 aiward를 거치지 않습니다. 지금처럼 세션이 아래 ntfy 서버에 직접 예약합니다.
 
 ## 구성
-
-aiward가 없는 기기에서 쓰는 서버입니다.
 
 | 서버 | 용도 | 토픽 |
 |---|---|---|
@@ -33,7 +31,7 @@ aiward가 없는 기기에서 쓰는 서버입니다.
 2. 추측하기 어려운 토픽 두 개를 만들고, 휴대폰 ntfy 앱에서 둘 다 구독합니다. 토픽 이름이 곧 비밀번호입니다.
 3. `claude plugin configure ntfy-checkpoint`로 두 토픽을 넣습니다. 값은 OS 자격 증명 저장소에 들어갑니다. 조회·예약 도구의 응답에는 토픽과 URL이 그대로 나오므로 세션 기록에는 남습니다.
 
-## 체크포인트 기록 (ntfy 서버로 직접 보낼 때)
+## 체크포인트 기록
 
 체크포인트는 백그라운드 세션에서 예약합니다. 세션은 스스로 깨어나지 않습니다. 대신 예약한 세션의 기록에 체크포인트마다 한 줄씩 상태를 남깁니다. push를 탭하면 Claude 앱에서 그 세션이 열립니다. Airflow 화면처럼 확인할 페이지가 따로 있으면 탭은 그 페이지로 가고, 세션은 '세션 열기' 버튼으로 엽니다. 터미널에서는 본문의 `claude attach <short id>`로 엽니다. 세션이 멈춘 뒤라면 `claude --bg --resume <session id>`로 같은 세션을 다시 띄웁니다. 다른 세션은 세션 id로 그 줄을 찾아 이어갈 수 있습니다. sequence id는 `<short id>-<step>` 꼴이라 다른 세션의 push를 대체하지 않습니다. short id가 가리키는 세션이 그 체크포인트의 주인입니다.
 

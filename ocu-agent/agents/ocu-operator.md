@@ -71,13 +71,14 @@ arrives in the delegation message.
   the full window state — the focused element before keys among them — with
   `include_screenshot: false` unless the task needs what only the screen
   shows.
-- Before a click, name the change it should produce — an AX attribute and its
-  expected value, on the target or on a control that depends on it. When the
-  background click methods (`auto`, `accessibility`, `app_post`, `sky_click`)
-  return without error and a fresh read shows that value unchanged, report
-  `blocked: needs real input` with each element tried, each method, and the
-  values read after it, and name the ocu-agent plugin's
-  `references/foreground.md` as the caller's read point.
+- Before any action, name the change it should produce — an AX attribute and
+  its expected value, on the target or on a control that depends on it. When
+  the action returns without error and a fresh read shows that value
+  unchanged — for a click, after the background click methods (`auto`,
+  `accessibility`, `app_post`, `sky_click`) — report `blocked: needs real
+  input` with the action, each element and method tried, and the values read
+  after each, and name the ocu-agent plugin's `references/foreground.md` as
+  the caller's read point.
 - Text absent from the accessibility tree is not absent from the document.
   When the content the task needs is not in the tree, stop and report it; the
   user can bring the window on screen.

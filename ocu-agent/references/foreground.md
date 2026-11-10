@@ -4,7 +4,7 @@ Read by the session that delegated to `ocu-operator`, after the agent's report c
 
 ## Entry
 
-The blocked report: the change the click should have produced (an AX attribute and its expected value), each element tried, each method, and the values read after it.
+The blocked report: the action, the change it should have produced (an AX attribute and its expected value), each element and method tried, and the values read after each.
 
 ## Turns with the user
 
@@ -18,7 +18,9 @@ The user's hint or decision sets the next turn. A hypothesis other than real inp
 
 ## Real input
 
-Run only after the user's go-ahead for it in a turn that states these preconditions:
+Through ocu, real input exists for clicks only: `clickMethod: "global"`. A blocked action of another kind has no known ocu real-input path; its turn hands the act itself to the user and reads the result afterwards.
+
+A real-input click runs only after the user's go-ahead for it in a turn that states these preconditions:
 
 - **The user keeps off both keyboard and mouse until the run ends.** A real click makes the target window key, so any typed input lands in it and can change the control under focus; pointer movement between the verify read and the destructive press redirects the press.
 - **The target region stays unobscured.** A global click lands on whatever window is topmost at that point.
@@ -42,6 +44,6 @@ After the block is resolved, add the control's line to the case record.
 
 ## Case record
 
-One line per control confirmed to accept only real input: app · control · AX shape · what background methods did · what real input did. Entries are added as cases are confirmed.
+One line per control on which an ocu action returned without error and its on-screen effect did not land: app · control · AX shape · what the ocu action did · what resolved it. Entries are added as cases are confirmed.
 
 - System Settings · Privacy & Security permission list (Full Disk Access) and its remove button · `AXOutline` of `AXRow`/`AXCell` · no background method selected a row, so the remove button stayed disabled · a global click selected the row, and a global click on the remove button removed it with no authentication prompt.

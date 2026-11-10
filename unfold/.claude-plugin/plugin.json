@@ -1,7 +1,7 @@
 {
   "name": "unfold",
-  "description": "Linear chart writer — logs a decision at the moment the direction changes, and collapses an accumulated open set into axes that each name what they absorbed; asks rather than infers what the user settled, reads the unit's chart before the first write, and writes only structure and decisions, never state",
-  "version": "0.11.0",
+  "description": "Linear chart writer — logs a decision at the moment the direction changes, and collapses an accumulated open set into axes that each name what they absorbed; asks rather than infers what the user settled, reads the unit's chart before the first write, and writes only structure and decisions, never state, closing only a post-merge issue whose every criterion it has verified",
+  "version": "0.11.1",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

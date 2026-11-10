@@ -8,7 +8,8 @@ description: |
   without being named: when the accumulated context and the utterance show an
   intent to write to a repository, the unit's chart is read before the first
   write — matched against the catalog of project root issues, that one chart
-  and nothing beside it. Writes ONLY structure and decisions, never status.
+  and nothing beside it. Writes ONLY structure and decisions, never status —
+  except closing a post-merge issue once its every criterion is verified.
   Invoked as /unfold [moment] [project].
 ---
 
@@ -37,7 +38,8 @@ boundary — and the read each write needs first.
   structure, written by hand under the bullet above. A write reads what it is
   about to change, immediately before changing it.
 - **An issue completes on one PR's merge**: under the team's default Git
-  mapping, a merge moves to Done every issue its PR links, so a new
+  mapping, a merge moves to Done every issue its PR closes — one named in
+  its branch or title, or after a closing word in its description — so a new
   workstream issue carries only completion criteria that merge satisfies.
   Work complete only after a merge — a measurement, a shadow comparison, a
   post-deploy check, an alert test — is its own issue: a sibling with a
@@ -52,8 +54,9 @@ boundary — and the read each write needs first.
   no PR event will ever move: the initial state of a backfilled issue — one
   created for work finished before the issue existed — set once at creation,
   after which automation owns it; and the close of an issue no PR completes
-  (the post-merge work above), which the person makes, or the session on
-  their word, once the issue carries its result.
+  (the post-merge work above), which the session makes once every completion
+  criterion on it is verified and the evidence is on the issue, then reports
+  — a criterion left unverified keeps it open.
 
 ## Invocation
 

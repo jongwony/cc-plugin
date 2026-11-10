@@ -138,6 +138,14 @@
       "name": "findmy-location",
       "source": "./findmy-location",
       "description": "Read where the user is right now from the macOS Find My app, when a task needs the user's current location as context"
+    },
+    {
+      "name": "aiward",
+      "source": {
+        "source": "github",
+        "repo": "jongwony/aiward"
+      },
+      "description": "Report a session to aiward, choi's observer session, when the issue it carried settles or stops — the observer reads the session's own record and tells it to go on, pushes choi, or neither"
     }
   ]
 }

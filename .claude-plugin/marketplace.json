@@ -100,11 +100,6 @@
       "description": "Generate Seedance 2.5 video on Higgsfield through the higgsfield CLI — multi-shot cinematic clips with native dialogue, image-to-video, audio lipsync, clip edit and extension"
     },
     {
-      "name": "telegram-report",
-      "source": "./telegram-report",
-      "description": "Send-only Telegram report for scheduled routines — posts one message into a fixed forum topic by thread id, with credentials from TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID; never creates topics or reads updates"
-    },
-    {
       "name": "ink-figure",
       "source": "./ink-figure",
       "description": "Epistemic Ink output style, which renders what the epistemic protocols present and flags with a ↻ line a defect in an extension the user maintains once its admission checks pass, with a figure mod that draws the ```mermaid and ```math fences it writes as terminal figures — only what transcript text cannot draw; East Asian labels line up — and, with its figure board on, asks the model to keep each session's figures in one place the Claude apps can open"

@@ -34,8 +34,7 @@ Apple's built-in handwriting OCR in accuracy, Korean included.
    note is about. Trust the image over `handwriting_text`: Apple's recognizer
    produces errors like "Menory" for "Memory"; use its text only as a hint for
    ambiguous strokes or as a cheap pre-filter. Present per note: title, modified
-   time, transcription, interpretation. When running as 마틴, emit the result over
-   the Telegram `reply` channel as usual.
+   time, transcription, interpretation.
 
 4. **Advance the watermark — only in loop mode.** After new handwriting has been
    successfully consumed (interpreted and delivered), run

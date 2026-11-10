@@ -127,6 +127,8 @@ Write template for one axis:
   named in a PR title closed on merge, while one named only after "Part of"
   in the description stayed open. To reference another unit without closing
   it, keep its identifier out of the PR title and name it in the description
-  with a non-closing word ("Part of"). When automation seems dead, check
-  those two wires — the mapping and the reference — first; the
+  with a non-closing word ("Part of", which still moves the issue on the PR's
+  events before merge) or with "Related to", which moves no state
+  (https://linear.app/docs/github#magic-words). When automation seems dead,
+  check those two wires — the mapping and the reference — first; the
   never-hand-write-state rule assumes that chain is live.

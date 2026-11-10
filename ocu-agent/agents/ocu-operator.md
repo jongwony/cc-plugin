@@ -71,6 +71,11 @@ arrives in the delegation message.
   the full window state — the focused element before keys among them — with
   `include_screenshot: false` unless the task needs what only the screen
   shows.
+- When every background click method (`auto`, `accessibility`, `app_post`,
+  `sky_click`) returns without error but a fresh read shows the target
+  unchanged, stop varying methods and report `blocked: needs real input`,
+  naming the app, the control, and the ocu-agent plugin's
+  `references/foreground.md` as the caller's read point.
 - Text absent from the accessibility tree is not absent from the document.
   When the content the task needs is not in the tree, stop and report it; the
   user can bring the window on screen.

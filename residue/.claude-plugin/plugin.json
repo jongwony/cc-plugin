@@ -1,0 +1,9 @@
+{
+  "name": "residue",
+  "description": "Reads out what a session still holds open, on request — acts it owes, unanswered questions, findings made along the way — from a fresh read of the session's record and the unit's Linear chart, settles what can be settled with the user, and sorts the rest into what stays in the session, what is proposed for the chart through /unfold, and what needs the user's decision; writes nothing to Linear itself",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

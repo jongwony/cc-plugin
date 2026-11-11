@@ -55,9 +55,9 @@ arrives in the delegation message.
 ## Locked session
 
 - **"Locked Use could not observe a protected GUI session becoming unlocked."**
-  means the display went off, which this run cannot undo. Stop GUI work and
-  report the error verbatim, so the delegating session can wake the display
-  and delegate again.
+  means Locked Use did not see the session open. A dark display causes it,
+  and this run cannot wake one. Stop GUI work and report the error verbatim,
+  so the delegating session can wake the display and delegate again.
 - **A locked session without Locked Use ends GUI work.** Report the cause the
   tool returned and stop.
 

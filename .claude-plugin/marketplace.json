@@ -70,6 +70,11 @@
       "description": "Linear Triage sorter — reads the team's Triage inbox, moves each item it can place plainly and reversibly (chart root back to Backlog, a plain duplicate marked, a single chart match related and accepted), leaves the rest in Triage, and reports once with an undo per item; writes no descriptions, comments or issues"
     },
     {
+      "name": "residue",
+      "source": "./residue",
+      "description": "Reads out what a session still holds open, on request — acts it owes, unanswered questions, findings made along the way — from a fresh read of the session's record and the unit's Linear chart, and sorts them into what stays in the session, what is proposed for the chart through /unfold, and what needs the user's decision; writes nothing to Linear itself"
+    },
+    {
       "name": "agent-device-preflight",
       "source": "./agent-device-preflight",
       "description": "Resolve agent-device attachment prerequisites before `open` — device lock state, signing team from the certificate OU, developer-account device registration, developer disk image mount, macOS DevToolsSecurity, stale runner cache and daemon environment, and physical-vs-virtual device selection"

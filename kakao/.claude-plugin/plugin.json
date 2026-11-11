@@ -1,7 +1,7 @@
 {
   "name": "kakao",
   "description": "Work several macOS KakaoTalk chat rooms in parallel, one Claude session per room window — opened in the background, then read, drafted, sent and screenshotted through Accessibility, with no server, keyboard events or window raising",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

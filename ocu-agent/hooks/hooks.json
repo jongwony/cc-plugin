@@ -1,5 +1,5 @@
 {
-  "description": "ocu-agent: before an ocu tool call, a Bash command that starts with ocu, or a delegation to ocu-operator, while the Mac session is locked, wake the display when Locked Use can serve the call and deny with the cause when it cannot; end the ocu session when ocu-operator stops, so a window the run parked on the agent display comes back and element indices do not outlive the run.",
+  "description": "ocu-agent: deny an ocu tool call, a Bash command that starts with ocu, or a delegation to ocu-operator, with the cause, while the Mac session is locked and Locked Use cannot serve it; end the ocu session when ocu-operator stops, so a window the run parked on the agent display comes back and element indices do not outlive the run.",
   "hooks": {
     "PreToolUse": [
       {

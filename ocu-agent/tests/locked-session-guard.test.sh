@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Pipe test for scripts/locked-session-guard.sh: stub ocu, pgrep, caffeinate,
-# ioreg and sleep on PATH, feed PreToolUse JSON on stdin, assert on the
-# decision printed and on which stubs were called.
+# Pipe test for scripts/locked-session-guard.sh: stub ocu on PATH, feed
+# PreToolUse JSON on stdin, assert on the decision printed. pgrep, caffeinate,
+# ioreg and sleep are stubbed only to show that the guard calls none of them.
 # Usage: locked-session-guard.test.sh [path/to/guard.sh]
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -31,6 +31,7 @@ echo "$*" >>"$STUB_LOG/sleep"
 EOF
 cat >"$T/bin/ioreg" <<'EOF'
 #!/bin/bash
+echo "$*" >>"$STUB_LOG/ioreg"
 echo "    \"DCPPowerState\" = ${STUB_DISPLAY:-0}"
 EOF
 chmod +x "$T"/bin/*
@@ -50,6 +51,8 @@ run() {
   for _ in 1 2 3 4 5 6 7 8 9 10; do [ -e "$T/log/caffeinate" ] && break; /bin/sleep 0.05; done
 }
 calls() { [ -e "$T/log/$1" ] && wc -l <"$T/log/$1" | tr -d ' ' || echo 0; }
+spawned() { echo "caffeinate=$(calls caffeinate) pgrep=$(calls pgrep) ioreg=$(calls ioreg) sleep=$(calls sleep)"; }
+none="caffeinate=0 pgrep=0 ioreg=0 sleep=0"
 decision() { printf '%s' "$out" | plutil -extract hookSpecificOutput.permissionDecision raw -o - - 2>/dev/null; }
 
 fails=0
@@ -63,15 +66,11 @@ check "unlocked: silent allow"            "$rc|$out|$(calls ocu)|$(calls caffein
 
 status_json locked true ''
 STUB_DISPLAY=0 STUB_PGREP_RC=1 run "$(event_mcp query)"
-check "locked+available, display off: wake and settle" "$rc|$out|$(cat "$T/log/caffeinate" 2>/dev/null)|$(cat "$T/log/sleep" 2>/dev/null)" "0||-u -t 120|2"
-check "locked+available: pgrep names the -u caffeinate" "$(cat "$T/log/pgrep")" "-qf caffeinate -u"
-
-STUB_DISPLAY=4 STUB_PGREP_RC=0 run "$(event_mcp query)"
-check "locked+available, wake already running: nothing started" "$rc|$out|$(calls caffeinate)|$(calls sleep)" "0||0|0"
+check "locked+available, display off: silent allow, no wake" "$rc|$out|$(calls ocu)|$(spawned)" "0||1|$none"
 
 status_json locked false '"client \"claude\" is not approved"'
 run "$(event_mcp get_app_state)"
-check "locked+unavailable: deny"           "$rc|$(decision)|$(calls caffeinate)" "0|deny|0"
+check "locked+unavailable: deny"           "$rc|$(decision)|$(spawned)" "0|deny|$none"
 reason=$(printf '%s' "$out" | plutil -extract hookSpecificOutput.permissionDecisionReason raw -o - - 2>/dev/null)
 case "$reason" in *'ocu locked-use enable'*'client "claude" is not approved'*) r=cause ;; *) r="missing: $reason" ;; esac
 check "deny carries the user's act and the blocker" "$r" "cause"
@@ -101,11 +100,11 @@ check "Bash piped into ocu: deny"          "$rc|$(decision)" "0|deny"
 run "$(event_bash 'cd /tmp\nocu js step.js')"
 check "Bash ocu after a newline: deny"     "$rc|$(decision)" "0|deny"
 run "$(event_bash 'ocu locked-use status --json')"
-check "Bash ocu locked-use, unavailable: not denied" "$rc|$out|$(calls ocu)" "0||1"
+check "Bash ocu locked-use, unavailable: not denied, no status read" "$rc|$out|$(calls ocu)" "0||0"
 
 status_json locked true ''
 STUB_DISPLAY=0 STUB_PGREP_RC=1 run "$(event_bash 'ocu locked-use status --json')"
-check "Bash ocu locked-use, available: wake" "$rc|$out|$(cat "$T/log/caffeinate" 2>/dev/null)" "0||-u -t 120"
+check "Bash ocu locked-use, available: silent allow, no wake" "$rc|$out|$(spawned)" "0||$none"
 
 status_json locked false ''
 run "$(event_agent 'Explore')"
@@ -114,7 +113,7 @@ run "$(event_agent 'ocu-agent:ocu-operator')"
 check "Agent ocu-operator, unavailable: deny" "$rc|$(decision)" "0|deny"
 status_json locked true ''
 STUB_DISPLAY=0 STUB_PGREP_RC=1 run "$(event_agent 'ocu-agent:ocu-operator')"
-check "Agent ocu-operator, available: wake" "$rc|$out|$(cat "$T/log/caffeinate" 2>/dev/null)" "0||-u -t 120"
+check "Agent ocu-operator, available: silent allow, no wake" "$rc|$out|$(spawned)" "0||$none"
 
 run '{"tool_name":"Read","tool_input":{"file_path":"ocu js"}}'
 check "another tool: no status read"       "$rc|$out|$(calls ocu)" "0||0"

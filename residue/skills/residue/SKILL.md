@@ -19,12 +19,13 @@ agrees.
 - **unfold** (this marketplace) and a Linear MCP — step 4's chart proposals are
   written through them; without them the run ends at the proposal.
 
-## Invocation
-
-`/residue` — no arguments. It covers this session and the one unit of work the
-session is on.
-
 ## Procedure
+
+Whether work that has landed fits what was asked and where it landed is
+`/contextualize`'s to check, on its own sheet and with its own question; this
+procedure invokes it once and takes what it leaves open. What this procedure
+covers is what never became a result — an act not yet taken, a question not
+settled, a finding the request did not ask for — and where each one goes.
 
 0. **Read; do not answer from recall.**
    - The session's record. Where the conversation was compacted or resumed, the
@@ -36,13 +37,10 @@ session is on.
      says so.
 1. **Pull out everything this session opened or took on and has not closed**,
    unfiltered, in three kinds:
-   - **Owed** — an act the session said it would take, or was given. Whether it
-     is done is read from where the work landed, not from the session's own
-     earlier statement. Where owed work has landed, invoke `/contextualize`
-     once over all of it, against what was asked and where it landed: a misfit
-     it leaves open is an owed item. Where it holds on a question, that
-     question is this run's round for those items, and step 3 asks only what
-     remains.
+   - **Owed** — an act the session said it would take, or was given, and has
+     not taken. For work that has landed, invoke `/contextualize` once over all
+     of it; a misfit it leaves open is owed. Its question is the round for
+     those items, and step 3 asks only the rest.
    - **Unanswered** — a question either side asked that no turn or source
      settled.
    - **Found** — something noticed along the way that the request did not ask

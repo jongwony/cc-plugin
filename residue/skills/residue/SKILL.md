@@ -33,8 +33,8 @@ settled, a finding the request did not ask for — and where each one goes.
      for those turns.
    - The unit's chart, where the session has one — the root issue of the
      unit's Linear project: its Open questions section, its decision comments,
-     and its closing note where it has one, as they are now. A session with no
-     chart skips this and says so.
+     and its status, as they are now. A session with no chart skips this and
+     says so.
 1. **Pull out everything this session opened or took on and has not closed**,
    unfiltered, in three kinds:
    - **Owed** — an act the session said it would take, or was given, and has
@@ -61,10 +61,9 @@ settled, a finding the request did not ask for — and where each one goes.
    - **Stays in the session** — with the next act named.
    - **Proposed for the chart** — a settled direction through `/unfold decide`,
      the open set through `/unfold group`, once the user agrees to the move. A
-     closed chart takes no write. A unit closes by its closing note, not by
-     its issue reaching Done: read the chart for that note immediately before
-     proposing, and where it is there, say the unit is closed and leave the
-     destination to the user. An item with a deadline is proposed with what
+     chart whose status is Done or Canceled is closed and takes no write: read
+     the status immediately before proposing, say the unit is closed, and leave
+     the destination to the user. An item with a deadline is proposed with what
      brings it back before that date.
    - **Needs the user's decision** — whether it leaves the session is itself
      undecided: say the decision is needed and what it turns on.

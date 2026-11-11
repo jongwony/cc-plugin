@@ -1,23 +1,23 @@
 ---
 name: residue
-description: |
-  This skill should be used when the user asks "남은 작업 있어?", "남은 거
-  뭐야", "열린 거 정리해줘", "what's left", "anything still open", or runs
-  /residue — typically before a compaction, a handoff, or the end of a unit of
-  work. Reads the session's record and the unit's chart afresh, pulls out
-  everything the session still holds open, settles with the user what can be
-  settled now, and sorts the rest into what stays in the session, what is
-  proposed for the chart, and what needs the user's decision. Writes nothing
-  to Linear itself.
+description: "Use when the user asks what the session still holds open, or runs /residue. Reads the session's record and the unit's chart afresh; the user then sees each item the session opened and has not closed, and where it goes — kept in the session, proposed for the chart, or theirs to decide."
+skills:
+  - epharmoge:contextualize
 ---
 
 # Residue — what a session still holds open
 
-A session opens things as it works: acts it said it would take, questions no
-one answered, things it noticed on the way to something else. They live in the
-conversation and go with it when it is compacted or ends. This skill reads
-them out on request and sorts them. It reports and proposes; the only writes
-it leads to are `/unfold`'s, after the user agrees.
+What a session opens as it works lives in the conversation and goes with it
+when the conversation is compacted or ends. This skill reads it out on request
+and sorts it. The only writes it leads to are `/unfold`'s, after the user
+agrees.
+
+## Dependency
+
+- **Epharmoge** (`/contextualize`) — called in step 1; the epistemic-protocols
+  `epharmoge` plugin must be installed.
+- **unfold** (this marketplace) and a Linear MCP — step 4's chart proposals are
+  written through them; without them the run ends at the proposal.
 
 ## Invocation
 
@@ -38,7 +38,11 @@ session is on.
    unfiltered, in three kinds:
    - **Owed** — an act the session said it would take, or was given. Whether it
      is done is read from where the work landed, not from the session's own
-     earlier statement.
+     earlier statement. Where owed work has landed, invoke `/contextualize`
+     once over all of it, against what was asked and where it landed: a misfit
+     it leaves open is an owed item. Where it holds on a question, that
+     question is this run's round for those items, and step 3 asks only what
+     remains.
    - **Unanswered** — a question either side asked that no turn or source
      settled.
    - **Found** — something noticed along the way that the request did not ask

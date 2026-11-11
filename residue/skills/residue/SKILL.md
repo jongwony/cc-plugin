@@ -63,8 +63,7 @@ settled, a finding the request did not ask for — and where each one goes.
      the open set through `/unfold group`, once the user agrees to the move. A
      chart whose status is Done or Canceled is closed and takes no write: read
      the status immediately before proposing, say the unit is closed, and leave
-     the destination to the user. An item with a deadline is proposed with what
-     brings it back before that date.
+     the destination to the user.
    - **Needs the user's decision** — whether it leaves the session is itself
      undecided: say the decision is needed and what it turns on.
 5. **Report once**, one line per item: its kind, the item in plain words, the

@@ -25,7 +25,8 @@ It prints one JSON line; `rows` holds Find My's device-list rows as the app show
 - When that location reads `일시 정지됨`, or is older than the task can use, run the script once more with `--refresh`: Find My comes to the front for 10 seconds so its locations update, then focus returns to the app that was in front (`focus_restored: false` means it did not; tell the user Find My may still be in front).
 - Report the place, the distance and how long ago it was seen. When no row gives a recent location, say so; do not reuse an earlier reading.
 - `status: error` — reading Find My failed; `message` says how. Report it rather than retrying unchanged.
-- On a locked Mac the script wakes the display so Open Computer Use's Locked Use can read Find My (`locked_session: true`); the Mac's own auto-lock closes the session again.
+- On a locked Mac (`locked_session: true`) the script does the whole unlock itself: it reads `ocu locked-use status`, turns the display on (`caffeinate -u`), lets Open Computer Use's Locked Use open the session for the read, and on "could not observe a protected GUI session becoming unlocked" wakes the display again and retries once. Add no wake, unlock or relock step around it; the Mac's own auto-lock closes the session again.
+- That error in `message` is therefore already the second failure. Report it with the lock state, the last `Display is turned` line of `pmset -g log`, the power source and the lid state.
 
 ## Privacy
 

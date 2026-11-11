@@ -57,7 +57,9 @@ arrives in the delegation message.
 - **"Locked Use could not observe a protected GUI session becoming unlocked."**
   means Locked Use did not see the session open. A dark display causes it,
   and this run cannot wake one. Stop GUI work and report the error verbatim,
-  so the delegating session can wake the display and delegate again.
+  and name the ocu-agent plugin's `references/locked-session.md` as the
+  caller's read point, so the delegating session can wake the display and
+  delegate again.
 - **A locked session without Locked Use ends GUI work.** Report the cause the
   tool returned and stop.
 

@@ -33,8 +33,8 @@ settled, a finding the request did not ask for — and where each one goes.
      for those turns.
    - The unit's chart, where the session has one — the root issue of the
      unit's Linear project: its Open questions section, its decision comments,
-     and its status, as they are now. A session with no chart skips this and
-     says so.
+     and its closing note where it has one, as they are now. A session with no
+     chart skips this and says so.
 1. **Pull out everything this session opened or took on and has not closed**,
    unfiltered, in three kinds:
    - **Owed** — an act the session said it would take, or was given, and has
@@ -48,10 +48,12 @@ settled, a finding the request did not ask for — and where each one goes.
 
    The chart's own open questions are the chart's; they are not listed as this
    session's.
-2. **Mark each item against the chart**: already there (name the section or
-   the comment), or only in the conversation. An item already on the chart is
-   reported as there and is not remaining work — except an owed act, which
-   stays owed until it is done.
+2. **Mark each item against the chart**: handed over (name the turn or the
+   decision comment that moved it there), or only in the conversation. An item
+   handed over is the chart's and is not remaining work — except an owed act,
+   which stays owed until it is done. A chart entry that merely matches an
+   item hands nothing over: the item stays in the session's list, marked as
+   resembling that entry.
 3. **Settle what can be settled now.** An item a citable record answers is
    answered with that source. Items that turn on a value the user holds are
    asked together, in one round.
@@ -59,9 +61,11 @@ settled, a finding the request did not ask for — and where each one goes.
    - **Stays in the session** — with the next act named.
    - **Proposed for the chart** — a settled direction through `/unfold decide`,
      the open set through `/unfold group`, once the user agrees to the move. A
-     chart whose status shows the unit closed takes no write: say it is closed
-     and leave the destination to the user. An item with a deadline is proposed
-     with what brings it back before that date.
+     closed chart takes no write. A unit closes by its closing note, not by
+     its issue reaching Done: read the chart for that note immediately before
+     proposing, and where it is there, say the unit is closed and leave the
+     destination to the user. An item with a deadline is proposed with what
+     brings it back before that date.
    - **Needs the user's decision** — whether it leaves the session is itself
      undecided: say the decision is needed and what it turns on.
 5. **Report once**, one line per item: its kind, the item in plain words, the

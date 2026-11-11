@@ -1,39 +1,6 @@
 {
-  "description": "ocu-agent: deny an ocu tool call, a Bash command that starts with ocu, or a delegation to ocu-operator, with the cause, while the Mac session is locked and Locked Use cannot serve it; end the ocu session when ocu-operator stops, so a window the run parked on the agent display comes back and element indices do not outlive the run.",
+  "description": "ocu-agent: end the ocu session when ocu-operator stops, so a window the run parked on the agent display comes back and element indices do not outlive the run.",
   "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "mcp__plugin_ocu-agent_ocu__.*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/locked-session-guard.sh\"",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "if": "Bash(ocu *)",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/locked-session-guard.sh\"",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Agent",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/locked-session-guard.sh\"",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
     "SubagentStop": [
       {
         "matcher": "ocu-agent:ocu-operator",

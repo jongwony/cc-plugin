@@ -24,7 +24,7 @@ description: >
 ## Which path reaches KakaoTalk
 
 - The helper (Swift AX on one window) is the path wherever it reaches; OCU covers only the steps the helper cannot do.
-- This app's boundary — helper: find the room's row in the chat list and scroll it into view (`locate`), bind, read, draft, send, clear, capture (`shot`). OCU: switching the main window to its chat tab, naming and double-clicking that row to open a closed room, waking a dark display, read-only looks when a handshake is incomplete, and reading a room that has no input field.
+- This app's boundary — helper: find the room's row in the chat list and scroll it into view (`locate`), bind, read, draft, send, clear, capture (`shot`). OCU: switching the main window to its chat tab, naming and double-clicking that row to open a closed room, opening a locked session, read-only looks when a handshake is incomplete, and reading a room that has no input field.
 - OCU input on a chat window — click, set_value, type_text, press_key — is outside the boundary, as are keyboard events, AppleScript and raising a window: they act on whichever window has focus and break the other rooms.
 
 ## Opening a room
@@ -41,7 +41,7 @@ description: >
 
 - This session works one room. `handshake --room "<exact window title>"` binds it; keep `room` and `window_id` from the JSON and pass both to every later command.
 - Exit 3 (`handshake_incomplete`): `missing` names the element the helper could not settle and `candidates` lists what it saw. Look at the same window with OCU read-only tools (`get_app_state`, `query`), then rerun `handshake` with `--send-label <label>`, `--input-identifier <id>` or `--list-identifier <id>`. The hints are stored for the room.
-- Exit 9 `screen_locked`: with OCU Locked Use enabled, one OCU `get_app_state` call on KakaoTalk wakes the display; then retry the command once. If it is still locked, wait for a person to unlock the Mac.
+- Exit 9 `screen_locked`: with OCU Locked Use enabled, turn the display on (`caffeinate -u -t 120`, detached; wait 2 s), then one OCU `get_app_state` call on KakaoTalk opens the locked session; then retry the command once. If it is still locked, wait for a person to unlock the Mac.
 - A channel room (알림톡 from a business, e.g. a bank) has no input field: `handshake` exits 3 with `missing: ["input"]` and no hint settles it, so the helper cannot bind or `read` it. Read it with OCU `query` on that window (`window_id`, `role: "AXTextArea"`); each bubble's text is the match's `value`. Only bubbles the window has rendered are returned, and the Mac app holds an alimtalk's text only if it arrived while this Mac was signed in — the rest show "알림톡 도착 / 모바일에서 확인해 주세요." and their text is on the phone only.
 - When the helper cannot do something, report its JSON.
 

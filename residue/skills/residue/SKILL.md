@@ -1,6 +1,7 @@
 ---
 name: residue
-description: "Use when the user asks what the session still holds open, or runs /residue. Reads the session's record and the unit's chart afresh; the user then sees each item the session opened and has not closed, and where it goes — kept in the session, proposed for the chart, or theirs to decide."
+description: "Use when the user asks what the session still holds open, or runs /residue — or when what another session, named by its id, still holds open is to be read out. Reads the session's record and the unit's chart afresh; the user then sees each item the session opened and has not closed, and where it goes — kept in the session, proposed for the chart, or theirs to decide. Another session's record is read only."
+argument-hint: "[session-id]"
 skills:
   - epharmoge:contextualize
 ---
@@ -26,6 +27,12 @@ Whether work that has landed fits what was asked and where it landed is
 procedure invokes it once and takes what it leaves open. What this procedure
 covers is what never became a result — an act not yet taken, a question not
 settled, a finding the request did not ask for — and where each one goes.
+
+- **Invoked with a session id** (`/residue <session-id>`) → read
+  `references/another-session.md` before step 0. The procedure then runs on
+  the session that id names, with the differences that file carries for each
+  step, and writes nothing. With no id, the steps run as written, on this
+  session.
 
 0. **Read; do not answer from recall.**
    - The session's record. Where the conversation was compacted or resumed, the

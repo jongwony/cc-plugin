@@ -150,7 +150,7 @@
         "source": "url",
         "url": "https://github.com/jongwony/aiward.git"
       },
-      "description": "Report a session to aiward, choi's observer session, when the issue it carried settles or stops — the observer reads the session's own record and tells it to go on, pushes choi, or neither"
+      "description": "Report a session to aiward, choi's resident session, when the issue it carried settles or stops — aiward reads the session's own record and tells it to go on, pushes choi, or neither"
     }
   ]
 }

@@ -104,11 +104,14 @@ Resolve the target Linear project in this order; never hardcode project IDs:
 
 ## Tool loading
 
-Linear MCP tools are deferred in most sessions. Before the first call, load
-schemas via ToolSearch, e.g.
-`select:mcp__claude_ai_Linear__list_projects,mcp__claude_ai_Linear__list_issues,mcp__claude_ai_Linear__get_issue,mcp__claude_ai_Linear__list_comments,mcp__claude_ai_Linear__list_documents,mcp__claude_ai_Linear__save_comment,mcp__claude_ai_Linear__save_issue,mcp__claude_ai_Linear__save_document`
-(load only what the moment needs; exact server prefix may differ — discover
-with a keyword search on "linear" first when unsure).
+Linear's MCP tools are deferred in most sessions, and their names carry a
+server prefix (`mcp__<server>__<tool>`) that differs by host and by how the
+server was added. Before the first call, find them with a ToolSearch keyword
+search on "linear" and load only what the moment needs, among `list_projects`,
+`list_issues`, `get_issue`, `list_comments`, `list_documents`, `save_comment`,
+`save_issue`, `save_document`. Where a session has more than one Linear server,
+use the one for the unit's workspace, as the host's instructions name it; a
+write moment needs a server that exposes the write tools.
 
 ## Moment routing (summary)
 

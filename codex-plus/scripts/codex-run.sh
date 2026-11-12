@@ -75,8 +75,10 @@ Options:
                          A resumed turn does not inherit the session's model or
                          effort: pass -m and -r again to stay on them, or the
                          turn runs on this script's fallback (gpt-6-astra,
-                         medium). -s cannot be
-                         set on resume at all
+                         medium). -s has no effect on resume: `codex exec
+                         resume` takes no sandbox option, so the turn runs
+                         under the sandbox_mode of the codex config in force
+                         then, not the -s the session was created with
   -o, --output-last-message FILE
                          Also write codex's final message to FILE (deterministic
                          capture, decoupled from stdout banner noise)
@@ -178,10 +180,11 @@ if [[ -n "$SESSION_ID" ]]; then
   # The caller must pass -m/-r again to stay on the same model, exactly as with
   # -C below; this script keeps no memory of a session it did not start.
   CODEX_ARGS+=(-m "$MODEL" --config "model_reasoning_effort=$EFFORT")
-  # -s is the one that genuinely cannot be set here: `codex exec resume` has no
-  # --sandbox and exits 2 on it. The session's sandbox stands.
+  # -s cannot be passed here: `codex exec resume` has no --sandbox and exits 2
+  # on it. The resumed turn runs under the sandbox_mode of the codex config in
+  # force at resume time, not the -s the session was created with.
   if [[ "$SANDBOX" != "$DEFAULT_SANDBOX" ]]; then
-    echo "Warning: resume ignores -s $SANDBOX (the sandbox is fixed when the session is created)" >&2
+    echo "Warning: resume ignores -s $SANDBOX (the resumed turn runs under the codex config's sandbox_mode)" >&2
   fi
   # -C is ignored for a different reason: `codex exec resume` has no --cd, so a
   # resumed turn runs in whatever cwd it inherits — not the session's original

@@ -19,9 +19,10 @@ counts the CLI reported, and the session id. `-h` carries the flags and the exit
 - `GEMINI_API_KEY` set in the environment of the command that runs the script. When the
   environment does not have it, the user's own instructions say where it comes from.
 - The command needs network access to the Gemini API and write access to the CLI's state
-  directory (`~/.gemini`, or `$GEMINI_CLI_HOME/.gemini` when that is set), where sessions are
-  stored; a sandboxed shell has to be granted both. Keep the same state directory across a
-  session's runs.
+  directory, where sessions are stored; a sandboxed shell has to be granted both. The state
+  directory is `$GEMINI_CLI_HOME/.gemini`; with `GEMINI_CLI_HOME` unset the script uses
+  `${XDG_STATE_HOME:-~/.local/state}/gemini-cli-skill`, whose settings select the API key, and
+  leaves `~/.gemini` alone. Keep the same `GEMINI_CLI_HOME` across a session's runs.
 - The script stops when a settings file selects an auth method other than the API key; read
   `references/auth.md` then, and on any other authentication failure.
 

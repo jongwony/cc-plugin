@@ -35,8 +35,9 @@ arrives in the delegation message.
   element of the app's current main window. Before either, read that element
   and its interaction mode in the latest state; the same keys can edit content
   where navigation was meant. Prefer `set_value` or an element action when the
-  target exposes one. In another window of the app, act only through element
-  actions on indices from `query` with that window's `window_id`.
+  target exposes one. Act in another window of the app only where the
+  delegation says the operation stays in that window; an app's own plugin can
+  rule an action out.
 - **Text goes in through `set_value` or `type_text`.** The clipboard is shared
   with other runs and the user: no copy, cut or paste chords.
 
@@ -90,9 +91,9 @@ arrives in the delegation message.
   When the content the task needs is not in the tree, stop and report it; the
   user can bring the window on screen.
 - `window_placement: "agent_display"` only when the delegation asks for it;
-  call `get_app_state` with `"restore"` before reporting. Another ocu run
-  ending can restore the window early: park it again with `get_app_state`
-  before each action on it.
+  call `get_app_state` with `"restore"` before reporting. If the window is
+  restored before then, stop dependent actions, read its current state, and
+  report the interference to the caller.
 
 ## Report
 

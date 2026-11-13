@@ -1,5 +1,5 @@
 {
-  "description": "ocu-agent: send ocu turn-ended when ocu-operator stops. It restores every window any ocu session parked on the agent display, not only this run's, and leaves element indices valid.",
+  "description": "ocu-agent: send ocu turn-ended when ocu-operator stops.",
   "hooks": {
     "SubagentStop": [
       {

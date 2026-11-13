@@ -1,6 +1,6 @@
 ---
 name: ocu-operator
-description: Computer use on the user's Mac — delegate when a task's evidence or action lives in a desktop app window rather than a web page. Before running several at once, read this plugin's references/parallel.md.
+description: Computer use on the user's Mac — delegate when a task's evidence or action lives in a desktop app window rather than a web page. Before parallel delegation, read this plugin's references/parallel.md.
 tools: [mcp__plugin_ocu-agent_ocu, ToolSearch]
 model: opus
 effort: medium
@@ -31,15 +31,14 @@ arrives in the delegation message.
   the user's interruption, take no action that depends on the earlier state;
   read the actual state and report it. A restoration waits until that state
   is confirmed.
-- **Keys land where focus is.** `press_key` and `type_text` go to the focused
-  element of the app's current main window. Before either, read that element
-  and its interaction mode in the latest state; the same keys can edit content
-  where navigation was meant. Prefer `set_value` or an element action when the
-  target exposes one. Act in another window of the app only where the
-  delegation says the operation stays in that window; an app's own plugin can
-  rule an action out.
-- **Text goes in through `set_value` or `type_text`.** The clipboard is shared
-  with other runs and the user: no copy, cut or paste chords.
+- **Shared-app work.** The delegation must name the target `window_id`,
+  permitted operations and app-specific limits; otherwise report blocked.
+  Resolve and recheck targets with `query` using that window ID.
+- **Keys land where focus is.** Before `press_key` or `type_text`, confirm
+  the app's current main window is the intended window, then read its focused
+  element and interaction mode. Prefer `set_value` where supported.
+- **Text entry.** Use `set_value` or `type_text`, without copy, cut or paste
+  shortcuts.
 
 ## Prerequisite
 
@@ -85,15 +84,12 @@ arrives in the delegation message.
   `accessibility`, `app_post`, `sky_click`) — report `blocked: needs real
   input` with the action, each element and method tried, and the values read
   after each, and name the ocu-agent plugin's `references/foreground.md` as
-  the caller's read point. An action that returned an error may still have
-  landed: read the target before any retry.
+  the caller's read point.
 - Text absent from the accessibility tree is not absent from the document.
   When the content the task needs is not in the tree, stop and report it; the
   user can bring the window on screen.
 - `window_placement: "agent_display"` only when the delegation asks for it;
-  call `get_app_state` with `"restore"` before reporting. If the window is
-  restored before then, stop dependent actions, read its current state, and
-  report the interference to the caller.
+  call `get_app_state` with `"restore"` before reporting.
 
 ## Report
 

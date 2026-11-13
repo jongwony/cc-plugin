@@ -25,7 +25,6 @@
 ## Tools
 
 - Multi-step research → a subagent.
-- **A delegate runs on Opus 5.5 at high effort, whatever model the delegating session runs.** A fork inherits the parent's model and effort and ignores an override. An agent whose definition pins its own model keeps it.
 - **Automation reach — start at the first channel that covers the target; step down only when it does not expose the needed action or fails on it**: a skill, MCP tool, API or CLI → a page in a Chrome tab: the `chrome-agent:chrome-operator` agent → a desktop app window: the `ocu-agent:ocu-operator` agent.
 - **A Linear project status update (Pulse) is a briefing** (Externalization → Human-facing) for the initiative owner and leadership: what got settled since the last update, why a progress number moved, and what needs their coordination or decision.
 - **Creating or splitting a Linear issue, in any workspace, follows unfold's Core rule** (unfold@cc-plugin): an issue holds only what one PR's merge completes, and work complete only after a merge is a sibling issue the session closes once its every criterion is verified, then reports.

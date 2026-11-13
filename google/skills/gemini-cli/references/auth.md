@@ -8,7 +8,7 @@ Read when `gemini-run.sh` stops on an auth-method mismatch, or a run fails on au
   (`.gemini/settings.json` in the `-C` directory) and the system settings file, and stops when any
   selects a method other than `gemini-api-key`, naming the file.
 - **The user settings file is the skill's own by default.** With `GEMINI_CLI_HOME` unset the
-  script creates `${XDG_STATE_HOME:-~/.local/state}/gemini-cli-skill/.gemini/settings.json`
+  script creates `~/.local/state/gemini-cli-skill/.gemini/settings.json`
   selecting `gemini-api-key`, so `~/.gemini/settings.json` plays no part. A stop naming that file
   means `GEMINI_CLI_HOME` points at it or the skill's file was edited.
 - **Personal-account sign-in no longer serves Gemini CLI.** Since 2026-06-18 Gemini CLI answers

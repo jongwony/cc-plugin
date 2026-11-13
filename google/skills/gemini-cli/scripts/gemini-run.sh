@@ -36,7 +36,7 @@ The prompt file is fed to gemini on stdin. Requires GEMINI_API_KEY in the
 environment, and `gemini` and `node` on PATH.
 
 State: the CLI's settings and sessions live under $GEMINI_CLI_HOME/.gemini.
-Unset, GEMINI_CLI_HOME defaults to ${XDG_STATE_HOME:-~/.local/state}/gemini-cli-skill,
+Unset, GEMINI_CLI_HOME defaults to ~/.local/state/gemini-cli-skill,
 created with settings that select the API key. Keep the same GEMINI_CLI_HOME
 across a session's runs.
 
@@ -84,7 +84,7 @@ PROMPT_FILE="$(cd -P -- "$(dirname -- "$PROMPT_FILE")" && pwd -P)/$(basename -- 
 
 # Unset GEMINI_CLI_HOME → the skill's own state dir, whose settings select the API key.
 if [[ -z "${GEMINI_CLI_HOME:-}" ]]; then
-  GEMINI_CLI_HOME="${XDG_STATE_HOME:-$HOME/.local/state}/gemini-cli-skill"
+  GEMINI_CLI_HOME="$HOME/.local/state/gemini-cli-skill"
   mkdir -p -- "$GEMINI_CLI_HOME/.gemini"
   [[ -f "$GEMINI_CLI_HOME/.gemini/settings.json" ]] ||
     printf '%s\n' '{"security":{"auth":{"selectedType":"gemini-api-key"}}}' >"$GEMINI_CLI_HOME/.gemini/settings.json"

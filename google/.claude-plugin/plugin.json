@@ -1,7 +1,7 @@
 {
   "name": "google",
   "description": "Google Gemini video understanding, Gemini CLI headless runs",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

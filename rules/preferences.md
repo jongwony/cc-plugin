@@ -14,7 +14,7 @@
 - Use `git mv` for file moves
 - Removing git-tracked files: `git rm`, not sub-directory archival
 - **A command that needs a secret runs inline — do not hand it to the user to run.** Fetch the value by command substitution in the command that consumes it: `export FOO="$(<command that reads the secret>)" && <the command>`. Never `echo`, `cat`, or interpolate the value into anything printed; secret **names** are fine to show.
-- **The main session leaves code edits to a delegate wherever it can.**
+- **The main session leaves code edits to a delegate wherever it can, a full-history fork whenever the harness supports it.**
 - **A delegate whose result is later checked against its own tool record runs in a fresh context.** A fork's transcript opens with a `fork-context-ref` to the parent and records only the calls the fork itself makes.
 - **A change's reasoning goes in the commit message, not into the code.** The ledger is the project's commit-message history unless the project declares another. A comment keeps only an operative contract — a claim coupled to a channel that checks it; split a sentence that carries both a contract and a reason, and route the reason.
 - First authoring a project's always-loaded instruction file → declare its ledger binding there once, and only where it departs from the commit-message default.
@@ -25,7 +25,7 @@
 ## Tools
 
 - Multi-step research → a subagent.
-- **A delegate runs on Opus 5.5 at high effort, whatever model the delegating session runs.** A fresh subagent takes `model: "opus"` and `effort: "high"`. A fork inherits the parent's model and effort and ignores an override. An agent whose definition pins its own model keeps it.
+- **A delegate runs on Opus 5.5 at high effort, whatever model the delegating session runs.** A fork inherits the parent's model and effort and ignores an override. An agent whose definition pins its own model keeps it.
 - **Automation reach — start at the first channel that covers the target; step down only when it does not expose the needed action or fails on it**: a skill, MCP tool, API or CLI → a page in a Chrome tab: the `chrome-agent:chrome-operator` agent → a desktop app window: the `ocu-agent:ocu-operator` agent.
 - **A Linear project status update (Pulse) is a briefing** (Externalization → Human-facing) for the initiative owner and leadership: what got settled since the last update, why a progress number moved, and what needs their coordination or decision.
 - **Creating or splitting a Linear issue, in any workspace, follows unfold's Core rule** (unfold@cc-plugin): an issue holds only what one PR's merge completes, and work complete only after a merge is a sibling issue the session closes once its every criterion is verified, then reports.

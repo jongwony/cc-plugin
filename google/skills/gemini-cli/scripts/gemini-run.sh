@@ -35,6 +35,11 @@ Options:
 The prompt file is fed to gemini on stdin. Requires GEMINI_API_KEY in the
 environment, and `gemini` and `node` on PATH.
 
+State: the CLI's settings and sessions live under $GEMINI_CLI_HOME/.gemini.
+Unset, GEMINI_CLI_HOME defaults to ~/.local/state/gemini-cli-skill,
+created with settings that select the API key. Keep the same GEMINI_CLI_HOME
+across a session's runs.
+
 Output (stdout):
   the model's answer
   TOKENS <model>: <the CLI's token counts for that model, as JSON>
@@ -76,9 +81,18 @@ abs_bin() { local p; p="$(command -v "$1")" || return 1; [[ "$p" == /* ]] || p="
 GEMINI_BIN="$(abs_bin gemini)" || { echo "Error: gemini not found on PATH" >&2; exit 1; }
 NODE_BIN="$(abs_bin node)" || { echo "Error: node not found on PATH" >&2; exit 1; }
 PROMPT_FILE="$(cd -P -- "$(dirname -- "$PROMPT_FILE")" && pwd -P)/$(basename -- "$PROMPT_FILE")"
+
+# Unset GEMINI_CLI_HOME → the skill's own state dir, whose settings select the API key.
+if [[ -z "${GEMINI_CLI_HOME:-}" ]]; then
+  GEMINI_CLI_HOME="$HOME/.local/state/gemini-cli-skill"
+  mkdir -p -- "$GEMINI_CLI_HOME/.gemini"
+  [[ -f "$GEMINI_CLI_HOME/.gemini/settings.json" ]] ||
+    printf '%s\n' '{"security":{"auth":{"selectedType":"gemini-api-key"}}}' >"$GEMINI_CLI_HOME/.gemini/settings.json"
+fi
+export GEMINI_CLI_HOME
 [[ -n "$CWD" ]] && cd -P -- "$CWD"
 
-STATE_DIR="${GEMINI_CLI_HOME:-$HOME}/.gemini"
+STATE_DIR="$GEMINI_CLI_HOME/.gemini"
 
 # Fail closed on auth: in headless mode an auth method selected in a settings
 # file wins over GEMINI_API_KEY, and a cached sign-in then succeeds silently

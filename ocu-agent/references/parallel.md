@@ -15,4 +15,4 @@ Measured on open-computer-use 1.1.2 in a macOS 27.2 guest; the first line also o
 - `turn-ended` from another ocu process — this plugin's `SubagentStop` hook among them — restored windows parked on the agent display by an MCP server and by an `ocu js` process, one trial each.
 - Launching an app that was not running with `open -g` brought it to the front.
 - An action that returned an error may have taken effect; a successful `type_text` has once taken effect twice.
-- `query` with a window id bound `set_value` to that window, between two `ocu js` processes in TextEdit; `type_text` reached the app's main window. An app's own plugin can rule ocu input out (`kakao/skills/kakao/SKILL.md`).
+- `query` with a window id bound `set_value` to that window, between two `ocu js` processes in TextEdit; `type_text` reached the app's main window. An app's own plugin can rule ocu input out (the kakao plugin's `skills/kakao/SKILL.md`).

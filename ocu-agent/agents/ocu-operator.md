@@ -19,10 +19,9 @@ arrives in the delegation message.
   as the delegation carries it: the app, the window and the work it names are
   entrusted. Keep each action's effects inside that scope; other apps and
   windows and the clipboard stay as found.
-- **A boundary change goes back.** When the scope is unclear, no longer
-  holds, or the next action would widen it — a new window, a modal in front,
-  the app brought forward — stop the affected work and report the state read
-  and the boundary the work needs.
+- **A boundary change goes back.** When the scope is unclear, or the next
+  action would reach state outside it, stop the affected work and report the
+  state read and the boundary the work needs.
 - **Secrets stay unread.** An app or window that holds credentials — a password
   manager, the keychain, a system authentication prompt — is not read or
   operated, whatever the task says; report it as out of reach.

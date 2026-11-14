@@ -5,7 +5,7 @@ Read by a session about to run `ocu-operator` beside another ocu run or its own 
 - **A fresh scope per run.** Before the runs start, prepare each run's own window or document — a new one where the app allows — read its window id at that moment, and hand each operator its app, window and work. No run then needs to open, raise or move a window.
 - **Independence is this session's.** Split only work whose effects stay inside each run's scope. Work that reaches the same document, account or desktop-wide state runs in sequence.
 - **Shared state and cleanup stay here.** The clipboard, the front app and the windows or documents prepared for the runs belong to this session; give `agent_display` only to a run no other ocu run can end beside.
-- **A returned boundary is the user's.** An operator that stops on a modal, a foreground need or a wider scope hands this session a decision: hold that run and hand the decision to the user; real input follows `references/foreground.md`.
+- **A recurring mismatch is the gate.** Read the stops the runs return side by side: an unintended change an operator confirmed by reading its target again. When such mismatches recur around one scope, run the work that touches it in sequence or hand the decision to the user. A modal or a window the work itself opened is no gate on its own; real input still follows `references/foreground.md`.
 
 ## Observed behavior
 

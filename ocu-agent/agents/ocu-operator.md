@@ -1,6 +1,6 @@
 ---
 name: ocu-operator
-description: Computer use on the user's Mac — delegate when a task's evidence or action lives in a desktop app window rather than a web page. Before parallel delegation, read this plugin's references/parallel.md.
+description: Computer use on the user's Mac — delegate when a task's evidence or action lives in a desktop app window rather than a web page. Before running it beside another ocu run or this session's own ocu calls, read this plugin's references/parallel.md.
 tools: [mcp__plugin_ocu-agent_ocu, ToolSearch]
 model: opus
 effort: medium

@@ -1,5 +1,5 @@
 {
-  "description": "ocu-agent: end the ocu session when ocu-operator stops, so a window the run parked on the agent display comes back and element indices do not outlive the run.",
+  "description": "ocu-agent: send ocu turn-ended when ocu-operator stops.",
   "hooks": {
     "SubagentStop": [
       {

@@ -72,7 +72,7 @@
     {
       "name": "residue",
       "source": "./residue",
-      "description": "Reads out what a session still holds open, on request — acts it owes, unanswered questions, findings made along the way — from a fresh read of the session's record and the unit's Linear chart, and sorts them into what stays in the session, what is proposed for the chart through /unfold, and what needs the user's decision; writes nothing to Linear itself"
+      "description": "Reads out what a session still holds open, on request — acts it owes, unanswered questions, findings made along the way — from a fresh read of the session's record and the unit's Linear chart, and sorts them into what stays in the session and what it moves to the chart through /unfold without asking; writes nothing to Linear itself"
     },
     {
       "name": "agent-device-preflight",

@@ -1,6 +1,6 @@
 ---
 name: residue
-description: "Use when the user asks what the session still holds open, or runs /residue — or when what another session, named by its id, still holds open is to be read out. Reads the session's record and the unit's chart afresh; the user then sees each item the session opened and has not closed, and where it goes — kept in the session, proposed for the chart, or theirs to decide. Another session's record is read only."
+description: "Use when the user asks what the session still holds open, or runs /residue — or when what another session, named by its id, still holds open is to be read out. Reads the session's record and the unit's chart afresh; the user then sees each item the session opened and has not closed, and where it goes — kept in the session or moved to the chart. Another session's record is read only."
 argument-hint: "[session-id]"
 skills:
   - epharmoge:contextualize
@@ -10,15 +10,14 @@ skills:
 
 What a session opens as it works lives in the conversation and goes with it
 when the conversation is compacted or ends. This skill reads it out on request
-and sorts it. The only writes it leads to are `/unfold`'s, after the user
-agrees.
+and sorts it. The only writes it leads to are `/unfold`'s.
 
 ## Dependency
 
 - **Epharmoge** (`/contextualize`) — called in step 1; the epistemic-protocols
   `epharmoge` plugin must be installed.
-- **unfold** (this marketplace) and a Linear MCP — step 4's chart proposals are
-  written through them; without them the run ends at the proposal.
+- **unfold** (this marketplace) and a Linear MCP — step 4's chart moves are
+  written through them; without them the run ends at naming the move.
 
 ## Procedure
 
@@ -66,13 +65,11 @@ settled, a finding the request did not ask for — and where each one goes.
    asked together, in one round.
 4. **Sort what is still open**, one disposition per item:
    - **Stays in the session** — with the next act named.
-   - **Proposed for the chart** — a settled direction through `/unfold decide`,
-     the open set through `/unfold group`, once the user agrees to the move. A
-     chart whose status is Done or Canceled is closed and takes no write: read
-     the status immediately before proposing, say the unit is closed, and leave
-     the destination to the user.
-   - **Needs the user's decision** — whether it leaves the session is itself
-     undecided: say the decision is needed and what it turns on.
+   - **Moved to the chart** — a settled direction through `/unfold decide`,
+     the open set through `/unfold group`, written without asking and named in
+     the report. A chart whose status is Done or Canceled is closed and takes
+     no write: read the status immediately before writing, say the unit is
+     closed, and leave the destination to the user.
 5. **Report once**, one line per item: its kind, the item in plain words, the
    turn or file it came from, whether it is on the chart, and its disposition.
    Where nothing is open, say so in one line with what was read — the stretch

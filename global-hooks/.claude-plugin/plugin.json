@@ -1,7 +1,7 @@
 {
   "name": "global-hooks",
-  "description": "choi's global Claude Code hooks, carried as one plugin so every environment gets them with one install and turns them on or off together. kill-blast-radius: ask before a process kill that would signal more than 10 processes (macOS; no decision elsewhere).",
-  "version": "0.1.0",
+  "description": "choi's global Claude Code hooks, carried as one plugin so every environment gets them with one install and turns them on or off together. kill-blast-radius: an auxiliary warning that asks before a process kill whose observed matches exceed 10 processes (macOS; no decision elsewhere).",
+  "version": "0.1.1",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

@@ -10,28 +10,40 @@ is written on.
 
 | Hook | Event | What it does |
 | --- | --- | --- |
-| `kill-blast-radius` | `PreToolUse` (`Bash`) | Asks before a process kill that would signal more than 10 processes |
+| `kill-blast-radius` | `PreToolUse` (`Bash`) | An auxiliary warning: asks before a process kill whose observed matches exceed 10 processes |
 
 ### kill-blast-radius
 
-Before a Bash command runs, the hook finds every `pkill`/`killall` in it —
-after `for`/`do`, `timeout`, `xargs`, `env`, inside `bash|sh|zsh -c` — and every
-`kill` fed by `pgrep` (`pgrep … | xargs kill`, `kill $(pgrep …)`). It measures
-each one's match set with `pgrep` and the same arguments, so macOS argument
-quirks are measured as they would run (`pkill -f "cat" -n`, where `-n` becomes a
-second pattern). When a match set holds more than 10 processes, the hook returns
-`ask` with the count and a sample of the matched processes.
+An auxiliary warning, not a guarantee. Before a Bash command runs, the hook reads
+it with a small shell lexer — quotes, `$(...)` and backticks, redirections,
+heredocs, newlines — and looks only at words the shell would run as commands:
+`pkill`/`killall`, also behind `sudo`, `env`, `timeout`, `xargs`, `nohup` and
+inside `bash|sh|zsh -c`, `eval` and `$(...)`; and `kill` fed by `pgrep`
+(`pgrep … | xargs kill`, `pgrep … | while read p; do kill $p; done`,
+`kill $(pgrep …)`). Text that is not run — an `echo` argument, a quoted string,
+a heredoc that `cat` reads — is not measured.
 
-It makes no decision, and the normal permission flow applies, when:
+For each kill it re-runs the selection as `pgrep -l`: the selection options
+(`-P`, `-U`, `-u`, `-G`, `-g`, `-t`, `-F`, …) and the patterns in their order,
+with a leading signal and `-I` dropped, so macOS argument quirks are observed as
+they would select (`pkill -f "cat" -n`, where `-n` becomes a second pattern).
+It counts the union of the PIDs it observed across the whole command. When that
+union holds more than 10 processes, the hook returns `ask` with the count and a
+sample of the matched processes.
 
-- the command cannot be measured — a pattern from a variable, a remote `ssh`
-  command, a PID list built by `awk`;
-- Claude Code runs outside macOS. The measurement is calibrated to macOS
-  `pgrep`, and a Linux cloud session runs in a sandbox.
+What it does not cover — the normal permission flow applies:
+
+- a command it cannot measure: a pattern or command from a variable, a kill fed
+  by any other pipeline (`ps | grep | awk | xargs kill`, `pgrep … | head`), a
+  remote `ssh` command, a syntax it cannot lex;
+- processes that start or exit between its observation and the kill: the count
+  is what it saw just before the command ran;
+- Claude Code outside macOS. The observation is calibrated to macOS `pgrep`, and
+  a Linux cloud session runs in a sandbox.
 
 Requires `python3` on `PATH`; the hook uses the standard library only.
 
-Tests (macOS runs every case; elsewhere only the non-macOS path):
+Tests (the mocked cases run anywhere; the cases against real processes run on macOS):
 
 ```bash
 python3 global-hooks/tests/kill-blast-radius.test.py

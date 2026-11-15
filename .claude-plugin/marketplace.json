@@ -155,7 +155,7 @@
     {
       "name": "global-hooks",
       "source": "./global-hooks",
-      "description": "choi's global hooks in one plugin: kill-blast-radius asks before a process kill that would signal more than 10 processes (macOS; no decision elsewhere)"
+      "description": "choi's global hooks in one plugin: kill-blast-radius, an auxiliary warning that asks before a process kill whose observed matches exceed 10 processes (macOS; no decision elsewhere)"
     }
   ]
 }

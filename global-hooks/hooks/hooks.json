@@ -1,5 +1,5 @@
 {
-  "description": "global-hooks: kill-blast-radius asks before a pkill/killall or pgrep-fed kill that would signal more than 10 processes.",
+  "description": "global-hooks: kill-blast-radius, an auxiliary warning that asks before a pkill/killall or pgrep-fed kill whose observed matches exceed 10 processes (macOS).",
   "hooks": {
     "PreToolUse": [
       {

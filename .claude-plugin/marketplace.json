@@ -151,6 +151,11 @@
         "url": "https://github.com/jongwony/aiward.git"
       },
       "description": "Report a session to aiward, choi's resident session, when the issue it carried settles or stops — aiward reads the session's own record and tells it to go on, pushes choi, or neither"
+    },
+    {
+      "name": "global-hooks",
+      "source": "./global-hooks",
+      "description": "choi's global hooks in one plugin: kill-blast-radius asks before a process kill that would signal more than 10 processes (macOS; no decision elsewhere)"
     }
   ]
 }

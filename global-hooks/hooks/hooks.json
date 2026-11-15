@@ -1,0 +1,17 @@
+{
+  "description": "global-hooks: kill-blast-radius asks before a pkill/killall or pgrep-fed kill that would signal more than 10 processes.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/hooks/kill-blast-radius.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

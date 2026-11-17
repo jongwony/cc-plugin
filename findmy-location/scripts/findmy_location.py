@@ -198,14 +198,14 @@ def main(argv=None):
     args = parser.parse_args(argv)
     result = {"status": "error", "rows": [], "refreshed": False, "locked_session": False, "focus_restored": None, "cold_start": False, "lock_waited_s": None, "quit": None, "message": None, "read_at": None}
     try:
-        status = locked_use_status()
-        result["locked_session"] = locked = bool(status and status[0] == "locked")
-        if locked and not status[1]:
-            raise OcuError("the Mac is locked and Open Computer Use's Locked Use is not available"
-                           + (": " + status[2] if status[2] else "") + "; unlock the Mac or enable Locked Use (ocu locked-use enable)")
-        if locked:
-            wake_display()
         with Lifecycle(result):
+            status = locked_use_status()
+            result["locked_session"] = locked = bool(status and status[0] == "locked")
+            if locked and not status[1]:
+                raise OcuError("the Mac is locked and Open Computer Use's Locked Use is not available"
+                               + (": " + status[2] if status[2] else "") + "; unlock the Mac or enable Locked Use (ocu locked-use enable)")
+            if locked:
+                wake_display()
             result["cold_start"] = cold = not find_my_running()
             result["rows"] = refreshed_rows(result) if (args.refresh or cold) else read_rows()
         result["status"] = "ok"

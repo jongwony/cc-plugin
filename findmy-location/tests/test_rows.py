@@ -210,7 +210,6 @@ class UnobservedRetry(unittest.TestCase):
         self.wake.assert_not_called()
 
 
-@unittest.skipUnless(shutil.which("node"), "node not installed")
 class Lifecycle(unittest.TestCase):
     def setUp(self):
         mock.patch.object(fl, "locked_use_status", return_value=("unlocked", True, None)).start()
@@ -261,6 +260,17 @@ class Lifecycle(unittest.TestCase):
         self.assertEqual((code, result["lock_waited_s"]), (0, 0))
         self.assertEqual(fl.LOCK_PATH.read_text(), "")
 
+    def test_the_display_is_woken_after_the_wait_for_the_lock(self):
+        isolate(self)
+        order = []
+        mock.patch.object(fl, "locked_use_status", side_effect=lambda: order.append("status") or ("locked", True, None)).start()
+        mock.patch.object(fl, "wake_display", side_effect=lambda: order.append("wake")).start()
+        entered = fl.Lifecycle.__enter__
+        mock.patch.object(fl.Lifecycle, "__enter__", lambda self: order.append("lock") or entered(self)).start()
+        with mock.patch.object(fl, "ocu_js", return_value=ocu_output([])):
+            run_main()
+        self.assertEqual(order, ["lock", "status", "wake"])
+
     def test_two_runs_take_turns(self):
         isolate(self)
         mock.patch.object(fl.time, "sleep", new=REAL_SLEEP).start()
@@ -292,6 +302,7 @@ class Lifecycle(unittest.TestCase):
         self.assertEqual(len(results), 2)
 
 
+@unittest.skipUnless(shutil.which("node"), "node not installed")
 class Extractor(unittest.TestCase):
     def run_js(self, state):
         prelude = (

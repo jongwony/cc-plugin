@@ -6,8 +6,9 @@ Mac의 Find My 앱에서 지금 내 휴대폰(또는 지정한 보조 기기)의
 
 1. 스크립트는 Find My의 기기 목록을 접근성(AX) 트리로 읽어, 목록 행의 텍스트만 화면에 보이는 그대로 JSON 한 줄(`rows`)로 돌려줍니다. 스크린샷은 찍지 않고, 행을 해석하지도 않습니다.
 2. 행을 읽고 판단하는 것은 Claude입니다. 설정한 기기 이름으로 시작하는 행에서 장소, 이 Mac과의 거리, 얼마 전 위치인지를 읽습니다.
-3. 위치가 `일시 정지됨`이거나 작업에 쓰기에 오래됐으면 `--refresh`로 한 번 더 읽습니다. Find My를 10초 동안 앞으로 가져와 갱신하게 한 뒤, 원래 앞에 있던 앱으로 돌립니다.
-4. Mac이 잠겨 있으면 먼저 디스플레이를 켜서(`caffeinate -u`) Open Computer Use의 Locked Use가 Find My를 읽게 합니다. Locked Use가 연 세션은 Mac의 자동 잠금이 다시 닫습니다.
+3. 한 번 읽을 때마다 Find My를 켜고, 읽고, 끄는 과정을 한 묶음으로 처리합니다. Find My를 쓰는 세션은 한 번에 하나뿐입니다. 다른 세션이 쓰는 중이면 끝날 때까지 최대 180초 기다립니다. 이 순서는 `~/Library/Caches/findmy-location/session.lock` 파일의 잠금(flock)으로 지킵니다. 잠금을 가진 프로세스가 죽으면 운영체제가 잠금을 풀어 주고, 남아 있던 Find My는 다음 실행이 끝날 때 종료합니다.
+4. Find My가 꺼져 있다가 새로 켜진 경우(`cold_start: true`)에는 10초 동안 앞에 띄워 위치가 갱신되게 한 뒤 읽습니다. 그다음 원래 앞에 있던 앱으로 돌립니다. 그래도 위치가 `일시 정지됨`이거나 작업에 쓰기에 오래됐으면 `--refresh`로 한 번 더 읽습니다.
+5. Mac이 잠겨 있으면 먼저 디스플레이를 켜서(`caffeinate -u`) Open Computer Use의 Locked Use가 Find My를 읽게 합니다. Locked Use가 연 세션은 Mac의 자동 잠금이 다시 닫습니다.
 
 Find My를 읽지 못하면(접근성 권한 없음, ocu 실패·시간 초과, Locked Use 없이 잠긴 Mac) `status: error`와 이유를 돌려줍니다.
 
@@ -38,4 +39,4 @@ FINDMY_LOCATION_CONFIG_END
 python3 -m unittest discover -s findmy-location/tests -v
 ```
 
-행 텍스트를 걸러 내는 부분, 잠긴 Mac 처리, `--refresh`의 포커스 복귀, 오류 출력을 검사합니다. 실제 Find My를 읽는 경로는 테스트에 들어 있지 않습니다.
+행 텍스트를 걸러 내는 부분, 잠긴 Mac 처리, `--refresh`의 포커스 복귀, 켜고·읽고·끄는 과정과 세션 간 잠금, 오류 출력을 검사합니다. 실제 Find My를 읽는 경로는 테스트에 들어 있지 않습니다.

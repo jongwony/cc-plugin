@@ -22,7 +22,7 @@ flowchart TD
   F --> G{"그래도 열려 있는 것"}
   G --> H["세션에 둠<br/>다음 행동을 적음"]
   G --> I["차트에 넣자고 제안<br/>사용자가 동의하면 /unfold가 씀"]
-  G --> J["옮길지 정해지지 않음<br/>결정이 필요하다고 알림"]
+  G --> J["옮길지 정해지지 않았거나<br/>다루는 법을 사용자가 골라야 함<br/>결정이 필요하다고 알림"]
   classDef target stroke-width:3px,stroke-dasharray:6 3
 ```
 

@@ -302,6 +302,57 @@ class Lifecycle(unittest.TestCase):
         self.assertEqual(len(results), 2)
 
 
+class Freshness(unittest.TestCase):
+    PAUSED = "Phone A, 6.3km, 집 · 일시 정지됨"
+    NONE = "Phone A, 발견된 위치 없음"
+    LIVE = "Phone A, 6.3km, 집 · 지금"
+    OTHER = "Phone AB, 1km, 회사 · 지금"
+
+    def setUp(self):
+        mock.patch.object(fl, "locked_use_status", return_value=("unlocked", True, None)).start()
+        mock.patch.object(fl.time, "sleep").start()
+        mock.patch.object(fl, "run_bounded", side_effect=lambda cmd: ("com.example.Front", None) if cmd[0] == "osascript" else ("", None)).start()
+        isolate(self, running=False)
+
+    def test_a_row_with_a_location_is_fresh(self):
+        self.assertTrue(fl.is_fresh([self.OTHER, self.LIVE], "Phone A"))
+
+    def test_a_paused_or_missing_row_is_not_fresh(self):
+        self.assertFalse(fl.is_fresh([self.PAUSED], "Phone A"))
+        self.assertFalse(fl.is_fresh([self.NONE], "Phone A"))
+        self.assertFalse(fl.is_fresh([self.OTHER], "Phone A"))
+
+    def rows_in_turn(self, *batches):
+        return mock.patch.object(fl, "read_rows", side_effect=list(batches))
+
+    def test_a_cold_start_polls_until_the_device_row_is_fresh(self):
+        with self.rows_in_turn([self.PAUSED], [self.PAUSED], [self.LIVE]) as read:
+            code, result = run_main(["--device", "Phone A"])
+        self.assertEqual((code, result["fresh"], result["rows"], read.call_count), (0, True, [self.LIVE], 3))
+        fl.time.sleep.assert_called_with(fl.FRESH_POLL_S)
+        self.quit.assert_called_once()
+
+    def test_the_poll_stops_at_the_cap_and_reports_not_fresh(self):
+        clock = iter(range(0, 1000, 10))
+        mock.patch.object(fl.time, "monotonic", side_effect=lambda: next(clock)).start()
+        with mock.patch.object(fl, "read_rows", return_value=[self.PAUSED]) as read:
+            code, result = run_main(["--device", "Phone A"])
+        self.assertEqual((code, result["status"], result["fresh"], result["rows"]), (0, "ok", False, [self.PAUSED]))
+        self.assertLessEqual(read.call_count, fl.FRESH_CAP_S // 10 + 1)
+
+    def test_without_a_device_the_wait_is_fixed_and_fresh_is_unknown(self):
+        with self.rows_in_turn([self.PAUSED]) as read:
+            _, result = run_main()
+        self.assertEqual((result["fresh"], read.call_count), (None, 1))
+        fl.time.sleep.assert_any_call(fl.REFRESH_WAIT_S)
+
+    def test_a_warm_read_reports_freshness_without_polling(self):
+        fl.find_my_running.return_value = True
+        with self.rows_in_turn([self.PAUSED]) as read:
+            _, result = run_main(["--device", "Phone A"])
+        self.assertEqual((result["fresh"], result["refreshed"], read.call_count), (False, False, 1))
+
+
 @unittest.skipUnless(shutil.which("node"), "node not installed")
 class Extractor(unittest.TestCase):
     def run_js(self, state):

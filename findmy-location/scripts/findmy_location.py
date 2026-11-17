@@ -15,6 +15,9 @@ READ = pathlib.Path(__file__).with_name("read_rows.mjs")
 MARKER = "FINDMY_ROWS "
 ROW_ID = " ID: ListEntityRow"
 REFRESH_WAIT_S = 10
+FRESH_POLL_S = 2
+FRESH_CAP_S = 30
+NOT_A_LOCATION = ("일시 정지됨", "발견된 위치 없음")
 SHORT_TIMEOUT_S = 5
 WAKE = ["caffeinate", "-u", "-t", "120"]
 WAKE_SETTLE_S = 2
@@ -106,7 +109,32 @@ def locked_use_status():
     return session.get("state"), status.get("available") is True, (str(blockers[0]) if blockers else None)
 
 
-def refreshed_rows(result):
+def device_row(rows, device):
+    prefix = device + ", "
+    return next((row for row in rows if row.startswith(prefix)), None)
+
+
+def is_fresh(rows, device):
+    """The device's row exists and shows a location rather than a pause or no location."""
+    row = device_row(rows, device)
+    return row is not None and not any(marker in row for marker in NOT_A_LOCATION)
+
+
+def wait_for_rows(result, device):
+    """Read the rows once Find My has updated: poll until the device's row is fresh, or wait the fixed time when no device is named."""
+    if not device:
+        time.sleep(REFRESH_WAIT_S)
+        return read_rows()
+    started = time.monotonic()
+    while True:
+        rows = read_rows()
+        result["fresh"] = is_fresh(rows, device)
+        if result["fresh"] or time.monotonic() - started >= FRESH_CAP_S:
+            return rows
+        time.sleep(FRESH_POLL_S)
+
+
+def refreshed_rows(result, device=None):
     """Bring Find My to the front, let it update, read, and return focus to the app that was in front."""
     front, reason = run_bounded(["osascript", "-e", 'tell application "System Events" to get bundle identifier of first process whose frontmost is true'])
     _, failed = run_bounded(["open", "-b", FINDMY])
@@ -114,8 +142,7 @@ def refreshed_rows(result):
         raise OcuError("Find My could not be brought forward: " + failed)
     result["refreshed"] = True
     try:
-        time.sleep(REFRESH_WAIT_S)
-        return read_rows()
+        return wait_for_rows(result, device)
     finally:
         if not front:
             result.update(focus_restored=False, message="front app unknown: " + (reason or "osascript returned nothing"))
@@ -195,8 +222,9 @@ def quit_find_my():
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--refresh", action="store_true", help="bring Find My to the front for %d s so its locations update; a run that starts Find My does this anyway" % REFRESH_WAIT_S)
+    parser.add_argument("--device", help="device name as Find My lists it; a refresh then waits, up to %d s, until its row shows a location" % FRESH_CAP_S)
     args = parser.parse_args(argv)
-    result = {"status": "error", "rows": [], "refreshed": False, "locked_session": False, "focus_restored": None, "cold_start": False, "lock_waited_s": None, "quit": None, "message": None, "read_at": None}
+    result = {"status": "error", "rows": [], "refreshed": False, "locked_session": False, "focus_restored": None, "cold_start": False, "fresh": None, "lock_waited_s": None, "quit": None, "message": None, "read_at": None}
     try:
         with Lifecycle(result):
             status = locked_use_status()
@@ -207,7 +235,12 @@ def main(argv=None):
             if locked:
                 wake_display()
             result["cold_start"] = cold = not find_my_running()
-            result["rows"] = refreshed_rows(result) if (args.refresh or cold) else read_rows()
+            if args.refresh or cold:
+                result["rows"] = refreshed_rows(result, args.device)
+            else:
+                result["rows"] = read_rows()
+                if args.device:
+                    result["fresh"] = is_fresh(result["rows"], args.device)
         result["status"] = "ok"
     except OcuError as exc:
         result["message"] = str(exc)

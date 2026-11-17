@@ -43,17 +43,267 @@ have to be kept in step. Distinguish source analysis from executed checks.
 Request `direction` after findings on a non-approval; no single mechanism is a
 valid answer. A mechanism lacking a falsifier does not fill this slot.
 
+## Loop
+
+```lean
+/-!
+How to read this block. It is core Lean 4 and elaborates as written, and you are the model it is
+written for: you read it, and by inference over the context you settle each element it leaves
+open. Every `axiom` is one of those judgments — a black box to the contract, yours to make from
+the material in front of you; its doc comment says what you judge there, and nothing in this
+block decides it for you. Every `def`, `inductive`, and `structure` is fixed by the contract.
+The block fixes where the loop goes; what each phase does is its rules below.
+-/
+
+namespace ReviewLoop
+
+/-- The session as it stands: the invocation, the user's turns, each source's returns, the
+    captured base, the design-decision ledger, and the trace. -/
+axiom Session : Type
+
+/-- A reviewer, by the name the host knows it under. -/
+abbrev Source := String
+
+/-- A finding a source reported, or one the loop's own goal reading added. -/
+structure Finding where
+  source : Source
+  site   : String
+  claim  : String
+
+/-! ── ENTRY ── -/
+
+/-- How Phase 0 reads the sources. -/
+inductive Entry
+  | use (sources : List Source)
+  /-- the one invokable source, said as relayed -/
+  | relay (s : Source)
+  /-- a gate: the invokable sources with their actual coverage, cost and reporting limits and no
+      default; or why a designated source is unavailable, with making it available, an available
+      alternative, or stopping — the designation retained until that is settled -/
+  | ask
+  /-- the loop stops, naming the missing capability -/
+  | missing
+
+/-- `designated`: the sources this invocation names, each with any effort level it names.
+    `invokable`: what the host can run now. -/
+def entry (designated invokable : List Source) : Entry :=
+  match designated, invokable with
+  | [], []    => .missing
+  | [], [s]   => .relay s
+  | [], _     => .ask
+  | _ :: _, _ => if designated.all invokable.contains then .use designated else .ask
+
+/-! ── FINDINGS ── -/
+
+/-- **Your judgment**, through `/inquire` on the finding against the current artifact: the
+    artifact refutes it. A refuted finding is dropped with its cited basis and takes no
+    provenance. -/
+axiom Refuted : Session → Finding → Prop
+
+/-- Where a surviving finding's issue stood at the captured base. -/
+inductive Provenance
+  /-- the issue already held -/
+  | preExisting
+  /-- absent at base; the change alone supplies the defect -/
+  | introduced
+  /-- absent at base, but an independent condition is jointly necessary -/
+  | indeterminate
+
+/-- **Your reading** of the captured base for a surviving finding, following moves and renames. -/
+axiom provenance : Session → Finding → Provenance
+
+/-- The side a finding takes when scope is decided. -/
+inductive Side | ofChange | preExisting
+
+def Provenance.side : Provenance → Side
+  | .introduced    => .ofChange
+  | .preExisting   => .preExisting
+  | .indeterminate => .preExisting
+
+/-- How a finding ends: a verified repair, a drop with its cited basis, or carried with its
+    reason — a successor handover or declared residual. -/
+inductive Disposition | applied | dropped | carried
+
+/-- **Your reading**: the disposition a citable ground already settles for this finding — the
+    user's prior direction, the PR's purpose, a governing rule harvested under Phase 0 rule 4, or
+    citable precedent — or `none`. -/
+axiom settled : Session → Finding → Option Disposition
+
+inductive Class
+  /-- Extension: a verified bug with a self-evident localized fix, or another deterministic edit
+      whose plausible shapes do not materially diverge -/
+  | mechanical
+  /-- Constitution: materially different repair trajectories (withholding a whole carrier, where
+      another repair keeps part of what it delivers, is one), unresolved design trade-offs, or
+      unentrusted scope/risk decisions -/
+  | judgment
+
+/-- **Your judgment** of a surviving finding that nothing cited settles. -/
+axiom classOf : Session → Finding → Class
+
+/-- **Your judgment**: a citable scope license — purpose, mandated sweep, or settled precedent —
+    takes the repair of this pre-existing-side defect into this unit. -/
+axiom Licensed : Session → Finding → Prop
+
+/-- What Phase 3 does with one surviving finding. -/
+inductive Handling
+  /-- relayed with its basis, recording side effects; no question -/
+  | relay (d : Disposition)
+  /-- applied and reported, without a disposition gate -/
+  | apply
+  /-- a disposition gate -/
+  | gate
+
+open Classical in
+noncomputable def handling (s : Session) (f : Finding) : Handling :=
+  match settled s f with
+  | some d => .relay d
+  | none =>
+    match classOf s f, (provenance s f).side with
+    | .mechanical, .ofChange    => .apply
+    | .mechanical, .preExisting => if Licensed s f then .apply else .gate
+    | .judgment, _              => .gate
+
+/-! ── APPLY PASS ── -/
+
+/-- What the host offers for an apply pass. -/
+inductive Delegation | fullContextFork | freshContextDelegate | none
+
+/-- The writer route. `fork`: one full-context fork per apply pass. `brief`: a fresh-context
+    delegate, handed the enumerated predicate and screened sites in a self-contained brief.
+    `inline`: the driving session writes. -/
+inductive Route | fork | brief | inline
+
+/-- `parentHeld`: the pass holds an action the driving session keeps for risk. -/
+def route (d : Delegation) (parentHeld : Bool) : Route :=
+  if parentHeld then .inline else
+    match d with
+    | .fullContextFork      => .fork
+    | .freshContextDelegate => .brief
+    | .none                 => .inline
+
+inductive Actor | drivingSession | delegate
+
+/-- Who performs step 1 of Phase 4. -/
+def scanHolder : Route → Actor
+  | .fork => .delegate
+  | _     => .drivingSession
+
+/-- Who performs steps 4 and 5 of Phase 4. -/
+def writer : Route → Actor
+  | .inline => .drivingSession
+  | _       => .delegate
+
+/-! ── CONVERGENCE ── -/
+
+/-- **Your reading**: every surfaced finding is dispositioned. -/
+axiom AllDispositioned : Session → Prop
+
+/-- **Your reading**: a recurrence awaits diagnosis. -/
+axiom RecurrencePending : Session → Prop
+
+/-- **Your reading**: an edit has landed since the latest review. -/
+axiom EditedSinceReview : Session → Prop
+
+/-- **Your reading**, for one designated source on the current reviewed artifact: it returned
+    `approve`, or a full re-review returned zero new non-refuted findings. A finding is new in its
+    discovery review even when deferred or handed over; its later return is not new and preserves
+    the disposition. A call that ended without a usable review satisfies neither. -/
+axiom Clear : Session → Source → Prop
+
+/-- **Your reading**: every designated source completed a full re-review. -/
+axiom FullyReReviewed : Session → List Source → Prop
+
+/-- **Your reading** of Phase 3: the verified set names a shared cause. -/
+axiom SharedCause : Session → Prop
+
+/-- **Your reading**: every root on the trace maps to its resolution. -/
+axiom RootsResolved : Session → Prop
+
+/-- Phase 3's root-resolved end: the loop ends as it stands, the round's findings go to the user
+    unrepaired with their dispositions, and no repair is chosen or applied. -/
+def RootResolved (sources : List Source) (s : Session) : Prop :=
+  FullyReReviewed s sources ∧ ¬ SharedCause s ∧ RootsResolved s ∧ ¬ RecurrencePending s
+
+/-- Convergence holds only of the current reviewed artifact. -/
+def Converged (sources : List Source) (s : Session) : Prop :=
+  AllDispositioned s ∧ ¬ RecurrencePending s ∧ ¬ EditedSinceReview s ∧
+    ((∀ x ∈ sources, Clear s x) ∨ RootResolved sources s)
+
+inductive Exit
+  | converged
+  /-- reported as non-convergence, with the latest reviewed artifact, later edits, unfinished
+      repairs, residuals, and retained judgments -/
+  | notConverged
+
+open Classical in
+noncomputable def exitAs (sources : List Source) (s : Session) : Exit :=
+  if Converged sources s then .converged else .notConverged
+
+/-! ── LOOP ── -/
+
+/-- One round is `obtain` (Phase 1), `verify` (Phase 2), `settle` (Phase 3), `apply` (Phase 4),
+    `decide` (Phase 5); `enter` is Phase 0. -/
+inductive Phase | enter | obtain | verify | settle | apply | decide
+
+/-- What only the user's turn settles. -/
+inductive Gate
+  /-- `Entry.ask` -/
+  | sources
+  /-- Phase 0 rule 2: no changes -/
+  | scope
+  /-- Phase 0 rule 3: where PR repairs land, raised before the first repair; or recovery direction -/
+  | landing
+  /-- Phase 1: a call ended without a usable review -/
+  | failedCall
+  /-- `Handling.gate`, or a direction Phase 3 leaves to the user -/
+  | disposition
+  /-- Phase 4 rule 2: an unsettled epistemic risk -/
+  | risk
+
+/-- **Your reading**: the gate this phase's work has raised that no turn of the user's has yet
+    settled, or `none`. -/
+axiom pending : Session → Phase → Option Gate
+
+/-- **Your reading**: a turn of the user's ends the loop. -/
+axiom UserEnds : Session → Prop
+
+/-- **Your reading**: the settled dispositions leave a repair to write. -/
+axiom RepairOwed : Session → Prop
+
+inductive Step
+  | go (p : Phase)
+  /-- the gate is presented and the turn ends; silence settles nothing, and what waits on the gate
+      does not proceed -/
+  | hold (g : Gate)
+  | exit (e : Exit)
+
+open Classical in
+noncomputable def next (sources : List Source) (s : Session) (p : Phase) : Step :=
+  if UserEnds s then .exit (exitAs sources s)
+  else
+    match pending s p with
+    | some g => .hold g
+    | none =>
+      match p with
+      | .enter  => .go .obtain
+      | .obtain => .go .verify
+      | .verify => .go .settle
+      | .settle =>
+        if RootResolved sources s then .exit (exitAs sources s)
+        else if RepairOwed s then .go .apply
+        else .go .decide
+      | .apply  => .go .decide
+      | .decide => if Converged sources s then .exit .converged else .go .obtain
+
+end ReviewLoop
+```
+
 ## Rules
 
 ### Phase 0 — Set the invocation and its ground
 
-1. Use the source or sources designated in this invocation, with any effort level
-   designated for each. Otherwise present the invokable
-   sources with their actual coverage, cost, and reporting limits, without a default;
-   ask which to use and wait for the answer. Silence stops. One available source relays its designation; zero stops with the missing capability.
-   If an explicitly designated source is unavailable, surface why and ask whether to
-   make it available, use an available alternative, or stop; retain the designation
-   until that is settled.
+1. Settle the sources as `entry` has it.
 2. Resolve explicit or current-branch PR scope; otherwise use the working tree.
    Capture the resolved diff base SHA and changed-file list. For working-tree scope,
    include staged, unstaged, and recursively enumerated untracked paths, and retain
@@ -102,18 +352,9 @@ source omitting reach leaves the missing report visible as residual.
 
 ### Phase 2 — Verify and attribute
 
-Invoke `/inquire` — the skill call itself, for every finding however plain it looks —
-on each finding against the current artifact before acting. Drop a
-refuted finding with its cited basis and no defect provenance. For surviving findings,
-check the asserted issue against the captured base, following moves/renames:
-
-| Base reading | Provenance |
-|---|---|
-| The issue already held | `pre-existing` |
-| Absent at base; the change alone supplies the defect | `introduced` |
-| Absent at base but an independent condition is jointly necessary | `indeterminate` |
-
-`indeterminate` takes the pre-existing side for scope decisions.
+Invoke `/inquire` — the skill call itself, for every finding however plain it looks — on
+each finding against the current artifact before acting. `Refuted` and `provenance` are
+read from it.
 
 ### Phase 3 — Read the cause and settle disposition
 
@@ -122,11 +363,11 @@ the source found nothing. Name the goal and consequence behind any additional fi
 verify it through Phase 2, and include it in classification. Record an empty goal
 reading too; omit this pass only where no declared goal was found.
 
-Where one designated source's review this round meets its Phase 5 convergence arm and
-another's new findings survive verification, consult across that split before reading
-the set: ask the source still holding findings what in the artifact would turn its
-verdict to approve, and give those findings to the converged source to adjudicate,
-withholding the loop's dispositions from both. A consult is not a review. Its answers are material that
+Where one designated source's review this round leaves that source `Clear` and another's
+new findings survive verification, consult across that split before reading the set: ask
+the source still holding findings what in the artifact would turn its verdict to
+approve, and give those findings to the converged source to adjudicate, withholding the
+loop's dispositions from both. A consult is not a review. Its answers are material that
 Phase 2 and this reading weigh, never a verdict or a vote for either side.
 
 Read the verified set for a shared mechanism, competing explanations, unexplained
@@ -143,23 +384,11 @@ trace: a previously matching site missed by a sweep calls for completing the
 enumeration; an instance outside that predicate calls for reconsidering the abstraction.
 A later-created or newly matching site does not falsify an earlier sweep.
 
-Where that reading, on a full re-review every designated source completed, names no
-shared cause, every root on the trace maps to its resolution, and no recurrence awaits
-diagnosis, the loop ends there as it stands: the round's findings go to the user
-unrepaired with their dispositions, and no repair is chosen or applied.
+Where `RootResolved` holds on that reading, the loop ends there.
 
-- **Mechanical / Extension:** a verified bug with a self-evident localized fix, or
-  another deterministic edit whose plausible shapes do not materially diverge.
-  Apply and report without a disposition gate.
-- **Judgment / Constitution:** materially different repair trajectories (withholding a
-  whole carrier, where another repair keeps part of what it delivers, is one),
-  unresolved design trade-offs, or unentrusted scope/risk decisions.
+`handling` settles each surviving finding.
 
-Relay a disposition already settled by the user's prior direction, the PR's purpose, a
-governing rule harvested under Phase 0 rule 4, or citable precedent, recording side
-effects. Packaging an identical mechanical fix does not reopen disposition; repairing a
-pre-existing-side defect needs a citable scope license (purpose, mandated sweep, or
-settled precedent), otherwise ask about expansion.
+Packaging an identical mechanical fix does not reopen disposition.
 
 For conflicting governing surfaces, cite an applicable declared authority order or
 settled direction to identify what governs. That settles direction, not repair shape
@@ -199,16 +428,9 @@ what this unit carries. A rising count changes neither the criterion nor source 
 
 For PR scope, follow [PR scope](references/pr-scope.md) before the first edit.
 
-The driving session settles disposition and hands the apply pass to a writer.
-Where the host offers a full-context fork, one fork per apply pass is the default
-writer and carries steps 1, 4 and 5 below; the host reference (for
-Claude Code, [Claude Code](references/host-claude-code.md) § Writer fork) names the
-fork mechanism. Where the host offers only a fresh-context delegate, the
-driving session performs step 1 itself and hands the enumerated predicate and
-screened sites to that writer in a self-contained brief, which then carries steps 4
-and 5. Where the host offers no delegation, or an action is parent-held for risk,
-the driving session writes inline. Under every route the scan holder is whoever
-performs step 1, and the writer is whoever performs steps 4 and 5.
+The driving session settles disposition and hands the apply pass to the writer `route`
+names; the host reference (for Claude Code, [Claude Code](references/host-claude-code.md)
+§ Writer fork) names the fork mechanism.
 
 A writer returns to the driving session whenever it stops — at a gate it cannot
 settle, before step 4's `/contextualize` call, after which it is resumed with the
@@ -278,21 +500,14 @@ the repair commits are judged from their content in the diff as part of the whol
 
 These reviews are the next round's: Phase 1's rules for parallel sources and failed
 calls apply to them, and their findings and direction go straight to Phase 2. Converge
-only on the current reviewed artifact when every surfaced finding is dispositioned, no
-recurrence awaits diagnosis, no edit has landed since the review, and either:
+only where `Converged` holds.
 
-- for every designated source, the source returned `approve` or a full re-review
-  returned zero new non-refuted findings; or
-- the loop ended at Phase 3's root-resolved end.
+Unreached axes, missing reach reports, open deferrals, and explicitly retained
+adaptation effects remain residual; they do not themselves force another round and are
+never reported as clearance.
 
-A new finding remains new in its discovery review even when deferred or handed over;
-its later return is not new and preserves the disposition. Unreached axes, missing
-reach reports, open deferrals, and explicitly retained adaptation effects remain
-residual; they do not themselves force another round and are never reported as clearance.
-
-At any exit before these conditions hold, report non-convergence with the latest
-reviewed artifact, later edits, unfinished repairs, residuals, and retained judgments.
-The user may exit at any point; an external interruption supplies no convergence evidence.
+The user may exit at any point; an external interruption supplies no convergence
+evidence.
 
 ## Trace and Exit
 

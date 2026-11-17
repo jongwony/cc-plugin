@@ -259,7 +259,9 @@ the driving session writes inline. Under every route the scan holder is whoever
 performs step 1, and the writer is whoever performs steps 4 and 5.
 
 A writer returns to the driving session whenever it stops — at a gate it cannot
-settle, or at the end of the pass — carrying what Trace and Exit requires of the pass
+settle, before step 4's `/contextualize` call, which the driving session makes because
+a protocol runs only in the main conversation and after which the writer is resumed
+with the sheet, or at the end of the pass — carrying what Trace and Exit requires of the pass
 so far, so the driving session records rather than re-derives it.
 
 1. The scan holder scans planned change points, adjacent interactions, and repeated
@@ -302,11 +304,13 @@ so far, so the driving session records rather than re-derives it.
    limit remains residual.
    Record unavailable checks with their reason and consequence for confidence. These
    checks establish bounded conformance; full re-review independently judges the artifact.
-   Invoke `/contextualize` — the skill call itself, however small the bundle — once on
+   The driving session invokes `/contextualize` — the skill call itself, however small
+   the bundle — once on
    the whole applied bundle against the design-decision
    ledger and touched-surface conventions.
 5. An adaptation that `/contextualize` actually writes re-enters scan, site screening,
-   sweep, and write verification once.
+   sweep, and write verification once. What its sheet hands back as the user's returns
+   to Phase 3 as a Judgment item, with the handling the sheet proposed.
    Reconcile an already-written adaptation with its settled disposition before hand-forward.
    A self-evident repair stays within that disposition; a competing repair or a live
    judgment about evidence support returns to Phase 3 with the current artifact and
@@ -373,8 +377,9 @@ Each verified finding carries base provenance; an applied fix also carries its
 predicate and sweep side effects. Carry the loop's check artifact, evidence, unexercised
 limits, and unavailable-check reasons with that repair's Relay/Gated entry; keep this
 loop-side evidence distinct from the source-reported `Exercised` line.
-Assign exactly one Relay/Gated home by whether the user was asked, including nested
-`/contextualize` questions and epistemic risk gates. Host permission decisions are execution annotations. Record the fit pass as
+Assign exactly one Relay/Gated home by whether the user was asked, including epistemic
+risk gates; of the fit pass, a correction `/contextualize` made without asking is Relay
+and an item it hands back as the user's is Gated. Host permission decisions are execution annotations. Record the fit pass as
 its own entry, with adaptation, any retroactive rejecting verdict, and the resulting
 artifact state and disposition. Preserve write discrepancies and their reconciliation;
 carried reasons are records, while subsequent reviews detect findings fresh.

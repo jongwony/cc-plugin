@@ -26,8 +26,8 @@ running it. Each step holds as written, with these differences:
   and chart included. Where the chart was
   resolved and Linear cannot be reached from the session running this
   procedure, it is still invoked, against the record's intents alone, and the
-  chart's state is reported as could not be checked. Each misfit it finds comes
-  back with the change evidence fixes — what to change and the source that
+  chart's state is reported as could not be checked. Each misfit it leaves open
+  comes back with the change evidence fixes — what to change and the source that
   fixes it — or as waiting on the user; either is owed by the target.
 - **Steps 3 and 4.** The round step 3 asks is dropped — what
   `/contextualize`'s sheet hands back stays on that sheet — and step 4

@@ -377,8 +377,7 @@ predicate and sweep side effects. Carry the loop's check artifact, evidence, une
 limits, and unavailable-check reasons with that repair's Relay/Gated entry; keep this
 loop-side evidence distinct from the source-reported `Exercised` line.
 Assign exactly one Relay/Gated home by whether the user was asked, including epistemic
-risk gates; of the fit pass, a correction `/contextualize` made without asking is Relay
-and an item it hands back as the user's is Gated. Host permission decisions are execution annotations. Record the fit pass as
+risk gates. Host permission decisions are execution annotations. Record the fit pass as
 its own entry, with adaptation, any retroactive rejecting verdict, and the resulting
 artifact state and disposition. Preserve write discrepancies and their reconciliation;
 carried reasons are records, while subsequent reviews detect findings fresh.

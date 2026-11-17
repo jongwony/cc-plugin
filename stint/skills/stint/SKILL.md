@@ -147,7 +147,8 @@ Independent work needs something to start it. Route to exactly one.
   `CLAUDE_CONFIG_DIR=<alt-config> claude -p --resume <sessionId> --fork-session "<prompt>"`
   continues it on the other account: `--resume` finds the transcript through the shared
   `projects/`, and the source stays untouched. The fork keeps the source's `session-owner` and
-  records both organizations, so `/teleport` refuses to move it to the cloud.
+  records both organizations; the 2.1.326 binary's `/teleport` check refuses a session that
+  ran under more than one organization (read from the binary, not run).
 - **Workspace trust is per configuration directory.** A spawn into a directory
   `<alt-config>/.claude.json` has not trusted stops with `Workspace not trusted`. Where the
   user trusted that path in `<config>/.claude.json`, carry its `hasTrustDialogAccepted` over;

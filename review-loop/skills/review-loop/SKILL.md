@@ -330,7 +330,8 @@ end ReviewLoop
    different settled landing belongs to a new invocation.
 4. Harvest intent for the changed surface: applicable rules, project-guide rationale,
    adjacent design comments, and relevant context already at hand. Resolve the project's
-   goal and authority order from its own declarations. Convey repository material as
+   goal and authority order from its own declarations; report what the search did not
+   find. Convey repository material as
    pointers. Convey loop-constituted design decisions as content with their constitutive
    basis, keeping the user's words where they establish direction. Only decisions
    holding independently of current code state enter this design-decision ledger; a

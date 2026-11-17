@@ -122,6 +122,43 @@ Independent work needs something to start it. Route to exactly one.
   opens a dialog the worker never answers. Pass the creator's own class explicitly — the session
   registry does not carry it.
 
+### Under another account
+
+- **A Stint runs on another Claude account when its spawn carries that account's configuration
+  directory**: prefix the spawn line with `CLAUDE_CONFIG_DIR=<alt-config>`.
+- **Set `<alt-config>` up in this order: the links first, then the sign-in.** Create the
+  directory with the links below before anything runs under it. A name that already exists
+  there as a directory is not linked over — `ln -s` puts the link inside it and succeeds — so
+  move such an entry aside first and check each link with `ls -la`. Signing in is a browser
+  step the user takes once, after the links — hand them
+  `! CLAUDE_CONFIG_DIR=<alt-config> claude auth login`.
+- **Before the first spawn, `CLAUDE_CONFIG_DIR=<alt-config> claude auth status` reports the
+  other account.** An inherited `CLAUDE_CODE_OAUTH_TOKEN` or an `apiKeyHelper` in the shared
+  `settings.json` takes precedence over that login; where one is set, the Stint does not run on
+  the other account until it is resolved.
+- **`<alt-config>/sessions` is a symlink to `<config>/sessions`.** Without it neither side lists
+  the other and the handshake never reaches the creator. Link `projects/` too, so the Stint's
+  transcript is read from this side, and `settings.json`, `CLAUDE.md` where it exists, `rules/`,
+  `skills/`, `agents/`, `plugins/`, `hooks/`, `scripts/`, so it loads the same instructions.
+  Every other entry, `.claude.json` and `daemon*` and `jobs/` among them, stays its own: those
+  carry the account and its daemon.
+- **Link by symlink, never by hard link.** A hard-linked file silently becomes two copies on the
+  first write from either side.
+- **A session carries across accounts by fork.** From the session's cwd,
+  `CLAUDE_CONFIG_DIR=<alt-config> claude -p --resume <sessionId> --fork-session "<prompt>"`
+  continues it on the other account and leaves the source untouched. The fork records both
+  organizations, so it cannot be moved to the cloud with `/teleport`.
+- **Workspace trust is per account.** A spawn into a directory the other account has not trusted
+  stops with `Workspace not trusted`. Where the user trusted that path on the main account, copy
+  that project's `hasTrustDialogAccepted` from the main state file (`~/.claude.json` when
+  `CLAUDE_CONFIG_DIR` is unset) into `<alt-config>/.claude.json`; otherwise the user runs
+  `claude` there once under `<alt-config>`.
+- **The job's commands take the same prefix.** `claude agents`, `logs`, `attach`, `stop` and
+  `rm` reach the job only through `<alt-config>`'s daemon; the ACK check reads the jobId's row
+  there, and `sessions/<pid>.json` is the same file on both sides.
+- **User-scope MCP servers live in `.claude.json`**, so the Stint starts without them. Add one
+  to `<alt-config>` only where the work needs it.
+
 ### Naming
 
 - Use `stint::<topic>`, hyphenated and free of whitespace, where `<topic>` describes the

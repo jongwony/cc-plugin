@@ -8,6 +8,14 @@ skills:
 
 # Review Loop
 
+## Driving session
+
+The loop runs in a session of its own — a Stint — and that session's main conversation
+is the driving session. The session that started it stands where the user stands: each
+gate's question and the exit presentation go to it as a message, the turn ends at a gate,
+and its reply is read as the user's answer. A person who drives the loop directly is
+addressed directly.
+
 ## Caller Signature
 
 ```

@@ -134,6 +134,15 @@ Independent work needs something to start it. Route to exactly one.
   side, and `settings.json`, `rules/`, `skills/`, `agents/`, `plugins/`, `hooks/`, `scripts/`,
   so it loads the same instructions. Every other entry, `.claude.json` and `daemon*` and
   `jobs/` among them, stays its own: those carry the account and its daemon.
+- **Link by symlink, never by hard link.** APFS refuses directory hard links, and Claude Code
+  writes `settings.json` and `.claude.json` by temp file and rename: it writes through a
+  symlink, while a hard-linked file silently becomes two copies on the first write from either
+  side.
+- **A session carries across accounts by fork.** From the session's cwd,
+  `CLAUDE_CONFIG_DIR=<alt-config> claude -p --resume <sessionId> --fork-session "<prompt>"`
+  continues it on the other account: `--resume` finds the transcript through the shared
+  `projects/`, and the source stays untouched. The fork keeps the source's `session-owner` and
+  records both organizations, so `/teleport` refuses to move it to the cloud.
 - **Workspace trust is per configuration directory.** A spawn into a directory
   `<alt-config>/.claude.json` has not trusted stops with `Workspace not trusted`. Where the
   user trusted that path in `<config>/.claude.json`, carry its `hasTrustDialogAccepted` over;

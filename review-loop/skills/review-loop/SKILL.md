@@ -403,7 +403,8 @@ Where `RootResolved` holds on that reading, the loop ends there.
 
 `handling` settles each surviving finding.
 
-Packaging an identical mechanical fix does not reopen disposition.
+Reopen only a genuinely live competing judgment. Packaging an identical mechanical fix
+does not reopen disposition.
 
 For conflicting governing surfaces, cite an applicable declared authority order or
 settled direction to identify what governs. That settles direction, not repair shape

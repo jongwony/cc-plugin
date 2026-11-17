@@ -10,6 +10,7 @@ flowchart LR
   P -. an act outside this session .-> D["/bound"]
   D -. once settled, until then without it .-> P
   D -. the render itself needs it .-> T["the turn ends at the map"]
+  T -. answered on the map .-> P
   P --> M[mp4]
   M --> W{watch the mp4}
   W -- changes --> P
@@ -29,7 +30,7 @@ The dotted paths are taken only where the run shows that need. The build does no
 | `/elicit` | Always: it opens the run with the reading of the request, and the build does not wait for an answer |
 | `/sketch` | After an mp4: the look or the movement would be recognized on sight but cannot be described |
 | `/preview` | After an mp4: the person must commit to one of several directions they cannot judge from descriptions |
-| `/bound` | Before an act of the build that reaches outside this session: an install, a download, a licensed asset; the act waits until the person's turn on the map, or a decision of theirs, settles it, and where the render itself needs it the turn ends at the map |
+| `/bound` | Before an act of the build that reaches outside this session: an install, a download, a licensed asset; the act waits until the person's turn on the map, or a decision of theirs the map cites, settles it, and where the render itself needs it the turn ends at the map |
 
 ## Pieces
 

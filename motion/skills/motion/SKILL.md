@@ -54,7 +54,7 @@ Where the kind of video comes into view — the request implies it, or the readi
 
 Where `/sketch` ran on an earlier round, the page continues from the version the person took, never rewritten from a description of it. Write the page as one HTML file in a folder of this run's own, with each supplied file copied in beside it, its canvas the frame shape this run took and its sound what this run took. The page draws every frame as a function of time — `window.DURATION` (seconds) and `window.seek(t)` drawing the frame for `t` from `t` alone — so every render draws the same frame for the same `t`. With a loop, the frame at `DURATION` meets the frame at 0.
 
-Where the build needs an act that reaches outside this session — installing a tool, downloading a library the page uses, fetching music, fonts, or images that carry a license — the act goes only as far as a decision of theirs already settles. Where none settles it, invoke `/bound` on how far that act may go, before it happens; the turn then ends at the map, saying that the mp4 waits on their answer there, and the act goes only as far as their turn on it settles.
+Where the build needs an act that reaches outside this session — installing a tool, downloading a library the page uses, fetching music, fonts, or images that carry a license — invoke `/bound` on how far that act may go, before it happens. Where a decision of theirs the map cites already settles it, the act goes ahead; otherwise the turn ends at the map, and the act happens only once their turn on it settles how far it may go.
 
 ## Render and watch
 

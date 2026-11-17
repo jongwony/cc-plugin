@@ -7,8 +7,8 @@ flowchart LR
   A[what the video is for] --> B["/elicit: the reading — where, for whom, what and how; open questions with the values taken"]
   B -. wrong reading: interrupt .-> A
   B --> P[page drawn from time]
-  P -. an act outside this session no decision of theirs settles .-> D["/bound: the turn ends at the map"]
-  D -. their turn on the map .-> P
+  P -. an act outside this session .-> D["/bound"]
+  D -. settled by a decision the map cites, or by their turn on it .-> P
   P --> M[mp4]
   M --> W{watch the mp4}
   W -- changes --> P
@@ -28,7 +28,7 @@ The dotted paths are taken only where the run shows that need. The build does no
 | `/elicit` | Always: it opens the run with the reading of the request, and the build does not wait for an answer |
 | `/sketch` | After an mp4: the look or the movement would be recognized on sight but cannot be described |
 | `/preview` | After an mp4: the person must commit to one of several directions they cannot judge from descriptions |
-| `/bound` | Before an act of the build that reaches outside this session: an install, a download, a licensed asset that no decision of theirs already settles; the turn ends at the map, and the act goes only as far as their turn on it settles |
+| `/bound` | Before an act of the build that reaches outside this session: an install, a download, a licensed asset; unless a decision of theirs the map cites already settles it, the turn ends at the map and the act waits for their turn on it |
 
 ## Pieces
 

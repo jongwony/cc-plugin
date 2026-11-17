@@ -32,7 +32,7 @@ Respond in the person's language.
 
 Carry the person's words about the video verbatim as the seed; invoked without them, ask once what the video is for.
 
-Invoke `/elicit` on the seed — the skill call itself. Its first surface is the reading of the request: where and for whom the video is used, what it shows and how it shows it, and what that reading rests on. The decisions below that the reading leaves open follow it briefly, each as an open question carrying the value the build takes for it. Close with one plain sentence on what happens next: the build starts now, a wrong reading is theirs to stop with an interrupt, and the mp4 comes back to watch and approve or change. Then build without waiting for an answer — the `/elicit` return owes none; what the person says from then on, about the mp4 included, is the `/elicit` run's to read.
+Invoke `/elicit` on the seed — the skill call itself. Its first surface is the reading of the request: where and for whom the video is used, what it shows and how it shows it, and what that reading rests on. The decisions below that the reading leaves open follow it briefly, each as an open question carrying the value the build takes for it. Close with one plain sentence on what happens next: the build starts now, a wrong reading is theirs to stop with an interrupt, and the mp4 comes back to watch and approve or change. Then build without waiting for an answer; what the person says from then on, about the mp4 included, is the `/elicit` run's to read.
 
 ## What the video turns on
 
@@ -54,7 +54,7 @@ Where the kind of video comes into view — the request implies it, or the readi
 
 Where `/sketch` ran on an earlier round, the page continues from the version the person took, never rewritten from a description of it. Write the page as one HTML file in a folder of this run's own, with each supplied file copied in beside it, its canvas the frame shape this run took and its sound what this run took. The page draws every frame as a function of time — `window.DURATION` (seconds) and `window.seek(t)` drawing the frame for `t` from `t` alone — so every render draws the same frame for the same `t`. With a loop, the frame at `DURATION` meets the frame at 0.
 
-Where the build needs an act that reaches outside this session — installing a tool, downloading a library the page uses, fetching music, fonts, or images that carry a license — invoke `/bound` on how far that act may go, before it happens. `/bound` returns a map and owes no answer, so the act happens only where the person's turn on that map, or a source it cites, settles how far it may go; an act nothing settles does not happen.
+Where the build needs an act that reaches outside this session — installing a tool, downloading a library the page uses, fetching music, fonts, or images that carry a license — invoke `/bound` on how far that act may go, before it happens. The act happens only where the person's turn on that map, or a decision of theirs it cites, settles how far it may go; until then the build goes on without it, and the render names what stood in its place. An act nothing settles does not happen.
 
 ## Render and watch
 

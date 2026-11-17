@@ -70,13 +70,12 @@ valid answer. A mechanism lacking a falsifier does not fill this slot.
    commits, show what landed where and stop for recovery direction. A deliberately
    different settled landing belongs to a new invocation.
 4. Harvest intent for the changed surface: applicable rules, project-guide rationale,
-   adjacent design comments, and relevant context already at hand. Resolve the
-   project's goal and authority order from its own declarations; report what the
-   search did not find. Convey repository material as pointers. Convey loop-constituted
-   design decisions as content with their constitutive basis, keeping the user's
-   words where they establish direction. Only decisions holding independently of
-   current code state enter this design-decision ledger; a revised decision supersedes
-   its predecessor, with the retirement on the trace.
+   adjacent design comments, and relevant context already at hand. Resolve the project's
+   goal and authority order from its own declarations. Convey repository material as
+   pointers. Convey loop-constituted design decisions as content with their constitutive
+   basis, keeping the user's words where they establish direction. Only decisions
+   holding independently of current code state enter this design-decision ledger; a
+   revised decision supersedes its predecessor, with the retirement on the trace.
 5. **Preserve reviewer independence.** Convey design intent, allowing the reviewer to
    challenge defects that intent causes. Keep fix-status claims, dispositions,
    do-not-reflag instructions, shared-cause hypotheses, and Phase 3 split-consult
@@ -92,11 +91,7 @@ valid answer. A mechanism lacking a falsifier does not fill this slot.
 
 Use the selected host route and source adapter with the captured pointer and current
 intent bundle. Several designated sources review that same pointer in parallel, each in
-its own context; the round's findings are their union, each keeping its source. Read the
-returned review and diagnostics in full.
-
-When execution contradicts the expected contract, diagnose that mismatch; unresolved
-source or scope mismatches contribute no verdict and follow the incomplete-call rule.
+its own context; the round's findings are their union, each keeping its source.
 
 A call ending without a usable review contributes no verdict and satisfies neither
 convergence arm. Show what returned and ask whether to continue this round without that
@@ -118,8 +113,7 @@ check the asserted issue against the captured base, following moves/renames:
 | Absent at base; the change alone supplies the defect | `introduced` |
 | Absent at base but an independent condition is jointly necessary | `indeterminate` |
 
-`indeterminate` takes the pre-existing side for scope decisions. Fold genuine user
-judgments raised by verification into Phase 3's disposition gate.
+`indeterminate` takes the pre-existing side for scope decisions.
 
 ### Phase 3 — Read the cause and settle disposition
 
@@ -157,20 +151,15 @@ unrepaired with their dispositions, and no repair is chosen or applied.
 - **Mechanical / Extension:** a verified bug with a self-evident localized fix, or
   another deterministic edit whose plausible shapes do not materially diverge.
   Apply and report without a disposition gate.
-- **Judgment / Constitution:** materially different repair trajectories (withholding
-  a whole carrier, where another repair keeps part of what it delivers, is one), unresolved
-  design trade-offs, or unentrusted scope/risk decisions. Present evidence first,
-  then ask the live question in everyday language. Cluster findings by shared
-  disposition; when repair shape is the live axis, ask about trajectories rather
-  than asking whether to apply them all.
+- **Judgment / Constitution:** materially different repair trajectories (withholding a
+  whole carrier, where another repair keeps part of what it delivers, is one),
+  unresolved design trade-offs, or unentrusted scope/risk decisions.
 
 Relay a disposition already settled by the user's prior direction, the PR's purpose, a
 governing rule harvested under Phase 0 rule 4, or citable precedent, recording side
-effects. A proposed repair that a harvested rule excludes is not a live option: report
-it with that rule as its rejection basis before classifying, so any gate forms only over
-the admissible trajectories that remain. Packaging an identical mechanical fix does not
-reopen disposition; repairing a pre-existing-side defect needs a citable scope license
-(purpose, mandated sweep, or settled precedent), otherwise ask about expansion.
+effects. Packaging an identical mechanical fix does not reopen disposition; repairing a
+pre-existing-side defect needs a citable scope license (purpose, mandated sweep, or
+settled precedent), otherwise ask about expansion.
 
 For conflicting governing surfaces, cite an applicable declared authority order or
 settled direction to identify what governs. That settles direction, not repair shape
@@ -182,6 +171,13 @@ Where findings pull one clause or invariant in opposite directions and nothing
 governing decides between them, the clause holds a judgment the governing surfaces
 leave open: a Judgment gate showing both readings and any repair already landed in
 one direction, not a repair either reading settles.
+
+Read every repair as an ablation before classifying it. A finding grounds a repair
+through the consequence it verified; a finding that shows only something unstated
+grounds none and is dropped on that basis. The repair is the least text that resolves
+that consequence and loses no other obligation — an existing carrier before a new one,
+a removal before an addition — and that reading is a recommendation, not the
+disposition.
 
 **Recurrence:** identify the same defect by clause/invariant, not phrasing or line.
 An initial uninformed return is absorbed by settled policy. Instance-specific
@@ -274,13 +270,11 @@ so far, so the driving session records rather than re-derives it.
 
 When the processed round has not earned convergence below, refresh changed files and
 design intent and obtain a **full** re-review from each designated source, including
-after dispositions that landed no edit. Any edit invalidates the preceding verdict and
-always owes this review of the original surface plus all repairs. For PR scope, use the
-re-review pointer supplied by [PR scope](references/pr-scope.md). Where the ledger
-convention puts a repair's derivation in its commit message, that message is a
-fix-status claim under Phase 0 rule 5: point the re-review at the ledger through the
-pre-repair range only, and state that the repair commits are judged from their content
-in the diff as part of the whole range.
+after dispositions that landed no edit. For PR scope, use the re-review pointer supplied
+by [PR scope](references/pr-scope.md). Where the ledger convention puts a repair's
+derivation in its commit message, that message is a fix-status claim under Phase 0 rule
+5: point the re-review at the ledger through the pre-repair range only, and state that
+the repair commits are judged from their content in the diff as part of the whole range.
 
 These reviews are the next round's: Phase 1's rules for parallel sources and failed
 calls apply to them, and their findings and direction go straight to Phase 2. Converge
@@ -316,18 +310,16 @@ Apply: writer route (fork | brief | inline) → commits or new head, or tree sta
 Landing: repair destination (PR only)
 ```
 
-A round with several sources carries its Round, Exercised and Call lines once per source.
-
-Each verified finding carries base provenance; an applied fix also carries its
-predicate and sweep side effects. Carry the loop's check artifact, evidence, unexercised
-limits, and unavailable-check reasons with that repair's Relay/Gated entry; keep this
-loop-side evidence distinct from the source-reported `Exercised` line.
-Assign exactly one Relay/Gated home by whether the user was asked, including epistemic
-risk gates; of the fit pass, a correction `/contextualize` made without asking is Relay
-and an item it hands back as the user's is Gated. Host permission decisions are execution annotations. Record the fit pass as
-its own entry, with adaptation, any retroactive rejecting verdict, and the resulting
-artifact state and disposition. Preserve write discrepancies and their reconciliation;
-carried reasons are records, while subsequent reviews detect findings fresh.
+Each verified finding carries base provenance; an applied fix also carries its predicate
+and sweep side effects. Carry the loop's check artifact, evidence, unexercised limits,
+and unavailable-check reasons with that repair's Relay/Gated entry; keep this loop-side
+evidence distinct from the source-reported `Exercised` line. Assign exactly one
+Relay/Gated home by whether the user was asked, including epistemic risk gates; of the
+fit pass, a correction `/contextualize` made without asking is Relay and an item it
+hands back as the user's is Gated. Record the fit pass as its own entry, with
+adaptation, any retroactive rejecting verdict, and the resulting artifact state and
+disposition. Preserve write discrepancies and their reconciliation; carried reasons are
+records, while subsequent reviews detect findings fresh.
 
 At every exit, present the accumulated dispositions and residual,
 including standing source limits. Read [exit handover](references/exit-handover.md)

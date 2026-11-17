@@ -249,7 +249,7 @@ For PR scope, follow [PR scope](references/pr-scope.md) before the first edit.
 
 The driving session settles disposition and hands the apply pass to a writer.
 Where the host offers a full-context fork, one fork per apply pass is the default
-writer and carries steps 1, 4 and 5 below end to end; the host reference (for
+writer and carries steps 1, 4 and 5 below; the host reference (for
 Claude Code, [Claude Code](references/host-claude-code.md) § Writer fork) names the
 fork mechanism. Where the host offers only a fresh-context delegate, the
 driving session performs step 1 itself and hands the enumerated predicate and
@@ -259,9 +259,8 @@ the driving session writes inline. Under every route the scan holder is whoever
 performs step 1, and the writer is whoever performs steps 4 and 5.
 
 A writer returns to the driving session whenever it stops — at a gate it cannot
-settle, before step 4's `/contextualize` call, which the driving session makes because
-a protocol runs only in the main conversation and after which the writer is resumed
-with the sheet, or at the end of the pass — carrying what Trace and Exit requires of the pass
+settle, before step 4's `/contextualize` call, after which it is resumed with the
+sheet, or at the end of the pass — carrying what Trace and Exit requires of the pass
 so far, so the driving session records rather than re-derives it.
 
 1. The scan holder scans planned change points, adjacent interactions, and repeated

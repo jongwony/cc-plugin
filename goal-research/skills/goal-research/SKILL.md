@@ -17,8 +17,9 @@ Invoke directly with `/goal-research [runner] <research question>` when the pers
   epistemic-protocols `aitesis` plugin must be installed where the run executes.
 - **codex-plus** (this marketplace) — the `codex` runner, the default from Claude Code, is
   launched, continued, and read through it; where it is absent, designate `claude`.
-- **stint** (this marketplace) — the `claude` runner is a Stint, launched, continued, and
-  read through it; load `/stint` for the spawn, address, and resume mechanics.
+- **stint** (this marketplace) — the `claude` runner is a Stint, launched, continued, read,
+  and retired once the loop stops, through it; load `/stint` for the spawn, address, resume,
+  and retirement mechanics.
 
 ## Runner
 

@@ -8,7 +8,7 @@ flowchart LR
   B -. wrong reading: interrupt .-> A
   B --> P[page drawn from time]
   P -. an act outside this session .-> D["/bound"]
-  D -. once settled; until then without it .-> P
+  D -. once settled, until then without it .-> P
   P --> M[mp4]
   M --> W{watch the mp4}
   W -- changes --> P

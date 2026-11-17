@@ -24,7 +24,7 @@ FINDMY_LOCATION_CONFIG_END
 - `primary_device`: Find My 목록에 보이는 이름 그대로(보통 휴대폰)
 - `fallback_device`: 휴대폰 위치가 최근 것이 아닐 때 읽을 기기(예: Apple Watch). 비워 둬도 됩니다.
 
-두 값은 스크립트가 아니라 skill 안내문에 들어가, Claude가 어느 행을 읽을지 정하는 데 씁니다.
+`primary_device`는 skill 안내문이 스크립트에 `--device`로 넘깁니다. 스크립트는 이 값으로 위치가 갱신될 때까지 기다립니다. `--device` 없이 실행하면 10초만 기다리고 `fresh`는 `null`입니다. 두 값 모두 Claude가 어느 행을 읽을지 정하는 데도 씁니다.
 
 필요한 것: macOS, Python 3, Open Computer Use 1.1.3 이상(`npm i -g open-computer-use`, 접근성 권한), Find My 로그인. Mac이 잠긴 동안 읽으려면 Locked Use(`ocu locked-use enable`)가 켜져 있어야 합니다.
 

@@ -332,13 +332,21 @@ class Freshness(unittest.TestCase):
         fl.time.sleep.assert_called_with(fl.FRESH_POLL_S)
         self.quit.assert_called_once()
 
-    def test_the_poll_stops_at_the_cap_and_reports_not_fresh(self):
-        clock = iter(range(0, 1000, 10))
-        mock.patch.object(fl.time, "monotonic", side_effect=lambda: next(clock)).start()
-        with mock.patch.object(fl, "read_rows", return_value=[self.PAUSED]) as read:
+    def test_no_read_starts_past_the_cap_even_when_reads_are_slow(self):
+        now = [0.0]
+        starts = []
+        mock.patch.object(fl.time, "monotonic", side_effect=lambda: now[0]).start()
+        fl.time.sleep.side_effect = lambda s: now.__setitem__(0, now[0] + s)
+
+        def slow_read():
+            starts.append(now[0])
+            now[0] += 13
+            return [self.PAUSED]
+        with mock.patch.object(fl, "read_rows", side_effect=slow_read):
             code, result = run_main(["--device", "Phone A"])
         self.assertEqual((code, result["status"], result["fresh"], result["rows"]), (0, "ok", False, [self.PAUSED]))
-        self.assertLessEqual(read.call_count, fl.FRESH_CAP_S // 10 + 1)
+        self.assertTrue(all(start < fl.FRESH_CAP_S for start in starts), starts)
+        self.assertEqual(starts, [0, 15])
 
     def test_without_a_device_the_wait_is_fixed_and_fresh_is_unknown(self):
         with self.rows_in_turn([self.PAUSED]) as read:

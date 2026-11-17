@@ -125,11 +125,11 @@ def wait_for_rows(result, device):
     if not device:
         time.sleep(REFRESH_WAIT_S)
         return read_rows()
-    started = time.monotonic()
+    deadline = time.monotonic() + FRESH_CAP_S
     while True:
         rows = read_rows()
         result["fresh"] = is_fresh(rows, device)
-        if result["fresh"] or time.monotonic() - started >= FRESH_CAP_S:
+        if result["fresh"] or time.monotonic() + FRESH_POLL_S >= deadline:
             return rows
         time.sleep(FRESH_POLL_S)
 

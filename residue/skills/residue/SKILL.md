@@ -46,8 +46,9 @@ settled, a finding the request did not ask for — and where each one goes.
    unfiltered, in three kinds:
    - **Owed** — an act the session said it would take, or was given, and has
      not taken. For work that has landed, invoke `/contextualize` once over all
-     of it; each misfit its sheet hands back or holds is owed. The sheet
-     already shows what each one turns on, so step 3 asks only the rest.
+     of it; each misfit its sheet does not show repaired is owed, and one it
+     hands back waits on the user's handling there. The sheet already shows
+     what each one turns on, so step 3 asks only the rest.
    - **Unanswered** — a question either side asked that no turn or source
      settled.
    - **Found** — something noticed along the way that the request did not ask

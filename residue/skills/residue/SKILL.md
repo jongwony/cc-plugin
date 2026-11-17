@@ -46,9 +46,9 @@ settled, a finding the request did not ask for — and where each one goes.
    unfiltered, in three kinds:
    - **Owed** — an act the session said it would take, or was given, and has
      not taken. For work that has landed, invoke `/contextualize` once over all
-     of it; each misfit its sheet does not show repaired is owed, and one it
-     hands back waits on the user's handling there. The sheet already shows
-     what each one turns on, so step 3 asks only the rest.
+     of it. A misfit is owed unless its sheet shows it repaired, withdrawn, or
+     resolved to stay as it is; step 3 does not ask about the ones the sheet
+     hands back as the user's.
    - **Unanswered** — a question either side asked that no turn or source
      settled.
    - **Found** — something noticed along the way that the request did not ask
@@ -73,7 +73,8 @@ settled, a finding the request did not ask for — and where each one goes.
      the status immediately before proposing, say the unit is closed, and leave
      the destination to the user.
    - **Needs the user's decision** — whether it leaves the session is itself
-     undecided: say the decision is needed and what it turns on.
+     undecided, or its handling is the user's on the `/contextualize` sheet:
+     say the decision is needed and what it turns on.
 5. **Report once**, one line per item: its kind, the item in plain words, the
    turn or file it came from, whether it is on the chart, and its disposition.
    Where nothing is open, say so in one line with what was read — the stretch

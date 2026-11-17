@@ -22,8 +22,8 @@ running it. Each step holds as written, with these differences:
   through `unfold`'s project resolution. None found: no chart, said so.
 - **Step 1, `/contextualize`** is invoked once over the target's landed work,
   against the intents in its record and its chart's state in Linear as read
-  now, with the run's write scope stated in the invocation: nothing of the
-  target's — its artifacts, its worktree, its chart. Where the chart was
+  now, stating that the run writes nothing — the target's artifacts, worktree
+  and chart included. Where the chart was
   resolved and Linear cannot be reached from the session running this
   procedure, it is still invoked, against the record's intents alone, and the
   chart's state is reported as could not be checked. Each misfit it finds comes

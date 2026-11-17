@@ -41,7 +41,8 @@ Ask equally what the artifact carries that its remaining text already recovers: 
 obligation fails on a clause's deletion, and which two places state one thing and would
 have to be kept in step. Distinguish source analysis from executed checks.
 Request `direction` after findings on a non-approval; no single mechanism is a
-valid answer. A mechanism lacking a falsifier does not fill this slot.
+valid answer. A mechanism lacking a falsifier does not fill this slot. The loop
+supplies neither reach nor a source direction by inference.
 
 ## Loop
 
@@ -52,7 +53,8 @@ written for: you read it, and by inference over the context you settle each elem
 open. Every `axiom` is one of those judgments — a black box to the contract, yours to make from
 the material in front of you; its doc comment says what you judge there, and nothing in this
 block decides it for you. Every `def`, `inductive`, and `structure` is fixed by the contract.
-The block fixes where the loop goes; what each phase does is its rules below.
+The block fixes where the loop goes from one phase to the next; what a phase does, and how it
+resumes after a gate, is its rules below.
 -/
 
 namespace ReviewLoop
@@ -84,8 +86,9 @@ inductive Entry
   /-- the loop stops, naming the missing capability -/
   | missing
 
-/-- `designated`: the sources this invocation names, each with any effort level it names.
-    `invokable`: what the host can run now. -/
+/-- `designated`: the names of the sources this invocation designates; an effort level designated
+    for a source travels with it to its adapter and is not compared here. `invokable`: what the
+    host can run now. -/
 def entry (designated invokable : List Source) : Entry :=
   match designated, invokable with
   | [], []    => .missing
@@ -166,7 +169,8 @@ noncomputable def handling (s : Session) (f : Finding) : Handling :=
 
 /-! ── APPLY PASS ── -/
 
-/-- What the host offers for an apply pass. -/
+/-- The most the host offers for an apply pass: a full-context fork where it offers one, otherwise
+    a fresh-context delegate, otherwise none. -/
 inductive Delegation | fullContextFork | freshContextDelegate | none
 
 /-- The writer route. `fork`: one full-context fork per apply pass. `brief`: a fresh-context
@@ -205,13 +209,13 @@ axiom RecurrencePending : Session → Prop
 /-- **Your reading**: an edit has landed since the latest review. -/
 axiom EditedSinceReview : Session → Prop
 
-/-- **Your reading**, for one designated source on the current reviewed artifact: it returned
-    `approve`, or a full re-review returned zero new non-refuted findings. A finding is new in its
-    discovery review even when deferred or handed over; its later return is not new and preserves
-    the disposition. A call that ended without a usable review satisfies neither. -/
+/-- **Your reading**, for one source the loop is using, on the current reviewed artifact: it
+    returned `approve`, or a full re-review returned zero new non-refuted findings. A finding is
+    new in its discovery review even when deferred or handed over; its later return is not new and
+    preserves the disposition. -/
 axiom Clear : Session → Source → Prop
 
-/-- **Your reading**: every designated source completed a full re-review. -/
+/-- **Your reading**: every source the loop is using completed a full re-review. -/
 axiom FullyReReviewed : Session → List Source → Prop
 
 /-- **Your reading** of Phase 3: the verified set names a shared cause. -/
@@ -225,7 +229,9 @@ axiom RootsResolved : Session → Prop
 def RootResolved (sources : List Source) (s : Session) : Prop :=
   FullyReReviewed s sources ∧ ¬ SharedCause s ∧ RootsResolved s ∧ ¬ RecurrencePending s
 
-/-- Convergence holds only of the current reviewed artifact. -/
+/-- Convergence holds only of the current reviewed artifact. `sources`, here and in `RootResolved`
+    and `next`: the sources the loop is using — those `entry` settled (`Entry.use`'s list, or the
+    one `Entry.relay` names), as the user has since changed them at a sources gate. -/
 def Converged (sources : List Source) (s : Session) : Prop :=
   AllDispositioned s ∧ ¬ RecurrencePending s ∧ ¬ EditedSinceReview s ∧
     ((∀ x ∈ sources, Clear s x) ∨ RootResolved sources s)
@@ -243,7 +249,8 @@ noncomputable def exitAs (sources : List Source) (s : Session) : Exit :=
 /-! ── LOOP ── -/
 
 /-- One round is `obtain` (Phase 1), `verify` (Phase 2), `settle` (Phase 3), `apply` (Phase 4),
-    `decide` (Phase 5); `enter` is Phase 0. -/
+    `decide` (Phase 5's reading of convergence); `enter` is Phase 0. From the second round on,
+    `obtain` is the full re-review Phase 5 describes, with its pointer. -/
 inductive Phase | enter | obtain | verify | settle | apply | decide
 
 /-- What only the user's turn settles. -/
@@ -258,7 +265,7 @@ inductive Gate
   | failedCall
   /-- `Handling.gate`, or a direction Phase 3 leaves to the user -/
   | disposition
-  /-- Phase 4 rule 2: an unsettled epistemic risk -/
+  /-- Phase 4 step 2: an unsettled epistemic risk -/
   | risk
 
 /-- **Your reading**: the gate this phase's work has raised that no turn of the user's has yet
@@ -274,11 +281,13 @@ axiom RepairOwed : Session → Prop
 inductive Step
   | go (p : Phase)
   /-- the gate is presented and the turn ends; silence settles nothing, and what waits on the gate
-      does not proceed -/
+      does not proceed; on the user's answer the phase resumes where it held -/
   | hold (g : Gate)
   | exit (e : Exit)
 
 open Classical in
+/-- Read when phase `p`'s work is complete. A judgment Phase 4 returns to Phase 3 is settled inside
+    the apply pass, which then resumes (step 6): the phase stays `apply`. -/
 noncomputable def next (sources : List Source) (s : Session) (p : Phase) : Step :=
   if UserEnds s then .exit (exitAs sources s)
   else
@@ -343,6 +352,11 @@ Use the selected host route and source adapter with the captured pointer and cur
 intent bundle. Several designated sources review that same pointer in parallel, each in
 its own context; the round's findings are their union, each keeping its source.
 
+Use each source's first read-only review call to confirm its command and contract
+through startup, any skill expansion, and returned output. When execution contradicts
+the expected contract, diagnose that mismatch; unresolved source or scope mismatches
+contribute no verdict and follow the incomplete-call rule.
+
 A call ending without a usable review contributes no verdict and satisfies neither
 convergence arm. Show what returned and ask whether to continue this round without that
 source's review, switch source, or stop. A failure that persists makes the source
@@ -353,8 +367,8 @@ source omitting reach leaves the missing report visible as residual.
 ### Phase 2 — Verify and attribute
 
 Invoke `/inquire` — the skill call itself, for every finding however plain it looks — on
-each finding against the current artifact before acting. `Refuted` and `provenance` are
-read from it.
+each finding against the current artifact before acting. `Refuted` is read from it; each
+survivor then takes its `provenance`.
 
 ### Phase 3 — Read the cause and settle disposition
 

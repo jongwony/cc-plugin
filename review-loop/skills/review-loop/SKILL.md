@@ -8,18 +8,6 @@ skills:
 
 # Review Loop
 
-Drive a code/PR change through independent review, verification, disposition, repair,
-and full re-review. Each finding ends in a verified repair, a cited drop, a successor
-handover, or declared residual. Measure the artifact against the project's own stated
-goal and governing conventions, in its declared authority order.
-
-## Dependency
-
-- **Aitesis** (`/inquire`) and **Epharmoge** (`/contextualize`) — called in Phase 2 and
-  Phase 4; the epistemic-protocols `aitesis` and `epharmoge` plugins must be installed.
-- **codex-plus** (this marketplace) — the `codex` source runs through it; install it to
-  designate `codex`.
-
 ## Caller Signature
 
 ```
@@ -30,18 +18,11 @@ scope   : PR number | implicit current-branch PR / working tree
 landing : head | stacked       (PR scope only)
 ```
 
-Read designations from the request's words as well as its arguments. `source` selects
-the reviewer; the host is the environment driving the loop, not another user choice.
-Read only that host's reference before determining availability:
+Read only the driving host's reference before determining availability:
 
 | Host | `source=code-review` | `source=codex` | Reference |
 |---|---|---|---|
 | Claude Code | Fork the available Claude `/code-review` skill | Run a fresh codex session through codex-plus | [Claude Code](references/host-claude-code.md) |
-
-Other hosts may supply the same capabilities. Record the actual host, reviewer, and
-execution route; a new process provides a separate review context, not evidence of
-an independent model family. Sources remain runtime parameters rather than fixed
-frontmatter dependencies.
 
 ## Source Interface
 
@@ -61,13 +42,6 @@ obligation fails on a clause's deletion, and which two places state one thing an
 have to be kept in step. Distinguish source analysis from executed checks.
 Request `direction` after findings on a non-approval; no single mechanism is a
 valid answer. A mechanism lacking a falsifier does not fill this slot.
-
-A native report may be normalized by its adapter. An explicit successful empty
-findings result can mean approval; failed, skipped, missing, or unreadable review
-output cannot. Determine output capabilities from the available implementation. A
-source with no reach channel is declared once at entry and again at exit; a missing
-report from a capable source is a round-specific gap. The loop supplies neither
-reach nor a source direction by inference.
 
 ## Rules
 
@@ -106,37 +80,30 @@ reach nor a source direction by inference.
 5. **Preserve reviewer independence.** Convey design intent, allowing the reviewer to
    challenge defects that intent causes. Keep fix-status claims, dispositions,
    do-not-reflag instructions, shared-cause hypotheses, and Phase 3 split-consult
-   answers out of reviewer context
-   and out of surfaces harvested into it. A description of a decision carries no
-   instruction about which verdict to return. Calibrate source severity by actual
-   consequence against the mission: silent wrong results are critical, broken runtime
-   behavior high, edge-condition failures medium, and consistency-only discrepancies
-   low/suggestion; a convention-explained wording preference is not a defect.
-6. Announce once that the user may end the loop at any time, receiving the trace and
-   an optional offer to record what outlives it. Execution permissions and call
-   supervision belong to the host; the loop provides no timeout guarantee itself.
+   answers out of reviewer context and out of surfaces harvested into it. Calibrate
+   source severity by actual consequence against the mission: silent wrong results are
+   critical, broken runtime behavior high, edge-condition failures medium, and
+   consistency-only discrepancies low/suggestion; a convention-explained wording
+   preference is not a defect.
+6. Announce once that the user may end the loop at any time, receiving the trace and an
+   optional offer to record what outlives it.
 
 ### Phase 1 — Obtain the round's reviews
 
 Use the selected host route and source adapter with the captured pointer and current
-intent bundle. Several designated sources review that same pointer in parallel, each
-in its own context; the round's findings are their union, each keeping its source. Read the returned review and diagnostics in full. Record actual call
-settings and any reported failure cause as provenance, not coverage.
+intent bundle. Several designated sources review that same pointer in parallel, each in
+its own context; the round's findings are their union, each keeping its source. Read the
+returned review and diagnostics in full.
 
-Use each source's first read-only review call to confirm its command and contract
-through startup, any skill expansion, and returned output. Reuse matching implementation
-evidence as the adapter specifies. Before accepting a verdict, establish that its
-source actually reviewed the captured surface and completed successfully.
 When execution contradicts the expected contract, diagnose that mismatch; unresolved
 source or scope mismatches contribute no verdict and follow the incomplete-call rule.
 
 A call ending without a usable review contributes no verdict and satisfies neither
-convergence arm. Show what returned and ask whether to continue this round without
-that source's review, switch source, or stop. A failure that persists makes the source
-unavailable under Phase 0 rule 1, where its designation is settled. Continuing still
-owes that source a completed review before convergence.
-An extraction failure calls for inspecting raw output; it does not prove source
-failure. A capable source omitting reach leaves the missing report visible as residual.
+convergence arm. Show what returned and ask whether to continue this round without that
+source's review, switch source, or stop. A failure that persists makes the source
+unavailable under Phase 0 rule 1, where its designation is settled. An extraction
+failure calls for inspecting raw output; it does not prove source failure. A capable
+source omitting reach leaves the missing report visible as residual.
 
 ### Phase 2 — Verify and attribute
 
@@ -151,10 +118,8 @@ check the asserted issue against the captured base, following moves/renames:
 | Absent at base; the change alone supplies the defect | `introduced` |
 | Absent at base but an independent condition is jointly necessary | `indeterminate` |
 
-An unchanged copy left inconsistent by this change is introduced drift, not an
-independent contributor. `indeterminate` takes the pre-existing side for scope
-decisions. Provenance informs scope; it neither licenses nor excludes repair. Fold
-genuine user judgments raised by verification into Phase 3's disposition gate.
+`indeterminate` takes the pre-existing side for scope decisions. Fold genuine user
+judgments raised by verification into Phase 3's disposition gate.
 
 ### Phase 3 — Read the cause and settle disposition
 
@@ -171,19 +136,18 @@ withholding the loop's dispositions from both. A consult is not a review. Its an
 Phase 2 and this reading weigh, never a verdict or a vote for either side.
 
 Read the verified set for a shared mechanism, competing explanations, unexplained
-findings, and a falsifier. No shared cause is a valid result. A source direction is
-one candidate, reconsidered after verification; agreement with the loop's reading
-is not independent corroboration. Materially different root and local repairs are
-a plan-level judgment even when each isolated fix looks mechanical.
+findings, and a falsifier. A source direction is one candidate, reconsidered after
+verification; agreement with the loop's reading is not independent corroboration.
+Materially different root and local repairs are a plan-level judgment even when each
+isolated fix looks mechanical.
 
-A shared-cause reading may direct repair only while its falsifier holds off. It
-neither drops findings nor becomes constituted design intent. Recheck the falsifier
-when the surviving set changes or a repair lands; retire a defeated reading and
-reclassify unlanded work. Applied repairs stand for the next full review. Across
-rounds, compare new findings with prior fix predicates on the trace: a previously
-matching site missed by a sweep calls for completing the enumeration; an instance
-outside that predicate calls for reconsidering the abstraction. A later-created or
-newly matching site does not falsify an earlier sweep.
+A shared-cause reading may direct repair only while its falsifier holds off. It neither
+drops findings nor becomes constituted design intent. Recheck the falsifier when the
+surviving set changes or a repair lands; retire a defeated reading and reclassify
+unlanded work. Across rounds, compare new findings with prior fix predicates on the
+trace: a previously matching site missed by a sweep calls for completing the
+enumeration; an instance outside that predicate calls for reconsidering the abstraction.
+A later-created or newly matching site does not falsify an earlier sweep.
 
 Where that reading, on a full re-review every designated source completed, names no
 shared cause, every root on the trace maps to its resolution, and no recurrence awaits
@@ -200,14 +164,13 @@ unrepaired with their dispositions, and no repair is chosen or applied.
   disposition; when repair shape is the live axis, ask about trajectories rather
   than asking whether to apply them all.
 
-Relay a disposition already settled by the user's prior direction, the PR's purpose,
-a governing rule harvested under Phase 0 rule 4, or citable precedent, recording side
+Relay a disposition already settled by the user's prior direction, the PR's purpose, a
+governing rule harvested under Phase 0 rule 4, or citable precedent, recording side
 effects. A proposed repair that a harvested rule excludes is not a live option: report
-it with that rule as its rejection basis before classifying, so any gate forms only
-over the admissible trajectories that remain. Reopen only a genuinely live competing
-judgment. Packaging an identical mechanical fix does not reopen disposition; repairing
-a pre-existing-side defect needs a citable scope license (purpose, mandated sweep,
-or settled precedent), otherwise ask about expansion.
+it with that rule as its rejection basis before classifying, so any gate forms only over
+the admissible trajectories that remain. Packaging an identical mechanical fix does not
+reopen disposition; repairing a pre-existing-side defect needs a citable scope license
+(purpose, mandated sweep, or settled precedent), otherwise ask about expansion.
 
 For conflicting governing surfaces, cite an applicable declared authority order or
 settled direction to identify what governs. That settles direction, not repair shape
@@ -219,13 +182,6 @@ Where findings pull one clause or invariant in opposite directions and nothing
 governing decides between them, the clause holds a judgment the governing surfaces
 leave open: a Judgment gate showing both readings and any repair already landed in
 one direction, not a repair either reading settles.
-
-Read every repair as an ablation before classifying it. A finding grounds a repair
-through the consequence it verified; a finding that shows only something unstated
-grounds none and is dropped on that basis. The repair is the least text that resolves
-that consequence and loses no other obligation — an existing carrier before a new one,
-a removal before an addition — and that reading is a recommendation, not the
-disposition.
 
 **Recurrence:** identify the same defect by clause/invariant, not phrasing or line.
 An initial uninformed return is absorbed by settled policy. Instance-specific
@@ -264,19 +220,16 @@ sheet, or at the end of the pass — carrying what Trace and Exit requires of th
 so far, so the driving session records rather than re-derives it.
 
 1. The scan holder scans planned change points, adjacent interactions, and repeated
-   instances. Derive each fix's predicate from the violated invariant and verified cause.
-   Trace relevant state through production, transfer, invalidation, and consumption,
-   including transitions and interleavings; where a repair changes what reaches whom,
-   the consumers are every recipient of that delivery — a host without the expected
-   input, a partial install, an inherited context, a fresh delegate, a seeded copy —
-   with its absence paths, not only the recipient the finding names. Enumerate the
-   predicate's sites. State the
-   observation that would falsify the repair and select bounded checks from it. Return
-   a live judgment about consistency or evidence support to Phase 3 before its
-   dependent repair.
-   Semantically verify and risk-screen every site before writing it; a new unscreened
-   site returns for screening. A nameless predicate licenses no write.
-   Sweep matching sites in this apply pass within the settled scope, reporting expansion.
+   instances. Derive each fix's predicate from the violated invariant and verified
+   cause. Trace relevant state through production, transfer, invalidation, and
+   consumption, including transitions and interleavings; where a repair changes what
+   reaches whom, the consumers are every recipient of that delivery, with its absence
+   paths, not only the recipient the finding names. Enumerate the predicate's sites.
+   State the observation that would falsify the repair and select bounded checks from
+   it. Return a live judgment about consistency or evidence support to Phase 3 before
+   its dependent repair. Semantically verify and risk-screen every site before writing
+   it; a new unscreened site returns for screening. Sweep matching sites in this apply
+   pass within the settled scope, reporting expansion.
 2. Risk is separate from Mechanical/Judgment classification. Route substrate actions
    to host permissions; an unsettled epistemic risk goes to the user for apply, defer,
    or drop. Rejection blocks an edit not yet written.
@@ -297,16 +250,12 @@ so far, so the driving session records rather than re-derives it.
 4. Read every written and swept site against its disposition and exercise the repaired
    invariant through the transitions, orderings and recipients identified by the scan,
    absence paths included; a check offered as a guard shows that it rejects the failure
-   it names. Repair a known
-   discrepancy within the settled disposition and re-check the affected bundle before
-   hand-forward; a live judgment returns to Phase 3. An explicitly accepted or deferred
-   limit remains residual.
-   Record unavailable checks with their reason and consequence for confidence. These
-   checks establish bounded conformance; full re-review independently judges the artifact.
-   The driving session invokes `/contextualize` — the skill call itself, however small
-   the bundle — once on
-   the whole applied bundle against the design-decision
-   ledger and touched-surface conventions.
+   it names. Repair a known discrepancy within the settled disposition and re-check the
+   affected bundle before hand-forward; a live judgment returns to Phase 3. Record
+   unavailable checks with their reason and consequence for confidence. The driving
+   session invokes `/contextualize` — the skill call itself, however small the bundle —
+   once on the whole applied bundle against the design-decision ledger and
+   touched-surface conventions.
 5. An adaptation that `/contextualize` actually writes re-enters scan, site screening,
    sweep, and write verification once. What its sheet hands back as the user's returns
    to Phase 3 as a Judgment item, with the handling the sheet proposed.
@@ -326,20 +275,17 @@ so far, so the driving session records rather than re-derives it.
 When the processed round has not earned convergence below, refresh changed files and
 design intent and obtain a **full** re-review from each designated source, including
 after dispositions that landed no edit. Any edit invalidates the preceding verdict and
-always owes this review of the original surface plus all repairs. For PR scope, use the re-review
-pointer supplied by [PR scope](references/pr-scope.md).
-For working-tree scope, compare against the captured base and include current
-untracked files even if the loop has since committed. Keep review base fixed.
-Where the ledger convention puts a repair's derivation in its commit message, that
-message is a fix-status claim under Phase 0 rule 5: point the re-review at the ledger
-through the pre-repair range only, and state that the repair commits are judged from
-their content in the diff as part of the whole range.
+always owes this review of the original surface plus all repairs. For PR scope, use the
+re-review pointer supplied by [PR scope](references/pr-scope.md). Where the ledger
+convention puts a repair's derivation in its commit message, that message is a
+fix-status claim under Phase 0 rule 5: point the re-review at the ledger through the
+pre-repair range only, and state that the repair commits are judged from their content
+in the diff as part of the whole range.
 
 These reviews are the next round's: Phase 1's rules for parallel sources and failed
-calls apply to them, and their findings and direction go straight to Phase 2. Process findings even alongside approval, and
-perform the goal reading. Converge only on the current reviewed artifact when every
-surfaced finding is dispositioned, no recurrence awaits diagnosis, no edit has landed
-since the review, and either:
+calls apply to them, and their findings and direction go straight to Phase 2. Converge
+only on the current reviewed artifact when every surfaced finding is dispositioned, no
+recurrence awaits diagnosis, no edit has landed since the review, and either:
 
 - for every designated source, the source returned `approve` or a full re-review
   returned zero new non-refuted findings; or

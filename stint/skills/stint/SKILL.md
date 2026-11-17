@@ -125,9 +125,14 @@ Independent work needs something to start it. Route to exactly one.
 ### Under another account
 
 - **A Stint runs on another Claude account when its spawn carries that account's configuration
-  directory**: prefix the spawn line with `CLAUDE_CONFIG_DIR=<alt-config>`. Credentials are
-  stored per configuration directory; signing in is a browser step the user takes once — hand
-  them `! CLAUDE_CONFIG_DIR=<alt-config> claude auth login`.
+  directory**: prefix the spawn line with `CLAUDE_CONFIG_DIR=<alt-config>`.
+- **Set `<alt-config>` up in this order: the links first, then the sign-in.** Create the
+  directory with the links below before anything runs under it. A name that already exists
+  there as a directory is not linked over — `ln -s` puts the link inside it and succeeds — so
+  move such an entry aside first and check each link with `ls -la`. Credentials are stored per
+  configuration directory; signing in is a browser step the user takes once, after the links —
+  hand them `! CLAUDE_CONFIG_DIR=<alt-config> claude auth login`. It writes `.claude.json`
+  into `<alt-config>` as that account's own file.
 - **`<alt-config>/sessions` is a symlink to `<config>/sessions`.** The session registry is per
   configuration directory, so without the link neither side lists the other and the handshake
   never reaches the creator. Link `projects/` too, so the Stint's transcript is read from this

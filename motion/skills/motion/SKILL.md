@@ -13,7 +13,7 @@ skills:
 
 Invoke with `/motion <what the video is for>`. The person may know nothing about motion graphics or about writing prompts; the skill is written for that person.
 
-**Composition**: `/elicit` carries the contract for what the person's intent turns on; its run stays open beside the build rather than ahead of it. `/sketch`, `/preview`, and `/bound` each carry their own contract and enter only where their deficit shows in this run: `/sketch` and `/preview` on the person's turn on an mp4, `/bound` before an act of the build that reaches outside this session. This skill supplies what is particular to a code-rendered video: how a request is read before anything is built, the decisions a video turns on, and how a page drawn from time becomes something to watch and then an mp4.
+**Composition**: `/elicit` carries the contract for what the person's intent turns on; its run reads the person's turns beside the build rather than ahead of it. `/sketch`, `/preview`, and `/bound` each carry their own contract and enter only where their deficit shows in this run: `/sketch` and `/preview` on the person's turn on an mp4, `/bound` before an act of the build that reaches outside this session. This skill supplies what is particular to a code-rendered video: how a request is read before anything is built, the decisions a video turns on, and how a page drawn from time becomes something to watch and then an mp4.
 
 Respond in the person's language.
 

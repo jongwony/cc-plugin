@@ -23,8 +23,8 @@ agrees.
 ## Procedure
 
 Whether work that has landed fits what was asked and where it landed is
-`/contextualize`'s to check, on its own sheet and with its own question; this
-procedure invokes it once and takes what it leaves open. What this procedure
+`/contextualize`'s to check, on its own sheet; this procedure invokes it once,
+stating that the run writes nothing, and takes what the sheet leaves open. What this procedure
 covers is what never became a result — an act not yet taken, a question not
 settled, a finding the request did not ask for — and where each one goes.
 
@@ -46,8 +46,8 @@ settled, a finding the request did not ask for — and where each one goes.
    unfiltered, in three kinds:
    - **Owed** — an act the session said it would take, or was given, and has
      not taken. For work that has landed, invoke `/contextualize` once over all
-     of it; a misfit it leaves open is owed. Its question is the round for
-     those items, and step 3 asks only the rest.
+     of it; each misfit its sheet hands back or holds is owed. The sheet
+     already shows what each one turns on, so step 3 asks only the rest.
    - **Unanswered** — a question either side asked that no turn or source
      settled.
    - **Found** — something noticed along the way that the request did not ask

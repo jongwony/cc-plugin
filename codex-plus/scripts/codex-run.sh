@@ -12,18 +12,18 @@ set -euo pipefail
 CDPATH=
 
 # Defaults
-readonly DEFAULT_MODEL="gpt-6-astra"
+readonly DEFAULT_MODEL="gpt-6.2-astra"
 # medium is a starting point, not a ceiling. Raising effort is a per-call
 # judgment made from the task in front of the caller; a default cannot read the
 # task, so pinning the top of the ladder here spends it on every run that never
 # needed it. OpenAI's own guidance for the current generation is to start at
 # medium and compare against neighbours on representative work rather than
-# assume the highest effort wins. Callers escalate to high, xhigh or max
+# assume the highest effort wins. Callers escalate to high, xhigh, max or ultra
 # deliberately.
 #
 # astra's ladder is what `codex debug models` reports for it. It has no
-# `none` rung, unlike the gpt-5.6 family — passing one is codex's error to
-# report, not this script's to pre-empt.
+# `none` rung — passing one is codex's error to report, not this script's to
+# pre-empt.
 readonly DEFAULT_EFFORT="medium"
 # workspace-write, not read-only, for one reason: the network. codex exposes no
 # network switch under read-only — the toggle lives in the
@@ -48,8 +48,8 @@ usage() {
 Usage: codex-run.sh [options] <prompt_file>
 
 Options:
-  -m, --model MODEL      Model name (default: gpt-6-astra)
-  -r, --effort EFFORT    Reasoning effort: low|medium|high|xhigh|max (default:
+  -m, --model MODEL      Model name (default: gpt-6.2-astra)
+  -r, --effort EFFORT    Reasoning effort: low|medium|high|xhigh|max|ultra (default:
                          medium, a starting point rather than a ceiling —
                          escalate per task. astra has no `none` rung)
   -f, --fast             Request codex's fast (priority) service tier. codex has
@@ -74,7 +74,7 @@ Options:
                          the only resume path — there is no --last fallback).
                          A resumed turn does not inherit the session's model or
                          effort: pass -m and -r again to stay on them, or the
-                         turn runs on this script's fallback (gpt-6-astra,
+                         turn runs on this script's fallback (gpt-6.2-astra,
                          medium). -s has no effect on resume: `codex exec
                          resume` takes no sandbox option, so the turn runs
                          under the sandbox_mode of the codex config in force

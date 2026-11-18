@@ -40,6 +40,6 @@ a decision, an execution, an end-to-end check — and holds what the prompt owes
 ## Choosing the model and effort
 
 - A model or effort the caller already named is the answer; pass it through.
-- Otherwise the model is `gpt-6-astra`; an end-to-end or browser run goes to
+- Otherwise the model is `gpt-6.2-astra`; an end-to-end or browser run goes to
   `gpt-6-luna`.
 - Start effort at `medium` and move it by the task's reasoning depth.

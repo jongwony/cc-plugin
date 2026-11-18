@@ -171,11 +171,9 @@ ensure_plugin() {
   fi
 }
 
-ensure_plugin epistemic-cooperative@epistemic-protocols
 ensure_plugin route@epistemic-protocols
 
-# --- Tavily MCP: how the epistemic-cooperative goal-research skill reaches
-# external search. The codex side of cloud-setup.sh keeps the key off disk with
+# --- Tavily MCP: how cc-plugin's goal-research skill reaches external search. The codex side of cloud-setup.sh keeps the key off disk with
 # `--bearer-token-env-var`; `claude mcp add` has no equivalent, and ${VAR}
 # expansion in MCP config is a .mcp.json feature that user scope does not
 # share, so the value is resolved here and lands in the user config. That is

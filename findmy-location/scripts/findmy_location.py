@@ -2,7 +2,9 @@
 """Print Find My's device-list rows, as the app shows them, in one JSON line."""
 import argparse
 import datetime
+import fcntl
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -13,10 +15,17 @@ READ = pathlib.Path(__file__).with_name("read_rows.mjs")
 MARKER = "FINDMY_ROWS "
 ROW_ID = " ID: ListEntityRow"
 REFRESH_WAIT_S = 10
+FRESH_POLL_S = 2
+FRESH_CAP_S = 30
+NOT_A_LOCATION = ("일시 정지됨", "발견된 위치 없음")
 SHORT_TIMEOUT_S = 5
 WAKE = ["caffeinate", "-u", "-t", "120"]
 WAKE_SETTLE_S = 2
 UNOBSERVED = "could not observe a protected GUI session becoming unlocked"
+LOCK_PATH = pathlib.Path.home() / "Library" / "Caches" / "findmy-location" / "session.lock"
+LOCK_WAIT_S = 180
+LOCK_POLL_S = 1
+QUIT_WAIT_S = 5
 
 
 class OcuError(Exception):
@@ -100,7 +109,32 @@ def locked_use_status():
     return session.get("state"), status.get("available") is True, (str(blockers[0]) if blockers else None)
 
 
-def refreshed_rows(result):
+def device_row(rows, device):
+    prefix = device + ", "
+    return next((row for row in rows if row.startswith(prefix)), None)
+
+
+def is_fresh(rows, device):
+    """The device's row exists and shows a location rather than a pause or no location."""
+    row = device_row(rows, device)
+    return row is not None and not any(marker in row for marker in NOT_A_LOCATION)
+
+
+def wait_for_rows(result, device):
+    """Read the rows once Find My has updated: poll until the device's row is fresh, or wait the fixed time when no device is named."""
+    if not device:
+        time.sleep(REFRESH_WAIT_S)
+        return read_rows()
+    deadline = time.monotonic() + FRESH_CAP_S
+    while True:
+        rows = read_rows()
+        result["fresh"] = is_fresh(rows, device)
+        if result["fresh"] or time.monotonic() + FRESH_POLL_S >= deadline:
+            return rows
+        time.sleep(FRESH_POLL_S)
+
+
+def refreshed_rows(result, device=None):
     """Bring Find My to the front, let it update, read, and return focus to the app that was in front."""
     front, reason = run_bounded(["osascript", "-e", 'tell application "System Events" to get bundle identifier of first process whose frontmost is true'])
     _, failed = run_bounded(["open", "-b", FINDMY])
@@ -108,8 +142,7 @@ def refreshed_rows(result):
         raise OcuError("Find My could not be brought forward: " + failed)
     result["refreshed"] = True
     try:
-        time.sleep(REFRESH_WAIT_S)
-        return read_rows()
+        return wait_for_rows(result, device)
     finally:
         if not front:
             result.update(focus_restored=False, message="front app unknown: " + (reason or "osascript returned nothing"))
@@ -120,23 +153,99 @@ def refreshed_rows(result):
                 result["message"] = failed
 
 
+class Lifecycle:
+    """One session at a time: hold the lock, start Find My if needed, and quit it on the way out.
+
+    The lock is an flock, so the kernel drops it when its holder dies; the file keeps the holder's pid only for diagnosis."""
+
+    def __init__(self, result, path=None, wait_s=None):
+        self.result = result
+        self.path = path or LOCK_PATH
+        self.wait_s = LOCK_WAIT_S if wait_s is None else wait_s
+        self.fd = None
+
+    def __enter__(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o644)
+        started = time.monotonic()
+        while True:
+            try:
+                fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                waited = time.monotonic() - started
+                if waited >= self.wait_s:
+                    holder = self.holder()
+                    os.close(self.fd)
+                    self.fd = None
+                    raise OcuError("another session held Find My for %ds (pid %s); not read" % (self.wait_s, holder or "unknown"))
+                time.sleep(LOCK_POLL_S)
+        self.result["lock_waited_s"] = round(time.monotonic() - started)
+        os.ftruncate(self.fd, 0)
+        os.write(self.fd, str(os.getpid()).encode())
+        return self
+
+    def holder(self):
+        try:
+            return self.path.read_text().strip() or None
+        except OSError:
+            return None
+
+    def __exit__(self, *exc):
+        try:
+            self.result["quit"] = quit_find_my()
+        finally:
+            os.ftruncate(self.fd, 0)
+            fcntl.flock(self.fd, fcntl.LOCK_UN)
+            os.close(self.fd)
+            self.fd = None
+        return False
+
+
+def find_my_running():
+    return run_bounded(["pgrep", "-x", "FindMy"])[0] is not None
+
+
+def quit_find_my():
+    """Quit Find My and confirm it is gone; True when it is not running afterwards."""
+    if not find_my_running():
+        return True
+    run_bounded(["osascript", "-e", 'tell application id "%s" to quit' % FINDMY])
+    deadline = time.monotonic() + QUIT_WAIT_S
+    while time.monotonic() < deadline:
+        if not find_my_running():
+            return True
+        time.sleep(0.5)
+    return not find_my_running()
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--refresh", action="store_true", help="bring Find My to the front for %d s so its locations update" % REFRESH_WAIT_S)
+    parser.add_argument("--refresh", action="store_true", help="bring Find My to the front for %d s so its locations update; a run that starts Find My does this anyway" % REFRESH_WAIT_S)
+    parser.add_argument("--device", help="device name as Find My lists it; a refresh then waits, up to %d s, until its row shows a location" % FRESH_CAP_S)
     args = parser.parse_args(argv)
-    result = {"status": "error", "rows": [], "refreshed": False, "locked_session": False, "focus_restored": None, "message": None, "read_at": None}
+    result = {"status": "error", "rows": [], "refreshed": False, "locked_session": False, "focus_restored": None, "cold_start": False, "fresh": None, "lock_waited_s": None, "quit": None, "message": None, "read_at": None}
     try:
-        status = locked_use_status()
-        result["locked_session"] = locked = bool(status and status[0] == "locked")
-        if locked and not status[1]:
-            raise OcuError("the Mac is locked and Open Computer Use's Locked Use is not available"
-                           + (": " + status[2] if status[2] else "") + "; unlock the Mac or enable Locked Use (ocu locked-use enable)")
-        if locked:
-            wake_display()
-        result["rows"] = refreshed_rows(result) if args.refresh else read_rows()
+        with Lifecycle(result):
+            status = locked_use_status()
+            result["locked_session"] = locked = bool(status and status[0] == "locked")
+            if locked and not status[1]:
+                raise OcuError("the Mac is locked and Open Computer Use's Locked Use is not available"
+                               + (": " + status[2] if status[2] else "") + "; unlock the Mac or enable Locked Use (ocu locked-use enable)")
+            if locked:
+                wake_display()
+            result["cold_start"] = cold = not find_my_running()
+            if args.refresh or cold:
+                result["rows"] = refreshed_rows(result, args.device)
+            else:
+                result["rows"] = read_rows()
+                if args.device:
+                    result["fresh"] = is_fresh(result["rows"], args.device)
         result["status"] = "ok"
     except OcuError as exc:
         result["message"] = str(exc)
+    except OSError as exc:
+        result["message"] = "Find My lock %s: %s" % (LOCK_PATH, exc)
     result["read_at"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
     print(json.dumps(result, ensure_ascii=False))
     return 0 if result["status"] == "ok" else 3

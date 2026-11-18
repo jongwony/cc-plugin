@@ -74,7 +74,6 @@ ensure_plugin() {
   fi
 }
 
-ensure_plugin epistemic-cooperative@epistemic-protocols
 ensure_plugin route@epistemic-protocols
 
 # --- ink-figure's figure board option, through the plugin's own options CLI;
@@ -135,9 +134,9 @@ rm -f "$codex_log"
 
 # --- Tavily MCP for Codex: the remote server, authenticated by a bearer token
 # that Codex reads from TAVILY_API_KEY when it launches the server. That is
-# how the epistemic-cooperative goal-research skill reaches external search
-# from inside a Codex session. `codex mcp add` overwrites an existing entry
-# of the same name, so a re-run converges on this shape.
+# how cc-plugin's goal-research skill reaches external search from inside
+# a Codex session. `codex mcp add` overwrites an existing entry of the same
+# name, so a re-run converges on this shape.
 if codex mcp add tavily --url https://mcp.tavily.com/mcp/ --bearer-token-env-var TAVILY_API_KEY < /dev/null; then
   echo "Registered the Tavily MCP server for Codex; set TAVILY_API_KEY in the environment's variables to enable it."
 else

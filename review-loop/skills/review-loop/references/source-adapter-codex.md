@@ -3,7 +3,7 @@
 Use after `source=codex` is designated. Start a fresh codex session in the reviewed
 checkout through the codex-plus plugin's `codex` skill and its wrapper, `codex-run.sh`,
 following that skill's delegation rules; check `codex-run.sh -h` for the options it takes.
-Unless the user specifies otherwise, retain the review recipe's `gpt-6-astra` model
+Unless the user specifies otherwise, retain the review recipe's `gpt-6.2-astra` model
 and select effort by the diff: `high` for small mechanical work, `xhigh` for substantive
 work, `max` for the most demanding reviews. Record the actual setting. A child using
 the driving model remains a separate context, not a different-model comparison.

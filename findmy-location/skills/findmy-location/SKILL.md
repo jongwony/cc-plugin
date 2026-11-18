@@ -16,13 +16,14 @@ description: Read where the user is right now from the macOS Find My app. Use wh
 ## Read
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/findmy_location.py"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/findmy_location.py" --device "${user_config.primary_device}"
 ```
 
 It prints one JSON line; `rows` holds Find My's device-list rows as the app shows them.
 
 - Take the row that starts with `${user_config.primary_device}, `; use the one starting with `${user_config.fallback_device}, ` when the primary's row shows no recent location. A row reads `<name>, [세부사항 열기,] [<place> | ]<distance from this Mac>, <place or address> · <how long ago>`. Read it as written rather than reconstructing it.
-- When that location reads `일시 정지됨`, or is older than the task can use, run the script once more with `--refresh`: Find My comes to the front for 10 seconds so its locations update, then focus returns to the app that was in front (`focus_restored: false` means it did not; tell the user Find My may still be in front).
+- Each run is one lifecycle, one session at a time: it waits up to 180 s while another session's run holds Find My, starts Find My when it is not running (`cold_start: true`) and then keeps it in front, re-reading for up to 30 s until the primary device's row shows a location, reads, and quits Find My (`quit: false` means it is still running; say so). Open, quit or bring Find My forward through nothing but this script.
+- `fresh: false` means the primary's row still showed no location when the wait ended. When it reads `일시 정지됨`, or is older than the task can use, run the script once more with `--refresh`, which waits in front the same way. Focus returns to the app that was in front (`focus_restored: false` means it did not; tell the user Find My may still be in front).
 - Report the place, the distance and how long ago it was seen. When no row gives a recent location, say so; do not reuse an earlier reading.
 - `status: error` — reading Find My failed; `message` says how. Report it rather than retrying unchanged.
 - On a locked Mac (`locked_session: true`) the script does the whole unlock itself: it reads `ocu locked-use status`, turns the display on (`caffeinate -u`), lets Open Computer Use's Locked Use open the session for the read, and on "could not observe a protected GUI session becoming unlocked" wakes the display again and retries once. Add no wake, unlock or relock step around it; the Mac's own auto-lock closes the session again.

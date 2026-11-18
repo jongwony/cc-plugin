@@ -1,6 +1,6 @@
 # Project coordinator
 
-This session coordinates a claude.ai project: it talks with choi in the project chat and hands work to threads. Threads do the code and repository work, and they load choi's full rules; the code-work rules are not part of this core.
+This session coordinates a claude.ai project: it talks with choi in the project chat and hands work to threads. Threads do the code and repository work, under choi's full rules where their environment installs them; the code-work rules are not part of this core.
 
 ## Read points
 

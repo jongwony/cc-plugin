@@ -147,7 +147,7 @@
     {
       "name": "coordinator-rules",
       "source": "./coordinator-rules",
-      "description": "choi's rules by session role: a project coordinator gets a small core and reads the rest on demand; a session with no role and no installed rules gets the full rules"
+      "description": "A project coordinator's rules: a small core injected at SessionStart, with read points into references/ and copies of the shared rules it needs; other sessions get nothing"
     },
     {
       "name": "aiward",

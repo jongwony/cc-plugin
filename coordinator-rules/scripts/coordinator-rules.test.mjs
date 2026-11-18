@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { detectRole, roleCore } from "./session-rules.mjs";
+import { sharedPaths } from "./sync-shared.mjs";
 import { slashCommands, build as briefLine } from "./thread-brief.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -15,14 +16,14 @@ const root = path.resolve(here, "..");
 const COORD = "mcp__hearthbot__post_message,mcp__hearthbot__start_thread,mcp__hearthbot__no_reply_needed";
 const THREAD = "mcp__hearthbot__post_message,mcp__hearthbot__message_coordinator,mcp__hearthbot__message_thread";
 
-function run(part, env, script = "session-rules.mjs", stdin = "{}") {
+function run(env, script = "session-rules.mjs", stdin = "{}", pluginRoot = root) {
   const config = fs.mkdtempSync(path.join(os.tmpdir(), "cr-"));
   const clean = { ...process.env };
   delete clean.CLAUDE_CODE_TERMINAL_MCP_TOOLS;
   delete clean.CLAUDE_CODE_ENTRYPOINT;
-  const r = spawnSync("node", [path.join(here, script), part].filter(Boolean), {
+  const r = spawnSync("node", [path.join(pluginRoot, "scripts", script)], {
     input: stdin,
-    env: { ...clean, CLAUDE_CONFIG_DIR: config, CLAUDE_PLUGIN_ROOT: root, ...env },
+    env: { ...clean, CLAUDE_CONFIG_DIR: config, CLAUDE_PLUGIN_ROOT: pluginRoot, ...env },
     encoding: "utf8",
   });
   assert.equal(r.status, 0, r.stderr);
@@ -36,30 +37,37 @@ test("role: start_thread marks the coordinator, a thread has none", () => {
   assert.equal(detectRole({}), null);
 });
 
-test("coordinator: one part, under the cap, every indexed path resolves", () => {
-  const env = { CLAUDE_CODE_TERMINAL_MCP_TOOLS: COORD };
-  const first = run("1/4", env);
-  assert.match(first, /# Project coordinator/);
-  assert.ok(first.length < 10000, `core is ${first.length} chars`);
-  assert.ok(!first.includes("{{root}}"));
-  assert.ok(first.includes(path.join(root, "references", "delegation.md")));
-  for (const p of ["2/4", "3/4", "4/4"]) assert.equal(run(p, env), "");
+test("coordinator: the core, under the cap, every indexed path resolves", () => {
+  const out = run({ CLAUDE_CODE_TERMINAL_MCP_TOOLS: COORD });
+  assert.match(out, /# Project coordinator/);
+  assert.ok(out.length < 10000, `core is ${out.length} chars`);
+  assert.ok(!out.includes("{{root}}"));
+  assert.ok(out.includes(path.join(root, "references", "delegation.md")));
   assert.deepEqual(roleCore("coordinator", root).missing, []);
 });
 
-test("thread without installed rules: the full manifest, as before", () => {
-  const env = { CLAUDE_CODE_TERMINAL_MCP_TOOLS: THREAD };
-  const parts = ["1/4", "2/4", "3/4", "4/4"].map((p) => run(p, env));
-  const all = parts.join("\n");
-  assert.match(all, /<rule file="rules\/preferences.md">/);
-  assert.doesNotMatch(all, /cloud-rules\//);
-  for (const p of parts) assert.ok(p.length < 10000);
+test("thread or plain session: nothing", () => {
+  assert.equal(run({ CLAUDE_CODE_TERMINAL_MCP_TOOLS: THREAD }), "");
+  assert.equal(run({}), "");
 });
 
 test("unknown role in a projects session: one line, no rules", () => {
-  const env = { CLAUDE_CODE_ENTRYPOINT: "remote_projects" };
-  assert.match(run("1/4", env), /could not be told; no coordinator rules were loaded/);
-  assert.equal(run("2/4", env), "");
+  assert.match(run({ CLAUDE_CODE_ENTRYPOINT: "remote_projects" }), /could not be told; no coordinator rules were loaded/);
+});
+
+test("copies: exactly the rules/ files the core indexes", () => {
+  const want = sharedPaths(root).sort();
+  assert.ok(want.length > 0);
+  assert.deepEqual(fs.readdirSync(path.join(root, "rules")).map((f) => `rules/${f}`).sort(), want);
+});
+
+test("a lost copy is named under the core", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "crp-"));
+  fs.cpSync(root, tmp, { recursive: true });
+  fs.rmSync(path.join(tmp, "rules"), { recursive: true });
+  const out = run({ CLAUDE_CODE_TERMINAL_MCP_TOOLS: COORD }, "session-rules.mjs", "{}", tmp);
+  assert.match(out, /# Project coordinator/);
+  assert.match(out, /these indexed files are missing under .*rules\/consent-tiers\.md/);
 });
 
 test("start_thread brief: slash commands are named, the reminder always goes out", () => {
@@ -68,6 +76,6 @@ test("start_thread brief: slash commands are named, the reminder always goes out
   const line = briefLine({ tool_input: { text: "/elicit then work" } }, root);
   assert.match(line, /\/elicit/);
   assert.match(line, /message_thread/);
-  const out = run(null, {}, "thread-brief.mjs", JSON.stringify({ tool_input: { text: "plain brief" } }));
+  const out = run({}, "thread-brief.mjs", JSON.stringify({ tool_input: { text: "plain brief" } }));
   assert.match(out, /The parts of a brief/);
 });

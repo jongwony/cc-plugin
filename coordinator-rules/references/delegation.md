@@ -14,7 +14,7 @@ Read before `start_thread`, and before a `message_thread` that changes what a th
 
 ## Left out of a brief
 
-- A rule the thread already loads. A thread in an environment that runs `cloud-setup.sh`, or one that gets this plugin's full-rules path, holds choi's rules; name a rule file only where it decides the work.
+- A rule the thread already loads. A thread in an environment that runs `cloud-setup.sh` holds choi's rules; name a rule file only where it decides the work. A thread in an environment without it holds none, so the brief names the rule files the work turns on.
 - A long derivation. It goes into a project file, and the brief points there.
 
 ## Receiving a result

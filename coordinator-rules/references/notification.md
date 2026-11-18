@@ -1,6 +1,6 @@
 # Notification — from a project coordinator
 
-Read before a push to choi, and before reporting that work ended or stopped. `rules/notification.md` beside this directory holds the principle in full. Its senders on choi's Mac (`aiward-send`, the `ntfy-checkpoint` skill, the `aiward:report` skill) are not installed in a coordinator session; a coordinator sends through MCP servers registered for it instead.
+Read before a push to choi, and before reporting that work ended or stopped. The core's §Notifications holds the principle. On choi's Mac the senders are `aiward-send`, the `ntfy-checkpoint` skill and the `aiward:report` skill; none is installed in a coordinator session, which sends through MCP servers registered for it instead.
 
 ## Senders
 

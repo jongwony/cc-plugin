@@ -83,9 +83,7 @@ structure Sources where
 
 def Sources.toList (d : Sources) : List Source := d.first :: d.rest
 
-/-- A finding a source reported, one the loop's own goal reading added, or the question Phase 4
-    hands back of whether an effect already landed is retained — dispositioned as a finding of its
-    own, apart from the finding whose settled disposition it follows. -/
+/-- A finding a source reported, or one the loop's own goal reading added. -/
 structure Finding where
   source : Source
   site   : String
@@ -248,6 +246,11 @@ axiom RecurrencePending : Session → Prop
 /-- **Your reading**: an edit has landed since the latest review. -/
 axiom EditedSinceReview : Session → Prop
 
+/-- **Your reading**: the trace records the latest round's goal reading of the current reviewed
+    artifact against the project's stated goal, an empty reading included, with any finding it
+    added dispositioned; or no declared goal was found. -/
+axiom GoalRead : Session → Prop
+
 /-- **Your reading**, for one source, of its usable return in the latest round, on the current
     reviewed artifact: it returned `approve`, or that round's full re-review returned zero new
     non-refuted findings. A return from an earlier round does not count, even on the same
@@ -279,7 +282,7 @@ def RootResolved (s : Session) : Prop :=
 def Converged (s : Session) : Prop :=
   match inForce s with
   | none   => False
-  | some d => AllDispositioned s ∧ ¬ RecurrencePending s ∧ ¬ EditedSinceReview s ∧
+  | some d => AllDispositioned s ∧ ¬ RecurrencePending s ∧ ¬ EditedSinceReview s ∧ GoalRead s ∧
       ((∀ x ∈ d.toList, Clear s x) ∨ RootResolved s)
 
 inductive Exit
@@ -494,8 +497,10 @@ so far, so the driving session records rather than re-derives it.
    A self-evident repair stays within that disposition; a competing repair or a live
    judgment about evidence support returns to Phase 3 with the current artifact and
    consequences. A defer or drop verdict states whether the landed effect remains and
-   its authorized basis; the verdict alone does not authorize retaining it, and where
-   nothing settles retaining it, that question returns to Phase 3 as its own finding. After
+   its authorized basis; the verdict alone does not authorize retaining it. Where nothing
+   authorizes the landed effect's presence in this unit, this step holds on one question to
+   the user, whether that effect stays in this unit; the answer resumes the step, and an
+   invocation that ends at that gate reports the effect as unresolved. After
    reconciliation and checks, including explicit unavailable-check limits, the writer
    commits to the settled landing for PR scope and pushes where that landing has a
    remote, then returns.

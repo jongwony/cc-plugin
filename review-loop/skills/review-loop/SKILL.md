@@ -83,7 +83,9 @@ structure Sources where
 
 def Sources.toList (d : Sources) : List Source := d.first :: d.rest
 
-/-- A finding a source reported, or one the loop's own goal reading added. -/
+/-- A finding a source reported, one the loop's own goal reading added, or the question Phase 4
+    hands back of whether an effect already landed is retained — dispositioned as a finding of its
+    own, apart from the finding whose settled disposition it follows. -/
 structure Finding where
   source : Source
   site   : String
@@ -117,8 +119,9 @@ def entry (designated invokable : List Source) : Entry :=
     `Entry.relay` names, or the user's answer to `Entry.ask`), as a later turn of the user's has
     replaced them: a switch offered when a call ended without a usable review, or a correction of
     the designation. Continuing a round without a failed source's review leaves that source in
-    force. `none` while no designation exists: `entry` gave `Entry.missing`, or no answer to
-    `Entry.ask` has yet named a source. -/
+    force. `none` while no designation exists: `entry` gave `Entry.missing`, or at the initial
+    selection no answer to `Entry.ask` has yet named a source. An established designation stays
+    in force until a turn of the user's changes it, a sources gate raised later included. -/
 axiom inForce : Session → Option Sources
 
 /-! ── FINDINGS ── -/
@@ -168,10 +171,9 @@ inductive Class
       unentrusted scope/risk decisions -/
   | judgment
 
-/-- **Your judgment** of a surviving finding: whether a choice is still live once what `settled`
-    gives is taken as fixed — the repair's shape or scope where the finding is to be repaired or
-    nothing cited settles it, and where a ground settles a drop or a carry, what becomes of an
-    effect already landed for it. -/
+/-- **Your judgment** of a surviving finding that is to be repaired or whose disposition nothing
+    cited settles: whether a repair choice is still live once what `settled` gives is taken as
+    fixed. -/
 axiom classOf : Session → Finding → Class
 
 /-- **Your judgment**: a citable scope license — the user's direction, the purpose, a mandated
@@ -186,22 +188,18 @@ inductive Handling
   /-- applied and reported with its basis — the cited ground where one settled it — without a
       disposition gate -/
   | apply
-  /-- a disposition gate, or the question a settled disposition still leaves, with that
-      disposition kept -/
+  /-- a disposition gate; the user's answer, a scope answer included, sets the disposition
+      recorded -/
   | gate
 
 open Classical in
-/-- A settled drop or carry is relayed unless `classOf` finds a choice it still leaves. Every
-    other finding is repaired or gated on what is still live in it and on whether its side is in
-    scope, whether or not a ground settled that it is repaired. -/
+/-- A settled drop or carry is relayed. Every other finding is repaired or gated on what is still
+    live in it and on whether its side is in scope, whether or not a ground settled that it is
+    repaired. -/
 noncomputable def handling (s : Session) (f : Finding) : Handling :=
   match settled s f with
-  | some .dropped => match classOf s f with
-    | .mechanical => .relay .dropped
-    | .judgment   => .gate
-  | some .carried => match classOf s f with
-    | .mechanical => .relay .carried
-    | .judgment   => .gate
+  | some .dropped => .relay .dropped
+  | some .carried => .relay .carried
   | _ =>
     match classOf s f, (provenance s f).side with
     | .judgment, _              => .gate
@@ -496,7 +494,8 @@ so far, so the driving session records rather than re-derives it.
    A self-evident repair stays within that disposition; a competing repair or a live
    judgment about evidence support returns to Phase 3 with the current artifact and
    consequences. A defer or drop verdict states whether the landed effect remains and
-   its authorized basis; the verdict alone does not authorize retaining it. After
+   its authorized basis; the verdict alone does not authorize retaining it, and where
+   nothing settles retaining it, that question returns to Phase 3 as its own finding. After
    reconciliation and checks, including explicit unavailable-check limits, the writer
    commits to the settled landing for PR scope and pushes where that landing has a
    remote, then returns.

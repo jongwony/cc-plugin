@@ -12,7 +12,7 @@ set -euo pipefail
 CDPATH=
 
 # Defaults
-readonly DEFAULT_MODEL="gpt-6-astra"
+readonly DEFAULT_MODEL="gpt-6.2-astra"
 # medium is a starting point, not a ceiling. Raising effort is a per-call
 # judgment made from the task in front of the caller; a default cannot read the
 # task, so pinning the top of the ladder here spends it on every run that never
@@ -48,7 +48,7 @@ usage() {
 Usage: codex-run.sh [options] <prompt_file>
 
 Options:
-  -m, --model MODEL      Model name (default: gpt-6-astra)
+  -m, --model MODEL      Model name (default: gpt-6.2-astra)
   -r, --effort EFFORT    Reasoning effort: low|medium|high|xhigh|max (default:
                          medium, a starting point rather than a ceiling —
                          escalate per task. astra has no `none` rung)
@@ -74,7 +74,7 @@ Options:
                          the only resume path — there is no --last fallback).
                          A resumed turn does not inherit the session's model or
                          effort: pass -m and -r again to stay on them, or the
-                         turn runs on this script's fallback (gpt-6-astra,
+                         turn runs on this script's fallback (gpt-6.2-astra,
                          medium). -s has no effect on resume: `codex exec
                          resume` takes no sandbox option, so the turn runs
                          under the sandbox_mode of the codex config in force

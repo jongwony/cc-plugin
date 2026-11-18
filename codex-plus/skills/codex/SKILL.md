@@ -49,7 +49,7 @@ When the delegated task is to define, create, or refine a Codex goal — a goal-
    - **Single model**: one subagent call.
    - **Multiple models**: issue parallel subagent calls (one per model) in a single response — same prompt, sandbox, and effort, different `-m`. Each returns its own `SESSION_ID`.
 5. Record each returned `SESSION_ID` against its purpose/model. This {purpose → SESSION_ID} map is the only resume handle.
-6. Resume: write new instructions to a fresh `<scratchpad>/codex_prompt_<suffix>.txt`, then delegate to a Bash subagent running `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> <scratchpad>/codex_prompt_<suffix>.txt`. Resume is always by explicit id, which stays deterministic under parallel sessions. **A resumed turn inherits none of the session's settings** — pass `-m`, `-r`, `-C` and `-f` again to stay where the session was. Omit `-m`/`-r` and the wrapper passes its own fallback, `gpt-6-astra` at `medium`, so a resumed run started on another model silently moves to astra; omit `-C` and the turn runs wherever the subagent happens to be, re-resolving every pointer against that tree. `-s` has no effect on resume: `codex exec resume` takes no sandbox option, and the turn runs under the `sandbox_mode` of the codex config in force at resume time, not the `-s` the session was created with.
+6. Resume: write new instructions to a fresh `<scratchpad>/codex_prompt_<suffix>.txt`, then delegate to a Bash subagent running `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> <scratchpad>/codex_prompt_<suffix>.txt`. Resume is always by explicit id, which stays deterministic under parallel sessions. **A resumed turn inherits none of the session's settings** — pass `-m`, `-r`, `-C` and `-f` again to stay where the session was. Omit `-m`/`-r` and the wrapper passes its own fallback, `gpt-6.2-astra` at `medium`, so a resumed run started on another model silently moves to `gpt-6.2-astra`; omit `-C` and the turn runs wherever the subagent happens to be, re-resolving every pointer against that tree. `-s` has no effect on resume: `codex exec resume` takes no sandbox option, and the turn runs under the `sandbox_mode` of the codex config in force at resume time, not the `-s` the session was created with.
 7. Summarize each outcome to the user; for parallel work, surface which `SESSION_ID` maps to which branch. Inform the user: "Resume anytime with 'codex resume'."
 
 ### Quick Reference
@@ -63,7 +63,7 @@ Base patterns:
 
 Modifiers, added to any base pattern above:
 - Different working directory — `-C <DIR>`; pass it again on resume (step 6)
-- Model and effort — `-m MODEL`, `-r EFFORT` (omitted, the wrapper falls back to `gpt-6-astra` at `medium`); pass both again on resume (step 6)
+- Model and effort — `-m MODEL`, `-r EFFORT` (omitted, the wrapper falls back to `gpt-6.2-astra` at `medium`); pass both again on resume (step 6)
 - Fast service tier — `-f`; a request rather than a guarantee, since codex drops the tier without an error where the model does not carry it (`codex debug models` lists what each one has). Pass it again on resume (step 6)
 - Capture the answer to a file — `-o <FILE>` writes codex's final message to FILE deterministically
 

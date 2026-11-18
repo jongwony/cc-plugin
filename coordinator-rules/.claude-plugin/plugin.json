@@ -1,0 +1,10 @@
+{
+  "name": "coordinator-rules",
+  "description": "choi's rules for sessions no setup script reaches — a project coordinator, or a cloud session without cloud-setup — injected at SessionStart from the same rules/ and manifest the other surfaces read; silent where <config>/rules/ already holds them",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  },
+  "license": "MIT"
+}

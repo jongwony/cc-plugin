@@ -1,0 +1,11 @@
+{
+  "description": "coordinator-rules: at every context epoch (startup, resume, clear, compact), puts choi's rules into a session whose <config>/rules/ holds none of them — a project coordinator, or a cloud session without scripts/cloud-setup.sh. Four entries, because the host caps each injected string at 10,000 characters; each emits one part of the same packing, and an entry with no part emits nothing.",
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-rules.mjs\" 0 4" }] },
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-rules.mjs\" 1 4" }] },
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-rules.mjs\" 2 4" }] },
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-rules.mjs\" 3 4" }] }
+    ]
+  }
+}

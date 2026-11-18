@@ -145,6 +145,11 @@
       "description": "Read where the user is right now from the macOS Find My app, when a task needs the user's current location as context"
     },
     {
+      "name": "coordinator-rules",
+      "source": "./coordinator-rules",
+      "description": "choi's rules for sessions no setup script reaches — a project coordinator, or a cloud session without cloud-setup — injected at SessionStart; silent where <config>/rules/ already holds them"
+    },
+    {
       "name": "aiward",
       "source": {
         "source": "url",

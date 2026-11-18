@@ -1,35 +1,44 @@
 #!/usr/bin/env node
 /**
- * SessionStart hook: put choi's rules into a session that has none installed.
+ * SessionStart hook: give each session the rules its role needs.
  *
  * Claude Code loads every file in <config>/rules/ at session start. Sessions
  * on choi's Mac get those files as symlinks, and cloud environments that run
- * scripts/cloud-setup.sh get them from scripts/install-rules.sh. Some sessions
- * have neither: a project coordinator runs outside any cloud environment, so
- * no setup script reaches it, and a thread in an environment without the setup
- * script starts bare. Both still receive the plugins synced from the claude.ai
- * account, so this plugin carries the rules there as hook context.
+ * scripts/cloud-setup.sh get them from scripts/install-rules.sh. A project
+ * coordinator runs outside any cloud environment and a thread in an
+ * environment without the setup script starts bare; both still receive the
+ * plugins synced from the claude.ai account, so this plugin reaches them.
  *
- * One source: the plugin's `rules`, `cloud-rules` and `install-rules.manifest`
- * are symlinks to the repository's own, so the manifest stays the one list
- * every surface reads and no copy can drift.
+ * Role first. A role is a session kind with its own always-loaded core,
+ * `roles/<role>.md`. The core carries only what that role does, and indexes
+ * the rest by absolute path for the session to read when the moment comes
+ * (`references/` and the shared `rules/`, `cloud-rules/` links). A role's core
+ * is emitted whether or not <config>/rules/ is installed, because the role
+ * decides what the session needs, not the install state.
  *
- * No double load: where any manifest file name already exists in
- * <config>/rules/, the rules arrived another way and this hook is silent. One
- * present file is enough, not each file its own check: the Mac links only the
- * `rules/` entries, and `cloud-rules/` must stay out of it.
+ *   coordinator — CLAUDE_CODE_TERMINAL_MCP_TOOLS names
+ *     mcp__hearthbot__start_thread. Threads carry the same variable without
+ *     that tool, and CLAUDE_CODE_ENTRYPOINT / CLAUDE_CODE_COORDINATOR_EXTRA_TOOLS
+ *     hold the same values in both, so this is the one marker observed to
+ *     differ (2026-11-18). It is an undocumented product value: where it is
+ *     unset in a projects session, the role is unknown, no core is emitted
+ *     (fail closed), and part 1 says so in one line.
  *
- * Size: the host caps each additionalContext string at 10,000 characters and
- * past it substitutes a file path and a preview, and one hook command can hand
- * back only one such string. hooks.json therefore registers this script once
- * per part, as `<part>/<parts>` (`1/4` is part 1 of 4): every entry packs the
- * same files in manifest order into parts under the cap and emits its own
- * part, or nothing when the rules need fewer parts. The last entry names any
- * file that did not fit.
+ * No role: the full rules. A session with no role and nothing installed gets
+ * every file `install-rules.manifest` lists, as before. Where any manifest
+ * file name already exists in <config>/rules/, the rules arrived another way
+ * and this path is silent; one present file is enough, since the Mac links
+ * only the `rules/` entries and `cloud-rules/` must stay out of it.
+ *
+ * Size: the host caps each additionalContext string at 10,000 characters, and
+ * one hook command hands back one string. hooks.json therefore registers this
+ * script once per part, as `<part>/<parts>`; a role core is one part (entry
+ * 1), and the full rules pack into as many parts as they need, with the last
+ * entry naming any file that did not fit.
  *
  * Every failure path is open: whatever goes wrong, the hook exits 0, and the
- * session starts. Where the plugin's links did not survive (the synced copy
- * dropped them), the first entry says so in one line, so the gap is visible.
+ * session starts. A path the core indexes that does not resolve (the synced
+ * copy dropped a link) is named in one line under the core.
  * Zero external dependencies: Node.js standard library only.
  */
 
@@ -39,12 +48,36 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const CAP = 9500; // under the host's 10,000, with room for the part header
+const ROOT_TOKEN = "{{root}}";
 
 const pluginRoot =
   process.env.CLAUDE_PLUGIN_ROOT ||
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const configDir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude");
 const installedDir = path.join(configDir, "rules");
+
+/** The session's role: a name with a `roles/<name>.md`, null for none, "unknown" when undecidable. */
+export function detectRole(env) {
+  const tools = env.CLAUDE_CODE_TERMINAL_MCP_TOOLS;
+  if (tools === undefined) {
+    return env.CLAUDE_CODE_ENTRYPOINT === "remote_projects" ? "unknown" : null;
+  }
+  const names = tools.split(",").map((s) => s.trim());
+  if (names.includes("mcp__hearthbot__start_thread")) return "coordinator";
+  return null;
+}
+
+/** The role's core with every `{{root}}` made absolute, and the indexed paths that do not resolve. */
+export function roleCore(role, root = pluginRoot) {
+  const raw = fs.readFileSync(path.join(root, "roles", `${role}.md`), "utf8").trim();
+  const body = raw.split(ROOT_TOKEN).join(root);
+  const missing = [];
+  const re = new RegExp(`${ROOT_TOKEN.replace(/[{}]/g, "\\$&")}/([\\w./-]+\\.md)`, "g");
+  for (const m of raw.matchAll(re)) {
+    if (!fs.existsSync(path.join(root, m[1])) && !missing.includes(m[1])) missing.push(m[1]);
+  }
+  return { body, missing };
+}
 
 function readManifest() {
   const text = fs.readFileSync(path.join(pluginRoot, "install-rules.manifest"), "utf8");
@@ -93,6 +126,26 @@ function pack(rules) {
   return parts;
 }
 
+function buildRole(role, index) {
+  if (index !== 0) return "";
+  let core;
+  try {
+    core = roleCore(role);
+  } catch {
+    return `coordinator-rules: roles/${role}.md is missing under ${pluginRoot}; no ${role} rules were loaded.`;
+  }
+  const lines = [
+    `choi's ${role} rules from cc-plugin (coordinator-rules). This session was identified as the ${role}; ` +
+      `the paths below are absolute — Read each one at the moment its line names.`,
+    "",
+    core.body,
+  ];
+  if (core.missing.length) {
+    lines.push("", `coordinator-rules: these indexed files are missing under ${pluginRoot}: ${core.missing.join(", ")}.`);
+  }
+  return lines.join("\n");
+}
+
 function header(i, total) {
   return (
     `choi's rules from cc-plugin (coordinator-rules), part ${i + 1} of ${total}. ` +
@@ -101,7 +154,7 @@ function header(i, total) {
   );
 }
 
-function build(index, count) {
+function buildFull(index, count) {
   let collected;
   try {
     collected = collect();
@@ -126,6 +179,18 @@ function build(index, count) {
   return lines.join("\n");
 }
 
+export function build(index, count, env = process.env) {
+  const role = detectRole(env);
+  if (role === "unknown") {
+    return index === 0
+      ? "coordinator-rules: CLAUDE_CODE_TERMINAL_MCP_TOOLS is unset, so whether this session is the project coordinator " +
+          "could not be told; no coordinator rules were loaded."
+      : "";
+  }
+  if (role) return buildRole(role, index);
+  return buildFull(index, count);
+}
+
 /** `<part>/<parts>`, 1-based, into a 0-based index and a count; anything else is 1/1. */
 function parsePart(arg) {
   const m = /^(\d+)\/(\d+)$/.exec(arg ?? "");
@@ -135,6 +200,9 @@ function parsePart(arg) {
 }
 
 function main() {
+  try {
+    fs.readFileSync(0); // drain the hook payload; nothing in it is needed
+  } catch {}
   const { index, count } = parsePart(process.argv[2]);
   let context = "";
   try {
@@ -150,7 +218,4 @@ function main() {
   );
 }
 
-try {
-  fs.readFileSync(0); // drain the hook payload; nothing in it is needed
-} catch {}
-main();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();

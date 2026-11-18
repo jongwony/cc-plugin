@@ -147,7 +147,7 @@
     {
       "name": "coordinator-rules",
       "source": "./coordinator-rules",
-      "description": "choi's rules for sessions no setup script reaches — a project coordinator, or a cloud session without cloud-setup — injected at SessionStart; silent where <config>/rules/ already holds them"
+      "description": "choi's rules by session role: a project coordinator gets a small core and reads the rest on demand; a session with no role and no installed rules gets the full rules"
     },
     {
       "name": "aiward",

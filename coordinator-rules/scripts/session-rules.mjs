@@ -20,10 +20,12 @@
  * `rules/` entries, and `cloud-rules/` must stay out of it.
  *
  * Size: the host caps each additionalContext string at 10,000 characters and
- * past it substitutes a file path and a preview. hooks.json therefore
- * registers this script several times, as `<index> <count>`; every entry packs
- * the same files in manifest order into parts under the cap and emits the part
- * at its index. The last entry names any file that did not fit.
+ * past it substitutes a file path and a preview, and one hook command can hand
+ * back only one such string. hooks.json therefore registers this script once
+ * per part, as `<part>/<parts>` (`1/4` is part 1 of 4): every entry packs the
+ * same files in manifest order into parts under the cap and emits its own
+ * part, or nothing when the rules need fewer parts. The last entry names any
+ * file that did not fit.
  *
  * Every failure path is open: whatever goes wrong, the hook exits 0, and the
  * session starts. Where the plugin's links did not survive (the synced copy
@@ -124,12 +126,19 @@ function build(index, count) {
   return lines.join("\n");
 }
 
+/** `<part>/<parts>`, 1-based, into a 0-based index and a count; anything else is 1/1. */
+function parsePart(arg) {
+  const m = /^(\d+)\/(\d+)$/.exec(arg ?? "");
+  const part = m ? Number(m[1]) : 1;
+  const parts = m ? Number(m[2]) : 1;
+  return part >= 1 && part <= parts ? { index: part - 1, count: parts } : { index: 0, count: 1 };
+}
+
 function main() {
-  const index = Number.parseInt(process.argv[2] ?? "0", 10);
-  const count = Number.parseInt(process.argv[3] ?? "1", 10);
+  const { index, count } = parsePart(process.argv[2]);
   let context = "";
   try {
-    context = build(Number.isNaN(index) ? 0 : index, Number.isNaN(count) ? 1 : count);
+    context = build(index, count);
   } catch {
     context = "";
   }

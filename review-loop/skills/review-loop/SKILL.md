@@ -61,8 +61,9 @@ written for: you read it, and by inference over the context you settle each elem
 open. Every `axiom` is one of those judgments — a black box to the contract, yours to make from
 the material in front of you; its doc comment says what you judge there, and nothing in this
 block decides it for you. Every `def`, `inductive`, and `structure` is fixed by the contract.
-The block fixes which sources a round owes, how a surviving finding is handled, which writer
-route an apply pass takes, and when the loop has converged. The order of the phases, where the
+The block reads the sources that `entry` and the user's turns establish, and fixes how a
+surviving finding is handled, which writer route an apply pass takes, and when the loop has
+converged. The order of the phases, where the
 loop holds for the user, and how it resumes are the rules below.
 -/
 
@@ -116,8 +117,9 @@ def entry (designated invokable : List Source) : Entry :=
     `Entry.relay` names, or the user's answer to `Entry.ask`), as a later turn of the user's has
     replaced them: a switch offered when a call ended without a usable review, or a correction of
     the designation. Continuing a round without a failed source's review leaves that source in
-    force. -/
-axiom inForce : Session → Sources
+    force. `none` while no designation exists: `entry` gave `Entry.missing`, or no answer to
+    `Entry.ask` has yet named a source. -/
+axiom inForce : Session → Option Sources
 
 /-! ── FINDINGS ── -/
 
@@ -166,9 +168,10 @@ inductive Class
       unentrusted scope/risk decisions -/
   | judgment
 
-/-- **Your judgment** of a surviving finding that is to be repaired or whose disposition nothing
-    cited settles: whether a repair choice is still live once what `settled` gives is taken as
-    fixed. -/
+/-- **Your judgment** of a surviving finding: whether a choice is still live once what `settled`
+    gives is taken as fixed — the repair's shape or scope where the finding is to be repaired or
+    nothing cited settles it, and where a ground settles a drop or a carry, what becomes of an
+    effect already landed for it. -/
 axiom classOf : Session → Finding → Class
 
 /-- **Your judgment**: a citable scope license — the user's direction, the purpose, a mandated
@@ -183,17 +186,22 @@ inductive Handling
   /-- applied and reported with its basis — the cited ground where one settled it — without a
       disposition gate -/
   | apply
-  /-- a disposition gate -/
+  /-- a disposition gate, or the question a settled disposition still leaves, with that
+      disposition kept -/
   | gate
 
 open Classical in
-/-- A ground that settles a drop or a carry leaves nothing to choose. Every other finding is
-    repaired or gated on what is still live in it and on whether its side is in scope, whether or
-    not a ground settled that it is repaired. -/
+/-- A settled drop or carry is relayed unless `classOf` finds a choice it still leaves. Every
+    other finding is repaired or gated on what is still live in it and on whether its side is in
+    scope, whether or not a ground settled that it is repaired. -/
 noncomputable def handling (s : Session) (f : Finding) : Handling :=
   match settled s f with
-  | some .dropped => .relay .dropped
-  | some .carried => .relay .carried
+  | some .dropped => match classOf s f with
+    | .mechanical => .relay .dropped
+    | .judgment   => .gate
+  | some .carried => match classOf s f with
+    | .mechanical => .relay .carried
+    | .judgment   => .gate
   | _ =>
     match classOf s f, (provenance s f).side with
     | .judgment, _              => .gate
@@ -242,13 +250,16 @@ axiom RecurrencePending : Session → Prop
 /-- **Your reading**: an edit has landed since the latest review. -/
 axiom EditedSinceReview : Session → Prop
 
-/-- **Your reading**, for one source, of its review on the current reviewed artifact: it returned
-    `approve`, or a full re-review returned zero new non-refuted findings. A finding is new in its
+/-- **Your reading**, for one source, of its usable return in the latest round, on the current
+    reviewed artifact: it returned `approve`, or that round's full re-review returned zero new
+    non-refuted findings. A return from an earlier round does not count, even on the same
+    artifact. A finding is new in its
     discovery review even when deferred or handed over; its later return is not new and
     preserves the disposition. -/
 axiom Clear : Session → Source → Prop
 
-/-- **Your reading**: this source completed a full re-review of the current reviewed artifact. -/
+/-- **Your reading**: this source's usable return in the latest round is a full re-review of the
+    current reviewed artifact; a re-review from an earlier round does not count. -/
 axiom FullyReReviewed : Session → Source → Prop
 
 /-- **Your reading** of Phase 3: the verified set names a shared cause. -/
@@ -260,14 +271,18 @@ axiom RootsResolved : Session → Prop
 /-- Phase 3's root-resolved end: the loop ends as it stands, the round's findings go to the user
     unrepaired with their dispositions, and no repair is chosen or applied. -/
 def RootResolved (s : Session) : Prop :=
-  (∀ x ∈ (inForce s).toList, FullyReReviewed s x) ∧
-    ¬ SharedCause s ∧ RootsResolved s ∧ ¬ RecurrencePending s
+  match inForce s with
+  | none   => False
+  | some d => (∀ x ∈ d.toList, FullyReReviewed s x) ∧
+      ¬ SharedCause s ∧ RootsResolved s ∧ ¬ RecurrencePending s
 
 /-- Convergence holds only of the current reviewed artifact, and only through reviews every source
-    in force owes. -/
+    in force owes; before any designation exists there is nothing to converge on. -/
 def Converged (s : Session) : Prop :=
-  AllDispositioned s ∧ ¬ RecurrencePending s ∧ ¬ EditedSinceReview s ∧
-    ((∀ x ∈ (inForce s).toList, Clear s x) ∨ RootResolved s)
+  match inForce s with
+  | none   => False
+  | some d => AllDispositioned s ∧ ¬ RecurrencePending s ∧ ¬ EditedSinceReview s ∧
+      ((∀ x ∈ d.toList, Clear s x) ∨ RootResolved s)
 
 inductive Exit
   | converged
@@ -276,7 +291,9 @@ inductive Exit
   | notConverged
 
 open Classical in
-/-- How any exit is reported: the user's, a stop, Phase 3's root-resolved end, or Phase 5's. -/
+/-- How any exit is reported: the user's, a stop, Phase 3's root-resolved end, or Phase 5's. An
+    exit before any designation exists, at `Entry.missing` or at the first sources gate, is
+    reported as non-convergence. -/
 noncomputable def exitAs (s : Session) : Exit :=
   if Converged s then .converged else .notConverged
 

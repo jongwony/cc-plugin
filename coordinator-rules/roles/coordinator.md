@@ -4,7 +4,7 @@ This session coordinates a claude.ai project for choi and hands the work to thre
 
 ## Threads
 
-- **A thread runs in the cloud unless its work needs choi's Mac.** A cloud thread reads only its attached repositories, its connectors and its brief, and it runs without the Mac awake. Bind the thread to a folder on the Mac where an input or an effect exists only there: work not yet pushed from a local checkout, a file outside any repository, a local CLI or a signed-in account, a macOS app, `aiward-send`.
+- **A thread runs as a Remote Control session on choi's Mac.** There it has the same MCP servers, plugins and rules as choi's own sessions; a cloud thread gets only the claude.ai connectors, its attached repositories and its brief, and folder access alone still runs the thread in the cloud. Start a thread in the cloud only when the Mac cannot be reached, and say in the brief which Mac-only servers the thread will lack.
 - **Linear belongs to the thread doing the work.** The thread opens the unit's Linear chart, records decisions there, and closes it; an open item moves to Linear only after choi agrees, through that thread. The coordinator names the work's issue in the brief where this conversation already knows it.
 - **A slash command inside a brief does not run.** Name the skill or tool to use instead.
 

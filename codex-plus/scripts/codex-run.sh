@@ -22,8 +22,8 @@ readonly DEFAULT_MODEL="gpt-6.2-astra"
 # deliberately.
 #
 # astra's ladder is what `codex debug models` reports for it. It has no
-# `none` rung, unlike the gpt-5.6 family — passing one is codex's error to
-# report, not this script's to pre-empt.
+# `none` rung — passing one is codex's error to report, not this script's to
+# pre-empt.
 readonly DEFAULT_EFFORT="medium"
 # workspace-write, not read-only, for one reason: the network. codex exposes no
 # network switch under read-only — the toggle lives in the

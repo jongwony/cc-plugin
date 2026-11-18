@@ -12,7 +12,7 @@ A project coordinator runs outside any cloud environment, so `scripts/cloud-setu
 
 The core restates none of these. What is left is what only this role needs:
 
-- Code, repositories and Linear stay with the thread doing the work.
+- Linear stays with the thread doing the work.
 - A slash command inside a brief does not run.
 - Notifications go through the aiward and ntfy MCP servers, in the order the core gives, with a fallback when neither is connected.
 

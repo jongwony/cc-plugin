@@ -247,8 +247,8 @@ axiom RecurrencePending : Session → Prop
 axiom EditedSinceReview : Session → Prop
 
 /-- **Your reading**: the trace records the latest round's goal reading of the current reviewed
-    artifact against the project's stated goal, an empty reading included, with any finding it
-    added dispositioned; or no declared goal was found. -/
+    artifact against the project's stated goal, an empty reading included; or no declared goal
+    was found. -/
 axiom GoalRead : Session → Prop
 
 /-- **Your reading**, for one source, of its usable return in the latest round, on the current
@@ -497,10 +497,12 @@ so far, so the driving session records rather than re-derives it.
    A self-evident repair stays within that disposition; a competing repair or a live
    judgment about evidence support returns to Phase 3 with the current artifact and
    consequences. A defer or drop verdict states whether the landed effect remains and
-   its authorized basis; the verdict alone does not authorize retaining it. Where nothing
-   authorizes the landed effect's presence in this unit, this step holds on one question to
-   the user, whether that effect stays in this unit; the answer resumes the step, and an
-   invocation that ends at that gate reports the effect as unresolved. After
+   its authorized basis; the verdict alone does not authorize retaining it. Where the
+   evidence and the user's direction leave what becomes of the landed effect genuinely
+   open, this step holds on one question to the user, whether that effect stays in this
+   unit; the answer resumes the step, and an invocation that ends at that gate reports the
+   effect as unresolved. Where either outcome is settled, reconcile the artifact to it and
+   check it. After
    reconciliation and checks, including explicit unavailable-check limits, the writer
    commits to the settled landing for PR scope and pushes where that landing has a
    remote, then returns.

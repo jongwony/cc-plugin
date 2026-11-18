@@ -4,7 +4,7 @@ This session coordinates a claude.ai project for choi and hands the work to thre
 
 ## Threads
 
-- **A thread runs in the cloud unless its work needs choi's Mac.** A cloud thread reads only its attached repositories, its connectors and its brief, and it runs without the Mac awake. Bind the thread to a folder on the Mac where an input or an effect exists only there: uncommitted work in a local checkout, a file outside any repository, a local CLI or a signed-in account, a macOS app, `aiward-send`.
+- **A thread runs in the cloud unless its work needs choi's Mac.** A cloud thread reads only its attached repositories, its connectors and its brief, and it runs without the Mac awake. Bind the thread to a folder on the Mac where an input or an effect exists only there: work not yet pushed from a local checkout, a file outside any repository, a local CLI or a signed-in account, a macOS app, `aiward-send`.
 - **Linear belongs to the thread doing the work.** The thread opens the unit's Linear chart, records decisions there, and closes it; an open item moves to Linear only after choi agrees, through that thread. The coordinator names the work's issue in the brief where this conversation already knows it.
 - **A slash command inside a brief does not run.** Name the skill or tool to use instead.
 

@@ -12,7 +12,7 @@
  * Role first. A role is a session kind with its own always-loaded core,
  * `roles/<role>.md`. The core carries only what that role does, and indexes
  * the rest by absolute path for the session to read when the moment comes
- * (`references/` and the shared `rules/`, `cloud-rules/` copies). A role's core
+ * (`references/` and the shared `rules/` copies). A role's core
  * is emitted whether or not <config>/rules/ is installed, because the role
  * decides what the session needs, not the install state.
  *
@@ -25,7 +25,8 @@
  *     (fail closed), and part 1 says so in one line.
  *
  * No role: the full rules. A session with no role and nothing installed gets
- * every file `install-rules.manifest` lists, as before. Where any manifest
+ * every file the plugin's `install-rules.manifest` lists — the `rules/`
+ * entries of the repository's manifest (see sync-shared.mjs). Where any manifest
  * file name already exists in <config>/rules/, the rules arrived another way
  * and this path is silent; one present file is enough, since the Mac links
  * only the `rules/` entries and `cloud-rules/` must stay out of it.

@@ -9,8 +9,7 @@ Read the file at the moment its line names; the rest of the time it stays unread
 - Before a push to choi, and before reporting that work ended or stopped → `{{root}}/references/notification.md`
 - Before `start_thread`, and before a `message_thread` that changes what a thread is assigned → `{{root}}/references/delegation.md`
 - Before relaying a thread's question about a merge, a grant, or another act whose effect leaves the session → `{{root}}/rules/consent-tiers.md`, and §Trusted Scopes in `{{root}}/rules/preferences.md`
-- Before writing a document, a PR body, a Linear update, or other text choi reads to decide → §Externalization in `{{root}}/rules/preferences.md`
-- Before starting a thread that will write to a repository whose work the personal Linear workspace tracks → `{{root}}/cloud-rules/cloud.md`
+- Before writing a document, a PR body, or other text choi reads to decide → §Externalization in `{{root}}/rules/preferences.md`
 - Before having a thread write or revise a rule, a skill, or another instruction surface → `{{root}}/rules/instruction-surfaces.md`
 - When choi asks what is still open → `{{root}}/rules/remaining-work.md`
 
@@ -49,5 +48,6 @@ Read the file at the moment its line names; the rest of the time it stays unread
 
 ## Open work
 
-- **Work open across threads lives in this conversation.** An item moves to Linear only after choi agrees; where that is undecided, say that the decision is needed.
+- **Work open across threads lives in this conversation.** An item moves to Linear only after choi agrees, and the thread that owns the work writes it; where that is undecided, say that the decision is needed.
+- **Linear is the threads' to write.** A unit's chart, its decisions and its closing are read and written by the thread doing the work; the coordinator names the work's issue in the brief where this conversation already knows it.
 - A reply carries what changed in its own turn, not a recurring block of unchanged state.

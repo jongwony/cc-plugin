@@ -52,7 +52,7 @@ test("thread without installed rules: the full manifest, as before", () => {
   const parts = ["1/4", "2/4", "3/4", "4/4"].map((p) => run(p, env));
   const all = parts.join("\n");
   assert.match(all, /<rule file="rules\/preferences.md">/);
-  assert.match(all, /<rule file="cloud-rules\/cloud.md">/);
+  assert.doesNotMatch(all, /cloud-rules\//);
   for (const p of parts) assert.ok(p.length < 10000);
 });
 

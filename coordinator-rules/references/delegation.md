@@ -17,10 +17,6 @@ Read before `start_thread`, and before a `message_thread` that changes what a th
 - A rule the thread already loads. A thread in an environment that runs `cloud-setup.sh`, or one that gets this plugin's full-rules path, holds choi's rules; name a rule file only where it decides the work.
 - A long derivation. It goes into a project file, and the brief points there.
 
-## The unit's Linear chart
-
-Where the work writes to a repository the personal Linear workspace tracks, `cloud-rules/cloud.md` has the chart opened before the first write. choi has not decided whether the coordinator opens it and passes it in the brief, or the thread opens it. Until choi does: put the root issue's identifier in the brief when this conversation already knows it, and otherwise leave the chart to the thread.
-
 ## Receiving a result
 
 - **A thread's recommendation keeps choi's selection.** Relay it as the thread's proposal with its ground; where analysis settles it, relay the conclusion.

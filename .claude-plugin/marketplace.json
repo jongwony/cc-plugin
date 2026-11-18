@@ -147,7 +147,7 @@
     {
       "name": "coordinator-rules",
       "source": "./coordinator-rules",
-      "description": "A project coordinator's rules: a small core injected at SessionStart, with read points into references/ and copies of the shared rules it needs; other sessions get nothing"
+      "description": "A project coordinator's role core, injected at SessionStart: only what the coordinator role adds over the product's instructions and the premise layer; other sessions get nothing"
     },
     {
       "name": "aiward",

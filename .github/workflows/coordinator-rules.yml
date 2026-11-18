@@ -1,11 +1,9 @@
 name: coordinator-rules
 
-# The coordinator-rules plugin ships copies of the rules/ files its role cores
-# index; this keeps them equal to the sources and runs the plugin's tests.
+# Runs the coordinator-rules plugin's tests.
 on:
   pull_request:
     paths:
-      - "rules/**"
       - "coordinator-rules/**"
       - ".github/workflows/coordinator-rules.yml"
 
@@ -17,7 +15,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Copies match the shared rules
-        run: node coordinator-rules/scripts/sync-shared.mjs --check
       - name: Plugin tests
         run: node --test coordinator-rules/scripts/coordinator-rules.test.mjs

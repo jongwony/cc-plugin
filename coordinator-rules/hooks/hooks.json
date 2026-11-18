@@ -1,5 +1,5 @@
 {
-  "description": "coordinator-rules: at every context epoch (startup, resume, clear, compact), gives a project coordinator its core (roles/coordinator.md) with read points into references/ and copies of the shared rules; any other session gets nothing. After start_thread, a PostToolUse line names what a brief may have left out.",
+  "description": "coordinator-rules: at every context epoch (startup, resume, clear, compact), gives a project coordinator its role core (roles/coordinator.md); any other session gets nothing. After start_thread, a PostToolUse line names a slash command a brief line opens with, since it does not run there.",
   "hooks": {
     "SessionStart": [
       { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-rules.mjs\"" }] }

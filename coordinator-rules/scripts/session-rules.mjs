@@ -1,16 +1,17 @@
 #!/usr/bin/env node
 /**
- * SessionStart hook: give a project coordinator its rules.
+ * SessionStart hook: give a project coordinator its role core.
  *
  * A project coordinator runs outside any cloud environment, so no setup script
  * installs choi's rules into its <config>/rules/; it still receives the
- * plugins synced from the claude.ai account, so this plugin reaches it.
+ * plugins enabled on the claude.ai account, so this plugin reaches it.
  *
  * A role is a session kind with its own always-loaded core, `roles/<role>.md`.
- * The core carries only what that role does and indexes the rest by absolute
- * path for the session to read when the moment comes (`references/` and the
- * `rules/` copies). It is one string under the host's 10,000-character cap,
- * so hooks.json registers one entry. A session with no role gets nothing.
+ * The core carries only what that role adds: what the product's instructions,
+ * the premise layer (the route plugin) and the account's preferences already
+ * give the session stays with them. It is one string under the host's
+ * 10,000-character cap, so hooks.json registers one entry. A session with no
+ * role gets nothing.
  *
  *   coordinator — CLAUDE_CODE_TERMINAL_MCP_TOOLS names
  *     mcp__hearthbot__start_thread. Threads carry the same variable without
@@ -21,16 +22,12 @@
  *     (fail closed), and one line says so.
  *
  * Every failure path is open: whatever goes wrong, the hook exits 0, and the
- * session starts. A path the core indexes that does not resolve (the synced
- * copy lost a file) is named in one line under the core.
- * Zero external dependencies: Node.js standard library only.
+ * session starts. Zero external dependencies: Node.js standard library only.
  */
 
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
-const ROOT_TOKEN = "{{root}}";
 
 const pluginRoot =
   process.env.CLAUDE_PLUGIN_ROOT ||
@@ -47,23 +44,7 @@ export function detectRole(env) {
   return null;
 }
 
-/** Plugin-relative paths a core indexes as `{{root}}/<path>.md`, in order of first mention. */
-export function indexedPaths(raw) {
-  const re = new RegExp(`${ROOT_TOKEN.replace(/[{}]/g, "\\$&")}/([\\w./-]+\\.md)`, "g");
-  const out = [];
-  for (const m of raw.matchAll(re)) if (!out.includes(m[1])) out.push(m[1]);
-  return out;
-}
-
-/** The role's core with every `{{root}}` made absolute, and the indexed paths that do not resolve. */
-export function roleCore(role, root = pluginRoot) {
-  const raw = fs.readFileSync(path.join(root, "roles", `${role}.md`), "utf8").trim();
-  const body = raw.split(ROOT_TOKEN).join(root);
-  const missing = indexedPaths(raw).filter((rel) => !fs.existsSync(path.join(root, rel)));
-  return { body, missing };
-}
-
-export function build(env = process.env) {
+export function build(env = process.env, root = pluginRoot) {
   const role = detectRole(env);
   if (role === "unknown") {
     return (
@@ -74,20 +55,11 @@ export function build(env = process.env) {
   if (!role) return "";
   let core;
   try {
-    core = roleCore(role);
+    core = fs.readFileSync(path.join(root, "roles", `${role}.md`), "utf8").trim();
   } catch {
-    return `coordinator-rules: roles/${role}.md is missing under ${pluginRoot}; no ${role} rules were loaded.`;
+    return `coordinator-rules: roles/${role}.md is missing under ${root}; no ${role} rules were loaded.`;
   }
-  const lines = [
-    `choi's ${role} rules from cc-plugin (coordinator-rules). This session was identified as the ${role}; ` +
-      `the paths below are absolute — Read each one at the moment its line names.`,
-    "",
-    core.body,
-  ];
-  if (core.missing.length) {
-    lines.push("", `coordinator-rules: these indexed files are missing under ${pluginRoot}: ${core.missing.join(", ")}.`);
-  }
-  return lines.join("\n");
+  return `choi's ${role} rules from cc-plugin (coordinator-rules); this session was identified as the ${role}.\n\n${core}`;
 }
 
 function main() {

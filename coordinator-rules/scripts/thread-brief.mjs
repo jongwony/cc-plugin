@@ -10,10 +10,9 @@
  * `message_thread`, never as a gate on the call.
  *
  * What the hook decides without reading intent: a line of the brief that
- * opens with a slash command (it does not run inside a brief). Everything else
- * — whether the brief carried pointers, the judgment boundary, the grants —
- * needs the brief read for meaning, so the line names the reference that
- * holds that checklist instead of judging it here.
+ * opens with a slash command (it does not run inside a brief). It says nothing
+ * otherwise; what else a brief should carry is for the product's instructions
+ * and the premise layer, read for meaning.
  *
  * Every failure path is open: whatever goes wrong, the hook exits 0 silently.
  * Zero external dependencies: Node.js standard library only.
@@ -22,10 +21,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
-const pluginRoot =
-  process.env.CLAUDE_PLUGIN_ROOT ||
-  path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 function strings(value, out = []) {
   if (typeof value === "string") out.push(value);
@@ -46,21 +41,13 @@ export function slashCommands(input) {
   return found;
 }
 
-export function build(payload, root = pluginRoot) {
-  const ref = path.join(root, "references", "delegation.md");
-  const lines = [];
+export function build(payload) {
   const slash = slashCommands(payload?.tool_input ?? {});
-  if (slash.length) {
-    lines.push(
-      `coordinator-rules: the brief opens a line with ${slash.join(", ")}; a slash command does not run inside a brief. ` +
-        "Send the thread the skill or tool to use instead, with message_thread.",
-    );
-  }
-  lines.push(
-    `coordinator-rules: if the brief left out a pointer, the judgment boundary, a grant choi gave, or where the result lands ` +
-      `(${ref} §The parts of a brief), send it now with message_thread.`,
+  if (!slash.length) return "";
+  return (
+    `coordinator-rules: the brief opens a line with ${slash.join(", ")}; a slash command does not run inside a brief. ` +
+    "Send the thread the skill or tool to use instead, with message_thread."
   );
-  return lines.join("\n");
 }
 
 function main() {

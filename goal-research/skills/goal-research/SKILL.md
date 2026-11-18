@@ -17,6 +17,9 @@ Invoke directly with `/goal-research [runner] <research question>` when the pers
   epistemic-protocols `aitesis` plugin must be installed where the run executes.
 - **codex-plus** (this marketplace) — the `codex` runner, the default from Claude Code, is
   launched, continued, and read through it; where it is absent, designate `claude`.
+- **stint** (this marketplace) — the `claude` runner is a Stint, launched, continued, read,
+  and retired once the loop stops, through it; load `/stint` for the spawn, address, resume,
+  and retirement mechanics.
 
 ## Runner
 
@@ -37,7 +40,7 @@ Before launching, show the person once, in their language:
 - what the research is for and what should come back, as far as the context says;
 - the runner.
 
-Then launch without waiting for an answer. A correction that arrives later stops any pass in flight. For a Claude subagent it then goes to the same run as a continuation (Phase 3), carrying the corrected intent and the goal condition restated to match it. For codex, a correction, or research resumed after the loop has stopped, starts a new thread whose brief carries the corrected intent and the rollout path of every earlier thread. Invoked with no question, ask once for it.
+Then launch without waiting for an answer. A correction that arrives later stops any pass in flight. For a Claude Stint it then goes to the same session as a continuation (Phase 3), carrying the corrected intent and the goal condition restated in its text. For codex, a correction, or research resumed after the loop has stopped, starts a new thread whose brief carries the corrected intent and the rollout path of every earlier thread. Invoked with no question, ask once for it.
 
 ## Phase 2: Brief and Launch
 
@@ -56,13 +59,13 @@ The brief, with `{inquire}` set to `/inquire` for `claude` and `$inquire` for `c
 - that no person answers inside the run;
 - what to return: a compact result in the person's language, shaped by the stated use — what stands and on which sources, the weakest link the conclusions lean on, and each item left open with its question, how far it reached, and whose it is. The full working record stays in the run's own transcript.
 
-Launch in the background, as a run this session can continue and whose transcript a verifier can read: a Codex session through codex-plus ([invocation](references/codex-plus.md)) or a Claude subagent, as Runner settles. For codex, the goal turn follows the launch as its own turn, once per thread, setting the goal condition through codex-plus's goal route ([invocation](references/codex-plus.md)). A Claude subagent gets no separate goal turn: it receives no slash command through a message, so every continuation to it restates the goal condition in its text. A runner that cannot be launched is reported with what is missing, and the skill stops there.
+Launch in the background, as a run this session can continue and whose transcript a verifier can read: a Codex session through codex-plus ([invocation](references/codex-plus.md)) or a Claude Stint through the stint plugin, as Runner settles. For codex, the goal turn follows the launch as its own turn, once per thread, setting the goal condition through codex-plus's goal route ([invocation](references/codex-plus.md)). For claude, the goal condition is the Stint's whole initial prompt, as `/goal <goal condition>`, and the brief is its next message — a built-in dispatches only as the first token of a message; continuations go to the same session through `SendMessage`. A runner that cannot be launched is reported with what is missing, and the skill stops there.
 
 ## Phase 3: Check and Continue
 
 After each pass that returns a whole result, a verifier — a fresh context, neither this session nor the run — checks the result. This session gives it the whole compact result and the run's record, which carries the brief and every continuation:
 
-- Claude subagent: `${CLAUDE_CONFIG_DIR:-~/.claude}/projects/<the session's project>/<session>/subagents/agent-<id>.jsonl`, and the transcripts of agents it spawned — each `agent-<id>.meta.json` names its parent as `parentAgentId`;
+- Claude Stint: the session's transcript `${CLAUDE_CONFIG_DIR:-~/.claude}/projects/<its cwd, every non-alphanumeric character replaced by a hyphen>/<sessionId>.jsonl` (`claude agents --json` gives the sessionId and cwd), and the transcripts of agents it spawned under `<sessionId>/subagents/` — each `agent-<id>.meta.json` names its parent as `parentAgentId`;
 - codex: the rollout of every pass and of each earlier thread, and the rollouts of runs it spawned ([invocation](references/codex-plus.md)).
 
 The verifier reads every claim of the result, cited or not, against the record, and hands back only a verdict and the discrepancies, each marked as its reading: a cited source no Tavily search or extract call retrieved — what a call retrieved is what its response returned, structured or as formatted text, and a completed extract can still name a URL it failed to fetch; a source that does not support the claim as the result words it — its scope, a qualification lost in compression; a claim with no citation; a failed call a claim leans on; a claim on session ground that the brief and continuations do not carry. What it cannot read it reports as unread rather than as absent. The same verifier may be continued for later passes.

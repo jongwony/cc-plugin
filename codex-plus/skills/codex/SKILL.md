@@ -78,10 +78,10 @@ Modifiers, added to any base pattern above:
 Read the prompting guide before writing a prompt for a gpt-6 model, and again whenever a
 run came back having stopped early or asked a question instead of deciding.
 
-**File**: `references/gpt-6_prompting_guide.md`
+**File**: `references/gpt-6.2_prompting_guide.md`
 
 That file keeps only what changes for an unattended `codex exec` run. For the rest of
-prompting the gpt-6 family — its best practices and migration notes — read OpenAI's
+prompting GPT-6.2 — its best practices and migration notes — read OpenAI's
 guide itself: https://developers.openai.com/api/docs/guides/latest-model
 
 - Before delegating browser or native computer-use work, read

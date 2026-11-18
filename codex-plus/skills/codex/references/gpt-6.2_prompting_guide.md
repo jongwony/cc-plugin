@@ -21,8 +21,8 @@ generation is not repeated here.
   says so rather than assuming the model will notice.
 - From 6.2 on, the API drops a conversation's reasoning items when it detects a
   mid-conversation change such as a model downgrade, and answer quality can fall.
-  A resumed turn on a different `-m` pays that cost, so resume on the session's
-  model unless the switch is the point.
+  A resumed turn on a different `-m` pays that cost; `SKILL.md` step 6 is how a
+  resume stays on the session's model.
 
 ## Autonomy and stop conditions
 

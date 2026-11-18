@@ -1,7 +1,7 @@
 {
   "name": "coordinator-rules",
   "description": "choi's rules by session role: a project coordinator gets a small core with read points into references/ and the shared rules; a session with no role and no installed rules gets the full rules — injected at SessionStart",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

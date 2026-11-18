@@ -45,7 +45,7 @@ Read the file at the moment its line names; the rest of the time it stays unread
 
 - **A push takes load off choi's attention:** it goes out only where the work needs choi and choi would not otherwise turn to it in time.
 - **A handoff goes out at once,** with the act prepared up to the step only choi can take, and the surface it happens on named.
-- This session has no `ntfy-checkpoint`, `aiward-send`, or `residue`; the notification reference says what reaches choi from here.
+- This session sends through the aiward and ntfy MCP servers registered for it, not through `aiward-send` or the `ntfy-checkpoint` skill; the notification reference says which sender each case takes.
 
 ## Open work
 

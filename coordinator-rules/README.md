@@ -6,14 +6,14 @@ Gives each Claude Code session the rules its role needs, through a SessionStart 
 
 Claude Code loads every file in `<config>/rules/` at session start. The Mac links those files, and a cloud environment that runs `scripts/cloud-setup.sh` writes them (see `scripts/install-rules.md`). A project coordinator runs outside any cloud environment, so no setup script reaches it. A cloud thread whose environment has no setup script starts without the rules too. Both still get the plugins synced from the claude.ai account.
 
-The coordinator does not need the full set. It does no code work itself: it reports to choi, notifies, and coordinates threads, and the threads load the full rules. About half of the full set is code-work rules, and some rules name tools the coordinator does not have (`ntfy-checkpoint`, `aiward-send`, `residue`).
+The coordinator does not need the full set. It does no code work itself: it reports to choi, notifies, and coordinates threads, and the threads load the full rules. About half of the full set is code-work rules, and some rules name tools the coordinator does not have (`ntfy-checkpoint`, `aiward-send`, `residue`); a coordinator notifies through aiward and ntfy MCP servers instead.
 
 ## Layout
 
 | Path | Loaded | Holds |
 |---|---|---|
 | `roles/coordinator.md` | every context epoch, coordinator only | the core: read points, person and language, gate or relay, delegation, consent, notifications, open work (about 5,000 characters) |
-| `references/notification.md` | read before a push or an end-of-work report | what reaches choi from a coordinator, and what to do until choi picks a channel |
+| `references/notification.md` | read before a push or an end-of-work report | which sender each case takes (the aiward and ntfy MCP servers), and what to do where neither is connected |
 | `references/delegation.md` | read before `start_thread` | what a brief carries and leaves out, the Linear chart, receiving a result |
 | `rules/`, `cloud-rules/`, `install-rules.manifest` | symlinks to the repository's own | the shared rules; the core indexes the ones it needs by absolute path, and the full-rules path reads the manifest |
 

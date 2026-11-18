@@ -15,7 +15,7 @@ The coordinator does not need the full set. It does no code work itself: it repo
 | `roles/coordinator.md` | every context epoch, coordinator only | the core: read points, person and language, gate or relay, delegation, consent, notifications, open work (about 5,000 characters) |
 | `references/notification.md` | read before a push or an end-of-work report | which sender each case takes (the aiward and ntfy MCP servers), and what to do where neither is connected |
 | `references/delegation.md` | read before `start_thread` | what a brief carries and leaves out, the Linear chart, receiving a result |
-| `rules/`, `cloud-rules/`, `install-rules.manifest` | symlinks to the repository's own | the shared rules; the core indexes the ones it needs by absolute path, and the full-rules path reads the manifest |
+| `rules/`, `cloud-rules/`, `install-rules.manifest` | copies of the repository's own | the shared rules; the core indexes the ones it needs by absolute path, and the full-rules path reads the manifest |
 
 ## How
 
@@ -27,6 +27,10 @@ The coordinator does not need the full set. It does no code work itself: it repo
 - Every path exits 0.
 
 `CLAUDE_CODE_TERMINAL_MCP_TOOLS` is an undocumented product value, observed on 2026-11-18 to differ between a coordinator and its threads. `CLAUDE_CODE_ENTRYPOINT` and `CLAUDE_CODE_COORDINATOR_EXTRA_TOOLS` hold the same values in both. If the product changes it, the coordinator falls to the unknown path and says so.
+
+## Editing a shared rule
+
+The shared rules are copies, because account sync delivers a plugin as a plain directory and is not known to carry symlinks. The repository's `rules/`, `cloud-rules/` and `scripts/install-rules.manifest` stay the source. After editing one, run `node coordinator-rules/scripts/sync-shared.mjs`, bump this plugin's version, and commit both; the `coordinator-rules` workflow fails a PR whose copies differ.
 
 Requires Node.js on `PATH`. Tests: `node --test coordinator-rules/scripts/coordinator-rules.test.mjs`.
 
@@ -42,7 +46,7 @@ A role is a session kind with its own core. To add one (the Mac-resident aiward 
 
 Upload the plugin to the claude.ai account, so it syncs to every session, including project coordinators. A coordinator that is already running picks it up once its container syncs plugins again and a SessionStart fires (resume or compact); when that sync happens has not been verified.
 
-To check a session, look for the plugin under `<config>/plugins/synced/` and confirm that `rules/preferences.md` there is a real file, not a missing link. A missing link also shows in the coordinator core's last line.
+To check a session, look for the plugin under `<config>/plugins/synced/`, and in a coordinator, for `# Project coordinator` in the session-start context. A shared file missing from the copy shows in the core's last line.
 
 In Claude Code, for testing:
 

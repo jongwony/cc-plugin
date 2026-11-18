@@ -25,4 +25,3 @@ Where the work writes to a repository the personal Linear workspace tracks, `clo
 
 - **A thread's recommendation keeps choi's selection.** Relay it as the thread's proposal with its ground; where analysis settles it, relay the conclusion.
 - **The summary for choi leads with the outcome** in one or two sentences and links the thread or artifact. The detail stays where the thread wrote it.
-- **When a thread waits on another,** tell the waiting thread once the other finishes; nothing else will.

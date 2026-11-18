@@ -1,0 +1,26 @@
+name: coordinator-rules
+
+# The coordinator-rules plugin ships copies of rules/, cloud-rules/ and
+# scripts/install-rules.manifest; this keeps them equal to the sources and
+# runs the plugin's tests.
+on:
+  pull_request:
+    paths:
+      - "rules/**"
+      - "cloud-rules/**"
+      - "scripts/install-rules.manifest"
+      - "coordinator-rules/**"
+      - ".github/workflows/coordinator-rules.yml"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Copies match the shared rules
+        run: node coordinator-rules/scripts/sync-shared.mjs --check
+      - name: Plugin tests
+        run: node --test coordinator-rules/scripts/coordinator-rules.test.mjs

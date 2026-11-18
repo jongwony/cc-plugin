@@ -12,7 +12,7 @@
  * Role first. A role is a session kind with its own always-loaded core,
  * `roles/<role>.md`. The core carries only what that role does, and indexes
  * the rest by absolute path for the session to read when the moment comes
- * (`references/` and the shared `rules/`, `cloud-rules/` links). A role's core
+ * (`references/` and the shared `rules/`, `cloud-rules/` copies). A role's core
  * is emitted whether or not <config>/rules/ is installed, because the role
  * decides what the session needs, not the install state.
  *
@@ -38,7 +38,11 @@
  *
  * Every failure path is open: whatever goes wrong, the hook exits 0, and the
  * session starts. A path the core indexes that does not resolve (the synced
- * copy dropped a link) is named in one line under the core.
+ * copy lost a file) is named in one line under the core.
+ *
+ * The shared rules are copies of the repository's own, kept equal by
+ * scripts/sync-shared.mjs (CI runs its --check), because account sync delivers
+ * a plugin as a plain directory.
  * Zero external dependencies: Node.js standard library only.
  */
 
@@ -160,7 +164,7 @@ function buildFull(index, count) {
     collected = collect();
   } catch {
     return index === 0
-      ? `coordinator-rules: install-rules.manifest is missing under ${pluginRoot}; the plugin's links did not survive, so no rules were loaded.`
+      ? `coordinator-rules: install-rules.manifest is missing under ${pluginRoot}; so no rules were loaded.`
       : "";
   }
   const { rules, missing } = collected;

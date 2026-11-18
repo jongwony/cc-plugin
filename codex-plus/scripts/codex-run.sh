@@ -18,7 +18,7 @@ readonly DEFAULT_MODEL="gpt-6.2-astra"
 # task, so pinning the top of the ladder here spends it on every run that never
 # needed it. OpenAI's own guidance for the current generation is to start at
 # medium and compare against neighbours on representative work rather than
-# assume the highest effort wins. Callers escalate to high, xhigh or max
+# assume the highest effort wins. Callers escalate to high, xhigh, max or ultra
 # deliberately.
 #
 # astra's ladder is what `codex debug models` reports for it. It has no
@@ -49,7 +49,7 @@ Usage: codex-run.sh [options] <prompt_file>
 
 Options:
   -m, --model MODEL      Model name (default: gpt-6.2-astra)
-  -r, --effort EFFORT    Reasoning effort: low|medium|high|xhigh|max (default:
+  -r, --effort EFFORT    Reasoning effort: low|medium|high|xhigh|max|ultra (default:
                          medium, a starting point rather than a ceiling —
                          escalate per task. astra has no `none` rung)
   -f, --fast             Request codex's fast (priority) service tier. codex has

@@ -61,8 +61,9 @@ written for: you read it, and by inference over the context you settle each elem
 open. Every `axiom` is one of those judgments — a black box to the contract, yours to make from
 the material in front of you; its doc comment says what you judge there, and nothing in this
 block decides it for you. Every `def`, `inductive`, and `structure` is fixed by the contract.
-The block fixes where the loop goes from one phase to the next; what a phase does, and how it
-resumes after a gate, is its rules below.
+The block fixes which sources a round owes, how a surviving finding is handled, which writer
+route an apply pass takes, and when the loop has converged. The order of the phases, where the
+loop holds for the user, and how it resumes are the rules below.
 -/
 
 namespace ReviewLoop
@@ -74,6 +75,13 @@ axiom Session : Type
 /-- A reviewer, by the name the host knows it under. -/
 abbrev Source := String
 
+/-- The sources a round owes reviews from. It holds at least one source by construction. -/
+structure Sources where
+  first : Source
+  rest  : List Source
+
+def Sources.toList (d : Sources) : List Source := d.first :: d.rest
+
 /-- A finding a source reported, or one the loop's own goal reading added. -/
 structure Finding where
   source : Source
@@ -84,14 +92,14 @@ structure Finding where
 
 /-- How Phase 0 reads the sources. -/
 inductive Entry
-  | use (sources : List Source)
+  | use (d : Sources)
   /-- the one invokable source, said as relayed -/
   | relay (s : Source)
   /-- a gate: the invokable sources with their actual coverage, cost and reporting limits and no
       default; or why a designated source is unavailable, with making it available, an available
       alternative, or stopping — the designation retained until that is settled -/
   | ask
-  /-- the loop stops, naming the missing capability -/
+  /-- the loop stops before any review, naming the missing capability -/
   | missing
 
 /-- `designated`: the names of the sources this invocation designates; an effort level designated
@@ -99,10 +107,17 @@ inductive Entry
     host can run now. -/
 def entry (designated invokable : List Source) : Entry :=
   match designated, invokable with
-  | [], []    => .missing
-  | [], [s]   => .relay s
-  | [], _     => .ask
-  | _ :: _, _ => if designated.all invokable.contains then .use designated else .ask
+  | [], []      => .missing
+  | [], [s]     => .relay s
+  | [], _       => .ask
+  | d :: ds, _  => if (d :: ds).all invokable.contains then .use ⟨d, ds⟩ else .ask
+
+/-- **Your reading**: the sources in force — those `entry` settled (`Entry.use`'s, or the one
+    `Entry.relay` names, or the user's answer to `Entry.ask`), as a later turn of the user's has
+    replaced them: a switch offered when a call ended without a usable review, or a correction of
+    the designation. Continuing a round without a failed source's review leaves that source in
+    force. -/
+axiom inForce : Session → Sources
 
 /-! ── FINDINGS ── -/
 
@@ -136,8 +151,10 @@ def Provenance.side : Provenance → Side
 inductive Disposition | applied | dropped | carried
 
 /-- **Your reading**: the disposition a citable ground already settles for this finding — the
-    user's prior direction, the PR's purpose, a governing rule harvested under Phase 0 rule 4, or
-    citable precedent — or `none`. -/
+    user's prior direction, the PR's purpose, a governing rule the Phase 0 harvest found, or
+    citable precedent — or `none`. A ground that settles `applied` settles that the finding is
+    repaired; it settles the repair's shape and its scope only where it says so, and `classOf`
+    and `Licensed` read what it leaves. -/
 axiom settled : Session → Finding → Option Disposition
 
 inductive Class
@@ -149,31 +166,39 @@ inductive Class
       unentrusted scope/risk decisions -/
   | judgment
 
-/-- **Your judgment** of a surviving finding that nothing cited settles. -/
+/-- **Your judgment** of a surviving finding that is to be repaired or whose disposition nothing
+    cited settles: whether a repair choice is still live once what `settled` gives is taken as
+    fixed. -/
 axiom classOf : Session → Finding → Class
 
-/-- **Your judgment**: a citable scope license — purpose, mandated sweep, or settled precedent —
-    takes the repair of this pre-existing-side defect into this unit. -/
+/-- **Your judgment**: a citable scope license — the user's direction, the purpose, a mandated
+    sweep, or settled precedent — takes the repair of this pre-existing-side defect into this
+    unit. -/
 axiom Licensed : Session → Finding → Prop
 
 /-- What Phase 3 does with one surviving finding. -/
 inductive Handling
   /-- relayed with its basis, recording side effects; no question -/
   | relay (d : Disposition)
-  /-- applied and reported, without a disposition gate -/
+  /-- applied and reported with its basis — the cited ground where one settled it — without a
+      disposition gate -/
   | apply
   /-- a disposition gate -/
   | gate
 
 open Classical in
+/-- A ground that settles a drop or a carry leaves nothing to choose. Every other finding is
+    repaired or gated on what is still live in it and on whether its side is in scope, whether or
+    not a ground settled that it is repaired. -/
 noncomputable def handling (s : Session) (f : Finding) : Handling :=
   match settled s f with
-  | some d => .relay d
-  | none =>
+  | some .dropped => .relay .dropped
+  | some .carried => .relay .carried
+  | _ =>
     match classOf s f, (provenance s f).side with
+    | .judgment, _              => .gate
     | .mechanical, .ofChange    => .apply
     | .mechanical, .preExisting => if Licensed s f then .apply else .gate
-    | .judgment, _              => .gate
 
 /-! ── APPLY PASS ── -/
 
@@ -196,12 +221,12 @@ def route (d : Delegation) (parentHeld : Bool) : Route :=
 
 inductive Actor | drivingSession | delegate
 
-/-- Who performs step 1 of Phase 4. -/
+/-- Who scans the planned change points and enumerates the predicate's sites in Phase 4. -/
 def scanHolder : Route → Actor
   | .fork => .delegate
   | _     => .drivingSession
 
-/-- Who performs steps 4 and 5 of Phase 4. -/
+/-- Who checks the written sites and reconciles the fit pass's result in Phase 4. -/
 def writer : Route → Actor
   | .inline => .drivingSession
   | _       => .delegate
@@ -217,14 +242,14 @@ axiom RecurrencePending : Session → Prop
 /-- **Your reading**: an edit has landed since the latest review. -/
 axiom EditedSinceReview : Session → Prop
 
-/-- **Your reading**, for one source the loop is using, on the current reviewed artifact: it
-    returned `approve`, or a full re-review returned zero new non-refuted findings. A finding is
-    new in its discovery review even when deferred or handed over; its later return is not new and
+/-- **Your reading**, for one source, of its review on the current reviewed artifact: it returned
+    `approve`, or a full re-review returned zero new non-refuted findings. A finding is new in its
+    discovery review even when deferred or handed over; its later return is not new and
     preserves the disposition. -/
 axiom Clear : Session → Source → Prop
 
-/-- **Your reading**: every source the loop is using completed a full re-review. -/
-axiom FullyReReviewed : Session → List Source → Prop
+/-- **Your reading**: this source completed a full re-review of the current reviewed artifact. -/
+axiom FullyReReviewed : Session → Source → Prop
 
 /-- **Your reading** of Phase 3: the verified set names a shared cause. -/
 axiom SharedCause : Session → Prop
@@ -234,15 +259,15 @@ axiom RootsResolved : Session → Prop
 
 /-- Phase 3's root-resolved end: the loop ends as it stands, the round's findings go to the user
     unrepaired with their dispositions, and no repair is chosen or applied. -/
-def RootResolved (sources : List Source) (s : Session) : Prop :=
-  FullyReReviewed s sources ∧ ¬ SharedCause s ∧ RootsResolved s ∧ ¬ RecurrencePending s
+def RootResolved (s : Session) : Prop :=
+  (∀ x ∈ (inForce s).toList, FullyReReviewed s x) ∧
+    ¬ SharedCause s ∧ RootsResolved s ∧ ¬ RecurrencePending s
 
-/-- Convergence holds only of the current reviewed artifact. `sources`, here and in `RootResolved`
-    and `next`: the sources the loop is using — those `entry` settled (`Entry.use`'s list, or the
-    one `Entry.relay` names), as the user has since changed them at a sources gate. -/
-def Converged (sources : List Source) (s : Session) : Prop :=
+/-- Convergence holds only of the current reviewed artifact, and only through reviews every source
+    in force owes. -/
+def Converged (s : Session) : Prop :=
   AllDispositioned s ∧ ¬ RecurrencePending s ∧ ¬ EditedSinceReview s ∧
-    ((∀ x ∈ sources, Clear s x) ∨ RootResolved sources s)
+    ((∀ x ∈ (inForce s).toList, Clear s x) ∨ RootResolved s)
 
 inductive Exit
   | converged
@@ -251,72 +276,18 @@ inductive Exit
   | notConverged
 
 open Classical in
-noncomputable def exitAs (sources : List Source) (s : Session) : Exit :=
-  if Converged sources s then .converged else .notConverged
-
-/-! ── LOOP ── -/
-
-/-- One round is `obtain` (Phase 1), `verify` (Phase 2), `settle` (Phase 3), `apply` (Phase 4),
-    `decide` (Phase 5's reading of convergence); `enter` is Phase 0. From the second round on,
-    `obtain` is the full re-review Phase 5 describes, with its pointer. -/
-inductive Phase | enter | obtain | verify | settle | apply | decide
-
-/-- What only the user's turn settles. -/
-inductive Gate
-  /-- `Entry.ask` -/
-  | sources
-  /-- Phase 0 rule 2: no changes -/
-  | scope
-  /-- Phase 0 rule 3: where PR repairs land, raised before the first repair; or recovery direction -/
-  | landing
-  /-- Phase 1: a call ended without a usable review -/
-  | failedCall
-  /-- `Handling.gate`, or a direction Phase 3 leaves to the user -/
-  | disposition
-  /-- Phase 4 step 2: an unsettled epistemic risk -/
-  | risk
-
-/-- **Your reading**: the gate this phase's work has raised that no turn of the user's has yet
-    settled, or `none`. -/
-axiom pending : Session → Phase → Option Gate
-
-/-- **Your reading**: a turn of the user's ends the loop. -/
-axiom UserEnds : Session → Prop
-
-/-- **Your reading**: the settled dispositions leave a repair to write. -/
-axiom RepairOwed : Session → Prop
-
-inductive Step
-  | go (p : Phase)
-  /-- the gate is presented and the turn ends; silence settles nothing, and what waits on the gate
-      does not proceed; on the user's answer the phase resumes where it held -/
-  | hold (g : Gate)
-  | exit (e : Exit)
-
-open Classical in
-/-- Read when phase `p`'s work is complete. A judgment Phase 4 returns to Phase 3 is settled inside
-    the apply pass, which then resumes (step 6): the phase stays `apply`. -/
-noncomputable def next (sources : List Source) (s : Session) (p : Phase) : Step :=
-  if UserEnds s then .exit (exitAs sources s)
-  else
-    match pending s p with
-    | some g => .hold g
-    | none =>
-      match p with
-      | .enter  => .go .obtain
-      | .obtain => .go .verify
-      | .verify => .go .settle
-      | .settle =>
-        if RootResolved sources s then .exit (exitAs sources s)
-        else if RepairOwed s then .go .apply
-        else .go .decide
-      | .apply  => .go .decide
-      | .decide => if Converged sources s then .exit .converged else .go .obtain
+/-- How any exit is reported: the user's, a stop, Phase 3's root-resolved end, or Phase 5's. -/
+noncomputable def exitAs (s : Session) : Exit :=
+  if Converged s then .converged else .notConverged
 
 end ReviewLoop
 ```
 
 ## Rules
+
+The phases run in order. A gate presents its question and ends the turn: silence settles
+nothing, what waits on the gate does not proceed, and the user's answer resumes the work
+where it held.
 
 ### Phase 0 — Set the invocation and its ground
 
@@ -358,7 +329,7 @@ end ReviewLoop
 ### Phase 1 — Obtain the round's reviews
 
 Use the selected host route and source adapter with the captured pointer and current
-intent bundle. Several designated sources review that same pointer in parallel, each in
+intent bundle. Several sources in force review that same pointer in parallel, each in
 its own context; the round's findings are their union, each keeping its source.
 
 Use each source's first read-only review call to confirm its command and contract
@@ -386,7 +357,7 @@ the source found nothing. Name the goal and consequence behind any additional fi
 verify it through Phase 2, and include it in classification. Record an empty goal
 reading too; omit this pass only where no declared goal was found.
 
-Where one designated source's review this round leaves that source `Clear` and another's
+Where one in-force source's review this round leaves that source `Clear` and another's
 new findings survive verification, consult across that split before reading the set: ask
 the source still holding findings what in the artifact would turn its verdict to
 approve, and give those findings to the converged source to adjudicate, withholding the
@@ -449,6 +420,9 @@ trends. Separate introduced, fix-induced, and pre-existing-side work when decidi
 what this unit carries. A rising count changes neither the criterion nor source scope.
 
 ### Phase 4 — Apply and check the bundle
+
+An apply pass runs where the settled dispositions leave a repair to write; otherwise the
+round goes to Phase 5.
 
 For PR scope, follow [PR scope](references/pr-scope.md) before the first edit.
 
@@ -515,7 +489,7 @@ so far, so the driving session records rather than re-derives it.
 ### Phase 5 — Re-review and stop on evidence
 
 When the processed round has not earned convergence below, refresh changed files and
-design intent and obtain a **full** re-review from each designated source, including
+design intent and obtain a **full** re-review from each source in force, including
 after dispositions that landed no edit. For PR scope, use the re-review pointer supplied
 by [PR scope](references/pr-scope.md). Where the ledger convention puts a repair's
 derivation in its commit message, that message is a fix-status claim under Phase 0 rule

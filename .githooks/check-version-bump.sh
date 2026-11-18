@@ -11,6 +11,8 @@
 # unchanged: that field selects shipped components, so moving it — including by
 # adding or deleting the manifest — does require a bump.
 # A new plugin (no prior plugin.json) is satisfied by having a version at all.
+# A file outside the plugin that a tracked symlink under the plugin dir points
+# to (or into) ships with the plugin, so its change requires the bump too.
 #
 # Modes:
 #   (default)       index mode — compare staged index vs HEAD   (pre-commit hook)
@@ -98,12 +100,62 @@ extract_version() {
   extract_field version
 }
 
+# Resolve a repo-relative path holding "." and ".." segments (bash 3.2: no
+# realpath -m on macOS). Prints the normalized path, empty when it leaves the
+# repository.
+normalize_path() {
+  local IFS=/ part out=()
+  for part in $1; do
+    case "$part" in
+      ""|.) ;;
+      ..) [ "${#out[@]}" -gt 0 ] || return 0; unset "out[$(( ${#out[@]} - 1 ))]"; out=("${out[@]+"${out[@]}"}") ;;
+      *) out+=("$part") ;;
+    esac
+  done
+  printf '%s' "${out[*]+"${out[*]}"}"
+}
+
+# Paths outside a plugin that ship inside it: each tracked symlink under the
+# plugin dir, resolved against the repository, is copied into the plugin when it
+# installs, so a change under its target changes what this version delivers.
+# Read from the new side of the comparison, so a link added in this change-set
+# counts. Prints "<link path>\t<target path>" lines.
+linked_paths() {
+  local pdir="$1" meta path target
+  if [ -n "$base" ]; then
+    git ls-tree -r HEAD -- "$pdir" 2>/dev/null | while IFS=$'\t' read -r meta path; do
+      set -- $meta; [ "$1" = 120000 ] || continue
+      target=$(git cat-file -p "$3" 2>/dev/null) || continue
+      printf '%s\t%s\n' "$path" "$(normalize_path "$(dirname "$path")/$target")"
+    done
+  else
+    git ls-files -s -- "$pdir" 2>/dev/null | while IFS=$'\t' read -r meta path; do
+      set -- $meta; [ "$1" = 120000 ] || continue
+      target=$(git cat-file -p "$2" 2>/dev/null) || continue
+      printf '%s\t%s\n' "$path" "$(normalize_path "$(dirname "$path")/$target")"
+    done
+  fi
+}
+
 violations=0
 for pj in "${plugins[@]}"; do
   pdir=${pj%/.claude-plugin/plugin.json}
 
+  targets=()
+  while IFS=$'\t' read -r _link target; do
+    [ -n "$target" ] && targets+=("$target")
+  done < <(linked_paths "$pdir")
+
   content=0
   for f in "${changed[@]}"; do
+    linked=0
+    for t in "${targets[@]+"${targets[@]}"}"; do
+      case "$f" in "$t"|"$t"/*) linked=1; break ;; esac
+    done
+    if [ "$linked" -eq 1 ]; then
+      content=$((content + 1))                                 # ships through a link
+      continue
+    fi
     case "$f" in "$pdir"/*) ;; *) continue ;; esac           # under this plugin
     # .claude-plugin/ is where the version itself lives, so exempting it whole is
     # structural: a bump would otherwise be a change demanding its own bump.

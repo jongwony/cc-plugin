@@ -38,7 +38,7 @@ When the delegated task is to define, create, or refine a Codex goal — a goal-
 
    What a choice may name:
    - **Model** — any slug `codex debug models` lists.
-   - **Effort** — `low`, `medium`, `high`, `xhigh`, `max`. A model's ladder may stop short of `max`, and a parallel run needs an effort every model in it takes; `codex debug models` reports each model's ladder.
+   - **Effort** — `low`, `medium`, `high`, `xhigh`, `max`, `ultra`. `ultra` is maximum reasoning with automatic task delegation, as the model catalog describes it. A model's ladder may stop short of the top — `gpt-6-luna`'s ends at `max` — and a parallel run needs an effort every model in it takes; `codex debug models` reports each model's ladder.
    - **Service tier** — `-f`, under the caveat in the Quick Reference.
 
 2. Select sandbox mode. Omitting `-s` gives `workspace-write` **with network access** — codex offers no network under `read-only` at all, so this is the only mode short of full access that has any. Pass `-s read-only` when a run must neither touch the tree nor reach off-machine; `-s danger-full-access` only when it must write outside the workspace. Because the default already permits writes, what bounds a run that is meant to only read is the role its prompt declares — state it.
@@ -49,7 +49,7 @@ When the delegated task is to define, create, or refine a Codex goal — a goal-
    - **Single model**: one subagent call.
    - **Multiple models**: issue parallel subagent calls (one per model) in a single response — same prompt, sandbox, and effort, different `-m`. Each returns its own `SESSION_ID`.
 5. Record each returned `SESSION_ID` against its purpose/model. This {purpose → SESSION_ID} map is the only resume handle.
-6. Resume: write new instructions to a fresh `<scratchpad>/codex_prompt_<suffix>.txt`, then delegate to a Bash subagent running `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> <scratchpad>/codex_prompt_<suffix>.txt`. Resume is always by explicit id, which stays deterministic under parallel sessions. **A resumed turn inherits none of the session's settings** — pass `-m`, `-r`, `-C` and `-f` again to stay where the session was. Omit `-m`/`-r` and the wrapper passes its own fallback, `gpt-6-astra` at `medium`, so a resumed run started on another model silently moves to astra; omit `-C` and the turn runs wherever the subagent happens to be, re-resolving every pointer against that tree. `-s` has no effect on resume: `codex exec resume` takes no sandbox option, and the turn runs under the `sandbox_mode` of the codex config in force at resume time, not the `-s` the session was created with.
+6. Resume: write new instructions to a fresh `<scratchpad>/codex_prompt_<suffix>.txt`, then delegate to a Bash subagent running `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> <scratchpad>/codex_prompt_<suffix>.txt`. Resume is always by explicit id, which stays deterministic under parallel sessions. **A resumed turn inherits none of the session's settings** — pass `-m`, `-r`, `-C` and `-f` again to stay where the session was. Omit `-m`/`-r` and the wrapper passes its own fallback, `gpt-6.2-astra` at `medium`, so a resumed run started on another model silently moves to `gpt-6.2-astra`; omit `-C` and the turn runs wherever the subagent happens to be, re-resolving every pointer against that tree. `-s` has no effect on resume: `codex exec resume` takes no sandbox option, and the turn runs under the `sandbox_mode` of the codex config in force at resume time, not the `-s` the session was created with.
 7. Summarize each outcome to the user; for parallel work, surface which `SESSION_ID` maps to which branch. Inform the user: "Resume anytime with 'codex resume'."
 
 ### Quick Reference
@@ -63,7 +63,7 @@ Base patterns:
 
 Modifiers, added to any base pattern above:
 - Different working directory — `-C <DIR>`; pass it again on resume (step 6)
-- Model and effort — `-m MODEL`, `-r EFFORT` (omitted, the wrapper falls back to `gpt-6-astra` at `medium`); pass both again on resume (step 6)
+- Model and effort — `-m MODEL`, `-r EFFORT` (omitted, the wrapper falls back to `gpt-6.2-astra` at `medium`); pass both again on resume (step 6)
 - Fast service tier — `-f`; a request rather than a guarantee, since codex drops the tier without an error where the model does not carry it (`codex debug models` lists what each one has). Pass it again on resume (step 6)
 - Capture the answer to a file — `-o <FILE>` writes codex's final message to FILE deterministically
 
@@ -78,10 +78,10 @@ Modifiers, added to any base pattern above:
 Read the prompting guide before writing a prompt for a gpt-6 model, and again whenever a
 run came back having stopped early or asked a question instead of deciding.
 
-**File**: `references/gpt-6_prompting_guide.md`
+**File**: `references/gpt-6.2_prompting_guide.md`
 
 That file keeps only what changes for an unattended `codex exec` run. For the rest of
-prompting the gpt-6 family — its best practices and migration notes — read OpenAI's
+prompting GPT-6.2 — its best practices and migration notes — read OpenAI's
 guide itself: https://developers.openai.com/api/docs/guides/latest-model
 
 - Before delegating browser or native computer-use work, read

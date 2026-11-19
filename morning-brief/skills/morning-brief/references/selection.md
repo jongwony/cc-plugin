@@ -10,7 +10,7 @@ Where one read is blocked, reach the same state another way — the channel inst
 
 ## Independent check of each to-do
 
-Send each to-do candidate to a fresh-context subagent (Agent tool, one call per candidate, all in parallel) whose job is to disqualify it. Give it the candidate's title, source URL, the person who asked, and why it looks open. It answers four questions with tool reads and returns `{"verdict": "keep" | "drop", "evidence": "..."}`:
+Send each to-do candidate to a fresh-context subagent (Agent tool with `model: opus`, one call per candidate, all in parallel) whose job is to disqualify it. Every candidate gets its check, however long the checks take. Give it the candidate's title, source URL, the person who asked, and why it looks open. It answers four questions with tool reads and returns `{"verdict": "keep" | "drop", "evidence": "..."}`:
 
 1. Is the work already done — the pull request merged or closed, the issue resolved, the document updated?
 2. Has the user already acted on it — replied, delivered, handed it to someone else — here or in another tool?

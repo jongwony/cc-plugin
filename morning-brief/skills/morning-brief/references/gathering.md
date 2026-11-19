@@ -4,7 +4,7 @@ Read at step 1 and step 2 of the procedure. Establishing what is the case — wh
 
 ## What `/inquire` establishes for the brief
 
-Invoke `/inquire` with these targets, as of the brief's date and time:
+Invoke `/inquire` with these targets, as of the brief's date and time. A subagent launched for this collection runs with `model: opus`.
 
 - **The user**: role and team.
 - **What the organization is pushing on now**: launches, migrations, deadlines.

@@ -17,7 +17,7 @@ Invoke `/inquire` with these targets, as of the brief's date and time. A subagen
   On Monday, widen every window by three days so Friday is covered.
 - **The candidates in the section below**, each with its source URL.
 
-Of what `/inquire` hands back as the user's, an open decision the user owns becomes a to-do candidate naming the decision and who is waiting on it; what stayed unreached goes in the brief's closing line with what was tried. The run continues past both.
+Of what `/inquire` hands back as the user's, an open decision the user owns becomes a to-do candidate naming the decision and who is waiting on it; what stayed unreached goes in the brief's closing line with what was tried. The run continues past both; in an unattended run no turn waits on `/inquire`'s relay to the user.
 
 An item tied to a top project outranks a larger item on a side topic throughout the brief.
 

@@ -10,14 +10,15 @@ Where one read is blocked, reach the same state another way — the channel inst
 
 ## Independent check of each to-do
 
-Send each to-do candidate to a fresh-context subagent (Agent tool with `model: opus`, one call per candidate, all in parallel) whose job is to disqualify it. Every candidate gets its check, however long the checks take. Give it the candidate's title, source URL, the person who asked, and why it looks open. It answers four questions with tool reads and returns `{"verdict": "keep" | "drop", "evidence": "..."}`:
+Send each to-do candidate to a fresh-context subagent (Agent tool with `model: opus`, one call per candidate, all in parallel) whose job is to disqualify it. Every candidate gets its check, however long the checks take. Give it the candidate's title, source URL, the person who asked, and why it looks open. It answers five questions with tool reads and returns `{"verdict": "keep" | "drop", "evidence": "..."}`:
 
 1. Is the work already done — the pull request merged or closed, the issue resolved, the document updated?
 2. Has the user already acted on it — replied, delivered, handed it to someone else — here or in another tool?
 3. Is it the user's to do — asked of them, not of someone else or of the group?
 4. Has it gone stale — no movement from anyone for more than five days, or the project moved on?
+5. Is it owed today — due today, or someone verifiably blocked on the user now?
 
-A candidate the check drops stays out of the to-dos, whatever this run believes. Where the check corrects the candidate's next action, the correction replaces the candidate's wording. Where it reframes the candidate into a different successor action, that successor gets its own independent check before it is listed.
+A candidate the check drops stays out of the to-dos, whatever this run believes; one it keeps still goes through the drop rules below, applied to the check's answers. Where two checks disagree on a fact, re-read that fact once at its authoritative record — the pull request's own state through the code host, the issue in its tracker — and use that read, not whichever claim is more recent. Where the check corrects the candidate's next action, the correction replaces the candidate's wording. Where it reframes the candidate into a different successor action, that successor gets its own independent check before it is listed.
 
 ## Drop or move rules
 
@@ -58,7 +59,7 @@ Before writing, each source URL appears in exactly one section, and the same com
 
 ## Previous brief
 
-The previous brief is the newest dated file in `<dir>` before the brief's date. Its to-dos are a checklist; a checked box means the user or a downstream marked it done.
+The previous brief is the newest dated file in `<dir>` before the brief's date, together with an existing file for the brief's own date when the run repeats a day. Its to-dos are a checklist; a checked box means the user or a downstream marked it done.
 
 - A checked to-do is not listed again unless new activity reopened it.
 - An unchecked to-do is re-read at its source for a later reply or state that discharges it before it is carried over. One still open is listed again with where it now stands — the current blocker and the next action — and since when it has been open, rather than in the previous brief's wording.

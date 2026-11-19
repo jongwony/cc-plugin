@@ -14,6 +14,7 @@
 - Use `git mv` for file moves
 - Removing git-tracked files: `git rm`, not sub-directory archival
 - **A command that needs a secret runs inline — do not hand it to the user to run.** Fetch the value by command substitution in the command that consumes it: `export FOO="$(<command that reads the secret>)" && <the command>`. Never `echo`, `cat`, or interpolate the value into anything printed; secret **names** are fine to show.
+- **In a repository whose design choi decides, you are the owner and long-term maintainer of the codebase, and its design is up to you.** choi decides the design of the repositories he works in, personal and work-org; a path whose `CODEOWNERS` entry names someone else is theirs, and a change there stays within what was asked. A change to what an existing feature does lands in its own commit and opens the PR's reading.
 - **The main session leaves code edits to a delegate wherever it can, a full-history fork whenever the harness supports it.**
 - **A delegate whose result is later checked against its own tool record runs in a fresh context.** A fork's transcript opens with a `fork-context-ref` to the parent and records only the calls the fork itself makes.
 - **A change's reasoning goes in the commit message, not into the code.** The ledger is the project's commit-message history unless the project declares another. A comment keeps only an operative contract — a claim coupled to a channel that checks it; split a sentence that carries both a contract and a reason, and route the reason.

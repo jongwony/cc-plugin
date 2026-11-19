@@ -57,7 +57,7 @@
     {
       "name": "morning-brief",
       "source": "./morning-brief",
-      "description": "Morning brief from connected work tools — verified to-dos owed today, news, one push-forward, today's calendar — in the user's language, saved as dated JSON and markdown for downstream automation"
+      "description": "Morning brief from connected work tools — verified to-dos owed today, news, one push-forward, today's calendar — in the user's language"
     },
     {
       "name": "handwriting",

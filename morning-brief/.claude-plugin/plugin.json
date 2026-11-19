@@ -1,12 +1,12 @@
 {
   "name": "morning-brief",
-  "description": "A morning brief from the user's connected work tools — to-dos owed today, verified against each source's latest state, news they would otherwise miss, one piece of work to push forward, and today's calendar — in the user's language, saved as dated JSON and markdown for downstream automation",
-  "version": "0.1.0",
+  "description": "A morning brief from the user's connected work tools — to-dos owed today, verified against each source's latest state, news they would otherwise miss, one piece of work to push forward, and today's calendar — in the user's language",
+  "version": "0.2.0",
   "userConfig": {
     "output_dir": {
       "type": "string",
-      "title": "Output directory",
-      "description": "Absolute path where each brief's JSON and markdown are written; leave empty to use the plugin's data directory",
+      "title": "Brief directory",
+      "description": "Absolute path where each day's brief is saved for the next run to read; leave empty to use the plugin's data directory",
       "required": false
     },
     "language": {

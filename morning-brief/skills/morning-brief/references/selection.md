@@ -1,12 +1,12 @@
 # Selection
 
-Read at step 3 and step 4 of the procedure. Covers how a candidate is verified and which section it belongs in.
+Read at steps 0 and 3–5 of the procedure. Covers how a candidate is verified, which section it belongs in, and how the brief is written.
 
 ## Verify to the latest state
 
-A candidate is verified only after its source has been read to its most recent activity: the last reply in the thread, the current review and merge state of the pull request, the current status of the issue, the latest comments on the page. A notification, an inbox row or a preview shows the original ask, not its current state. Every `source.url` in the brief is a page that this run opened.
+A candidate is verified only after its source has been read to its most recent activity: the last reply in the thread, the current review and merge state of the pull request, the current status of the issue, the latest comments on the page. A notification, an inbox row or a preview shows the original ask, not its current state. Every source link in the brief is a page that this run opened.
 
-Where one read is blocked, reach the same state another way — the channel instead of the search, the page instead of its notification, another tool for the same system. Leave the candidate out only when every route is blocked, and list it under `unverified` with what was tried.
+Where one read is blocked, reach the same state another way — the channel instead of the search, the page instead of its notification, another tool for the same system. Leave the candidate out only when every route is blocked, and list it among the unverified items with what was tried.
 
 ## Independent check of each to-do
 
@@ -43,14 +43,23 @@ A standing duty the user owns stays even without an explicit ask, until a source
 
 Every item carries an `area`: the project it belongs to, or a working area when it has none.
 
+The brief opens with a greeting of one or two sentences. It comments on the shape of the day — how full the calendar is, where the open time sits — warmly, without listing items and without urgency. The sections follow it in this order: push forward, top to-dos, new updates, your day, looking ahead. An empty section is left out, except top to-dos and your day, which say that they are empty. A closing line names the sources read, any that failed, and the unverified items.
+
+## Writing an item
+
+- The title names the action or the news in a short phrase. For a to-do, it names the next action given the current state — after what the user has already done — and the person it concerns.
+- The body is one or two short sentences that add what the title does not: who is waiting, on what, and why today. It does not restate the title.
+- Each item ends with its source as a link named for the tool it lives in.
+- The text states only what the source states: "X asked …" needs a source that shows X asking. A proposed fix is written as proposed, and a suspected cause as suspected.
+
 ## No repetition
 
 Before writing, each source URL appears in exactly one section, and the same commitment or the same news appears once even under different URLs. Keep the item where it serves best.
 
 ## Previous brief
 
-Where a previous brief exists (see `output.md` §Storage):
+The previous brief is the newest dated file in `<dir>` before the brief's date. Its to-dos are a checklist; a checked box means the user or a downstream marked it done.
 
-- A to-do the previous brief listed and that is marked `done` is not listed again unless new activity reopened it.
-- A to-do the previous brief listed that is still open after verification is listed again; say in its body how long it has been open.
+- A checked to-do is not listed again unless new activity reopened it.
+- An unchecked to-do that is still open after verification is listed again, and its body says since when it has been open.
 - An update the previous brief already carried is not repeated unless its state changed; then say what changed.

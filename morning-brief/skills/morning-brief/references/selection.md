@@ -35,20 +35,20 @@ A standing duty the user owns stays even without an explicit ask, until a source
 
 ## Sections
 
-- **Push forward** — exactly one item: the piece of work this user is best placed to move today, tied to a top project, that this assistant can concretely advance (a draft, a synthesis across threads, a preparation for a named meeting), and whose full context this run can explain — who asked, why, what has to happen. Frame it as the next step for a real occasion. Omit the section rather than fill it with a reminder.
+- **Push forward** — the work this user is best placed to move today, tied to a top project, that this assistant can concretely advance (a draft, a synthesis across threads, a preparation for a named meeting), and whose full context this run can explain — who asked, why, what has to happen. Frame it as the next step for a real occasion. Omit the section rather than fill it with a reminder.
 - **Top to-dos** — every verified open action owed by the user today, however many there are, ranked by impact; the order carries priority, and urgent wording in a source does not raise an item's rank by itself. Always present; for each top project and each meeting that needs preparation, list each distinct next step that held up under verification. A meeting needs preparation only when the source shows the user's role in it (organizer, presenter, owner) or material they owe; attendance alone creates no to-do.
 - **New updates** — things the user would learn from: news they did not cause, all collected in this section. Drop anything the user authored or did themselves. Keep an incident, a cause someone proposed and a confirmed cause distinct. High bar: it should change how the user sees the day.
 - **Your day** — today's calendar split into morning and afternoon, each meeting with a note where this run has useful context. Always present; an empty day is stated as one.
 - **Looking ahead** — one or two sentences on the shape of tomorrow.
 
-Every item carries an `area`: the project it belongs to, or a working area when it has none.
+Every verified item is shown; no section has a fixed count. Every item carries an `area`: the project it belongs to, or a working area when it has none.
 
 The brief opens with a greeting of one or two sentences. It comments on the shape of the day — how full the calendar is, where the open time sits — warmly, without listing items and without urgency. The sections follow it in this order: push forward, top to-dos, new updates, your day, looking ahead. An empty section is left out, except top to-dos and your day, which say that they are empty. A closing line names the sources read, any that failed, and the unverified items.
 
 ## Writing an item
 
 - The title names the action or the news in a short phrase. For a to-do, it names the next action given the current state — after what the user has already done — and the person it concerns, joined to the trigger it is due to (the meeting, the deadline or the person) where the source shows one.
-- The body is one or two short sentences that add what the title does not: who is waiting, on what, and why today. "Why today" is the actual deadline, dependency or person waiting as the source shows it, stated without urgency adjectives. The body does not restate the title.
+- The body adds what the title does not, and its length follows the item's importance and complexity: a simple item may be its title and link alone; an important or tangled one gets what it needs — who is waiting, on what, why today, where it stands. "Why today" is the actual deadline, dependency or person waiting as the source shows it, stated without urgency adjectives. The body does not restate the title.
 - Each item ends with a link to its original conversation or item, named for the tool it lives in.
 - The text states only what the source states: "X asked …" needs a source that shows X asking. A proposed fix is written as proposed, and a suspected cause as suspected.
 

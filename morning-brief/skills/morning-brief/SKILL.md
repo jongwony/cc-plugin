@@ -1,6 +1,6 @@
 ---
 name: morning-brief
-description: Prepares the user's morning brief — the to-dos they owe today, verified against each source's latest state, news from their connected work tools they would otherwise miss, one piece of work to push forward, and today's calendar — written in the user's language, headings and dates included. Use when the user asks for a morning brief, a day brief, "오늘 브리프", or "what do I owe today", or when a schedule or loop invokes /morning-brief.
+description: Prepares the user's morning brief — the to-dos they owe today, verified against each source's latest state, news from their connected work tools they would otherwise miss, work to push forward, and today's calendar — written in the user's language, headings and dates included. Use when the user asks for a morning brief, a day brief, "오늘 브리프", or "what do I owe today", or when a schedule or loop invokes /morning-brief.
 argument-hint: "[YYYY-MM-DD] [--no-save]"
 model: opus
 effort: medium
@@ -8,7 +8,7 @@ effort: medium
 
 # Morning brief
 
-A curated view of the user's day: what they owe today, what they would otherwise miss, and one thing to move forward. Every item earns its place by being verified against its source's current state; an item that does not hold up stays out, however short that leaves the brief.
+A curated view of the user's day: what they owe today, what they would otherwise miss, and what to move forward. Every item earns its place by being verified against its source's current state; an item that does not hold up stays out, however short that leaves the brief.
 
 ## Settings
 

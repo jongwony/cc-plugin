@@ -1,6 +1,6 @@
 # Gathering
 
-Read at steps 1 and 2 of the procedure. Establishing what is the case is `/inquire`'s; this file says what the brief needs established and what counts as a candidate.
+Read at steps 1 and 2 of the procedure. Establishing what is the case is `/inquire`'s.
 
 ## What the brief needs established
 
@@ -9,11 +9,11 @@ Read at steps 1 and 2 of the procedure. Establishing what is the case is `/inqui
 - **Updates**, sought by what the user's work depends on, not by where the user speaks.
 - **The calendar**, to a fixed horizon: the next day, and on the week's first brief the rest of the week. Dated events in the user's own records count as occasions too.
 
-No turn waits on an answer before the brief is saved: `/inquire`'s questions are collected for the closing, never asked mid-run. Of what it hands back as the user's, only a decision someone is waiting on in a record is a to-do candidate, naming the decision and who is waiting. An uncertainty about this run's own reading that the rules here do not settle goes to the closing too.
+No turn waits on an answer before the brief is saved: `/inquire`'s questions are collected for the closing, never asked mid-run. Of what it hands back as the user's, only a decision someone is waiting on in a record is a candidate. So does an uncertainty about this run's own reading that these rules do not settle.
 
 ## Candidates
 
-A candidate is anything that might be the user's open act (`selection.md` §To-do) or an update: news that bears on their projects or on the direction of their work. An action that news implies for the user is a candidate of its own.
+A candidate is anything that might be the user's open act (`selection.md` §To-do) or an update: news that bears on their projects or on the direction of their work. News and the action it implies are separate candidates, each with its own verdict.
 
 A candidate's source is the record where its current state lives and where the user would act on it, not the message that pointed there.
 

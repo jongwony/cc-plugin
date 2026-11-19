@@ -1,0 +1,24 @@
+{
+  "name": "morning-brief",
+  "description": "A morning brief from the user's connected work tools — to-dos owed today, verified against each source's latest state, news they would otherwise miss, one piece of work to push forward, and today's calendar — in the user's language, saved as dated JSON and markdown for downstream automation",
+  "version": "0.1.0",
+  "userConfig": {
+    "output_dir": {
+      "type": "string",
+      "title": "Output directory",
+      "description": "Absolute path where each brief's JSON and markdown are written; leave empty to use the plugin's data directory",
+      "required": false
+    },
+    "language": {
+      "type": "string",
+      "title": "Brief language",
+      "description": "Language of the brief, e.g. ko or en; leave empty to use the language the session answers in",
+      "required": false
+    }
+  },
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  },
+  "license": "MIT"
+}

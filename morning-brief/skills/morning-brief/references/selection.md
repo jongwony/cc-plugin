@@ -1,0 +1,56 @@
+# Selection
+
+Read at step 3 and step 4 of the procedure. Covers how a candidate is verified and which section it belongs in.
+
+## Verify to the latest state
+
+A candidate is verified only after its source has been read to its most recent activity: the last reply in the thread, the current review and merge state of the pull request, the current status of the issue, the latest comments on the page. A notification, an inbox row or a preview shows the original ask, not its current state. Every `source.url` in the brief is a page that this run opened.
+
+Where one read is blocked, reach the same state another way — the channel instead of the search, the page instead of its notification, another tool for the same system. Leave the candidate out only when every route is blocked, and list it under `unverified` with what was tried.
+
+## Independent check of each to-do
+
+Send each to-do candidate to a fresh-context subagent (Agent tool, one call per candidate, all in parallel) whose job is to disqualify it. Give it the candidate's title, source URL, the person who asked, and why it looks open. It answers four questions with tool reads and returns `{"verdict": "keep" | "drop", "evidence": "..."}`:
+
+1. Is the work already done — the pull request merged or closed, the issue resolved, the document updated?
+2. Has the user already acted on it — replied, delivered, handed it to someone else — here or in another tool?
+3. Is it the user's to do — asked of them, not of someone else or of the group?
+4. Has it gone stale — no movement from anyone for more than five days, or the project moved on?
+
+A candidate the check drops stays out of the to-dos, whatever this run believes.
+
+## Drop or move rules
+
+Apply to every candidate after verification:
+
+- **Done or handed off** by the user, in the source or in an adjacent tool → drop. A reaction, an acknowledgement or a reply about something else is not completion.
+- **Resolved at the source** — merged, closed, marked done, cancelled → drop.
+- **Answered by anyone** → drop the answered part; keep only an action the latest state still shows the user owes. A promise to do it later does not complete it.
+- **Past its time** — the meeting already happened, the deadline passed → drop, or reframe as follow-through ("anything to send after the 1:1?"). Compare against the current time, item by item.
+- **Not addressed to the user** (a list, a broadcast, an FYI) → not a to-do; it may be an update.
+- **Not due today** → leave for the day it is due, except on Monday, when the brief also looks at the week.
+- **Optional or no-rush** → drop unless a verified deadline or dependency makes it today's.
+
+A standing duty the user owns stays even without an explicit ask, until a source shows it finished or owned by someone else.
+
+## Sections
+
+- **Push forward** — exactly one item: the piece of work this user is best placed to move today, tied to a top project, that this assistant can concretely advance (a draft, a synthesis across threads, a preparation for a named meeting), and whose full context this run can explain — who asked, why, what has to happen. Frame it as the next step for a real occasion. Omit the section rather than fill it with a reminder.
+- **Top to-dos** — every verified open action owed by the user today, ranked by impact. Always present; for each top project and each meeting that needs preparation, list each distinct next step that held up under verification. Title names the person and the next action given the current state; body says what they wait on and why today.
+- **New updates** — things the user would learn from: news they did not cause. Drop anything the user authored or did themselves. Keep an incident, a cause someone proposed and a confirmed cause distinct. High bar: it should change how the user sees the day.
+- **Your day** — today's calendar split into morning and afternoon, each meeting with a note where this run has useful context. Always present; an empty day is stated as one.
+- **Looking ahead** — one or two sentences on the shape of tomorrow.
+
+Every item carries an `area`: the project it belongs to, or a working area when it has none.
+
+## No repetition
+
+Before writing, each source URL appears in exactly one section, and the same commitment or the same news appears once even under different URLs. Keep the item where it serves best.
+
+## Previous brief
+
+Where a previous brief exists (see `output.md` §Storage):
+
+- A to-do the previous brief listed and that is marked `done` is not listed again unless new activity reopened it.
+- A to-do the previous brief listed that is still open after verification is listed again; say in its body how long it has been open.
+- An update the previous brief already carried is not repeated unless its state changed; then say what changed.

@@ -15,6 +15,7 @@ Before publishing, apply step 5's self-check to the figures as well: each figure
 
 ## Publishing
 
-- Before writing the page, load the host's artifact design guidance (the artifact-design skill or the Artifact tool's quickstart) and follow it.
+- Before writing the page, load the host's artifact design guidance (the artifact-design skill or the Artifact tool's quickstart) and its `dataviz` skill, where the host offers them, and follow both. Every figure follows dataviz's method for form, color, marks and labels. The page meets the design guidance's baseline: readable in light and dark themes, phone width with no horizontal scroll, text contrast.
+- Where either skill is absent, a figure stays plain and legible: identity and state are never carried by color alone.
 - One artifact serves every run. Its URL is kept in `<dir>/artifact-url`. Where that file exists, read that artifact with the Artifact tool first, then republish to its URL. Where it does not, the first publish creates the artifact and writes its URL there.
 - The artifact stays private. The run does not share it.

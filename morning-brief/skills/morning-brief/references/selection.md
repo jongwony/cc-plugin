@@ -51,6 +51,7 @@ The brief opens with a greeting of one or two sentences. It comments on the shap
 - The title names the action or the news in a short phrase. For a to-do, it names the next action given the current state — after what the user has already done — and the person it concerns, joined to the trigger it is due to (the meeting, the deadline or the person) where the source shows one.
 - The body adds what the title does not, and its length follows the item's importance and complexity: a simple item may be its title and link alone; an important or tangled one gets what it needs — who is waiting, on what, why today, where it stands. "Why today" is the actual deadline, dependency or person waiting as the source shows it, stated without urgency adjectives. The body does not restate the title.
 - Each item ends with a link to its original conversation or item, named for the tool it lives in.
+- An identifier (an issue key, a pull request number, a milestone or project code) never stands in for its referent: the text names the thing in the brief's language, with the identifier beside it where the reader needs it to act.
 - The text states only what the source states: "X asked …" needs a source that shows X asking. A proposed fix is written as proposed, and a suspected cause as suspected.
 
 ## No repetition

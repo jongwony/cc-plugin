@@ -8,6 +8,7 @@ A figure is drawn only for a relation the brief's text states and its layout doe
 
 - **Time**: today's meetings, and the deadlines and triggers of the to-dos, placed on one time axis.
 - **Waiting**: who waits on whom, and for which item.
+- **Compared quantities**: quantities the sources measured and the brief compares across items, such as milestone progress percentages, are drawn as lengths in one figure on one scale. Each value sits beside its length, and the scale is stated. A derived quantity the judgment rests on, such as days past a target or a share, appears beside its inputs.
 
 Every fact in a figure comes from a verified item in the brief, and each figure's elements point back to the item they came from. No figure is decorative. The page's text is the self-checked markdown brief, in `<language>`, labels included.
 

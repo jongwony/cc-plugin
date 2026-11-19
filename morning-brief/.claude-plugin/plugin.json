@@ -1,7 +1,7 @@
 {
   "name": "morning-brief",
   "description": "A morning brief from the user's connected work tools — to-dos owed today, verified against each source's latest state, news they would otherwise miss, one piece of work to push forward, and today's calendar — in the user's language",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "userConfig": {
     "output_dir": {
       "type": "string",

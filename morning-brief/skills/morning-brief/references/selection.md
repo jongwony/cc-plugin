@@ -8,7 +8,7 @@ A candidate is verified when this run has read its source record to its most rec
 
 - A fact is used as fact only from the record that owns it. Who a record names — asker, owner, counterpart — is such a fact. Who decides a schedule is such a fact, from the record that names that role; the schedule's owning record is their latest statement. Where none names one, the conflicting statements are shown with authors and times, and neither is written as fact.
 - Any other carrier — a relay, a transcript, a summary, someone's mention — points there. What it carries keeps that attribution, with its time, wherever it is written, titles included.
-- The owning record is reached through records, never by a command. Where no route reaches it, a condition only a carrier speaks to holds at the carrier's standing: the item stands in its section, marked unverified at its owner. Unreached is for a condition no record speaks to.
+- The owning record is reached through records. Where no route reaches it, a condition only a carrier speaks to holds at the carrier's standing: the item stands in its section, marked unverified at its owner. Unreached is for a condition no record speaks to.
 
 ## To-do
 

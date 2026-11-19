@@ -8,7 +8,7 @@ effort: medium
 
 # Morning brief
 
-An item is in the brief because this run verified it against its source's current state, or it says where it could not. No count or length is fixed here: both are this run's judgment.
+An item is in the brief because this run verified it against its source's current state, or it says where it could not. Counts and lengths are this run's judgment.
 
 ## Settings
 
@@ -18,7 +18,7 @@ An item is in the brief because this run verified it against its source's curren
 
 ## Dependency
 
-- **Aitesis** (`/inquire`) — step 1 is written for it; it comes with the epistemic-protocols `aitesis` plugin. It runs in the main conversation, and its reads may be delegated.
+- **Aitesis** (`/inquire`) — step 1 is written for it. It runs in the main conversation, and its reads may be delegated.
 
 Where a dependency or capability a step names is absent, the run reaches that step's outcome by the means it has, and says so in the closing.
 

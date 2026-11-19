@@ -4,7 +4,7 @@ Read at steps 0 and 3–5 of the procedure. Covers how a candidate is verified, 
 
 ## Verify to the latest state
 
-A candidate is verified only after its source has been read to its most recent activity: the last reply in the thread, the current review and merge state of the pull request, the current status of the issue, the latest comments on the page. A notification, an inbox row or a preview shows the original ask, not its current state. Every source link in the brief is a page that this run opened.
+A candidate is verified only after its source has been read to its most recent activity: the last reply in the thread, the current review and merge state of the pull request, the current status of the issue, the latest comments on the page. A notification, an inbox row or a preview shows the original ask, not its current state. A source counts as opened when this run read the record itself — the page, or the record through an API or MCP read — and its link in the brief is the canonical URL that read returned.
 
 Where one read is blocked, reach the same state another way — the channel instead of the search, the page instead of its notification, another tool for the same system. Leave the candidate out only when every route is blocked, and list it among the unverified items with what was tried.
 
@@ -17,7 +17,7 @@ Send each to-do candidate to a fresh-context subagent (Agent tool, one call per 
 3. Is it the user's to do — asked of them, not of someone else or of the group?
 4. Has it gone stale — no movement from anyone for more than five days, or the project moved on?
 
-A candidate the check drops stays out of the to-dos, whatever this run believes.
+A candidate the check drops stays out of the to-dos, whatever this run believes. Where the check corrects the candidate's next action, the correction replaces the candidate's wording. Where it reframes the candidate into a different successor action, that successor gets its own independent check before it is listed.
 
 ## Drop or move rules
 
@@ -28,7 +28,7 @@ Apply to every candidate after verification:
 - **Answered by anyone** → drop the answered part; keep only an action the latest state still shows the user owes. A promise to do it later does not complete it.
 - **Past its time** — the meeting already happened, the deadline passed → drop, or reframe as follow-through ("anything to send after the 1:1?"). Compare against the current time, item by item.
 - **Not addressed to the user** (a list, a broadcast, an FYI) → not a to-do; it may be an update.
-- **Not due today** → leave for the day it is due, except on Monday, when the brief also looks at the week.
+- **Not due today** → leave for the day it is due, except on Monday, when the brief also looks at the week. An item with no date belongs to today when someone is verifiably blocked on the user now; its body says there is no fixed deadline rather than inventing one.
 - **Optional or no-rush** → drop unless a verified deadline or dependency makes it today's. A small or ad-hoc request still owed today is not optional, however minor it looks.
 
 A standing duty the user owns stays even without an explicit ask, until a source shows it finished or owned by someone else.
@@ -41,9 +41,9 @@ A standing duty the user owns stays even without an explicit ask, until a source
 - **Your day** — today's calendar split into morning and afternoon, each meeting with a note where this run has useful context. Always present; an empty day is stated as one.
 - **Looking ahead** — one or two sentences on the shape of tomorrow.
 
-Every verified item is shown; no section has a fixed count. Every item carries an `area`: the project it belongs to, or a working area when it has none.
+Every verified item is shown; no section has a fixed count. Every item carries an area label — the project it belongs to, or a working area when it has none — written in the brief's language like every other label.
 
-The brief opens with a greeting of one or two sentences. It comments on the shape of the day — how full the calendar is, where the open time sits — warmly, without listing items and without urgency. The sections follow it in this order: push forward, top to-dos, new updates, your day, looking ahead. An empty section is left out, except top to-dos and your day, which say that they are empty. A closing line names the sources read, any that failed, and the unverified items.
+The brief opens with a greeting of one or two sentences. It comments on the shape of the day — how full the calendar is, where the open time sits — warmly, without listing items and without urgency. The sections follow it in this order: push forward, top to-dos, new updates, your day, looking ahead. An empty section is left out, except top to-dos and your day, which say that they are empty. A closing line states the brief's as-of time (the local time it was composed) and names the sources read, any that failed, and the unverified items.
 
 ## Writing an item
 

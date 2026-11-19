@@ -17,13 +17,13 @@ Invoke `/inquire` with these targets, as of the brief's date and time:
   On Monday, widen every window by three days so Friday is covered.
 - **The candidates in the section below**, each with its source URL.
 
-What `/inquire` leaves unreached goes under the brief's unverified items, with what was tried. The run continues past it.
+Of what `/inquire` hands back as the user's, an open decision the user owns becomes a to-do candidate naming the decision and who is waiting on it; what stayed unreached goes in the brief's closing line with what was tried. The run continues past both.
 
 An item tied to a top project outranks a larger item on a side topic throughout the brief.
 
 ## Candidates
 
-A candidate is anything that might be a to-do or an update. Track every candidate in a TodoWrite list as `<short description> — <source url>`, and give each a verdict before writing the brief: to-do, update, push-forward, or drop, with the reason. Only an item with a verdict of to-do, update or push-forward reaches the brief, and it goes in the section its verdict names.
+A candidate is anything that might be a to-do or an update. Keep a candidate ledger — in the harness's task tool or a scratch file — with one row per candidate as `<short description> — <source url>`, and give each a verdict before writing the brief: to-do, update, push-forward, or drop, with the reason. Only an item with a verdict of to-do, update or push-forward reaches the brief, and it goes in the section its verdict names.
 
 Look for candidates in this order:
 

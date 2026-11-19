@@ -29,15 +29,15 @@ Apply to every candidate after verification:
 - **Past its time** — the meeting already happened, the deadline passed → drop, or reframe as follow-through ("anything to send after the 1:1?"). Compare against the current time, item by item.
 - **Not addressed to the user** (a list, a broadcast, an FYI) → not a to-do; it may be an update.
 - **Not due today** → leave for the day it is due, except on Monday, when the brief also looks at the week.
-- **Optional or no-rush** → drop unless a verified deadline or dependency makes it today's.
+- **Optional or no-rush** → drop unless a verified deadline or dependency makes it today's. A small or ad-hoc request still owed today is not optional, however minor it looks.
 
 A standing duty the user owns stays even without an explicit ask, until a source shows it finished or owned by someone else.
 
 ## Sections
 
 - **Push forward** — exactly one item: the piece of work this user is best placed to move today, tied to a top project, that this assistant can concretely advance (a draft, a synthesis across threads, a preparation for a named meeting), and whose full context this run can explain — who asked, why, what has to happen. Frame it as the next step for a real occasion. Omit the section rather than fill it with a reminder.
-- **Top to-dos** — every verified open action owed by the user today, ranked by impact. Always present; for each top project and each meeting that needs preparation, list each distinct next step that held up under verification. Title names the person and the next action given the current state; body says what they wait on and why today.
-- **New updates** — things the user would learn from: news they did not cause. Drop anything the user authored or did themselves. Keep an incident, a cause someone proposed and a confirmed cause distinct. High bar: it should change how the user sees the day.
+- **Top to-dos** — every verified open action owed by the user today, however many there are, ranked by impact; the order carries priority, and urgent wording in a source does not raise an item's rank by itself. Always present; for each top project and each meeting that needs preparation, list each distinct next step that held up under verification. A meeting needs preparation only when the source shows the user's role in it (organizer, presenter, owner) or material they owe; attendance alone creates no to-do.
+- **New updates** — things the user would learn from: news they did not cause, all collected in this section. Drop anything the user authored or did themselves. Keep an incident, a cause someone proposed and a confirmed cause distinct. High bar: it should change how the user sees the day.
 - **Your day** — today's calendar split into morning and afternoon, each meeting with a note where this run has useful context. Always present; an empty day is stated as one.
 - **Looking ahead** — one or two sentences on the shape of tomorrow.
 
@@ -47,9 +47,9 @@ The brief opens with a greeting of one or two sentences. It comments on the shap
 
 ## Writing an item
 
-- The title names the action or the news in a short phrase. For a to-do, it names the next action given the current state — after what the user has already done — and the person it concerns.
-- The body is one or two short sentences that add what the title does not: who is waiting, on what, and why today. It does not restate the title.
-- Each item ends with its source as a link named for the tool it lives in.
+- The title names the action or the news in a short phrase. For a to-do, it names the next action given the current state — after what the user has already done — and the person it concerns, joined to the trigger it is due to (the meeting, the deadline or the person) where the source shows one.
+- The body is one or two short sentences that add what the title does not: who is waiting, on what, and why today. "Why today" is the actual deadline, dependency or person waiting as the source shows it, stated without urgency adjectives. The body does not restate the title.
+- Each item ends with a link to its original conversation or item, named for the tool it lives in.
 - The text states only what the source states: "X asked …" needs a source that shows X asking. A proposed fix is written as proposed, and a suspected cause as suspected.
 
 ## No repetition
@@ -61,5 +61,5 @@ Before writing, each source URL appears in exactly one section, and the same com
 The previous brief is the newest dated file in `<dir>` before the brief's date. Its to-dos are a checklist; a checked box means the user or a downstream marked it done.
 
 - A checked to-do is not listed again unless new activity reopened it.
-- An unchecked to-do that is still open after verification is listed again, and its body says since when it has been open.
+- An unchecked to-do is re-read at its source for a later reply or state that discharges it before it is carried over. One still open is listed again with where it now stands — the current blocker and the next action — and since when it has been open, rather than in the previous brief's wording.
 - An update the previous brief already carried is not repeated unless its state changed; then say what changed.

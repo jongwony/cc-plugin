@@ -4,13 +4,11 @@ description: Prepares the user's morning brief — the to-dos they owe today, ve
 argument-hint: "[YYYY-MM-DD] [--no-save]"
 model: opus
 effort: medium
-skills:
-  - aitesis:inquire
 ---
 
 # Morning brief
 
-A curated view of the user's day: what they owe today, what they would otherwise miss, and one thing to move forward. Every item earns its place by being verified against its source's current state; a short brief that holds up beats a long one that does not.
+A curated view of the user's day: what they owe today, what they would otherwise miss, and one thing to move forward. Every item earns its place by being verified against its source's current state; an item that does not hold up stays out, however short that leaves the brief.
 
 ## Settings
 

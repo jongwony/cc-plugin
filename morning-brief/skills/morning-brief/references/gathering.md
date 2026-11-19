@@ -1,36 +1,24 @@
 # Gathering
 
-Read at step 1 and step 2 of the procedure. Establishing what is the case — which sources are connected, what each holds now — is `/inquire`'s; this file names only what the brief needs established and in what order it looks for candidates.
+Read at steps 1 and 2 of the procedure. Establishing what is the case is `/inquire`'s; this file says what the brief needs established and what counts as a candidate.
 
-## What `/inquire` establishes for the brief
+## What the brief needs established
 
-Invoke `/inquire` with these targets, as of the brief's date and time. A subagent launched for this collection runs with `model: opus`.
+As of the brief's date and time:
 
-- **The user**: role and team.
-- **What the organization is pushing on now**: launches, migrations, deadlines.
-- **The user's top two or three projects, ranked.** The ranking settles only after every connected source has been read once; the busiest source is not the most important one.
-- **Each connected source, over these windows**:
-  - calendar: today and tomorrow;
-  - mail, code host, issue tracker, documents: the last two to three days;
-  - chat: the last three days, with mentions, direct messages and the top projects' channels;
-  - meeting notes: recent meetings tied to the top projects.
-  On Monday, widen every window by three days so Friday is covered.
-- **The candidates in the section below**, each with its source URL.
+- **What the user is responsible for**, and what their organization is pushing on now — enough to rank the user's projects by what matters most. The ranking settles only after every connected source has been read: the busiest source is not the most important one.
+- **Every connected source**, back far enough that nothing still owed today falls outside the read — at least to the latest saved brief, and across any gap since the user last worked — and the calendar far enough ahead for the brief's day and the next.
+- **The candidates** below, each with its source.
 
-Of what `/inquire` hands back as the user's, an open decision the user owns becomes a to-do candidate naming the decision and who is waiting on it; what stayed unreached goes in the brief's closing line with what was tried. The run continues past both; in an unattended run no turn waits on `/inquire`'s relay to the user.
-
-An item tied to a top project outranks a larger item on a side topic throughout the brief.
+`/inquire` hands back what only the user can settle and what it could not reach. A decision the user owns is a to-do candidate that names the decision and who is waiting on it. What could not be reached is named in the brief's closing line with what was tried. The run continues past both, and unattended it waits for no answer.
 
 ## Candidates
 
-A candidate is anything that might be a to-do or an update. Keep a candidate ledger — in the harness's task tool or a scratch file — with one row per candidate as `<short description> — <source url>`, and give each a verdict before writing the brief: to-do, update, push-forward, or drop, with the reason. Only an item with a verdict of to-do, update or push-forward reaches the brief, and it goes in the section its verdict names.
+A candidate is anything that might be a to-do or an update:
 
-Look for candidates in this order:
+- a to-do may come from something the user committed to, something asked of them, something an occasion today requires of them, or a duty they hold without anyone asking;
+- an update is news the user did not cause that bears on their projects or their organization's priorities.
 
-1. **What the user committed to**: their own recent messages that say they will do something, follow up, send, review or fix.
-2. **What others asked of the user**: mentions, direct messages, review requests, assignments, mail addressed to them. A request aimed at the user personally outranks broadcast, CC and digest traffic. Unread outranks read.
-3. **What today's meetings need**: preparation, an RSVP owed, a follow-through from the previous occurrence.
-4. **Standing duties** the user owns without anyone asking: a rotation, a release, an owned process visible in their own activity.
-5. **News beyond the user's own work**: what other teams shipped, decided, learned or broke that bears on the user's projects or the organization's priorities.
+A candidate's source is the record where its current state lives and where the user would act on it, not the message or notification that pointed there.
 
-A candidate that links elsewhere — a thread to a document, a mail to a pull request, a notification to an issue — takes the linked item as its source.
+Every candidate is recorded with its source and ends with a verdict and its reason: to-do, update, push forward, or drop. The brief holds exactly the candidates whose verdict put them there, each in the section its verdict names.

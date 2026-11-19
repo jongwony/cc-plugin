@@ -1,70 +1,57 @@
 # Selection
 
-Read at steps 0 and 3–5 of the procedure. Covers how a candidate is verified, which section it belongs in, and how the brief is written.
+Read at steps 0 and 3–5 of the procedure. Says when a candidate is verified, when it is a to-do, how the brief is shaped and written, and how it continues from the previous one.
 
-## Verify to the latest state
+## Verified
 
-A candidate is verified only after its source has been read to its most recent activity: the last reply in the thread, the current review and merge state of the pull request, the current status of the issue, the latest comments on the page. A notification, an inbox row or a preview shows the original ask, not its current state. A source counts as opened when this run read the record itself — the page, or the record through an API or MCP read — and its link in the brief is the canonical URL that read returned.
+A candidate is verified when this run has read its source record to its most recent activity. What announces an item — a notification, a preview, a list row — shows the ask, not its state.
 
-Where one read is blocked, reach the same state another way — the channel instead of the search, the page instead of its notification, another tool for the same system. Leave the candidate out only when every route is blocked, and list it among the unverified items with what was tried.
+Where the record cannot be read one way, reach the same state by another route. A candidate whose state no route could read stays out of the sections and is named in the closing line with what was tried. Where reads conflict on a fact, the record that owns the fact decides, read again; the recency of a claim does not.
 
-## Independent check of each to-do
+## To-do
 
-Send each to-do candidate to a fresh-context subagent (Agent tool with `model: opus`, one call per candidate, all in parallel) whose job is to disqualify it. Every candidate gets its check, however long the checks take. Give it the candidate's title, source URL, the person who asked, and why it looks open. It answers five questions with tool reads and returns `{"verdict": "keep" | "drop", "evidence": "..."}`:
+A to-do is listed only while all of these hold at its source's current state:
 
-1. Is the work already done — the pull request merged or closed, the issue resolved, the document updated?
-2. Has the user already acted on it — replied, delivered, handed it to someone else — here or in another tool?
-3. Is it the user's to do — asked of them, not of someone else or of the group?
-4. Has it gone stale — no movement from anyone for more than five days, or the project moved on?
-5. Is it owed today — due today, or someone verifiably blocked on the user now?
+1. **Open.** The action is not yet done, resolved or answered — by the user or by anyone, in this record or in an adjacent tool. Completion is the thing delivered, decided or handed over; an acknowledgement, a reaction or a promise is not. Where part is discharged, only the part still owed remains.
+2. **The user's.** It was asked of them, or they committed to it, or it is a duty they hold, which needs no ask. Something sent to a group, or owned by someone else, is not theirs; it may be an update. An occasion makes a to-do only where the record shows what the user owes to it — their role in it, or material they are to bring; attending is not owing.
+3. **Owed today.** It is due today, or someone is blocked on the user now — shown by the record's current state, not by the age of an old ask or by how large or small the request is. Against the brief's as-of time, an occasion already past leaves only what the user still owes after it. The first brief of a working week also shows what is due later that week, with its day.
 
-A candidate the check drops stays out of the to-dos, whatever this run believes; one it keeps still goes through the drop rules below, applied to the check's answers. Where two checks disagree on a fact, re-read that fact once at its authoritative record — the pull request's own state through the code host, the issue in its tracker — and use that read, not whichever claim is more recent. Where the check corrects the candidate's next action, the correction replaces the candidate's wording. Where it reframes the candidate into a different successor action, that successor gets its own independent check before it is listed.
+Each to-do candidate gets an independent check: a fresh-context subagent, given the candidate and its source, reads the records and tries to disqualify it on these conditions, reporting what it found for each. The checks run in parallel, and none is skipped to save time. A candidate is listed only where every condition holds on its check's evidence, and it is listed as the action that check confirmed. An action that surfaces any other way, including out of another candidate's check, is a new candidate with its own check.
 
-## Drop or move rules
+## Shape
 
-Apply to every candidate after verification:
+The brief opens with the actions to take first today, one line each, their detail left to the items below. Where the shape of the day changes a priority, that is said with the action it changes. Then, in this order:
 
-- **Done or handed off** by the user, in the source or in an adjacent tool → drop. A reaction, an acknowledgement or a reply about something else is not completion.
-- **Resolved at the source** — merged, closed, marked done, cancelled → drop.
-- **Answered by anyone** → drop the answered part; keep only an action the latest state still shows the user owes. A promise to do it later does not complete it.
-- **Past its time** — the meeting already happened, the deadline passed → drop, or reframe as follow-through ("anything to send after the 1:1?"). Compare against the current time, item by item.
-- **Not addressed to the user** (a list, a broadcast, an FYI) → not a to-do; it may be an update.
-- **Not due today** → leave for the day it is due, except on Monday, when the brief also looks at the week. An item with no date belongs to today when someone is verifiably blocked on the user now; its body says there is no fixed deadline rather than inventing one.
-- **Optional or no-rush** → drop unless a verified deadline or dependency makes it today's. A small or ad-hoc request still owed today is not optional, however minor it looks.
+- **Push forward** — work the user is best placed to move today, on one of their top projects, that this assistant can advance by producing something, and whose context this run can fully explain: who asked, why, and what has to happen. It is framed as the next step for a real occasion. Without such work the section is left out; a reminder does not fill it.
+- **To-dos** — every to-do that passed, as a checklist, in order of impact on what the user is responsible for. An item on a top project outranks a larger one on a side matter, and urgent wording in a source raises nothing.
+- **Updates** — news the user did not cause and would see their day differently for knowing.
+- **Today** — the day's calendar in time order, with a note on an occasion where this run has context that helps.
+- **Ahead** — the shape of the next day.
 
-A standing duty the user owns stays even without an explicit ask, until a source shows it finished or owned by someone else.
+Every verified item is shown. Each carries the project or area it belongs to. Each source appears in one place only, and the same commitment or news appears once even where several records carry it. An empty section is left out, except to-dos and today, which say that they are empty. A closing line gives the brief's as-of time, the sources read, any that failed, and what could not be verified.
 
-## Sections
+## Writing
 
-- **Push forward** — the work this user is best placed to move today, tied to a top project, that this assistant can concretely advance (a draft, a synthesis across threads, a preparation for a named meeting), and whose full context this run can explain — who asked, why, what has to happen. Frame it as the next step for a real occasion. Omit the section rather than fill it with a reminder.
-- **Top to-dos** — every verified open action owed by the user today, however many there are, ranked by impact; the order carries priority, and urgent wording in a source does not raise an item's rank by itself. Always present; for each top project and each meeting that needs preparation, list each distinct next step that held up under verification. A meeting needs preparation only when the source shows the user's role in it (organizer, presenter, owner) or material they owe; attendance alone creates no to-do.
-- **New updates** — things the user would learn from: news they did not cause, all collected in this section. Drop anything the user authored or did themselves. Keep an incident, a cause someone proposed and a confirmed cause distinct. High bar: it should change how the user sees the day.
-- **Your day** — today's calendar split into morning and afternoon, each meeting with a note where this run has useful context. Always present; an empty day is stated as one.
-- **Looking ahead** — one or two sentences on the shape of tomorrow.
+- An item opens with its point in a short title: an update with what changed; a to-do with the next action given the current state, the person it concerns, and the occasion, deadline or person it is due to where the record shows one. An item the reader can judge from that opening ends there, with its link.
+- A body adds only what the title does not, and runs as long as the item's importance, its familiarity to the reader, and what they still need to choose the action call for.
+- What makes an item today's is given as the fact — the deadline, the dependency, the person waiting — never as an urgency adjective.
+- Evidence and exceptions sit beside the action they bear on; an exception that would reverse the action is stated with it.
+- A list holds only parallel entries that answer one question, numbered where their order matters. Where the reader must follow a course of events, a short paragraph keeps cause and result together, as every sentence does, however short.
+- A thing is called by its name in `<language>`; an identifier sits beside the name where the reader needs it to act, and never replaces it.
+- Each item ends with a link to its source record.
 
-Every verified item is shown; no section has a fixed count. Every item carries an area label — the project it belongs to, or a working area when it has none — written in the brief's language like every other label.
+## Statement and estimate
 
-The brief opens with the actions to take first today, one line each; how many is this run's judgment, and each one's detail stays with its item below. Where the shape of the day changes a priority, that is attached to the action it changes ("before the noon meeting, …"). The sections follow in this order: push forward, top to-dos, new updates, your day, looking ahead. An empty section is left out, except top to-dos and your day, which say that they are empty. A closing line states the brief's as-of time (the local time it was composed) and names the sources read, any that failed, and the unverified items.
+The brief keeps what a source states apart from this run's own reading.
 
-## Writing an item
+- A claim keeps the standing its source gives it: proposed as proposed, suspected as suspected, confirmed as confirmed. A statement of what someone said, asked or decided needs a record that shows it.
+- A reading of this run's own is written only where it changes today's action. It is marked as an estimate in `<language>`, and sits beside the observed facts and the source link it rests on — a checkable source, not a longer explanation. One held weakly says what would settle it.
+- An inferred owner, deadline or commitment is never written as fact, and never makes a to-do by itself.
 
-- An item opens with its point, in a short title: an update with what changed, a to-do with the next action given the current state — after what the user has already done — and the person it concerns, joined to the trigger it is due to (the meeting, the deadline or the person) where the source shows one. An item the reader can judge from that opening ends there, with its link.
-- The body adds what the title does not, and its length follows the item's importance, how familiar the matter is to the reader, and what they still need to choose the action — who is waiting, on what, why today, where it stands. "Why today" is the actual deadline, dependency or person waiting as the source shows it, stated without urgency adjectives. The body does not restate the title.
-- Evidence and exceptions sit next to the action they bear on. An exception that would reverse the action is stated with the action, not further down.
-- A list holds only parallel entries that answer the same question — the conditions of one decision, or ordered steps, numbered when the order matters. Unrelated background, risks and dates are not gathered into one list. An update whose course of events the reader must follow keeps a short causal paragraph.
-- Sentences are short, and each keeps the link between a condition or cause and its result; no word count or length limit applies.
-- Each item ends with a link to its original conversation or item, named for the tool it lives in.
-- An identifier (an issue key, a pull request number, a milestone or project code) never stands in for its referent: the text names the thing in the brief's language, with the identifier beside it where the reader needs it to act.
-- The text states only what the source states: "X asked …" needs a source that shows X asking. A proposed fix is written as proposed, and a suspected cause as suspected.
+## Continuity
 
-## No repetition
+The previous brief is the latest one saved in `<dir>`, a file for the brief's own date included. Its items are candidates again: nothing carries over without today's check.
 
-Before writing, each source URL appears in exactly one section, and the same commitment or the same news appears once even under different URLs. Keep the item where it serves best.
-
-## Previous brief
-
-The previous brief is the newest dated file in `<dir>` before the brief's date, together with an existing file for the brief's own date when the run repeats a day. Its to-dos are a checklist; a checked box means the user or a downstream marked it done.
-
-- A checked to-do is not listed again unless new activity reopened it.
-- An unchecked to-do is re-read at its source for a later reply or state that discharges it before it is carried over. One still open is listed again with where it now stands — the current blocker and the next action — and since when it has been open, rather than in the previous brief's wording.
-- An update the previous brief already carried is not repeated unless its state changed; then say what changed.
+- A to-do the user checked off is not listed again unless its record shows it reopened.
+- A to-do still open is listed with where it stands now — what blocks it, the next action, and since when it has been open — not in the previous wording.
+- An update already given returns only when its state changed, and says what changed.

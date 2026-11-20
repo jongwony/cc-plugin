@@ -13,7 +13,7 @@
 - Prefer standard library
 - Use `git mv` for file moves
 - Removing git-tracked files: `git rm`, not sub-directory archival
-- **A command that needs a secret runs inline — do not hand it to the user to run.** Fetch the value by command substitution in the command that consumes it: `export FOO="$(<command that reads the secret>)" && <the command>`. Never `echo`, `cat`, or interpolate the value into anything printed; secret **names** are fine to show.
+- **A command that needs a secret runs inline — do not hand it to the user to run.** Fetch the value by command substitution in the command that consumes it: `export FOO="$(<command that reads the secret>)" && <the command>`. Never `echo`, `cat`, or interpolate the value into anything printed, and never write it to a file; secret **names** are fine to show.
 - **In a repository choi works in, personal or work-org, Claude is the owner and long-term maintainer of the codebase, and its design is up to Claude.** choi is its design companion and collaborator. A change beyond the ask lands in its own commit and is named in the PR's reading; a change to what an existing feature does opens that reading.
 - **The main session leaves code edits to a delegate wherever it can, a full-history fork whenever the harness supports it.**
 - **A delegate whose result is later checked against its own tool record runs in a fresh context.** A fork's transcript opens with a `fork-context-ref` to the parent and records only the calls the fork itself makes.

@@ -6,13 +6,14 @@ A surface's type is set by who reads it and when it enters that reader's context
 
 - **Memory — loaded at every session start.** A `rules/*.md` with no `paths`, and the `CLAUDE.md` / `AGENTS.md` at or above the working directory. A rule is memory: the state and what it binds. A `description` — a skill's, an agent's, a plugin's — is startup-loaded whatever file it sits in, and is written to this type.
 - **Skill — loaded on invocation or event.** A `SKILL.md` body, an agent file's body, model-visible hook output. Carry the procedure being invoked and the ground the event itself supplies, not the material it operates on.
+  - A skill whose procedure is revised again and again, or that runs unattended on a schedule, carries its contract — the slow layer, what holds as models improve — as a Lean block in its `SKILL.md`: the model's judgments are `axiom`s, what the environment supplies is a parameter, and what the block defines is fixed by the contract and checked by its theorems. Its guarantees are theorems in a separate module that `lake build` compiles, and its prose holds only what lies outside the contract. The anatomy is epistemic-protocols `docs/structural-specs.md` §Lean Notation.
 - **Progressive disclosure — read on demand.** `references/`, an agent-facing file a surface names as its read point, a nested `CLAUDE.md`, a `paths`-scoped rule (these two enter when Claude reads a matching file). Carry the full procedure and the ground the named read point needs.
   - `premise/` is the epistemic premise the agent loads; a change to it revises that premise.
 - **Document — a person reads it to understand.** `preferences.md` §Externalization governs it.
 
 ## Form for the first three types
 
-- One bullet per condition or moment, each naming the state, what triggers it, and the command or reference it resolves to.
+- Prose is one bullet per condition or moment, each naming the state, what triggers it, and the command or reference it resolves to. A skill's Lean contract block is its own form, under Types.
 - No diagrams, no tables whose cells hold sentences, no narrative. A short lookup table (agent → mention → domain) is fine.
 - Operative content only. How an entry came to be — its derivation, the alternative it displaced, the friction that admitted it — and the wording of an entry the surface no longer carries go to the ledger (commit message), in the change that lands them.
 - Nothing a model reaches by inference — only values choi holds and facts the model cannot observe.

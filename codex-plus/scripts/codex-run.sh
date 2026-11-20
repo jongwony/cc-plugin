@@ -75,10 +75,9 @@ Options:
                          A resumed turn does not inherit the session's model or
                          effort: pass -m and -r again to stay on them, or the
                          turn runs on this script's fallback (gpt-6.2-astra,
-                         medium). -s has no effect on resume: `codex exec
-                         resume` takes no sandbox option, so the turn runs
-                         under the sandbox_mode of the codex config in force
-                         then, not the -s the session was created with
+                         medium). Pass -s again too: a resumed turn runs under
+                         the -s given now (default workspace-write, as for a new
+                         session), never the sandbox_mode of the codex config
   -o, --output-last-message FILE
                          Also write codex's final message to FILE (deterministic
                          capture, decoupled from stdout banner noise)
@@ -180,12 +179,12 @@ if [[ -n "$SESSION_ID" ]]; then
   # The caller must pass -m/-r again to stay on the same model, exactly as with
   # -C below; this script keeps no memory of a session it did not start.
   CODEX_ARGS+=(-m "$MODEL" --config "model_reasoning_effort=$EFFORT")
-  # -s cannot be passed here: `codex exec resume` has no --sandbox and exits 2
-  # on it. The resumed turn runs under the sandbox_mode of the codex config in
-  # force at resume time, not the -s the session was created with.
-  if [[ "$SANDBOX" != "$DEFAULT_SANDBOX" ]]; then
-    echo "Warning: resume ignores -s $SANDBOX (the resumed turn runs under the codex config's sandbox_mode)" >&2
-  fi
+  # `codex exec resume` has no --sandbox (it exits 2 on it), but it takes the
+  # sandbox_mode config key like the two above. Without it the resumed turn runs
+  # under the codex config's sandbox_mode, whatever -s was given. The network
+  # switch is bound to workspace-write here for the same reason as below.
+  CODEX_ARGS+=(--config "sandbox_mode=\"$SANDBOX\"")
+  [[ "$SANDBOX" == "workspace-write" ]] && CODEX_ARGS+=(--config "sandbox_workspace_write.network_access=true")
   # -C is ignored for a different reason: `codex exec resume` has no --cd, so a
   # resumed turn runs in whatever cwd it inherits — not the session's original
   # directory. Restore the scope here; otherwise every pointer in the prompt

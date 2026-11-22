@@ -1,0 +1,10 @@
+{
+  "name": "rail-route",
+  "description": "Find a Korean rail trip where every passenger is seated around 매진 — transfers, same-train segment splits and alternative stations — from Korail's published timetable plus seat states read on korail.com",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  },
+  "license": "MIT"
+}

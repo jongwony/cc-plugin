@@ -104,19 +104,22 @@ USAGE
 
 # Parse options.
 #
-# -S, -C, -o and -t are checked for emptiness, not merely for presence: each is
+# -S, -C and -o are checked for emptiness, not merely for presence: each is
 # tested with -n further down, so an empty value there is indistinguishable from
 # the option never being passed. A caller whose variable came up empty would
-# silently get a new session, its own cwd, no capture, or the config's tier.
-# -m/-r/-s carry no such check — their values are always handed through to
-# codex, so an empty one is codex's to reject in the open rather than something
-# this script swallows. The asymmetry is the point; it is not an oversight to
-# even out.
+# silently get a new session, its own cwd, or no capture at all. -t is checked
+# against a tier name's character set, which also excludes an empty value: the
+# value lands inside a TOML string, where a quote or a space would change what
+# codex reads, and a leading dash would mean the next option was taken as the
+# tier. -m/-r/-s carry no such check — their values are always handed through
+# to codex, so an empty one is codex's to reject in the open rather than
+# something this script swallows. The asymmetry is the point; it is not an
+# oversight to even out.
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -m|--model) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; MODEL="$2"; shift 2 ;;
     -r|--effort) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; EFFORT="$2"; shift 2 ;;
-    -t|--service-tier) [[ $# -ge 2 && "$2" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "Error: $1 requires a tier name of letters, digits, _ or -" >&2; usage 1; }; TIER="$2"; shift 2 ;;
+    -t|--service-tier) [[ $# -ge 2 && "$2" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || { echo "Error: $1 requires a tier name of letters, digits, _ or -" >&2; usage 1; }; TIER="$2"; shift 2 ;;
     -s|--sandbox) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; SANDBOX="$2"; shift 2 ;;
     -C|--cwd) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; CWD="$2"; shift 2 ;;
     -S|--session-id) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; SESSION_ID="$2"; shift 2 ;;

@@ -37,11 +37,16 @@ a decision, an execution, an end-to-end check — and holds what the prompt owes
   when several models answer in parallel; one shared path and the answers
   overwrite each other.
 
-## Choosing the model and effort
+## Choosing the model, effort and tier
 
-- A model or effort the caller already named is the answer; pass it through.
+- A model, effort or tier the caller already named is the answer; pass it through.
 - Otherwise the model is `gpt-6.2-astra`. A run that drives a native app or a
-  browser through computer use goes to `gpt-6.2-sol` with `-t ultrafast`; no
-  other run requests `ultrafast`. Any other end-to-end run goes to `gpt-6-luna`
-  with `-t fast`.
-- Start effort at `medium` and move it by the task's reasoning depth.
+  browser through computer use goes to `gpt-6.2-sol` with `-t ultrafast` at
+  effort `medium`; no other run requests `ultrafast`. Any other end-to-end run
+  goes to `gpt-6-luna` with `-t fast`.
+- Effort for every other run starts at `medium` and moves by the task's
+  reasoning depth.
+- The tier follows the model the run actually uses. Where the caller named the
+  model and no tier, add the tier this section gives the run only where that
+  model's `additional_speed_tiers` in `codex debug models` lists it, and pass no
+  `-t` otherwise.

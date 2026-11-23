@@ -7,7 +7,7 @@ description: |
 # Codex Skill Guide
 
 ## Prompt Delivery
-Read `references/run-brief.md` before writing the prompt file: the role every prompt declares, what a prompt judging a decision carries, and how the model is chosen.
+Read `references/run-brief.md` before writing the prompt file: the role every prompt declares, what a prompt judging a decision carries, and how the model, effort and tier are chosen.
 
 1. Generate a short unique suffix (e.g., `a3f9`, timestamp fragment, or task keyword) for this invocation
 2. Write the prompt to `<scratchpad>/codex_prompt_<suffix>.txt` using the Write tool — `<scratchpad>` is the session's scratchpad directory, the `/private/tmp/…/scratchpad` path announced in the system prompt; writes there run without permission prompts. When no scratchpad directory is announced, fall back to `/private/tmp`.
@@ -34,7 +34,7 @@ When the delegated task is to define, create, or refine a Codex goal — a goal-
 - Read the Codex Goals cookbook — https://developers.openai.com/cookbook/examples/codex/using_goals_in_codex — for what a strong goal carries: outcome, verification surface, constraints, boundaries, iteration policy, and the blocked condition.
 
 ## Running a Task
-1. Choose the model and effort. Whatever the caller named upstream — a model, an effort, a service tier, several models at once — IS the answer: pass it through and do not re-ask it. Otherwise take the model and effort `references/run-brief.md` § Choosing the model and effort names.
+1. Choose the model, effort and tier. Whatever the caller named upstream — a model, an effort, a service tier, several models at once — IS the answer: pass it through and do not re-ask it. Otherwise take the model, effort and tier `references/run-brief.md` § Choosing the model, effort and tier names.
 
    What a choice may name:
    - **Model** — any slug `codex debug models` lists.

@@ -14,7 +14,7 @@ An item is in the brief because this run verified it against its source's curren
 
 - `<dir>`: `${user_config.output_dir}` where the host substituted a non-empty value for it; otherwise `${CLAUDE_PLUGIN_DATA}`.
 - `<language>`: `${user_config.language}` on the same test; otherwise the language this session answers the user in, or with no user turn, the language of the user's own messages in the sources. The whole brief is in `<language>`: headings, labels, dates and times as that language writes them.
-- `--no-save` skips steps 6 and 7.
+- `--no-save` skips the page in steps 4 and 5, and steps 6 and 7.
 
 ## Dependency
 
@@ -31,7 +31,7 @@ Where a dependency or capability a step names is absent, the run reaches that st
 4. **Compose** the brief (`references/selection.md` §Shape, §Writing, §Statement and estimate), and, where the host has an artifact tool, its page with each section's figures (`references/visual.md`).
 5. **Self-check.** Re-read the draft, and the page's text and figures, against those sections and `references/visual.md`, and against `references/gathering.md` §Candidates and §Boundaries, and fix what departs from them. Confirm that the as-of time is read from the clock now and that every link is to a record this run read.
 6. **Visual page.** Where the host has an artifact tool, publish the self-checked page (`references/visual.md` §Page); otherwise skip this step.
-7. **Save.** Write the brief as markdown to `<dir>/<YYYY-MM-DD>.md`. Where that file already holds refresh checkpoints, keep them below the new brief.
+7. **Save.** Write the brief as markdown to `<dir>/<YYYY-MM-DD>.md`. Where that file already holds refresh checkpoints, keep them below the new brief, each marked superseded, so a later refresh reads them only as candidates.
 8. **Reply** with the brief and the page's link or, where no page carries it, where the saved brief lives.
 
 ## Boundaries

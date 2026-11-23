@@ -1,6 +1,6 @@
 # Selection
 
-Read at steps 0 and 3–5 of the procedure.
+Read at steps 0 and 3–5 of the procedure, and by the `morning-brief:refresh` skill.
 
 ## Verified
 

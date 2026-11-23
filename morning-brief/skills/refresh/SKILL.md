@@ -41,7 +41,7 @@ axiom Item : Type
 
 /-- What the session observes by a read: `briefSaved` — today's `<dir>/<YYYY-MM-DD>.md` exists;
     `requested` — the user asked for this refresh in their own turn; `pageable` — the host has an
-    artifact tool and `<dir>/artifact-url` holds today's page. -/
+    artifact tool and the page at `<dir>/artifact-url` carries a record dated today. -/
 structure Observed where
   briefSaved : Bool
   requested  : Bool
@@ -64,6 +64,8 @@ inductive Standing
   | doneWithRemainder
   /-- no record shows it moved since the morning brief -/
   | unchanged
+  /-- the act is no longer the user's or no longer owed: reassigned, cancelled, or withdrawn -/
+  | noLongerOwed
   /-- the act's completion would leave no trace in any record, and none speaks to it -/
   | noRecord
   deriving DecidableEq
@@ -78,13 +80,15 @@ axiom arrival : Context → Item → Arrival
     is shown beside it. -/
 axiom standing : Context → Item → Standing
 
-/-- **Your judgment**: candidates that arrived since the latest earlier checkpoint of this skill —
-    or since the morning brief's as-of time where none exists — and could be the user's open act,
-    or an update, gathered as `references/gathering.md` §Candidates states. -/
+/-- **Your judgment**: candidates not yet in the brief that could be the user's open act, or an
+    update, gathered as `references/gathering.md` states — open asks read with no date bound. The
+    latest earlier checkpoint's read-start time, or the morning brief's as-of time where none
+    exists, only dates what is new. -/
 axiom arrivals : Context → List Item
 
 /-- **Your judgment**: a candidate passed the three conditions of `references/selection.md`
-    §To-do in a fresh-context check that read its record to the latest activity. -/
+    §To-do in a fresh-context check that read its record to the latest activity. Arrivals that
+    could be a to-do, and existing items whose record moved, both take it. -/
 axiom checked : Context → Item → Bool
 
 /-- **Your judgment**: the item's morning wording now states, as fact or as estimate, something
@@ -97,12 +101,16 @@ inductive Act
   | decline
   /-- re-read every item of the brief at its source, and the day's calendar -/
   | reread
-  /-- the full three-condition check on every arrival that could be a to-do -/
+  /-- the full three-condition check on every arrival that could be a to-do and on every existing
+      item whose record moved -/
   | checkArrivals
   /-- the page's record of items: read from the live page, this checkpoint merged into it -/
   | updateRecord
   /-- the whole page redrawn from that record: the top, then each item in place -/
   | redraw
+  /-- re-read what is about to go out against `references/visual.md` and the morning-brief
+      skill's step 5: times from the clock, every link to a record this run read -/
+  | selfCheck
   /-- republish the page at its address -/
   | publish
   /-- append the timestamped checkpoint block to today's file -/
@@ -114,16 +122,17 @@ def refresh (o : Observed) : List Act :=
   if !o.briefSaved || !o.requested then [.decline]
   else
     let page := if o.pageable then [.updateRecord, .redraw, .publish] else []
-    [.reread, .checkArrivals] ++ page ++ [.appendCheckpoint, .reply]
+    [.reread, .checkArrivals] ++ page.take 2 ++ [.selfCheck] ++ page.drop 2 ++
+      [.appendCheckpoint, .reply]
 
 /-- An arrival enters the to-dos only through the check. -/
 def admitsAsToDo (c : Context) (i : Item) : Bool := checked c i
 
-/-- A done item is struck through and recedes in place, and is listed in the top's fold; every
-    other standing keeps full weight in place. -/
+/-- A done item, or one no longer owed, is struck through and recedes in place, and is listed in
+    the top's fold; every other standing keeps full weight in place. -/
 def recedes : Standing → Bool
-  | .done => true
-  | _     => false
+  | .done | .noLongerOwed => true
+  | _                     => false
 
 end
 
@@ -135,17 +144,17 @@ end MorningBriefRefresh
 - Only on the user's request, at a moment they pick — about once or twice a day. Nothing schedules it.
 - Only once today's brief file exists. Before the morning brief, there is nothing to refresh.
 - Each refresh is one checkpoint. Refreshes stack through the day. The next morning's brief is a full new run; its Continuity reads the latest checkpoint only as candidates, and nothing carries over without that day's check.
-- A block in today's file that is not headed in this skill's checkpoint form is not a checkpoint: it is read as a carrier pointing to records, and the arrival window starts at the latest real checkpoint or the brief's as-of time.
+- A checkpoint is the block that opens with the marker `<!-- morning-brief:checkpoint HH:MM -->` (read start, reader's zone); any other block in today's file is read as a carrier pointing to records, and a checkpoint marked superseded is read only as candidates.
 
 ## Reading
 
-- Re-read every item at its source to the latest activity, through the connected tools directly, and the user's calendars for the rest of the day. Gathering the arrivals follows `references/gathering.md`, through `/inquire` where it is installed. Accuracy outranks cost: no read is shortened and no check is skipped to save time.
-- An arrival that could be the user's open act gets the full fresh-context check of `references/selection.md` §To-do. Only an arrival whose three conditions held is shown as a to-do; any other arrival is placed in the section its verdict gives it, and a dropped arrival appears only in the checkpoint block with its reason.
+- Re-read every item at its source to the latest activity, through the connected tools directly, and the user's calendars for the rest of the day. Gathering the arrivals follows `references/gathering.md` whole, open asks with no date bound, through `/inquire` where it is installed. Accuracy outranks cost: no read is shortened and no check is skipped to save time.
+- An arrival that could be the user's open act, and an existing item whose record moved, get the full fresh-context check of `references/selection.md` §To-do; an item that now passes moves to To-dos, and one that no longer holds takes `noLongerOwed`. Only an arrival whose three conditions held is shown as a to-do; any other arrival is placed in the section its verdict gives it, and a dropped arrival appears only in the checkpoint block with its reason.
 - A standing is the record's, as `references/selection.md` §Verified states. Who acted and when come from the record that owns the act.
 
 ## The page
 
-Where the host has an artifact tool and `<dir>/artifact-url` holds today's page, read the record of items that page carries (`references/visual.md` §Figures), merge this checkpoint into it — each item's arrival and standing, times, actors — and redraw the whole page from that record: the morning wording and figures are rendered again from it, never patched as HTML fragments. Republish at the same address. After a refusal that hands back a newer live page, merge into that page's record and redraw again. Without a page, the refresh lives in the saved file and the reply. `references/visual.md` governs figures, colors and density.
+Where the host has an artifact tool and `<dir>/artifact-url` holds today's page, read the record of items that page carries (`references/visual.md` §Figures); where its date is not today, the page is not today's and is not merged into, merge this checkpoint into it — each item's arrival and standing, times, actors — and redraw the whole page from that record: the morning wording and figures are rendered again from it, never patched as HTML fragments. Republish at the same address. After a refusal that hands back a newer live page, merge into that page's record and redraw again. Without a page, the refresh lives in the saved file and the reply. `references/visual.md` governs figures, colors and density.
 
 - **Top.** A day axis: one lane per item that moved or is still owed, updates included where they moved; a mark at the brief's time and at this checkpoint's; a mark or span where each item moved; and a lane for the day's occasions as the calendar now shows them. Below it, a summary bar with one cell per item in its standing, beside a legend that names each standing with its glyph; what is still owed leads, and the done items are listed under a collapsed "끝난 일 N개" (in the brief's language).
 - **Items.** Each item stays where the morning put it, in its morning wording. Where `recedes` holds, the item shrinks to its struck-through title and one standing line, at low weight, so a finished item is never shown at full weight twice; any other item keeps its weight, with its current standing written beneath it as one group: the label, the time, who acted, and what remains. An arrival goes into the section its verdict gives it, marked with its arrival time; one an earlier checkpoint added stays where that checkpoint put it.
@@ -153,7 +162,7 @@ Where the host has an artifact tool and `<dir>/artifact-url` holds today's page,
 
 ## The saved file
 
-Append a block headed with the checkpoint time — the clock when the reads finish — as "HH:MM 갱신" (in the brief's language) to today's `<dir>/<YYYY-MM-DD>.md`. It lists, without checkboxes, each item's arrival and standing as labels with time and actor, the arrivals with their verdicts (dropped ones with their reason), and closing lines: the as-of time, how far back each read went, what could not be reached, and questions for the user. The morning brief above it is not edited; its checkboxes stay unticked as §Continuity states.
+Append a block that opens with the marker `<!-- morning-brief:checkpoint HH:MM -->`, HH:MM the clock when the reads start, followed by the heading "HH:MM 갱신" in the brief's language, to today's `<dir>/<YYYY-MM-DD>.md`. It lists, without checkboxes, each item's arrival and standing as labels with time and actor, the arrivals with their verdicts (dropped ones with their reason), and closing lines: the as-of time, how far back each read went, what could not be reached, and questions for the user. The morning brief above it is not edited; its checkboxes stay unticked as §Continuity states.
 
 ## Reply
 

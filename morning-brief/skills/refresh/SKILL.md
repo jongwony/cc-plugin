@@ -47,6 +47,14 @@ structure Observed where
   requested  : Bool
   pageable   : Bool
 
+/-- When an item entered the brief; kept apart from where it stands now. -/
+inductive Arrival
+  /-- the morning brief carried it -/
+  | morning
+  /-- a refresh added it, at that checkpoint's time in the reader's zone -/
+  | atCheckpoint (time : String)
+  deriving DecidableEq
+
 /-- Where an item stands now, read against the morning brief. -/
 inductive Standing
   /-- the act the item names is done, by the user or by anyone; for an update, the state it
@@ -56,14 +64,18 @@ inductive Standing
   | doneWithRemainder
   /-- no record shows it moved since the morning brief -/
   | unchanged
-  /-- an arrival: it entered after the morning brief -/
-  | new
+  /-- the act's completion would leave no trace in any record, and none speaks to it -/
+  | noRecord
   deriving DecidableEq
 
+/-- **Your judgment**: when each item entered, read from today's file and its checkpoints. -/
+axiom arrival : Context → Item → Arrival
+
 /-- **Your judgment**: each item's standing, read from its source record to that record's latest
-    activity — the record that owns the act, as `references/selection.md` §Verified names it. An
-    act that would leave no trace in any record (reading a report, say) stays `unchanged` with
-    the record's silence named, unless the user reported it. -/
+    activity — the record that owns the act, as `references/selection.md` §Verified names it. Where
+    the act would leave no trace in any record (reading a report, say) and the user has not
+    reported it, the standing is `noRecord`; what did move around it, such as the report landing,
+    is shown beside it. -/
 axiom standing : Context → Item → Standing
 
 /-- **Your judgment**: candidates that arrived since the latest earlier checkpoint of this skill —
@@ -87,11 +99,11 @@ inductive Act
   | reread
   /-- the full three-condition check on every arrival that could be a to-do -/
   | checkArrivals
-  /-- the page's top: the day axis and the folding summary bar -/
-  | drawTop
-  /-- each item in place: morning text kept, the standing laid beneath -/
-  | overlayItems
-  /-- republish the page at its address, built on the live page read before it -/
+  /-- the page's record of items: read from the live page, this checkpoint merged into it -/
+  | updateRecord
+  /-- the whole page redrawn from that record: the top, then each item in place -/
+  | redraw
+  /-- republish the page at its address -/
   | publish
   /-- append the timestamped checkpoint block to today's file -/
   | appendCheckpoint
@@ -101,14 +113,15 @@ inductive Act
 def refresh (o : Observed) : List Act :=
   if !o.briefSaved || !o.requested then [.decline]
   else
-    let page := if o.pageable then [.drawTop, .overlayItems, .publish] else []
+    let page := if o.pageable then [.updateRecord, .redraw, .publish] else []
     [.reread, .checkArrivals] ++ page ++ [.appendCheckpoint, .reply]
 
 /-- An arrival enters the to-dos only through the check. -/
 def admitsAsToDo (c : Context) (i : Item) : Bool := checked c i
 
-/-- A done item is struck through; one done with a remainder is not. -/
-def struck : Standing → Bool
+/-- A done item is struck through and recedes in place, and is listed in the top's fold; every
+    other standing keeps full weight in place. -/
+def recedes : Standing → Bool
   | .done => true
   | _     => false
 
@@ -132,15 +145,15 @@ end MorningBriefRefresh
 
 ## The page
 
-Where the host has an artifact tool and `<dir>/artifact-url` holds today's page, read that live page first and build on it: its wording and figures are the morning text the overlay keeps. Republish it whole, at the same address: the morning page with the day's checkpoints laid over it. After a refusal that hands back a newer live page, lay this checkpoint on that page and publish again. Without a page, the refresh lives in the saved file and the reply. `references/visual.md` governs figures, colors and density; the overlay is rendered from the one record of items that file names, so a standing, time or strike reads the same in every place it appears.
+Where the host has an artifact tool and `<dir>/artifact-url` holds today's page, read the record of items that page carries (`references/visual.md` §Figures), merge this checkpoint into it — each item's arrival and standing, times, actors — and redraw the whole page from that record: the morning wording and figures are rendered again from it, never patched as HTML fragments. Republish at the same address. After a refusal that hands back a newer live page, merge into that page's record and redraw again. Without a page, the refresh lives in the saved file and the reply. `references/visual.md` governs figures, colors and density.
 
-- **Top.** A day axis: one lane per item that moved or is still owed, updates included where they moved; a mark at the brief's time and at this checkpoint's; a mark or span where each item moved; and a lane for the day's occasions as the calendar now shows them. Beside it, a folding summary bar with one cell per item, each cell in one standing, each shown with a glyph and a label as well as its color. The finished items are listed under a collapsed "끝난 일 N개" (in the brief's language).
-- **Items.** Each item stays where the morning put it, in its morning wording, faded; a done item is struck through, one done with a remainder is not. Its current standing is written beneath it: the label, the time, who acted, and what remains. An arrival goes into the section its verdict gives it, marked new; one an earlier checkpoint added stays where that checkpoint put it.
+- **Top.** A day axis: one lane per item that moved or is still owed, updates included where they moved; a mark at the brief's time and at this checkpoint's; a mark or span where each item moved; and a lane for the day's occasions as the calendar now shows them. Below it, a summary bar with one cell per item in its standing, beside a legend that names each standing with its glyph; what is still owed leads, and the done items are listed under a collapsed "끝난 일 N개" (in the brief's language).
+- **Items.** Each item stays where the morning put it, in its morning wording. Where `recedes` holds, the item shrinks to its struck-through title and one standing line, at low weight, so a finished item is never shown at full weight twice; any other item keeps its weight, with its current standing written beneath it as one group: the label, the time, who acted, and what remains. An arrival goes into the section its verdict gives it, marked with its arrival time; one an earlier checkpoint added stays where that checkpoint put it.
 - **Wording.** The morning text is kept as it was, because a reader who meets their morning words again recalls where they left the work. Only where `misleads` holds is a line reworded, on the page alone. Opening and Closing lines that restate an item take that item's strike or standing.
 
 ## The saved file
 
-Append a block headed with the checkpoint time — the clock when the reads finish — as "HH:MM 갱신" (in the brief's language) to today's `<dir>/<YYYY-MM-DD>.md`. It lists, without checkboxes, each item's standing as a label with time and actor, the arrivals with their verdicts (dropped ones with their reason), and closing lines: the as-of time, how far back each read went, what could not be reached, and questions for the user. The morning brief above it is not edited; its checkboxes stay unticked as §Continuity states.
+Append a block headed with the checkpoint time — the clock when the reads finish — as "HH:MM 갱신" (in the brief's language) to today's `<dir>/<YYYY-MM-DD>.md`. It lists, without checkboxes, each item's arrival and standing as labels with time and actor, the arrivals with their verdicts (dropped ones with their reason), and closing lines: the as-of time, how far back each read went, what could not be reached, and questions for the user. The morning brief above it is not edited; its checkboxes stay unticked as §Continuity states.
 
 ## Reply
 

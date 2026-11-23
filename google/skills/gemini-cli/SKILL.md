@@ -4,7 +4,7 @@ description: |
   This skill should be used when the user asks to "run gemini", "ask gemini", "delegate to gemini",
   "use Gemini CLI", "gemini resume", or "continue with gemini". Runs a prompt through Gemini CLI
   headless on a Gemini API key, with the model the user names, session resume by id, and the
-  token counts each run consumed.
+  token counts and cost of each run.
 ---
 
 # Gemini CLI (headless)
@@ -47,9 +47,14 @@ counts the CLI reported, and the session id. `-h` carries the flags and the exit
    handle, and only a successful run prints one.
 8. **Resume** by writing a new prompt file and running the same command with `-S <SESSION_ID>`,
    the same `-m`, and the same `-C`.
-9. **Report** the outcome, the session id, and the token counts. The counts are per model:
-   `input` is the prompt minus what was served from cache, `cached` is the cached part,
-   `candidates` and `thoughts` are output. Each run re-sends the CLI's own system prompt and tool
-   definitions, and a resumed run re-sends the conversation so far, so input grows with the
-   session. To turn counts into cost, read the model's current rates at
-   https://ai.google.dev/gemini-api/docs/pricing.
+9. **Report** the outcome, the session id, the token counts, and their cost. The counts are per
+   model: `input` is the prompt minus what was served from cache, `cached` is the cached part,
+   `candidates` and `thoughts` are output, both billed at the output rate. Each run re-sends the
+   CLI's own system prompt and tool definitions, and a resumed run re-sends the conversation so
+   far, so input grows with the session.
+10. **Cost**, per model and summed, in USD: `input` × input rate + `cached` × context-caching
+    rate + (`candidates` + `thoughts`) × output rate. Read the paid-tier rates from
+    https://ai.google.dev/gemini-api/docs/pricing at report time, taking the rate in force for the
+    run where the page gives a prompt-length tier or a dated change. The report names the rates
+    used, the tier (Standard unless the run used another), and the date they were read. Where a
+    rate cannot be read, report the counts and mark the cost unverified.

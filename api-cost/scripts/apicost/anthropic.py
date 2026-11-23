@@ -10,7 +10,7 @@ from decimal import Decimal
 
 from . import dates
 from .http import get_json
-from .model import Row
+from .model import CollectError, Row
 
 URL = "https://api.anthropic.com/v1/organizations/analytics/cost"
 SOURCE = "anthropic:/v1/organizations/analytics/cost"
@@ -28,7 +28,9 @@ def clamp(start, end, today):
     if start < floor:
         notes.append(f"start moved from {start} to {floor}: the API serves no earlier data")
         start = floor
-    return start, max(start, end), notes
+    if end <= start:
+        raise CollectError(f"the API serves no data before {floor}; the range ends at {end}")
+    return start, end, notes
 
 
 def item_of(group):
@@ -41,7 +43,7 @@ def item_of(group):
 
 def collect(account, key, start, end, get=get_json, today=None):
     """Return (rows, notes). `get(url, params, headers)` returns parsed JSON."""
-    start, end, notes = clamp(start, end, today or date.today())
+    start, end, notes = clamp(start, end, today or dates.today_utc())
     headers = {"x-api-key": key, "anthropic-version": VERSION, "anthropic-beta": BETA}
     rows = []
     for a, b in dates.chunks(start, end, MAX_SPAN):
@@ -59,7 +61,7 @@ def collect(account, key, start, end, get=get_json, today=None):
             }
             body = get(URL, params, headers)
             refreshed = body.get("data_refreshed_at")
-            if refreshed:
+            if refreshed and page is None:
                 notes.append(f"data refreshed at {refreshed} for {a}..{b}; later usage is missing or partial")
             as_of = refreshed or dates.now_iso()
             for r in body.get("data", []):

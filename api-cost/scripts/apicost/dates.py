@@ -28,5 +28,9 @@ def from_unix(ts):
     return datetime.fromtimestamp(int(ts), tz=timezone.utc).date().isoformat()
 
 
+def today_utc():
+    return datetime.now(timezone.utc).date()
+
+
 def now_iso():
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")

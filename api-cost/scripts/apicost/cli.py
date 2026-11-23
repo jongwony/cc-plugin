@@ -4,7 +4,7 @@ import argparse
 import os
 import re
 import sys
-from datetime import date, timedelta
+from datetime import timedelta
 
 from . import anthropic, dates, gemini, normalize, openai
 from .model import CollectError, Status
@@ -41,6 +41,9 @@ def parse_args(argv):
     return p.parse_args(argv)
 
 
+ACCOUNTS = ("personal", "work")
+
+
 def resolve_range(a, today):
     end = dates.parse(a.end) if a.end else today + timedelta(days=1)
     start = dates.parse(a.start) if a.start else end - timedelta(days=a.days)
@@ -50,13 +53,16 @@ def resolve_range(a, today):
 
 
 def run(a, today=None, collectors=None, gemini_collect=None, env=None):
-    today = today or date.today()
+    today = today or dates.today_utc()
     env = os.environ if env is None else env
     collectors = collectors or COLLECTORS
     gemini_collect = gemini_collect or gemini.collect
     start, end = resolve_range(a, today)
     vendors = [v.strip() for v in a.vendors.split(",") if v.strip()]
     accounts = [x.strip() for x in a.accounts.split(",") if x.strip()]
+    unknown = [x for x in accounts if x not in ACCOUNTS]
+    if unknown:
+        raise SystemExit(f"api-cost: unknown account {', '.join(unknown)}; use {', '.join(ACCOUNTS)}")
     rows, statuses = [], []
 
     def attempt(vendor, account, fn, secret=None):
@@ -65,9 +71,11 @@ def run(a, today=None, collectors=None, gemini_collect=None, env=None):
             got, notes = fn()
         except CollectError as e:
             st.reason = redact(str(e), secret)
+        except Exception as e:  # a vendor's unexpected shape must not lose the other accounts
+            st.reason = redact(f"unexpected {type(e).__name__}: {e}", secret)
         else:
             rows.extend(got)
-            st.state, st.rows, st.notes = "verified", len(got), notes
+            st.state, st.notes = "verified", notes
         statuses.append(st)
 
     for vendor in vendors:
@@ -94,6 +102,8 @@ def run(a, today=None, collectors=None, gemini_collect=None, env=None):
             attempt(vendor, account, lambda: collectors[vendor](account, key, start, end), secret=key)
 
     merged = normalize.merge(rows)
+    for st in statuses:
+        st.rows = sum(1 for r in merged if r.vendor == st.vendor and r.account == st.account)
     meta = {"generated_at": dates.now_iso(), "start": start.isoformat(), "end_exclusive": end.isoformat()}
     return merged, statuses, meta
 

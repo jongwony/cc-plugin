@@ -70,6 +70,17 @@ class AnthropicTest(unittest.TestCase):
         self.assertEqual(s, date(2026, 1, 1))
         self.assertTrue(notes)
 
+    def test_range_before_earliest_is_an_error(self):
+        with self.assertRaises(CollectError):
+            anthropic.clamp(date(2025, 11, 1), date(2025, 12, 1), date(2026, 3, 1))
+
+    def test_refresh_note_once_per_chunk(self):
+        page = {"data": [], "has_more": True, "next_page": "p2", "data_refreshed_at": "2026-11-02T04:00:00Z"}
+        last = dict(page, has_more=False, next_page=None)
+        _, notes = anthropic.collect("work", "k", date(2026, 11, 1), date(2026, 11, 3),
+                                     get=FakeGet([page, last]), today=date(2026, 11, 23))
+        self.assertEqual(len([n for n in notes if "refreshed" in n]), 1)
+
 
 class OpenAITest(unittest.TestCase):
     def test_parses_buckets_and_paginates(self):
@@ -114,6 +125,11 @@ class GeminiTest(unittest.TestCase):
         self.assertEqual(seen["acct"], "me@example.com")
         self.assertIn("--parameter=start:DATE:2026-11-01", seen["cmd"])
         self.assertIn("`p.billing.gcp_billing_export_v1_X`", seen["cmd"][-1])
+
+    def test_truncated_result_is_an_error(self):
+        many = [{"day": "2026-11-01", "cost": 0}] * gemini.MAX_ROWS
+        with self.assertRaises(CollectError):
+            gemini.collect("personal", "p.d.t", "", date(2026, 11, 1), date(2026, 11, 2), run=lambda c, a: many)
 
     def test_rejects_malformed_table(self):
         with self.assertRaises(CollectError):

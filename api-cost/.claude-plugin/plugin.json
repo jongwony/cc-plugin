@@ -1,7 +1,7 @@
 {
   "name": "api-cost",
   "description": "Collect vendor-billed API spend — Anthropic and OpenAI organization cost APIs, Gemini from a Cloud Billing export — into one dataset a dashboard reads",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "userConfig": {
     "output_dir": {
       "type": "string",

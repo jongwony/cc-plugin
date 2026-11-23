@@ -40,10 +40,10 @@ To narrow a work account to your own keys or projects, filter on `api_key` or `s
 ```bash
 ANTHROPIC_ADMIN_KEY_PERSONAL="…" OPENAI_ADMIN_KEY_WORK="…" \
   python3 api-cost/scripts/api_cost.py --out ./out --days 30 \
-  --gemini-table my-project.billing.gcp_billing_export_v1_XXXX --gemini-gcloud-account me@example.com
+  --gemini-table my-project.billing.gcp_billing_export_resource_v1_XXXX --gemini-gcloud-account me@example.com
 ```
 
-- Python 3 standard library only. The Gemini step also needs the `bq` CLI from the Google Cloud SDK.
+- Python 3 standard library only (`brew install python` where absent). The Gemini step also needs the `bq` CLI: `brew install --cask google-cloud-sdk`, or `gcloud components install bq`.
 - A key that is not set marks its account `unverified`. The other accounts still run.
 - Recent days can be partial. Anthropic data refreshes within about 4 to 24 hours. The billing export can lag by a day or more.
 

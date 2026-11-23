@@ -32,3 +32,7 @@ def get_json(url, params, headers, timeout=60):
         raise CollectError(f"HTTP {e.code} from {url}: {body}") from None
     except urllib.error.URLError as e:
         raise CollectError(f"cannot reach {url}: {e.reason}") from None
+    except (TimeoutError, OSError) as e:
+        raise CollectError(f"connection to {url} failed: {e}") from None
+    except ValueError as e:
+        raise CollectError(f"{url} returned a body that is not JSON: {e}") from None

@@ -13,6 +13,7 @@ from . import dates
 from .model import CollectError, Row
 
 SERVICES = ("Gemini API", "Generative Language API")
+MAX_ROWS = 100000
 TABLE_RE = re.compile(r"^[A-Za-z0-9_.:-]+\.[A-Za-z0-9_]+\.[A-Za-z0-9_]+$")
 
 QUERY = """
@@ -39,7 +40,7 @@ def build_cmd(table, start, end):
         "query",
         "--use_legacy_sql=false",
         "--format=json",
-        "--max_rows=100000",
+        f"--max_rows={MAX_ROWS}",
         "--parameter=services:ARRAY<STRING>:" + json.dumps(list(SERVICES)),
         f"--parameter=start:DATE:{start.isoformat()}",
         f"--parameter=end:DATE:{end.isoformat()}",
@@ -55,17 +56,28 @@ def run_bq(cmd, gcloud_account):
         p = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=300)
     except FileNotFoundError:
         raise CollectError("bq CLI not found (install the Google Cloud SDK)") from None
+    except subprocess.TimeoutExpired:
+        raise CollectError("bq query timed out after 300s") from None
     if p.returncode != 0:
         raise CollectError(f"bq query failed: {(p.stderr or p.stdout).strip()[:2000]}")
     out = p.stdout.strip()
-    return json.loads(out) if out else []
+    start = out.find("[")
+    if not out or start < 0:
+        return []
+    try:
+        return json.loads(out[start:])
+    except ValueError as e:
+        raise CollectError(f"bq output is not JSON: {e}") from None
 
 
 def collect(account, table, gcloud_account, start, end, run=run_bq):
     rows = []
     as_of = dates.now_iso()
     source = f"gemini:bigquery:{table}"
-    for r in run(build_cmd(table, start, end), gcloud_account):
+    result = run(build_cmd(table, start, end), gcloud_account)
+    if len(result) >= MAX_ROWS:
+        raise CollectError(f"bq returned {MAX_ROWS} rows, its limit; narrow the range")
+    for r in result:
         rows.append(
             Row(
                 date=r["day"],

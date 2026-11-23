@@ -79,6 +79,24 @@ class RunTest(unittest.TestCase):
         self.assertNotIn("secret-value-123", statuses[0].reason)
         self.assertNotIn("sk-admin", statuses[0].reason)
 
+    def test_unknown_account_exits_cleanly(self):
+        with self.assertRaises(SystemExit):
+            cli.run(self.args("--accounts", "personal,team"), today=date(2026, 11, 23), env={})
+
+    def test_unexpected_error_keeps_other_accounts(self):
+        def bad(account, key, start, end):
+            raise KeyError("start_time")
+
+        def good(account, key, start, end):
+            return [row(vendor="anthropic", account=account), row(vendor="anthropic", account=account)], []
+
+        rows, statuses, _ = cli.run(self.args("--vendors", "anthropic,openai", "--accounts", "work"),
+                                    today=date(2026, 11, 23), collectors={"anthropic": good, "openai": bad},
+                                    env={"ANTHROPIC_ADMIN_KEY_WORK": "a", "OPENAI_ADMIN_KEY_WORK": "b"})
+        by = {(s.vendor, s.account): s for s in statuses}
+        self.assertIn("KeyError", by[("openai", "work")].reason)
+        self.assertEqual(by[("anthropic", "work")].rows, len(rows))
+
     def test_default_range_includes_today(self):
         a = cli.parse_args(["--out", "/tmp/unused", "--days", "7"])
         s, e = cli.resolve_range(a, date(2026, 11, 23))

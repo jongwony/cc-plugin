@@ -10,7 +10,7 @@ description: Collect what Anthropic, OpenAI and Gemini billed for API use — pe
 - `<out>`: `${user_config.output_dir}` where the host substituted a non-empty value; otherwise `${CLAUDE_PLUGIN_DATA}`.
 - Gemini: `${user_config.gemini_billing_table}` (`project.dataset.table`) and `${user_config.gemini_gcloud_account}`; an empty table leaves Gemini unverified.
 - Admin keys, one per vendor and account, passed only as environment variables: `ANTHROPIC_ADMIN_KEY_PERSONAL`, `ANTHROPIC_ADMIN_KEY_WORK`, `OPENAI_ADMIN_KEY_PERSONAL`, `OPENAI_ADMIN_KEY_WORK`. Where each lives in the user's secret store is the user's local rules' to say.
-- Requires `python3` (standard library only) and, for Gemini, the `bq` CLI.
+- Requires `python3` (standard library only; `brew install python` where absent) and, for Gemini, the `bq` CLI (`brew install --cask google-cloud-sdk`, or `gcloud components install bq`).
 
 ## Procedure
 

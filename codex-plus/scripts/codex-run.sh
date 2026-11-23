@@ -65,7 +65,6 @@ Options:
                          stderr; where the tier's feature is off in `codex
                          features list` (fast_mode, ultrafast_mode), codex omits
                          it without a word
-  -f, --fast             Same as -t fast
   -s, --sandbox SANDBOX  Sandbox: read-only|workspace-write|danger-full-access
                          (default: workspace-write, which this wrapper always
                          runs with network access enabled, and which already
@@ -96,7 +95,7 @@ no most-recent fallback, so it is never a race under parallel sessions.
 
 Examples (<scratchpad> = the calling session's scratchpad directory):
   codex-run.sh <scratchpad>/codex_prompt_a3f9.txt
-  codex-run.sh -m gpt-6-luna -r xhigh -f <scratchpad>/codex_prompt_a3f9.txt
+  codex-run.sh -m gpt-6-luna -r xhigh -t fast <scratchpad>/codex_prompt_a3f9.txt
   codex-run.sh -m gpt-6.2-sol -t ultrafast <scratchpad>/codex_prompt_a3f9.txt
   codex-run.sh -S 019e3eff-c191-7401-bffb-bb8c31ac37c7 <scratchpad>/codex_prompt_a3f9.txt
 USAGE
@@ -117,7 +116,6 @@ while [[ $# -gt 0 ]]; do
     -m|--model) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; MODEL="$2"; shift 2 ;;
     -r|--effort) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; EFFORT="$2"; shift 2 ;;
     -t|--service-tier) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; TIER="$2"; shift 2 ;;
-    -f|--fast) TIER="fast"; shift ;;
     -s|--sandbox) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; SANDBOX="$2"; shift 2 ;;
     -C|--cwd) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; CWD="$2"; shift 2 ;;
     -S|--session-id) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; SESSION_ID="$2"; shift 2 ;;

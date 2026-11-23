@@ -1,6 +1,6 @@
 # Gathering
 
-Read at steps 1 and 2 of the procedure. Establishing what is the case is `/inquire`'s.
+Read at steps 1 and 2 of the procedure, and by the `morning-brief:refresh` skill. Establishing what is the case is `/inquire`'s.
 
 ## What the brief needs established
 

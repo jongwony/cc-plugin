@@ -12,7 +12,7 @@ Read at step 6 of the procedure.
 
 ## Page
 
-- The host's guidance for artifact pages and for data visualization is loaded and followed where offered. Otherwise a figure stays plain and legible.
+- Before the page is written, the host's artifact design guidance (the `artifact-design` skill, or the Artifact tool's quickstart) and its `dataviz` skill are loaded where the host offers them, and followed: every figure takes dataviz's method for form, color, marks and labels. Where they are not offered, a figure stays plain and legible.
 - A figure stays whole at any width: it re-lays out to fit, without scrolling inside itself or clipping a label.
 - Text wraps where its language breaks: a language read in word units keeps each word whole.
 - One page serves every run, and its address is kept in `<dir>/artifact-url`. The page is a view of this run's brief alone: the previous page's content already entered through step 0. After a refusal that hands back the live page, the run publishes this brief whole to the same address; such a refusal is not "cannot write". A new page is made, and its address written, only where none exists at the address or the run cannot write to it.

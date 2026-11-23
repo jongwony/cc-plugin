@@ -4,18 +4,21 @@ Read at steps 4 and 6 of the procedure, and by the `morning-brief:refresh` skill
 
 ## Figures
 
+A page built quickly will still carry rendering errors. These clauses keep each error in one place, where one fix reaches every rendering of it.
+
 - The page is composed with the brief, section by section. For each section, the run finds by drawing the mix of text and figures that lowers the reader's load while still giving enough understanding. A figure sits beside the item or section it draws.
 - A figure is drawn only for a relation among items that the text states and its layout does not already show: their order in time, who waits on whom, how measured quantities compare.
 - Where a figure carries values, the page text drops them and keeps what changes the next choice. The page and the saved markdown may differ in wording; the markdown keeps compared values compactly in its text.
-- Values the text compares are drawn as lengths, each value beside its length and the scale stated. One kind shares one scale in one figure; another kind sits beside as a value or in its own figure. A derived quantity a judgment rests on appears beside its inputs.
-- Each item on the page has an address. Every figure element comes from a verified item and points to that address.
+- Values the text compares are drawn as lengths, each value beside its length and the scale stated. Values a figure compares share one unit and the reader's time zone, and each stays on one line. One kind shares one scale in one figure; another kind sits beside as a value or in its own figure. A derived quantity a judgment rests on appears beside its inputs.
+- One record, derived views. Before anything is drawn, the page's items are written once as a record: each with its address, standing, times in the reader's zone, actors and link. Every place an item appears — a summary cell, a lane mark, a label, a strike-through, a schedule bar — is rendered from that record, never written by hand, and points to the item's address.
 - An element, and any relation a figure's layout invites, keep the standing the text gives them, shown by more than color.
-- Before publishing, each element is checked against its item, and where the host can show the page, it is looked at once.
+- Before publishing, each item's renderings are compared with its record, and each legend entry with the tokens in use. A disagreement is fixed in the record or in the renderer, never in the one instance. Where the host can show the page, it is looked at once.
 
 ## Page
 
 - Before the page is written, the host's artifact design guidance (the `artifact-design` skill, or the Artifact tool's quickstart) and its `dataviz` skill are loaded where the host offers them, and followed: every figure takes dataviz's method for form, color, marks and labels. Where they are not offered, a figure stays plain and legible.
-- Status colors mark status only. By the user's choice, and in place of dataviz's status palette, done, done with a remainder, and new take dataviz's categorical slots 3, 7 and 5 (aqua, violet, magenta), with each mode's own steps; unchanged takes the track neutral. Because that set is not validated for every pair, each status always carries a glyph and a label beside its color. Emphasis inside a figure takes a color outside these.
+- Status colors mark status only. By the user's choice, and in place of dataviz's status palette, done, done with a remainder, and new take dataviz's categorical slots 3, 7 and 5 (aqua, violet, magenta), with each mode's own steps; unchanged takes the track neutral. Because that set is not validated for every pair, each status always carries a glyph and a label beside its color. Any other emphasis takes a neutral or a figure-local accent. Captions and legends name a meaning beside its swatch, never a color in words.
+- A figure's styles are scoped to that figure; no class name is shared with page text.
 - Density: the page spans about 80% of the viewport, and the full width inside the side gutter below about 700px; body text is 16px at a line height near 1.55, with tight gaps between blocks.
 - A figure stays whole at any width: it re-lays out to fit, without scrolling inside itself or clipping a label.
 - Text wraps where its language breaks: a language read in word units keeps each word whole.

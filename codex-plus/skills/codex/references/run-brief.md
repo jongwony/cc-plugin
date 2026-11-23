@@ -43,10 +43,13 @@ a decision, an execution, an end-to-end check — and holds what the prompt owes
 - Otherwise the model is `gpt-6.2-astra`. A run that drives a native app or a
   browser through computer use goes to `gpt-6.2-sol` with `-t ultrafast` at
   effort `medium`; no other run requests `ultrafast`. Any other end-to-end run
-  goes to `gpt-6-luna` with `-t fast`.
+  goes to `gpt-6-luna` with `-t fast` at effort `xhigh`.
 - Effort for every other run starts at `medium` and moves by the task's
   reasoning depth.
 - The tier follows the model the run actually uses. Where the caller named the
-  model and no tier, add the tier this section gives the run only where that
-  model's `additional_speed_tiers` in `codex debug models` lists it, and pass no
-  `-t` otherwise.
+  model and no tier, and this section gives the run a tier, pass that tier if
+  the model's `additional_speed_tiers` in `codex debug models` lists it. A
+  computer-use run on a model without `ultrafast` passes `-t fast` where the
+  model lists `fast`. Where the model lists neither, pass `-t default`: without
+  `-t` the codex config's `service_tier` applies, and it may name a tier the
+  model lacks.

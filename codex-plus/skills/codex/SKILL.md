@@ -39,13 +39,13 @@ When the delegated task is to define, create, or refine a Codex goal — a goal-
    What a choice may name:
    - **Model** — any slug `codex debug models` lists.
    - **Effort** — `low`, `medium`, `high`, `xhigh`, `max`, `ultra`. `ultra` is maximum reasoning with automatic task delegation, as the model catalog describes it. A model's ladder may stop short of the top — `gpt-6-luna`'s ends at `max` — and a parallel run needs an effort every model in it takes; `codex debug models` reports each model's ladder.
-   - **Service tier** — `-t TIER`, a name the model's `additional_speed_tiers` lists in `codex debug models`, under the caveat in the Quick Reference.
+   - **Service tier** — `-t TIER`, a name the model's `additional_speed_tiers` lists in `codex debug models`, under the caveat in the Quick Reference. A parallel run needs a tier every model in it advertises — `ultrafast` is `gpt-6.2-sol`'s alone in the current catalog.
 
 2. Select sandbox mode. Omitting `-s` gives `workspace-write` **with network access** — codex offers no network under `read-only` at all, so this is the only mode short of full access that has any. Pass `-s read-only` when a run must neither touch the tree nor reach off-machine; `-s danger-full-access` only when it must write outside the workspace. Because the default already permits writes, what bounds a run that is meant to only read is the role its prompt declares — state it.
 3. Write the prompt per `references/run-brief.md` to `<scratchpad>/codex_prompt_<suffix>.txt`.
 4. Delegate execution to a Bash subagent (Task tool) — never run `codex-run.sh` directly in the main session. This keeps codex's verbose banner and full output out of the main context. Give the subagent:
-   - the exact command: `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh [options] <scratchpad>/codex_prompt_<suffix>.txt` with `-m MODEL` / `-r EFFORT` / `-s SANDBOX` / `-C DIR`, or `-S <SESSION_ID>` to resume.
-   - return contract: run the command and return ONLY (a) a concise outcome summary and (b) the session id. codex prints `session id: <uuid>` to stderr; the subagent extracts that line verbatim and returns it as `SESSION_ID: <uuid>`. The wrapper does no parsing — stderr is left unsuppressed precisely so the subagent can read the session id and any failure straight from the output.
+   - the exact command: `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh [options] <scratchpad>/codex_prompt_<suffix>.txt` with `-m MODEL` / `-r EFFORT` / `-t TIER` / `-s SANDBOX` / `-C DIR`, or `-S <SESSION_ID>` to resume.
+   - return contract: run the command and return ONLY (a) a concise outcome summary, (b) the session id, and (c) every `warning:` line codex printed to stderr, verbatim — a service tier codex dropped reaches the caller only through (c). codex prints `session id: <uuid>` to stderr; the subagent extracts that line verbatim and returns it as `SESSION_ID: <uuid>`. The wrapper does no parsing — stderr is left unsuppressed precisely so the subagent can read the session id and any failure straight from the output.
    - **Single model**: one subagent call.
    - **Multiple models**: issue parallel subagent calls (one per model) in a single response — same prompt, sandbox, and effort, different `-m`. Each returns its own `SESSION_ID`.
 5. Record each returned `SESSION_ID` against its purpose/model. This {purpose → SESSION_ID} map is the only resume handle.
@@ -59,7 +59,7 @@ Base patterns:
 - Analysis or unattended edits, network reachable — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -m MODEL <scratchpad>/codex_prompt_<suffix>.txt` (the default sandbox: workspace-write, network on — it applies edits without prompting, because `codex exec` is headless and has no approval step to opt out of)
 - Neither writes nor network — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s read-only <scratchpad>/codex_prompt_<suffix>.txt`
 - Write outside the workspace — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -s danger-full-access <scratchpad>/codex_prompt_<suffix>.txt`
-- Resume a session — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> -m <SAME_MODEL> -r <SAME_EFFORT> <scratchpad>/codex_prompt_<suffix>.txt`; the explicit id is the resume path, deterministic under parallel sessions.
+- Resume a session — `${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.sh -S <SESSION_ID> -m <SAME_MODEL> -r <SAME_EFFORT> [-t <SAME_TIER>] <scratchpad>/codex_prompt_<suffix>.txt`; the explicit id is the resume path, deterministic under parallel sessions.
 
 Modifiers, added to any base pattern above:
 - Different working directory — `-C <DIR>`; pass it again on resume (step 6)

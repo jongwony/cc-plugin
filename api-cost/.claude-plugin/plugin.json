@@ -1,0 +1,30 @@
+{
+  "name": "api-cost",
+  "description": "Collect vendor-billed API spend — Anthropic and OpenAI organization cost APIs, Gemini from a Cloud Billing export — into one dataset a dashboard reads",
+  "version": "0.1.0",
+  "userConfig": {
+    "output_dir": {
+      "type": "string",
+      "title": "Output directory",
+      "description": "Absolute path for costs.json, costs.csv and status.json; leave empty to use the plugin's data directory",
+      "required": false
+    },
+    "gemini_billing_table": {
+      "type": "string",
+      "title": "Gemini billing export table",
+      "description": "Personal Cloud Billing export table in BigQuery, as project.dataset.table; leave empty to skip Gemini",
+      "required": false
+    },
+    "gemini_gcloud_account": {
+      "type": "string",
+      "title": "gcloud account for the billing table",
+      "description": "The gcloud account bq runs as when reading the personal billing table",
+      "required": false
+    }
+  },
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  },
+  "license": "MIT"
+}

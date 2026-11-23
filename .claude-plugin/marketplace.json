@@ -165,7 +165,7 @@
     {
       "name": "api-cost",
       "source": "./api-cost",
-      "description": "Links to the Anthropic, OpenAI and Gemini API cost and usage dashboards, per account"
+      "description": "Links to the Anthropic, OpenAI and Gemini API cost and usage dashboards"
     }
   ]
 }

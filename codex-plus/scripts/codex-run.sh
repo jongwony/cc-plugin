@@ -41,7 +41,7 @@ SANDBOX="$DEFAULT_SANDBOX"
 SESSION_ID=""
 CWD=""
 OUTPUT_FILE=""
-FAST=0
+TIER=""
 
 usage() {
   cat <<'USAGE'
@@ -52,14 +52,20 @@ Options:
   -r, --effort EFFORT    Reasoning effort: low|medium|high|xhigh|max|ultra (default:
                          medium, a starting point rather than a ceiling —
                          escalate per task. astra has no `none` rung)
-  -f, --fast             Request codex's fast (priority) service tier. codex has
-                         no --fast flag of its own, so this sets the service_tier
-                         config key, which a resumed turn re-reads exactly as it
-                         re-reads the model and effort keys. It is a request, not
-                         a guarantee: codex drops the tier without an error where
-                         the model's catalog entry does not carry it, and again
-                         where the fast_mode feature is off — `codex debug models`
-                         and `codex features list` are what show either
+  -t, --service-tier TIER
+                         Request a codex service tier: a name the model's
+                         additional_speed_tiers lists in `codex debug models`,
+                         or default for the standard tier. codex has no tier
+                         flag of its own, so this sets the service_tier config
+                         key, which a resumed turn re-reads exactly as it
+                         re-reads the model and effort keys. Omitted, the codex
+                         config's service_tier applies. It is a request, not a
+                         guarantee: where the model does not advertise the tier,
+                         codex omits it and says so in a `warning:` line on
+                         stderr; where the tier's feature is off in `codex
+                         features list` (fast_mode, ultrafast_mode), codex omits
+                         it without a word
+  -f, --fast             Same as -t fast
   -s, --sandbox SANDBOX  Sandbox: read-only|workspace-write|danger-full-access
                          (default: workspace-write, which this wrapper always
                          runs with network access enabled, and which already
@@ -91,6 +97,7 @@ no most-recent fallback, so it is never a race under parallel sessions.
 Examples (<scratchpad> = the calling session's scratchpad directory):
   codex-run.sh <scratchpad>/codex_prompt_a3f9.txt
   codex-run.sh -m gpt-6-luna -r xhigh -f <scratchpad>/codex_prompt_a3f9.txt
+  codex-run.sh -m gpt-6.2-sol -t ultrafast <scratchpad>/codex_prompt_a3f9.txt
   codex-run.sh -S 019e3eff-c191-7401-bffb-bb8c31ac37c7 <scratchpad>/codex_prompt_a3f9.txt
 USAGE
   exit "${1:-0}"
@@ -98,10 +105,10 @@ USAGE
 
 # Parse options.
 #
-# -S, -C and -o are checked for emptiness, not merely for presence: each is
+# -S, -C, -o and -t are checked for emptiness, not merely for presence: each is
 # tested with -n further down, so an empty value there is indistinguishable from
 # the option never being passed. A caller whose variable came up empty would
-# silently get a new session, its own cwd, or no capture at all. -m/-r/-s carry
+# silently get a new session, its own cwd, no capture, or the config's tier. -m/-r/-s carry
 # no such check — their values are always handed through to codex, so an empty
 # one is codex's to reject in the open rather than something this script
 # swallows. The asymmetry is the point; it is not an oversight to even out.
@@ -109,7 +116,8 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     -m|--model) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; MODEL="$2"; shift 2 ;;
     -r|--effort) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; EFFORT="$2"; shift 2 ;;
-    -f|--fast) FAST=1; shift ;;
+    -t|--service-tier) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; TIER="$2"; shift 2 ;;
+    -f|--fast) TIER="fast"; shift ;;
     -s|--sandbox) [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; usage 1; }; SANDBOX="$2"; shift 2 ;;
     -C|--cwd) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; CWD="$2"; shift 2 ;;
     -S|--session-id) [[ $# -ge 2 && -n "$2" ]] || { echo "Error: $1 requires a non-empty value" >&2; usage 1; }; SESSION_ID="$2"; shift 2 ;;
@@ -166,7 +174,7 @@ CODEX_ARGS=(exec --skip-git-repo-check)
 # Set before the branch because it belongs to both halves of it: the tier is a
 # config key rather than a flag, so a resumed turn has to be handed it again for
 # the same reason -m and the effort key are re-passed below.
-[[ "$FAST" == 1 ]] && CODEX_ARGS+=(--config 'service_tier="fast"')
+[[ -n "$TIER" ]] && CODEX_ARGS+=(--config "service_tier=\"$TIER\"")
 if [[ -n "$SESSION_ID" ]]; then
   # A resumed turn does NOT inherit the session's model or effort. codex reads
   # both from the flags and config in force at resume time, so passing nothing

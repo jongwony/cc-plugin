@@ -1,5 +1,5 @@
 ---
-name: refresh
+name: refresh-brief
 description: Refreshes today's morning brief at a checkpoint the user picks — re-reads every item at its source, checks what newly became the user's to-do, and lays the day's movement over the morning text on the same page and in the same day's file. Use when the user asks to refresh or update today's brief ("브리프 갱신", "브리프 다시 읽어줘", "where does today's brief stand"), once today's brief exists.
 model: opus
 effort: medium
@@ -25,7 +25,7 @@ The block fixes which acts a refresh takes and in what order; how each act is ca
 prose below.
 -/
 
-namespace MorningBriefRefresh
+namespace MorningBriefRefreshBrief
 
 noncomputable section
 
@@ -136,7 +136,7 @@ def recedes : Standing → Bool
 
 end
 
-end MorningBriefRefresh
+end MorningBriefRefreshBrief
 ```
 
 ## When

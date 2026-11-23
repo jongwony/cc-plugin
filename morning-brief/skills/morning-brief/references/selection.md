@@ -1,6 +1,6 @@
 # Selection
 
-Read at steps 0 and 3–5 of the procedure, and by the `morning-brief:refresh` skill.
+Read at steps 0 and 3–5 of the procedure, and by the `morning-brief:refresh-brief` skill.
 
 ## Verified
 
@@ -69,7 +69,7 @@ The brief keeps what a source states apart from this run's own reading, in three
 
 ## Continuity
 
-The previous brief is the latest one saved in `<dir>`, read as of its latest refresh checkpoint where `morning-brief:refresh` appended any. Its items are candidates again: nothing carries over without today's check.
+The previous brief is the latest one saved in `<dir>`, read as of its latest refresh checkpoint where `morning-brief:refresh-brief` appended any. Its items are candidates again: nothing carries over without today's check.
 
 - The saved file keeps the user's words verbatim and visibly apart from the run's own: every checkbox is written unticked, and a carried note is quoted and attributed beside its item.
 - A tick or a note is the user's report. Where the record speaks, the record decides. A record is silent on an act only where the act would leave no trace in it: where the thing delivered would appear in a record read to its latest activity and does not, the record has spoken. Where it is silent, the report stands for the user's own part, and what it says of another person's act stays attributed to the user until that person's record shows it.

@@ -1,6 +1,6 @@
 # Visual page
 
-Read at steps 4 and 6 of the procedure, and by the `morning-brief:refresh` skill.
+Read at steps 4 and 6 of the procedure, and by the `morning-brief:refresh-brief` skill.
 
 ## Figures
 
@@ -25,5 +25,5 @@ A page built quickly will still carry rendering errors. These clauses keep each 
 - Density: figures get a canvas of about 80% of the viewport, and the full width inside the side gutter below about 700px; running text keeps a readable measure of about 68 characters. Body text is 16px at a line height near 1.55, with tight gaps between blocks.
 - A figure stays whole at any width: it re-lays out to fit, without scrolling inside itself or clipping a label.
 - Text wraps where its language breaks: a language read in word units keeps each word whole.
-- One page serves every run, and its address is kept in `<dir>/artifact-url`. The page is a view of this run's brief alone, with the same day's refresh checkpoints laid over it once `morning-brief:refresh` runs: the previous page's content already entered through step 0. After a refusal that hands back the live page, the run publishes this brief whole to the same address; such a refusal is not "cannot write". A new page is made, and its address written, only where none exists at the address or the run cannot write to it.
+- One page serves every run, and its address is kept in `<dir>/artifact-url`. The page is a view of this run's brief alone, with the same day's refresh checkpoints laid over it once `morning-brief:refresh-brief` runs: the previous page's content already entered through step 0. After a refusal that hands back the live page, the run publishes this brief whole to the same address; such a refusal is not "cannot write". A new page is made, and its address written, only where none exists at the address or the run cannot write to it.
 - The page stays private; the run shares it with no one.

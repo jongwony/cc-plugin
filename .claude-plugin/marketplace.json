@@ -161,6 +161,11 @@
       "name": "rail-route",
       "source": "./rail-route",
       "description": "Korean rail seat-finding across transfers and same-train splits when direct trains are sold out"
+    },
+    {
+      "name": "api-cost",
+      "source": "./api-cost",
+      "description": "Vendor-billed API spend — Anthropic, OpenAI and Gemini — collected into one dataset for a dashboard"
     }
   ]
 }

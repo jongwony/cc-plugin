@@ -1,7 +1,7 @@
 {
   "name": "api-cost",
-  "description": "Links to the Anthropic, OpenAI and Gemini API cost and usage dashboards, per account",
-  "version": "0.2.0",
+  "description": "Links to the Anthropic, OpenAI and Gemini API cost and usage dashboards",
+  "version": "0.2.1",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

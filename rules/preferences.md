@@ -57,7 +57,8 @@ Governs text handed to an agent that will act on it — an agent request posted 
 
 ## Environment
 
-- Timezone: Asia/Seoul (KST). A time or date stated without a zone resolves to this zone unless another zone is named.
+- Timezone: Asia/Seoul (KST). A time or date stated without a zone resolves to this zone unless another zone is named; a time written for choi is stated in KST, with UTC in parentheses only where a system record uses it.
+- **A time a scheduled wait will reach is the one printed by the command that starts the wait**, never an estimate made apart from it; a wait that ends on a condition is stated by that condition, not by a time.
 
 ## Trusted Scopes
 

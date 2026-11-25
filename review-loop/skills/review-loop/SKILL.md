@@ -45,6 +45,11 @@ direction : optional shared-cause hypothesis with its falsifier
 Every source able to report reach owes `exercised`, including on approval. Ask
 explicitly whether the whole changed artifact's contract closes: declared values
 have producers, branches have supplied inputs, and obligations reach their consumers.
+Ask as well whether that contract still closes once merging puts the change into a
+running system: work already in flight under the old definition, the order its parts
+roll out in, and state the running system holds that the diff does not show. A source
+names in `exercised`, as not reached, each fact this rests on that it could not
+establish — whether merging deploys the change, or running state it could not read.
 Ask equally what the artifact carries that its remaining text already recovers: which
 obligation fails on a clause's deletion, and which two places state one thing and would
 have to be kept in step. Distinguish source analysis from executed checks.

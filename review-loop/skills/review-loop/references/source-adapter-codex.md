@@ -19,7 +19,7 @@ Write the prompt to a unique temporary directory (`mktemp -d`). Include:
 - Changed-file list and the current design-intent bundle from Phase 0: repository
   pointers, constituted decisions and their basis, declared authority order or its
   absence, and mission pointer or the recorded absence of a declared goal.
-- The Source Interface output using findings and the labels
+- The Source Interface's asks, and its output using findings and the labels
   `VERDICT: approve | needs-attention`, `EXERCISED:`, and `DIRECTION:`.
   Convey the mission-based severity calibration.
 

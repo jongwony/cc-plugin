@@ -47,13 +47,12 @@ explicitly whether the whole changed artifact's contract closes: declared values
 have producers, branches have supplied inputs, and obligations reach their consumers.
 Ask as well whether that contract still closes once merging puts the change into a
 running system: work already in flight under the old definition, the order its parts
-roll out in, and state the running system holds that the diff does not show. Put this
-to the source unless it is established that merging deploys nothing; a source that
-cannot establish whether it does, or cannot read the running system, names the axis in
-`exercised` as not reached. Ask equally what the artifact carries that its remaining
-text already recovers: which obligation fails on a clause's deletion, and which two
-places state one thing and would have to be kept in step. Distinguish source analysis
-from executed checks.
+roll out in, and state the running system holds that the diff does not show. A source
+names in `exercised`, as not reached, each fact this rests on that it could not
+establish — whether merging deploys the change, or running state it could not read.
+Ask equally what the artifact carries that its remaining text already recovers: which
+obligation fails on a clause's deletion, and which two places state one thing and would
+have to be kept in step. Distinguish source analysis from executed checks.
 Request `direction` after findings on a non-approval; no single mechanism is a
 valid answer. A mechanism lacking a falsifier does not fill this slot. The loop
 supplies neither reach nor a source direction by inference.

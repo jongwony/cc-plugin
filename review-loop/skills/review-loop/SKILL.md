@@ -45,9 +45,12 @@ direction : optional shared-cause hypothesis with its falsifier
 Every source able to report reach owes `exercised`, including on approval. Ask
 explicitly whether the whole changed artifact's contract closes: declared values
 have producers, branches have supplied inputs, and obligations reach their consumers.
-Ask equally what the artifact carries that its remaining text already recovers: which
-obligation fails on a clause's deletion, and which two places state one thing and would
-have to be kept in step. Distinguish source analysis from executed checks.
+Where merging the change deploys it, ask the same of its arrival in the running system:
+work already in flight under the old definition, the order its parts roll out in, and
+state the running system holds that the diff does not show. Ask equally what the
+artifact carries that its remaining text already recovers: which obligation fails on a
+clause's deletion, and which two places state one thing and would have to be kept in
+step. Distinguish source analysis from executed checks.
 Request `direction` after findings on a non-approval; no single mechanism is a
 valid answer. A mechanism lacking a falsifier does not fill this slot. The loop
 supplies neither reach nor a source direction by inference.

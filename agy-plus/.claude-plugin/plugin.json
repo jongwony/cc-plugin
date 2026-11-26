@@ -1,7 +1,7 @@
 {
   "name": "agy-plus",
   "description": "Enhanced Google Antigravity CLI (agy) integration (flexible model/effort, parallel delegation, session resume)",
-  "version": "1.0.6",
+  "version": "1.0.8",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

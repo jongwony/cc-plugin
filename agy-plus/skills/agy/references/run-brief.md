@@ -10,6 +10,8 @@ prompt owes.
   can inspect directly under `-C DIR`.
 - Copy in only what `agy` cannot re-derive on disk (for example, session-bound
   context, user preferences stated in chat, or unrecorded test output).
+- The prompt travels as one argv value, visible to any local process listing
+  processes (`ps`) while `agy` runs: copy in no secret or credential.
 - On resume (`-S <SESSION_ID>`), send only the new instruction; do not repeat
   the prior context.
 

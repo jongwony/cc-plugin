@@ -51,9 +51,10 @@ Core options:
                               (default: auto).
   -f, --output-format FORMAT  Print-mode output format: json|text|stream-json
                               (default: json). Raw output is passed straight
-                              through without in-script parsing. Note: `text`
-                              omits `conversation_id`, so use `json` whenever
-                              a session may be resumed.
+                              through without in-script parsing. `json` and
+                              `stream-json` carry `conversation_id`; `text`
+                              omits it, so do not use `text` when a session
+                              may be resumed.
   -S, --session-id ID         Resume a specific conversation by UUID
                               (`--conversation`). Deterministic — no --continue
                               fallback. agy does not keep the session's
@@ -78,6 +79,13 @@ agy-specific options (see references/agy-features.md):
   --remote-agent              Run conversations using remote agents.
   --settings SETTINGS         Session-only settings JSON object or file path.
   -h, --help                  Show this help.
+
+The prompt file is read with `$(<file)`: trailing newlines and NUL bytes are
+dropped (bash 4.4+ also warns; macOS /bin/bash 3.2 does not). The 131063-byte
+limit is measured on the content as passed.
+
+The prompt travels as one argv value, so it is visible to other local
+processes (`ps`) for the whole run.
 
 Stdout and stderr are passed through untouched so the calling subagent reads
 `conversation_id`, `response`, `usage`, and any errors directly from agy's
@@ -138,6 +146,11 @@ case "$MODE" in
   *) echo "Error: invalid --mode \"$MODE\" (valid: auto, accept-edits, plan)" >&2; exit 1 ;;
 esac
 
+case "$EFFORT" in
+  ''|low|medium|high|xhigh|max) ;;
+  *) echo "Error: invalid --effort \"$EFFORT\" (valid: low, medium, high, xhigh, max)" >&2; exit 1 ;;
+esac
+
 case "$OUTPUT_FORMAT" in
   json|text|stream-json) ;;
   *) echo "Error: invalid --output-format \"$OUTPUT_FORMAT\" (valid: json, text, stream-json)" >&2; exit 1 ;;
@@ -181,7 +194,7 @@ fi
 
 # Resolve agy binary before changing directory so a relative PATH entry cannot
 # resolve to a different executable after `cd`.
-AGY_BIN="$(command -v agy)" || {
+AGY_BIN="$(type -P agy)" || {
   echo "Error: agy not found on PATH" >&2
   exit 1
 }
@@ -199,7 +212,7 @@ if [[ "$PROMPT_BYTES" -gt "$MAX_PROMPT_BYTES" ]]; then
   exit 1
 fi
 
-if [[ -z "${PROMPT_CONTENT//[[:space:]]/}" ]]; then
+if [[ "$PROMPT_CONTENT" != *[![:space:]]* ]]; then
   echo "Error: prompt file holds only whitespace: $PROMPT_FILE" >&2
   exit 1
 fi

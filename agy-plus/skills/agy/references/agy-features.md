@@ -52,8 +52,10 @@ Load this reference when a delegated task needs capabilities beyond the core
 - **Auto-denied tools (`denied_actions` in a `SUCCESS` payload)**: headless
   print mode cannot prompt, so a tool needing a permission is denied. Allow it
   for the run with an allow-rule under `permissions.allow` passed via
-  `--settings` (e.g., `command(<target>)`), or pass
-  `--dangerously-skip-permissions` once the user has permitted it.
+  `--settings` — `{"permissions":{"allow":["command(*)"]}}` allows every shell
+  command (narrower `command(git)`, `command(git *)` did not match in agy
+  1.5.18) — or pass `--dangerously-skip-permissions`. Either grant needs the
+  user's permission first.
 - **Auth expired / not signed in**: ask the user to run `agy` interactively in a
   terminal to complete Google Sign-In, or check `~/.gemini/antigravity-cli/settings.json`.
 - **Inspecting environment**: `agy mcp`, `agy plugin`, `agy changelog`, and

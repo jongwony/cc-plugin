@@ -191,17 +191,17 @@ AGY_BIN="$(command -v agy)" || {
 # Read prompt content (`agy --print` takes the prompt as its flag argument, not stdin).
 PROMPT_CONTENT="$(<"$PROMPT_FILE")"
 
-if [[ -z "${PROMPT_CONTENT//[[:space:]]/}" ]]; then
-  echo "Error: prompt file holds only whitespace: $PROMPT_FILE" >&2
-  exit 1
-fi
-
-# The prompt travels as one argv value; Linux caps a single one at 128 KiB
-# (MAX_ARG_STRLEN).
-readonly MAX_PROMPT_BYTES=131072
+# The prompt travels as one argv value, `--print=<prompt>` plus its NUL; Linux
+# caps a single one at 131072 bytes (MAX_ARG_STRLEN).
+readonly MAX_PROMPT_BYTES=131063
 PROMPT_BYTES=$(printf '%s' "$PROMPT_CONTENT" | wc -c | tr -d ' ')
 if [[ "$PROMPT_BYTES" -gt "$MAX_PROMPT_BYTES" ]]; then
   echo "Error: prompt is $PROMPT_BYTES bytes, over the $MAX_PROMPT_BYTES-byte limit for one argument; pass pointers instead of copies (references/run-brief.md \"Point, don't copy\")" >&2
+  exit 1
+fi
+
+if [[ -z "${PROMPT_CONTENT//[[:space:]]/}" ]]; then
+  echo "Error: prompt file holds only whitespace: $PROMPT_FILE" >&2
   exit 1
 fi
 

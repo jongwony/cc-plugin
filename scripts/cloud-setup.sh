@@ -2,8 +2,8 @@
 # Provision a Claude Code cloud environment: choi's rules (install-rules.sh),
 # both plugin marketplaces, the opt-in epistemic-protocols plugins, ink-figure's figure board option and the
 # Epistemic Ink output style, the Codex CLI with the Tavily MCP server
-# registered, and a SessionStart hook that reports a missing Codex login at
-# each session start.
+# registered, the Antigravity CLI (agy) set to the Gemini API-key provider, and
+# a SessionStart hook that reports a missing Codex login at each session start.
 # Idempotent: safe to re-run in a container that already has any of these.
 #
 # Paste this one line into the environment's "Setup script" field:
@@ -40,6 +40,16 @@ if ! command -v codex >/dev/null 2>&1; then
     curl -fsSL https://chatgpt.com/codex/install.sh | sh
   ) > "$codex_log" 2>&1 &
   codex_pid=$!
+fi
+
+# --- Antigravity CLI (agy): install alongside, join at the end. Its absence
+# leaves the session usable, so a failed install is reported, not fatal.
+agy_pid=""
+agy_log=$(mktemp)
+if ! command -v agy >/dev/null 2>&1; then
+  echo "Antigravity CLI not found; installing in the background..."
+  ( curl -fsSL https://antigravity.google/cli/install.sh | bash ) > "$agy_log" 2>&1 &
+  agy_pid=$!
 fi
 
 # --- Marketplaces: each installer is idempotent and leaves its opt-in plugins out.
@@ -131,6 +141,35 @@ if [ -n "$codex_pid" ]; then
   command -v codex >/dev/null 2>&1 || { echo "Error: Codex CLI is still not on PATH after install." >&2; exit 1; }
 fi
 rm -f "$codex_log"
+
+# --- Join the agy install.
+if [ -n "$agy_pid" ]; then
+  if wait "$agy_pid"; then
+    echo "Installed the Antigravity CLI."
+  else
+    echo "Error: Antigravity CLI install failed; continuing without it:" >&2
+    cat "$agy_log" >&2
+  fi
+fi
+rm -f "$agy_log"
+
+# --- agy provider: agy reads GEMINI_API_KEY only when modelProvider is
+# "gemini"; otherwise it asks for a browser OAuth sign-in that a cloud container
+# cannot finish. The key comes from the environment's variables at call time,
+# so nothing secret is written here. With this set and GEMINI_API_KEY unset,
+# agy exits at startup.
+python3 - "$HOME/.gemini/antigravity-cli/settings.json" <<'PY' || echo "Error: could not set agy's modelProvider." >&2
+import json, os, sys
+path = sys.argv[1]
+settings = json.load(open(path)) if os.path.exists(path) else {}
+if settings.get("modelProvider") != "gemini":
+    settings["modelProvider"] = "gemini"
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(settings, f, indent=2)
+        f.write("\n")
+    print("Set agy modelProvider: gemini")
+PY
 
 # --- Tavily MCP for Codex: the remote server, authenticated by a bearer token
 # that Codex reads from TAVILY_API_KEY when it launches the server. That is

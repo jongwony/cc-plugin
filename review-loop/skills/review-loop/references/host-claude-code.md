@@ -1,6 +1,7 @@
 # Claude Code Host
 
-Load at source selection. Availability is the running host's advertised capability,
+Load before starting the loop's session, which it names below, and again at source
+selection. Availability is the running host's advertised capability,
 not the model name or the presence of a plugin directory alone.
 
 - `code-review`: resolve the advertised skill and isolation route. Reuse matching
@@ -14,6 +15,7 @@ not the model name or the presence of a plugin directory alone.
   local configuration its wrapper runs. This is an external CLI review, regardless of
   which model drives Claude Code.
 
+- Driving session: a Stint, whose main conversation drives the loop.
 - Split consult (Phase 3): a fresh context on the source's own side — a new codex
   session through codex-plus, or for `code-review` an isolated subagent given the
   review pointer, intent, and the consult's question, since the review skill's report
@@ -29,7 +31,7 @@ After designation, load only the adapter of each selected source:
 
 The Claude review request carries the local base/head or working-tree pointer and
 intent, not the loop's conversation history. Use the host's completion mechanism
-and return the actual review output. Review is read-only and returns to the loop;
+and return the actual review output. Review returns to the loop;
 posting comments, editing, and disposition belong to separately authorized actions.
 
 For implementation-specific invocation details, check the installed skill and

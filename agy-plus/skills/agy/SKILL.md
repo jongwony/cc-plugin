@@ -18,7 +18,7 @@ Read `references/run-brief.md` before writing the prompt file: the role every pr
 1. **Choose model, effort, and parallelism.**
    - Whatever the caller named upstream (a model, an effort, several models in parallel) IS the answer: pass it through without re-asking.
    - Otherwise, judge flexibly from the task's complexity and nature (see `references/run-brief.md` § Choosing model, effort, and parallelism):
-     - **Model (`-m`)**: any slug from `agy models` (e.g., `gemini-4-neon-medium`, `gemini-4-neon-high`, `gemini-4-carbon-high`, `claude-opus-5-5-high`, `gemini-3.8-flash-medium`), or omit `-m` to use `agy`'s configured default.
+     - **Model (`-m`)**: any slug from `agy models` (e.g., `gemini-4-neon-medium`, `gemini-4-neon-high`, `gemini-4-carbon-high`, `gemini-3.8-flash-medium`), or omit `-m` to use `agy`'s configured default.
      - **Effort (`-r`)**: `low`, `medium`, `high`, `xhigh`, `max` — optional; omit when the chosen model slug already encodes the desired effort or when `agy`'s default suffices.
      - **Parallel multi-model runs**: when a decision benefits from independent perspectives or cross-checking, launch parallel subagent calls (one per model) in a single turn with the same prompt file and different `-m`.
 2. **Choose execution mode.**

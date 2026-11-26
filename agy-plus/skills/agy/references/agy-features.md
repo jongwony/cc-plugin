@@ -7,7 +7,7 @@ Load this reference when a delegated task needs capabilities beyond the core
 
 - `agy models` — lists all available model slugs (many slugs encode effort
   directly, e.g., `gemini-4-neon-medium`, `gemini-4-neon-high`,
-  `gemini-4-carbon-high`, `claude-opus-5-5-high`, `gemini-3.8-flash-medium`,
+  `gemini-4-carbon-high`, `gemini-3.8-flash-medium`,
   `gemini-pro-orchestrator-neon`).
 - `agy agents` — lists available named agents that can be passed via
   `-a <AGENT>` / `--agent <AGENT>`.

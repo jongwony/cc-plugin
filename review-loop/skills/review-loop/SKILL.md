@@ -10,8 +10,9 @@ skills:
 
 ## Driving session
 
-The loop runs in a session of its own, apart from the session that started it; the host
-reference names how that session is started. That session is the driving session. The
+The loop runs in a session of its own, apart from the session that started it, which
+reads the driving host's reference before starting it; that reference names how the session
+is started. That session is the driving session. The
 session that started it stands where the user stands: each
 gate's question and the exit presentation go to it as a message, the turn ends at a gate,
 and its reply is read as the user's answer. A person who drives the loop directly is
@@ -36,7 +37,9 @@ Read only the driving host's reference before determining availability:
 A host not listed supplies its own reference from its own surface, covering what a listed
 reference covers, and that reference is read in its place. A source it does not cover is
 unavailable under Phase 0 rule 1, and a writer route it does not name is the Lean block's
-`Delegation.none`.
+`Delegation.none`. With no driving session named, the loop runs where it was started and is
+addressed directly; with no split-consult context named, the consult is unavailable and is
+recorded as residual.
 
 ## Source Interface
 
@@ -359,7 +362,7 @@ where it held.
 
 Use the selected host route and source adapter with the captured pointer and current
 intent bundle. Several sources in force review that same pointer in parallel, each in
-its own context; the round's findings are their union, each keeping its source.
+its own context, except where the host reference orders a source; the round's findings are their union, each keeping its source.
 
 Use each source's first review call to confirm its command and contract
 through startup, any skill expansion, and returned output. When execution contradicts
@@ -370,7 +373,8 @@ Review is read-only. Where the host reference says a source's runtime cannot hol
 review read-only, that reference names the check that a call wrote nothing, the capture it
 can restore from, and how that source is ordered beside the others. A call the check
 catches ends without a usable review, and its presentation shows the change and asks
-whether to restore.
+whether to restore within the incomplete-call question, as one question settled before any
+further review call, Phase 2 verification, or apply pass.
 
 A call ending without a usable review contributes no verdict and satisfies neither
 convergence arm. Show what returned and ask whether to continue this round without that

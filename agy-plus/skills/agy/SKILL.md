@@ -33,7 +33,7 @@ Read `references/run-brief.md` before writing the prompt file: the role every pr
    - The exact command: `${CLAUDE_PLUGIN_ROOT}/scripts/agy-run.sh [options] <scratchpad>/agy_prompt_<suffix>.txt` with `-m MODEL` / `-r EFFORT` / `-M MODE` / `-C DIR` (or `-S <SESSION_ID>` to resume).
    - **Return contract**: run the command, read the raw JSON output directly (the wrapper passes stdout/stderr through without parsing), and return ONLY:
      1. the outcome (concise summary for execution tasks, or `response` verbatim/high-fidelity for judgment/review tasks),
-     2. `SESSION_ID: <conversation_id>` extracted verbatim from the JSON `conversation_id` field,
+     2. `SESSION_ID: <conversation_id>` extracted verbatim from the JSON `conversation_id` field — with `-f stream-json`, from the last line, the `"event":"result"` object's `result.conversation_id` (the first line, `"event":"init"`, carries it at top level),
      3. `usage`, `denied_actions`, and error / warning details if any occurred.
    - **Single model**: one subagent call.
    - **Multiple models**: issue parallel subagent calls (one per model) in a single response; each returns its own `SESSION_ID`.

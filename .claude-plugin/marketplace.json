@@ -10,11 +10,6 @@
       "description": "Google Gemini video understanding, Gemini CLI headless runs"
     },
     {
-      "name": "claude-code-internals",
-      "source": "./claude-code-internals",
-      "description": "Claude Code internals explorer"
-    },
-    {
       "name": "codex-plus",
       "source": "./codex-plus",
       "description": "Enhanced OpenAI Codex CLI integration (multi-model, context classification)"
@@ -50,11 +45,6 @@
       "description": "Push-to-talk voice dictation daemon (whisper.cpp) transcribing speech into the active window"
     },
     {
-      "name": "hourly-digest",
-      "source": "./hourly-digest",
-      "description": "Consolidated hourly Slack and Gmail digest with /loop scheduling"
-    },
-    {
       "name": "morning-brief",
       "source": "./morning-brief",
       "description": "Morning brief from connected work tools — verified to-dos owed today, news, work to push forward, today's calendar — in the user's language"
@@ -68,11 +58,6 @@
       "name": "unfold",
       "source": "./unfold",
       "description": "Linear chart writer — logs a decision at the moment the direction changes, and collapses an accumulated open set into axes that each name what they absorbed; asks rather than infers what the user settled, reads the unit's chart before the first write, and writes only structure and decisions, never state, closing only a post-merge issue whose every criterion it has verified"
-    },
-    {
-      "name": "intake",
-      "source": "./intake",
-      "description": "Linear Triage sorter — reads the team's Triage inbox, moves each item it can place plainly and reversibly (chart root back to Backlog, a plain duplicate marked, a single chart match related and accepted), leaves the rest in Triage, and reports once with an undo per item; writes no descriptions, comments or issues"
     },
     {
       "name": "residue",

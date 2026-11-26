@@ -22,8 +22,6 @@ Read `references/run-brief.md` before writing the prompt file: the role every pr
    - Otherwise, judge flexibly from the task's complexity and nature (see `references/run-brief.md` § Choosing model, effort, and parallelism):
      - **Model (`-m`)**: any slug from `agy models` (e.g., `gemini-4-neon-medium`, `gemini-4-neon-high`, `gemini-4-carbon-high`, `gemini-3.8-flash-medium`), or omit `-m` to use `agy`'s configured default.
      - **Effort (`-r`)**: optional — a level that family lists in `agy models` (`low`, `medium`, `high`, `xhigh`, `max`). Pair it with a family name without an effort suffix (e.g., `-m gemini-4-neon -r xhigh`) or with no `-m`.
-       - An effort-suffixed slug already fixes the effort; a `-r` that differs from it fails the run (`conflicts with --effort`).
-       - Orchestrator slugs (`gemini-pro-orchestrator*`) take no `-r`.
      - **Parallel multi-model runs**: when a decision benefits from independent perspectives or cross-checking, launch parallel subagent calls (one per model) in a single turn with the same prompt file and different `-m`.
 2. **Choose execution mode.**
    - Default is `--mode auto` (set by `agy-run.sh`). Because `auto` can edit files and run tools, the prompt's declared role is what keeps a reviewing/read-only run from modifying the tree — state the role explicitly.

@@ -43,8 +43,7 @@ Core options:
                               session's model.
   -r, --effort EFFORT         Reasoning effort: a level the family lists in
                               `agy models` (low|medium|high|xhigh|max). Pair
-                              with a family name or no -m; a differing level
-                              on an effort-suffixed slug fails the run.
+                              with a family name or no -m.
                               Omitted, agy uses the model's/config's default.
                               Unlike agy's own -r (alias of --conversation),
                               this -r is effort; resume with -S.

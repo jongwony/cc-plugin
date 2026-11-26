@@ -80,9 +80,9 @@ agy-specific options (see references/agy-features.md):
   --settings SETTINGS         Session-only settings JSON object or file path.
   -h, --help                  Show this help.
 
-The prompt file is read with `$(<file)`: trailing newlines are dropped and a
-NUL byte is dropped with a bash warning. The 131063-byte limit is measured on
-the content as passed.
+The prompt file is read with `$(<file)`: trailing newlines and NUL bytes are
+dropped (bash 4.4+ also warns; macOS /bin/bash 3.2 does not). The 131063-byte
+limit is measured on the content as passed.
 
 The prompt travels as one argv value, so it is visible to other local
 processes (`ps`) for the whole run.

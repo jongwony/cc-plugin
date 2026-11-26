@@ -39,7 +39,7 @@ Read `references/run-brief.md` before writing the prompt file: the role every pr
    - **Multiple models**: issue parallel subagent calls (one per model) in a single response; each returns its own `SESSION_ID`.
 5. **Record each returned `SESSION_ID`** against its purpose, model, and `-C` directory. This `{purpose → SESSION_ID}` map is the only resume handle.
 6. **Resume**: write new instructions to a fresh `<scratchpad>/agy_prompt_<suffix>.txt`, then delegate to a Bash subagent running:
-   `${CLAUDE_PLUGIN_ROOT}/scripts/agy-run.sh -S <SESSION_ID> [-C <SAME_DIR>] <scratchpad>/agy_prompt_<suffix>.txt`
+   `${CLAUDE_PLUGIN_ROOT}/scripts/agy-run.sh -S <SESSION_ID> [-m <SAME_MODEL>] [-C <SAME_DIR>] <scratchpad>/agy_prompt_<suffix>.txt`
    - Resume is always by explicit `SESSION_ID` (`--conversation`), never `--continue`, so parallel sessions never race.
    - **Model on resume**: pass the `-m` recorded for that `SESSION_ID` in step 5 again — `agy` does not keep a session's model, and a resume without `-m` runs on `agy`'s configured default. Where the first run omitted `-m`, omit it again. Pass a different `-m` only if the caller asks to switch models mid-session.
    - **Working directory on resume**: pass `-C <SAME_DIR>` again so relative file pointers in the conversation still resolve against the same tree.

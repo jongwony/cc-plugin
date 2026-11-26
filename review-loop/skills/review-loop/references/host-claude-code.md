@@ -1,6 +1,7 @@
 # Claude Code Host
 
-Load at source selection. Availability is the running host's advertised capability,
+Load before starting the loop's session, which it names below, and again at source
+selection. Availability is the running host's advertised capability,
 not the model name or the presence of a plugin directory alone.
 
 - `code-review`: resolve the advertised skill and isolation route. Reuse matching
@@ -9,7 +10,9 @@ not the model name or the presence of a plugin directory alone.
   When exposed metadata establishes `context: fork`, invoke that fork with the advertised skill name;
   otherwise use an available isolated reviewer subagent that calls the skill with
   only the review request. An inline `Skill(...)` call alone does not establish a
-  fork. If neither route exists, report this source unavailable.
+  fork. If neither route exists, report this source unavailable. Neither route holds
+  a review read-only, so Phase 1's no-write check applies to every `code-review` call;
+  `codex` through codex-plus runs read-only and needs none.
 - `codex`: resolve the codex-plus plugin's `codex` skill and the `codex` executable and
   local configuration its wrapper runs. This is an external CLI review, regardless of
   which model drives Claude Code.

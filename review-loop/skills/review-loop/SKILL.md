@@ -10,8 +10,8 @@ skills:
 
 ## Driving session
 
-The loop runs in a session of its own, which the host reference names, and that session
-is the driving session. The session that started it stands where the user stands: each
+The loop runs in a session of its own, which the caller starts where the driving host's
+reference names, and that session is the driving session. The session that started it stands where the user stands: each
 gate's question and the exit presentation go to it as a message, the turn ends at a gate,
 and its reply is read as the user's answer. A person who drives the loop directly is
 addressed directly.
@@ -33,7 +33,8 @@ Read only the driving host's reference before determining availability:
 | Claude Code | Fork the available Claude `/code-review` skill | Run a fresh codex session through codex-plus | [Claude Code](references/host-claude-code.md) |
 
 A host not listed supplies its own reference from its own surface, covering what a listed
-reference covers, and that reference is read in its place.
+reference covers, and that reference is read in its place; what it does not cover is
+unavailable under Phase 0 rule 1.
 
 ## Source Interface
 
@@ -356,17 +357,21 @@ where it held.
 
 Use the selected host route and source adapter with the captured pointer and current
 intent bundle. Several sources in force review that same pointer in parallel, each in
-its own context; the round's findings are their union, each keeping its source.
+its own context, except as the read-only rule below orders them; the round's findings are their union, each keeping its source.
 
 Use each source's first read-only review call to confirm its command and contract
 through startup, any skill expansion, and returned output. When execution contradicts
 the expected contract, diagnose that mismatch; unresolved source or scope mismatches
 contribute no verdict and follow the incomplete-call rule.
 
-Review is read-only. Where a source's runtime cannot hold a review read-only, the host
-reference names a check that the call wrote nothing — worktree, index and refs as captured
-before the call — and it runs after every review call; a call that wrote ends without a
-usable review, and what it wrote is part of what returned.
+Review is read-only. Where the host reference says a source's runtime cannot hold a
+review read-only, check after each of its calls that the call wrote nothing: `HEAD`, the
+reviewed checkout's local branch refs, its index and its worktree status, against their
+state captured before the call. Such a source does not review beside another; it runs once
+the round's other calls have returned, so a change the check finds is that call's. A call
+that wrote ends without a usable review, and its presentation shows what it wrote beside
+the captured state and asks whether to restore that state before any further review or
+apply pass.
 
 A call ending without a usable review contributes no verdict and satisfies neither
 convergence arm. Show what returned and ask whether to continue this round without that

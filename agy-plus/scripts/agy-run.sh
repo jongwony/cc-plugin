@@ -36,10 +36,15 @@ usage() {
 Usage: agy-run.sh [options] <prompt_file>
 
 Core options:
-  -m, --model MODEL           Model slug from `agy models`. Omitted, agy uses
-                              its configured default (and on resume, stays on
-                              the session's recorded model).
-  -r, --effort EFFORT         Reasoning effort: low|medium|high|xhigh|max.
+  -m, --model MODEL           Model slug from `agy models`, or a family name
+                              without effort suffix (e.g. gemini-4-neon).
+                              Omitted, agy uses its configured default — also
+                              on resume, so pass the same -m again to keep a
+                              session's model.
+  -r, --effort EFFORT         Reasoning effort: a level the family lists in
+                              `agy models` (low|medium|high|xhigh|max). Pair
+                              with a family name or no -m; a differing level
+                              on an effort-suffixed slug fails the run.
                               Omitted, agy uses the model's/config's default.
   -M, --mode MODE             Execution mode: auto|accept-edits|plan
                               (default: auto).
@@ -50,8 +55,8 @@ Core options:
                               a session may be resumed.
   -S, --session-id ID         Resume a specific conversation by UUID
                               (`--conversation`). Deterministic — no --continue
-                              fallback. Omit -m to stay on the session's
-                              original model.
+                              fallback. agy does not keep the session's
+                              model: pass the original -m again.
   -C, --cwd DIR               Working directory for agy (`cd -P` before exec,
                               since agy has no --cd flag). Pass it again on
                               resume so relative pointers resolve against the
@@ -81,7 +86,7 @@ Examples (<scratchpad> = the calling session's scratchpad directory):
   agy-run.sh <scratchpad>/agy_prompt_a3f9.txt
   agy-run.sh -m gemini-4-neon-high -C /path/to/repo <scratchpad>/agy_prompt_a3f9.txt
   agy-run.sh -M plan -r high <scratchpad>/agy_prompt_a3f9.txt
-  agy-run.sh -S 7d3d885d-0ccd-494a-9746-a9881dfa9341 -C /path/to/repo <scratchpad>/agy_prompt_b1c2.txt
+  agy-run.sh -S 7d3d885d-0ccd-494a-9746-a9881dfa9341 -m gemini-4-neon-high -C /path/to/repo <scratchpad>/agy_prompt_b1c2.txt
 USAGE
   exit "${1:-0}"
 }
@@ -124,6 +129,16 @@ while [[ $# -gt 0 ]]; do
     *) [[ -z "$PROMPT_FILE" ]] || { echo "Error: only one prompt file is accepted, got \"$PROMPT_FILE\" and \"$1\"" >&2; usage 1; }; PROMPT_FILE="$1"; shift ;;
   esac
 done
+
+case "$MODE" in
+  auto|accept-edits|plan) ;;
+  *) echo "Error: invalid --mode \"$MODE\" (valid: auto, accept-edits, plan)" >&2; exit 1 ;;
+esac
+
+case "$OUTPUT_FORMAT" in
+  json|text|stream-json) ;;
+  *) echo "Error: invalid --output-format \"$OUTPUT_FORMAT\" (valid: json, text, stream-json)" >&2; exit 1 ;;
+esac
 
 # Validate prompt file
 if [[ -z "$PROMPT_FILE" ]]; then

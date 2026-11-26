@@ -46,6 +46,8 @@ Core options:
                               with a family name or no -m; a differing level
                               on an effort-suffixed slug fails the run.
                               Omitted, agy uses the model's/config's default.
+                              Unlike agy's own -r (alias of --conversation),
+                              this -r is effort; resume with -S.
   -M, --mode MODE             Execution mode: auto|accept-edits|plan
                               (default: auto).
   -f, --output-format FORMAT  Print-mode output format: json|text|stream-json
@@ -101,8 +103,10 @@ resolve_existing_path() {
     (cd -P -- "$p" && pwd -P)
   elif [[ -e "$p" ]]; then
     printf '%s/%s\n' "$(cd -P -- "$(dirname -- "$p")" && pwd -P)" "$(basename -- "$p")"
-  else
+  elif [[ "$p" == /* ]]; then
     printf '%s\n' "$p"
+  else
+    printf '%s/%s\n' "$PWD" "$p"
   fi
 }
 
@@ -186,6 +190,20 @@ AGY_BIN="$(command -v agy)" || {
 
 # Read prompt content (`agy --print` takes the prompt as its flag argument, not stdin).
 PROMPT_CONTENT="$(<"$PROMPT_FILE")"
+
+if [[ -z "${PROMPT_CONTENT//[[:space:]]/}" ]]; then
+  echo "Error: prompt file holds only whitespace: $PROMPT_FILE" >&2
+  exit 1
+fi
+
+# The prompt travels as one argv value; Linux caps a single one at 128 KiB
+# (MAX_ARG_STRLEN).
+readonly MAX_PROMPT_BYTES=131072
+PROMPT_BYTES=$(printf '%s' "$PROMPT_CONTENT" | wc -c | tr -d ' ')
+if [[ "$PROMPT_BYTES" -gt "$MAX_PROMPT_BYTES" ]]; then
+  echo "Error: prompt is $PROMPT_BYTES bytes, over the $MAX_PROMPT_BYTES-byte limit for one argument; pass pointers instead of copies (references/run-brief.md \"Point, don't copy\")" >&2
+  exit 1
+fi
 
 # Build agy argv.
 AGY_ARGS=(--mode "$MODE" --output-format "$OUTPUT_FORMAT")

@@ -6,12 +6,14 @@ description: |
 
 # Agy Skill Guide
 
+Prerequisite: the `agy` CLI on PATH (`curl -fsSL https://antigravity.google/cli/install.sh | bash`), signed in by running `agy` once interactively.
+
 ## Prompt Delivery
 Read `references/run-brief.md` before writing the prompt file: the role every prompt declares, what a prompt judging a decision carries, and how model, effort, and parallel runs are chosen.
 
 1. Generate a short unique suffix (e.g., `a3f9`, timestamp fragment, or task keyword) for this invocation.
 2. Write the prompt to `<scratchpad>/agy_prompt_<suffix>.txt` using the Write tool — `<scratchpad>` is the session's scratchpad directory (e.g. `/private/tmp/…/scratchpad` announced in the system prompt; fall back to `/private/tmp` when none is announced).
-3. Execute via wrapper script: `${CLAUDE_PLUGIN_ROOT}/scripts/agy-run.sh [options] <scratchpad>/agy_prompt_<suffix>.txt`.
+3. Hand the wrapper command `${CLAUDE_PLUGIN_ROOT}/scripts/agy-run.sh [options] <scratchpad>/agy_prompt_<suffix>.txt` to a Bash subagent to run (Running a Task, step 4).
 
 ## Running a Task
 
@@ -63,7 +65,7 @@ Modifiers (added to any base pattern):
 - Stop and report failures whenever `agy-run.sh` exits non-zero or the JSON payload reports `"status":"ERROR"`; request direction before retrying.
 - A `"status":"SUCCESS"` payload carrying `denied_actions`, or an empty `response`, is incomplete: headless print mode auto-denies a tool that needs a permission. Report it as incomplete with the denied actions; the remedy is in `references/agy-features.md` § Sandbox & Authentication Troubleshooting.
 - Before passing `--dangerously-skip-permissions`, ask the user for permission unless it was already granted.
-- Note on host sandboxes: `agy` needs read/write access to `~/.gemini/antigravity-cli/` (logs, `installation_id`, session state) and network access. If a sandboxed Bash tool fails with `operation not permitted` on `~/.gemini/antigravity-cli/`, see `references/agy-features.md` § Sandbox & Authentication.
+- Note on host sandboxes: `agy` needs read/write access to `~/.gemini/antigravity-cli/` (logs, `installation_id`, session state) and network access. If a sandboxed Bash tool fails with `operation not permitted` on `~/.gemini/antigravity-cli/`, see `references/agy-features.md` § Sandbox & Authentication Troubleshooting.
 
 ## Progressive Disclosure — `agy`-Specific Features
 Keep the main workflow lean. Read `references/agy-features.md` only when the task actually needs `agy`-specific capabilities:

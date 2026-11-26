@@ -14,6 +14,7 @@ not the model name or the presence of a plugin directory alone.
   local configuration its wrapper runs. This is an external CLI review, regardless of
   which model drives Claude Code.
 
+- Driving session: a Stint, whose main conversation drives the loop.
 - Split consult (Phase 3): a fresh context on the source's own side — a new codex
   session through codex-plus, or for `code-review` an isolated subagent given the
   review pointer, intent, and the consult's question, since the review skill's report
@@ -29,7 +30,7 @@ After designation, load only the adapter of each selected source:
 
 The Claude review request carries the local base/head or working-tree pointer and
 intent, not the loop's conversation history. Use the host's completion mechanism
-and return the actual review output. Review is read-only and returns to the loop;
+and return the actual review output. Review returns to the loop;
 posting comments, editing, and disposition belong to separately authorized actions.
 
 For implementation-specific invocation details, check the installed skill and

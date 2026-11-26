@@ -10,7 +10,7 @@ skills:
 
 ## Driving session
 
-The loop runs in a session of its own — a Stint — and that session's main conversation
+The loop runs in a session of its own, which the host reference names, and that session
 is the driving session. The session that started it stands where the user stands: each
 gate's question and the exit presentation go to it as a message, the turn ends at a gate,
 and its reply is read as the user's answer. A person who drives the loop directly is
@@ -31,6 +31,9 @@ Read only the driving host's reference before determining availability:
 | Host | `source=code-review` | `source=codex` | Reference |
 |---|---|---|---|
 | Claude Code | Fork the available Claude `/code-review` skill | Run a fresh codex session through codex-plus | [Claude Code](references/host-claude-code.md) |
+
+A host not listed supplies its own reference from its own surface, covering what a listed
+reference covers, and that reference is read in its place.
 
 ## Source Interface
 
@@ -359,6 +362,11 @@ Use each source's first read-only review call to confirm its command and contrac
 through startup, any skill expansion, and returned output. When execution contradicts
 the expected contract, diagnose that mismatch; unresolved source or scope mismatches
 contribute no verdict and follow the incomplete-call rule.
+
+Review is read-only. Where a source's runtime cannot hold a review read-only, the host
+reference names a check that the call wrote nothing — worktree, index and refs as captured
+before the call — and it runs after every review call; a call that wrote ends without a
+usable review, and what it wrote is part of what returned.
 
 A call ending without a usable review contributes no verdict and satisfies neither
 convergence arm. Show what returned and ask whether to continue this round without that

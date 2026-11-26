@@ -15,6 +15,11 @@
       "description": "Enhanced OpenAI Codex CLI integration (multi-model, context classification)"
     },
     {
+      "name": "agy-plus",
+      "source": "./agy-plus",
+      "description": "Enhanced Google Antigravity CLI (agy) integration (flexible model/effort, parallel delegation, session resume)"
+    },
+    {
       "name": "stint",
       "source": "./stint",
       "description": "A bounded delegation that needs a session of its own, or one you ask for: spawn a Stint, or stand up an event/clock/self-round monitor"

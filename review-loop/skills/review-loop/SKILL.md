@@ -1,6 +1,6 @@
 ---
 name: review-loop
-description: "Convergence-paced review-resolve loop over a change and its governing surfaces. Verifies each finding against the codebase and the base it is measured from, then re-reviews until each is disposed of."
+description: "Review-resolve loop over a change and its governing surfaces. Verifies each finding against the codebase and the base it is measured from, applies the repairs whose direction is settled, and re-reviews until a round adds none, handing what only the user can decide back as decisions."
 skills:
   - aitesis:inquire
   - epharmoge:contextualize
@@ -76,8 +76,7 @@ open. Every `axiom` is one of those judgments — a black box to the contract, y
 the material in front of you; its doc comment says what you judge there, and nothing in this
 block decides it for you. Every `def`, `inductive`, and `structure` is fixed by the contract.
 The block reads the sources that `entry` and the user's turns establish, and fixes how a
-surviving finding is handled, which writer route an apply pass takes, and when the loop has
-converged. The order of the phases, where the
+surviving finding is handled, which writer route an apply pass takes, and when the loop ends. The order of the phases, where the
 loop holds for the user, and how it resumes are the rules below.
 -/
 
@@ -198,25 +197,26 @@ inductive Handling
   /-- relayed with its basis, recording side effects; no question -/
   | relay (d : Disposition)
   /-- applied and reported with its basis — the cited ground where one settled it — without a
-      disposition gate -/
+      decision -/
   | apply
-  /-- a disposition gate; the user's answer, a scope answer included, sets the disposition
-      recorded -/
-  | gate
+  /-- a decision for the user, recorded with its consequence and whether it blocks the merge, and
+      carried unrepaired; the loop neither picks a side nor repeats the fix, and goes on with what
+      is settled. The user's answer, a scope answer included, sets the disposition recorded. -/
+  | decide
 
 open Classical in
-/-- A settled drop or carry is relayed. Every other finding is repaired or gated on what is still
-    live in it and on whether its side is in scope, whether or not a ground settled that it is
-    repaired. -/
+/-- A settled drop or carry is relayed. Every other finding is repaired or decided on what is
+    still live in it and on whether its side is in scope, whether or not a ground settled that it
+    is repaired. -/
 noncomputable def handling (s : Session) (f : Finding) : Handling :=
   match settled s f with
   | some .dropped => .relay .dropped
   | some .carried => .relay .carried
   | _ =>
     match classOf s f, (provenance s f).side with
-    | .judgment, _              => .gate
+    | .judgment, _              => .decide
     | .mechanical, .ofChange    => .apply
-    | .mechanical, .preExisting => if Licensed s f then .apply else .gate
+    | .mechanical, .preExisting => if Licensed s f then .apply else .decide
 
 /-! ── APPLY PASS ── -/
 
@@ -299,10 +299,26 @@ def Converged (s : Session) : Prop :=
   | some d => AllDispositioned s ∧ ¬ RecurrencePending s ∧ ¬ EditedSinceReview s ∧ GoalRead s ∧
       ((∀ x ∈ d.toList, Clear s x) ∨ RootResolved s)
 
+/-- **Your reading**: the latest round, on the current reviewed artifact, left no surviving finding
+    whose `handling` is `Handling.apply` — every survivor relayed, or carried as a decision. -/
+axiom NoSettledRepair : Session → Prop
+
+/-- The loop has done what review can settle: a completed round on the current reviewed artifact,
+    with a full re-review from every source in force, added no further settled repair. What is
+    left is the user's to decide; every source converging is not required. -/
+def Settled (s : Session) : Prop :=
+  match inForce s with
+  | none   => False
+  | some d => (∀ x ∈ d.toList, FullyReReviewed s x) ∧ AllDispositioned s ∧ ¬ RecurrencePending s ∧
+      ¬ EditedSinceReview s ∧ GoalRead s ∧ NoSettledRepair s
+
 inductive Exit
   | converged
+  /-- not convergence: the loop ends with its decisions handed to the user, heaviest consequence
+      first, each marked whether it blocks the merge — which the caller reads before merging -/
+  | settled
   /-- reported as non-convergence, with the latest reviewed artifact, later edits, unfinished
-      repairs, residuals, and retained judgments -/
+      repairs, residuals, and retained decisions -/
   | notConverged
 
 open Classical in
@@ -310,7 +326,7 @@ open Classical in
     exit before any designation exists, at `Entry.missing` or at the first sources gate, is
     reported as non-convergence. -/
 noncomputable def exitAs (s : Session) : Exit :=
-  if Converged s then .converged else .notConverged
+  if Converged s then .converged else if Settled s then .settled else .notConverged
 
 end ReviewLoop
 ```
@@ -319,7 +335,9 @@ end ReviewLoop
 
 The phases run in order. A gate presents its question and ends the turn: silence settles
 nothing, what waits on the gate does not proceed, and the user's answer resumes the work
-where it held.
+where it held. A decision (`Handling.decide`) is not a gate: it is recorded, the round goes
+on with what is settled, and the exit hands it over; an answer that arrives earlier is
+carried out on the next apply pass.
 
 ### Phase 0 — Set the invocation and its ground
 
@@ -401,7 +419,8 @@ new findings survive verification, consult across that split before reading the 
 the source still holding findings what in the artifact would turn its verdict to
 approve, and give those findings to the converged source to adjudicate, withholding the
 loop's dispositions from both. A consult is not a review. Its answers are material that
-Phase 2 and this reading weigh, never a verdict or a vote for either side.
+Phase 2 and this reading weigh, never a verdict or a vote for either side. A split that
+survives the consult and verification is a decision, not a side the loop picks.
 
 Read the verified set for a shared mechanism, competing explanations, unexplained
 findings, and a falsifier. A source direction is one candidate, reconsidered after
@@ -427,13 +446,19 @@ does not reopen disposition.
 For conflicting governing surfaces, cite an applicable declared authority order or
 settled direction to identify what governs. That settles direction, not repair shape
 or execution permission. Where direction remains unsettled or its authority is
-contested, show both surfaces, their disagreement, and their authority relation or
-its absence; ask an open-ended direction question and retain the user's words.
+contested, record a decision showing both surfaces, their disagreement, and their
+authority relation or its absence, put as an open-ended direction question; retain the
+user's words when they answer.
 
 Where findings pull one clause or invariant in opposite directions and nothing
 governing decides between them, the clause holds a judgment the governing surfaces
-leave open: a Judgment gate showing both readings and any repair already landed in
+leave open: a decision showing both readings and any repair already landed in
 one direction, not a repair either reading settles.
+
+Each decision carries its consequence — who would act on the wrong answer, how soon,
+and what could take it back — and whether it blocks the merge: it does where that wrong
+answer would reach the running service, its users, or the sessions that load a changed
+rule or skill.
 
 Read every repair as an ablation before classifying it. A finding grounds a repair
 through the consequence it verified; a finding that shows only something unstated
@@ -447,12 +472,11 @@ An initial uninformed return is absorbed by settled policy. Instance-specific
 dismissals/deferrals never enter reviewer context, so their returns keep that
 disposition and remain residual. A return after a fix was visible or a constituted
 decision conveyed requires diagnosis before convergence. A still-self-evident
-incomplete repair stays Mechanical and is rewritten in the next apply pass with the
-recurrence history in its hand-off. A
-contested design decision reaches a judgment gate with the recurrence history;
-a third recurrence after the escalated re-apply discredits the Mechanical diagnosis
-and also gates. End recurrence through repair or constituted direction, not reviewer
-suppression.
+incomplete repair stays Mechanical and is rewritten once in the next apply pass with
+the recurrence history in its hand-off. A contested design decision becomes a decision
+with the recurrence history; a recurrence after that diagnosed rewrite discredits the
+Mechanical diagnosis and becomes a decision too, and the loop does not repeat the fix.
+End recurrence through repair or constituted direction, not reviewer suppression.
 
 Read trajectory from recurrence, causes, and base provenance, not finding-count
 trends. Separate introduced, fix-induced, and pre-existing-side work when deciding
@@ -532,7 +556,7 @@ so far, so the driving session records rather than re-derives it.
 
 ### Phase 5 — Re-review and stop on evidence
 
-When the processed round has not earned convergence below, refresh changed files and
+When the processed round has not reached an end below, refresh changed files and
 design intent and obtain a **full** re-review from each source in force, including
 after dispositions that landed no edit. For PR scope, use the re-review pointer supplied
 by [PR scope](references/pr-scope.md). Where the ledger convention puts a repair's
@@ -541,8 +565,9 @@ derivation in its commit message, that message is a fix-status claim under Phase
 the repair commits are judged from their content in the diff as part of the whole range.
 
 These reviews are the next round's: Phase 1's rules for parallel sources and failed
-calls apply to them, and their findings and direction go straight to Phase 2. Converge
-only where `Converged` holds.
+calls apply to them, and their findings and direction go straight to Phase 2. End where
+`Converged` holds, or where `Settled` holds, and report which as `exitAs` reads it. The loop
+never merges; the caller reads the exit's merge-blocking decisions before it does.
 
 Unreached axes, missing reach reports, open deferrals, and explicitly retained
 adaptation effects remain residual; they do not themselves force another round and are
@@ -562,7 +587,8 @@ Call: observed settings or diagnostics, when present
 Goal: loop's goal reading and its findings, including none (omit if no declared goal)
 Roots: Phase 3 shared-cause reading — each shared cause with the findings it explains, or none; any split consult with its question and answer
 Relay: autonomously dispositioned findings → applied | dropped: basis | carried: reason
-Gated: findings requiring user judgment → applied | dropped: basis | carried: reason
+Gated: findings a gate put to the user → applied | dropped: basis | carried: reason
+Decisions: findings recorded for the user → consequence, blocks the merge or not; answered → applied | dropped: basis | carried: reason
 Apply: writer route (fork | brief | inline) → commits or new head, or tree state (omit if no pass ran)
 Landing: repair destination (PR only)
 ```
@@ -571,12 +597,14 @@ Each verified finding carries base provenance; an applied fix also carries its p
 and sweep side effects. Carry the loop's check artifact, evidence, unexercised limits,
 and unavailable-check reasons with that repair's Relay/Gated entry; keep this loop-side
 evidence distinct from the source-reported `Exercised` line. Assign exactly one
-Relay/Gated home by whether the user was asked, including epistemic risk gates. Record
+Relay/Gated/Decisions home: Gated where a gate asked the user, epistemic risk gates
+included; Decisions where `handling` recorded one. Record
 the fit pass as its own entry, with adaptation, any retroactive rejecting verdict, and
 the resulting artifact state and disposition. Preserve write discrepancies and their
 reconciliation; carried reasons are records, while subsequent reviews detect findings
 fresh.
 
-At every exit, present the accumulated dispositions and residual,
-including standing source limits. Read [exit handover](references/exit-handover.md)
+At every exit, present the exit as `exitAs` reads it, the open decisions heaviest
+consequence first with those that block the merge marked, and the accumulated
+dispositions and residual, including standing source limits. Read [exit handover](references/exit-handover.md)
 before offering durable recording.

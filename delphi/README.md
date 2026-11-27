@@ -8,33 +8,35 @@ The skill is the procedure for one invocation. The user invokes it. A rule about
 
 ```mermaid
 flowchart LR
-  B[One read-only brief] --> P{{Codex and Antigravity, in parallel}}
+  B[One read-only brief, numbered] --> P{{Codex and Antigravity, in parallel}}
   P --> R[Read each answer whole]
-  R -->|that seat, once: empty, incomplete, or an old draft| P
-  R --> V[Verify the grounds against primary sources]
+  R -->|that seat, once, same session: no evaluating answer, incomplete, or an old brief| P
+  R --> V[Verify objection and endorsement premises against primary sources]
   V --> D{Dispose}
-  D -->|verified| A[Apply to the draft]
+  D -->|holds, no user value left| A[Apply to the draft]
   D -->|refuted| X[Drop]
-  D -->|user-held value, open split, unverifiable| U[To the user]
+  D -->|repeat, nothing new| K[Keep its earlier disposition]
+  D -->|user-held value, surviving split, unverifiable premise, fix that turns on the user's choice| U[To the user]
   A --> H[Revised draft and items, to the user]
   X --> H
+  K --> H
   U --> H
-  H --> S{Complete round on the current draft, no new grounded objection?}
-  S -->|no| Q[Delta brief to the same sessions] --> P
-  S -->|yes| E[Exit: open items, and the claim that this panel raised no new grounded objection to the current draft]
+  H --> S{Complete round on the current brief, round clear, no new grounded objection?}
+  S -->|no| Q[Delta brief to the same sessions, next brief number] --> P
+  S -->|yes| E[Exit: open items, and the claim that this panel raised no new grounded objection to the current brief]
 ```
 
 ## What the contract fixes
 
-The Lean block in `skills/delphi/SKILL.md` fixes these points:
+The Lean block in `skills/delphi/SKILL.md` fixes only what holds within one round. The routes an objection takes are the procedure's, written in prose, and the Lean block reads each route as a judgment.
 
-- **An answer.** A seat has answered when its answer is not empty and is on the current draft. A round in which a seat has not answered is incomplete, and an incomplete round never stops the consult. A round on an earlier draft never stops it either.
-- **Agreement.** Agreement between the two advisors is provenance and not evidence. The place where an objection goes does not depend on which seats the objection lists. A verified objection from one seat can change the draft. An objection that no seat raised, such as a premise that failed or could not be verified, is recorded as the facilitator's.
-- **The user's items.** A value that only the user holds always goes to the user. A split that verification leaves open also goes to the user, and so does a ground that cannot be verified. The facilitator does not settle these items.
+- **An answer.** Briefs are numbered, and a seat has answered when its answer evaluates the current brief and is not empty. A factual repair of the draft, or new context, makes a new current brief before the stop is read, so the advisors answer it before the consult can stop. A round in which a seat has not answered is incomplete, and an incomplete round never stops the consult. A round on an earlier brief never stops it either.
+- **A clear round.** A round stops the consult only when the facilitator judges it clear: both answers evaluate the brief, the premises of objections and of endorsements are verified, and no choice that blocks closing is pending. An empty objection list does not stop a round whose shared premise needs the user's choice.
+- **Agreement.** Agreement between the two advisors is provenance and not evidence. The disposition and the keeps-open judgment take an objection's point, never the seats it lists.
 - **The delta brief.** The brief that a resumed session gets has no field for a seat, a count or a verdict. The user's decisions go in it as constraints. The facts that those decisions lean on stay open to objection.
-- **The exit.** The exit hands over the items that are still open, as the procedure carries them. Where such items remain, it also gives each advisor's raw-answer pointer, the answer files and the session id, so that the user can open the raw answers when they need them. The hand-over and the exit do not show the raw answers themselves. The consult claims that this panel raised no new grounded objection to the current draft in this material only when it stopped. When the user ends it earlier, the exit says that the consult ended before a stopping round.
+- **The exit.** The exit hands over the items that are still open, as the procedure carries them. Where such items remain, it also gives each advisor's raw-answer pointer, the answer files and the session id, so that the user can open the raw answers when they need them. The hand-over and the exit do not show the raw answers themselves. The consult claims that this panel raised no new grounded objection to the current brief in this material only when it stopped. When the user ends it earlier, the exit says that the consult ended before a stopping round.
 
-The Lean block holds within one round, and it takes what spans rounds as parameters. Across rounds, the procedure in the SKILL.md holds the rest. An item routed to the user that the user has not settled goes into every later hand-over, into the open points of each delta brief and into the exit. A point that the user decided is not sent to the advisors again. When an advisor raises a decided point again, the facilitator drops it, unless it comes with new evidence. Then it goes back to the user.
+Across rounds, the procedure in the SKILL.md holds the rest. An item routed to the user that the user has not settled goes into every later hand-over, into the open points of each delta brief and into the exit. A point that the user decided goes to the advisors as a decision, not again as an open point.
 
 The guarantees are proved in `lean/Delphi/Theorems.lean`. These proofs are made against a module that is generated from the block in the SKILL.md. To check them, install elan, which reads its toolchain from `lean/lean-toolchain`:
 
@@ -50,9 +52,11 @@ The procedure is closest to the policy line of the Delphi method. It takes one p
 
 - **Factual arguments.** Kuusi's *Argument Delphi* is a variant of the Policy Delphi. It gets the factual arguments that are relevant to an issue from a discussion between protagonists and critics ([Kuusi, 1999, §3.10](https://www.doria.fi/bitstream/handle/10024/148479/t59.pdf)).
 - **The decision-maker keeps the choice.** Turoff's *Policy Delphi* gives the decision-maker the options and the strongest opposing views. It is not a mechanism that makes the decision. This is cited through Turoff's own chapter in [Linstone & Turoff (eds.), 1975, pp. 80–81](https://www.foresight.pl/assets/downloads/publications/Turoff_Linstone.pdf).
-- **Verification.** The facilitator checks each advisor's factual premises against primary sources. This step is the skill's own design.
+- **Verification.** The facilitator checks the factual premises of each advisor's objections and endorsements against primary sources. This step is the skill's own design.
 
 The procedure keeps three properties of the classical method: separate first answers, iteration and controlled feedback ([Dalkey & Helmer, 1963](https://ideas.repec.org/a/inm/ormnsc/v9y1963i3p458-467.html)). It does not keep the statistical group response or a sized expert panel ([RAND guide](https://www.rand.org/content/dam/rand/pubs/tools/TLA3000/TLA3082-1/RAND_TLA3082-1.pdf)). It keeps anonymity only in part, because each advisor remembers its own answers. What it can promise is that no point in a brief is attributed to a seat.
+
+The split into independent perspectives has an earlier form in this author's work. Prothesis, an epistemic-protocols protocol first released on 2025-12-26, split perspectives inside one model, ran one subagent per selected perspective, and synthesized their convergence and divergence. It was retired on 2026-09-26 (epistemic-protocols `d1471a9f`). `/delphi` carries that split across vendors. Prothesis's return-time reports of each perspective's horizon limits were rejected at its retirement, because the limits are known when the advisor is chosen, and they are not imported here.
 
 ## Why the delta brief has this shape
 
@@ -63,4 +67,4 @@ The procedure keeps three properties of the classical method: separate first ans
 ## Why it stops where it does
 
 - **The stop rule.** Qualitative Delphi ends a study when enough information has been exchanged, or at theoretical saturation ([Skulmoski et al., 2007](https://www.jite.org/documents/Vol6/JITEv6p001-021Skulmoski212.pdf)). Agreement thresholds and stability measures answer different questions ([Dajani et al., 1979](https://www.sciencedirect.com/science/article/abs/pii/0040162579900076); [von der Gracht, 2012](https://www.sciencedirect.com/science/article/pii/S0040162512001023)). For this reason, the consult stops on a complete round that has no new grounded objection.
-- **The weakest link.** A quiet round can still miss what the material leaves out. In a synthetic Delphi study, the panel converged in all eight data conditions. A research area that was missing from the first material was still missing in the later rounds ([study](https://link.springer.com/article/10.1186/s40309-026-00302-x)). This is why the exit claims no more than its panel and material support.
+- **The weakest link.** A quiet round can still miss what the material leaves out. In a synthetic Delphi study, the panel converged in seven of its eight data conditions. A research area that was missing from the first material was still missing in the later rounds ([study](https://link.springer.com/article/10.1186/s40309-026-00302-x)). This is why the exit claims no more than its panel and material support.

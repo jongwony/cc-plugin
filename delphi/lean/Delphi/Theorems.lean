@@ -8,49 +8,54 @@ namespace Delphi
 /-- Every judgment the block declares has an inhabited type, so none assumes what nothing
     inhabits. -/
 example : Nonempty (type_of% @Session) := ⟨Unit⟩
-example : Nonempty (type_of% @verified) := ⟨fun _ _ => .holds⟩
-example : Nonempty (type_of% @userHeld) := ⟨fun _ _ => false⟩
-example : Nonempty (type_of% @split) := ⟨fun _ _ => false⟩
-example : Nonempty (type_of% @bears) := ⟨fun _ _ => false⟩
-example : Nonempty (type_of% @isNew) := ⟨fun _ _ => false⟩
+example : Nonempty (type_of% @dispose) := ⟨fun _ _ => .drop⟩
+example : Nonempty (type_of% @keepsOpen) := ⟨fun _ _ => false⟩
+example : Nonempty (type_of% @roundClear) := ⟨fun _ _ => false⟩
 
-/-- An empty or whitespace-only answer is not an answer. -/
+/-- An empty or whitespace-only answer is not an answer, and an answer counts only on its own
+    brief. -/
 theorem answered_nonempty {cur : Nat} {a : Answer} (h : answered cur (some a) = true) :
-    a.draft = cur ∧ a.text.all Char.isWhitespace = false := by
+    a.brief = cur ∧ a.text.all Char.isWhitespace = false := by
   simp [answered] at h
   exact ⟨h.1, by simpa using h.2⟩
 
 /-- A missing answer is not an answer. -/
 theorem answered_none (cur : Nat) : answered cur none = false := rfl
 
-/-- The consult stops only on a round on the current draft. -/
+/-- The consult stops only on a round on the current brief. -/
 theorem stop_on_current {s : Session} {cur : Nat} {r : Round} (h : stop s cur r = true) :
-    r.draft = cur := by
+    r.brief = cur := by
   simp [stop] at h
-  exact h.1.1
+  exact h.1.1.1
 
 /-- The consult stops only on a round where both seats gave a non-empty answer on the current
-    draft. -/
+    brief. -/
 theorem stop_needs_both {s : Session} {cur : Nat} {r : Round} (h : stop s cur r = true) :
     answered cur (r.answers .first) = true ∧ answered cur (r.answers .second) = true := by
   have hd := stop_on_current h
   simp [stop, Round.complete] at h
   subst hd
-  exact h.1.2
+  exact h.1.1.2
 
 /-- A round with a seat missing never stops the consult. -/
 theorem incomplete_never_stops {s : Session} {cur : Nat} {r : Round} (h : r.complete = false) :
     stop s cur r = false := by
   simp [stop, h]
 
-/-- A round on an earlier draft never stops the consult. -/
-theorem stale_never_stops {s : Session} {cur : Nat} {r : Round} (h : r.draft ≠ cur) :
+/-- A round on an earlier brief never stops the consult. -/
+theorem stale_never_stops {s : Session} {cur : Nat} {r : Round} (h : r.brief ≠ cur) :
+    stop s cur r = false := by
+  simp [stop, h]
+
+/-- A round that is not `roundClear` — a pending choice, unfinished verification, an answer that
+    does not evaluate the brief — never stops the consult, even with no objection. -/
+theorem unclear_never_stops {s : Session} {cur : Nat} {r : Round} (h : roundClear s r = false) :
     stop s cur r = false := by
   simp [stop, h]
 
 /-- A stopping round raised nothing that keeps the consult open. -/
 theorem stop_nothing_open {s : Session} {cur : Nat} {r : Round} (h : stop s cur r = true) :
-    ∀ o ∈ r.objections, keepsOpen s o = false := by
+    ∀ o ∈ r.objections, keepsOpen s o.point = false := by
   intro o ho
   simp [stop] at h
   have := h.2 o ho
@@ -59,40 +64,34 @@ theorem stop_nothing_open {s : Session} {cur : Nat} {r : Round} (h : stop s cur 
 /-- Where an objection goes does not depend on its `sources` field: two objections with the same
     point are disposed of alike, whichever seats they list. -/
 theorem dispose_ignores_provenance (s : Session) {o₁ o₂ : Objection} (h : o₁.point = o₂.point) :
-    dispose s o₁ = dispose s o₂ := by
-  simp [dispose, h]
+    dispose s o₁.point = dispose s o₂.point := by
+  rw [h]
 
-/-- An objection no seat raised is recorded as the facilitator's. -/
-theorem provenance_facilitator (p : Point) : provenance ⟨p, []⟩ = .facilitator := rfl
-
-/-- A value only the user holds always goes to the user, whatever verification found. -/
-theorem userHeld_goes_to_user {s : Session} {p : Point} (h : userHeld s p = true) :
-    disposePoint s p = .toUser .userValue := by
-  simp [disposePoint, h]
-
-/-- An item routed to the user is never one the facilitator settles. -/
-theorem toUser_not_settled {s : Session} {o : Objection} {r : Reason}
-    (h : dispose s o = .toUser r) : (dispose s o).settledByFacilitator = false := by
-  rw [h]; rfl
-
-/-- What the facilitator settles is exactly `apply` or `drop`. -/
-theorem settled_iff (d : Disposition) :
-    d.settledByFacilitator = true ↔ d = .apply ∨ d = .drop := by
-  cases d <;> simp [Disposition.settledByFacilitator]
+/-- Whether an objection keeps the consult open does not depend on which seats it lists. -/
+theorem keepsOpen_ignores_provenance (s : Session) {o₁ o₂ : Objection}
+    (h : o₁.point = o₂.point) : keepsOpen s o₁.point = keepsOpen s o₂.point := by
+  rw [h]
 
 /-- The exit makes the panel's claim only where the consult stopped. -/
 theorem exit_claim_stop {s : Session} {cur : Nat} {r : Round} {items : List (Point × Reason)}
     {rawAt : Seat → String} (h : stop s cur r = true) :
     (exit s cur r items rawAt).claim =
-      "this panel raised no new grounded objection to the current draft in this material" := by
+      "this panel raised no new grounded objection to the current brief in this material" := by
   simp [exit, h]
 
 /-- An exit that did not stop says the consult ended before a stopping round. -/
 theorem exit_claim_early {s : Session} {cur : Nat} {r : Round} {items : List (Point × Reason)}
     {rawAt : Seat → String} (h : stop s cur r = false) :
     (exit s cur r items rawAt).claim =
-      "the consult ended before a round on the current draft stopped it" := by
+      "the consult ended before a round on the current brief stopped it" := by
   simp [exit, h]
+
+/-- A round that is not `roundClear` never issues the panel's claim. -/
+theorem unclear_no_claim {s : Session} {cur : Nat} {r : Round} {items : List (Point × Reason)}
+    {rawAt : Seat → String} (h : roundClear s r = false) :
+    (exit s cur r items rawAt).claim =
+      "the consult ended before a round on the current brief stopped it" :=
+  exit_claim_early (unclear_never_stops h)
 
 /-- The exit hands over exactly the open items it is given. -/
 theorem exit_hands_over {s : Session} {cur : Nat} {r : Round} {items : List (Point × Reason)}

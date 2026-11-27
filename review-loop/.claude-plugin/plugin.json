@@ -1,7 +1,7 @@
 {
   "name": "review-loop",
   "description": "Review-resolve loop over a change and its governing surfaces — verifies each finding against the codebase and its base, applies the repairs whose direction is settled, and re-reviews until a round adds none, handing the rest back as decisions (/review-loop)",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

@@ -346,7 +346,7 @@ nothing, what waits on the gate does not proceed, and the user's answer resumes 
 where it held. A decision (`Handling.decide`) is not a gate: it is recorded, the round goes
 on with what is settled, and the exit hands it over; an answer that arrives earlier is
 carried out on the next apply pass. A decision that turns on a value only the user holds
-takes the user's own answer, not the starting session's.
+takes the user's own answer, carried in their words, not the starting session's.
 
 ### Phase 0 — Set the invocation and its ground
 
@@ -484,7 +484,8 @@ decision conveyed requires diagnosis before convergence. A still-self-evident
 incomplete repair stays Mechanical and is rewritten once in the next apply pass with
 the recurrence history in its hand-off. A contested design decision becomes a decision
 with the recurrence history; a recurrence after that diagnosed rewrite discredits the
-Mechanical diagnosis and becomes a decision too, and the loop does not repeat the fix.
+Mechanical diagnosis and becomes a decision too, showing the repair already landed, and the
+loop does not repeat the fix.
 End recurrence through repair or constituted direction, not reviewer suppression.
 
 Read trajectory from recurrence, causes, and base provenance, not finding-count

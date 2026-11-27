@@ -18,19 +18,19 @@ Each advisor runs through its own plugin; that plugin and the delegation rule in
 
 ## Prerequisites
 
-The consult needs the `codex-plus` and `agy-plus` plugins, which run the two seats, and the `stint` plugin, whose `references/prompting.md` the brief follows. Where a runner is missing or cannot start, report which one and what it needs, and stop: the consult does not run on one seat.
+The two seats run through the `codex-plus` and `agy-plus` plugins, and the brief follows the `stint` plugin's `references/prompting.md`.
 
 ## Procedure
 
 - **Brief.** One brief, identical for both seats, written as a consult per stint `references/prompting.md`: the reviewing role and that it changes no file, the decision, the settled constraints, the current draft, entry points to the evidence, and what would change the answer. Every path the brief names is a plain file each advisor can read without running a command; content reached only through a command, such as `git show`, is saved to a file first. The first brief is number 1, and every brief sent after it, a delta brief included, takes the next number.
 - **Dispatch.** Both seats run in parallel, each in its runner's read-only mode where the brief needs no network — Codex's read-only sandbox, Antigravity's plan mode. Record each seat's session id. Keep each run's full returned answer verbatim as its own raw file, one file per run (round and attempt): Codex's answer file, Antigravity's `response` field — never a summary of either. Every later round resumes the same session.
-- **Read.** Read each answer whole, in its own words. A run's answer is recorded as the seat's `Answer` only when its plugin reports the run complete and the answer evaluates the brief. A run its plugin reports incomplete — such as an Antigravity `SUCCESS` that carries `denied_actions` — is recorded as none whatever text it carries, and that text stays in its raw file; a reply that asks for clarification or refuses is recorded as none too. A run that exited cleanly but is recorded as none, or answered an earlier brief, is run once more on the current brief by resuming the same session. The exception is a run that failed outright — a nonzero exit, an Antigravity `ERROR` — which is never retried: it goes to the user as its plugin's error handling directs. A seat that failed outright, or is recorded as none again after its one retry, is an exit item for the user.
+- **Read.** Read each answer whole, in its own words. An answer that evaluates the current brief is recorded as the seat's `Answer`.
 - **Verify.** Check the factual premises each answer leans on — those of its objections and those of its endorsement — against their primary sources, one premise at a time: two answers agreeing are two claims, not a check.
 - **Dispose.** Each objection's point, and each premise verification refutes, takes one route. Judge a point on its grounds, not on which seat raised it or how many did; the seats that raised it are recorded beside it.
   - a point that turns only on a value the user holds goes to the user without verification;
   - a point resting on factual premises drops each premise verification refutes; what remains goes to the user where it turns on a value the user holds, and is applied where it holds and no such value is left;
   - a point raised and disposed of before, coming with no new evidence or failure condition, keeps its earlier disposition — an unanswered referral stays open, and this is not a refuted drop;
-  - a refuted premise, whichever answers lean on it and however many, is routed by what it changes: where it changes only an assessment — an endorsement's reason fails while the draft is right — the assessment is corrected; where the draft is wrong and the fix is factual, the draft is repaired; where the fix turns on the user's choice, it goes to the user as a choice that blocks closing, and the round is not `roundClear`;
+  - a refuted premise, whichever answers lean on it and however many, is routed by what it changes: where it changes only an assessment — an endorsement's reason is refuted while the draft is right — the assessment is corrected; where the draft is wrong and the fix is factual, the draft is repaired; where the fix turns on the user's choice, it goes to the user as a choice that blocks closing, and the round is not `roundClear`;
   - a premise that cannot be verified goes to the user with the choice it bears on, without blocking closing;
   - a split that survives verification — two grounded positions recommending opposite options — gives the user the alternatives and the trade-off; the facilitator picks neither.
 - **Hand over.** Present the revised draft, what was applied and on what ground, and each item routed to the user with its reason and what verification found of its premises — the items, not the seats' raw answers; where an item is routed to the user, stop for their answer. The user's decisions become the next brief's `Decision`s.
@@ -39,7 +39,7 @@ The consult needs the `codex-plus` and `agy-plus` plugins, which run the two sea
 
 The Lean block holds within one round; what spans rounds reaches it as parameters and judgments. Across rounds the prose holds, and each item's latest disposition governs: an item routed to the user is carried into every later hand over, into each `DeltaBrief`'s open points and into the `exit` until the user settles it or a later verification refutes it — a refuted referral is retired, not carried; a decided point goes to the seats as a `Decision`, not again as an open point.
 
-The judgments in the Lean block take a point, never the seats an objection lists, so a disposition cannot read who raised it from its inputs. They still read the session, from which a judgment could infer who spoke; that it does not is the Dispose step's rule above, not a property the block proves.
+What the Lean block proves of provenance is narrow: the judgments take a point, so they are independent of an objection's `sources` field, and the closing judgment reads a seat-free `RoundView`. The judgments still read the session; judging a point on its grounds rather than on who raised it is the Dispose step's rule above.
 
 ## Lean
 
@@ -68,9 +68,7 @@ inductive Seat
   | second
 
 /-- What an advisor returned for one run: the number of the brief it answered, and its text.
-    Only an answer from a run its plugin reports complete, which the Read step judges to evaluate
-    the brief, is recorded as `some`; an incomplete run, a request for clarification or a refusal
-    is `none`, as a missing answer is. -/
+    An answer the Read step judges to evaluate the brief is recorded as `some`. -/
 structure Answer where
   brief : Nat
   text  : String
@@ -95,14 +93,12 @@ structure Objection where
   sources_ne : sources ≠ []
 
 /-- Why an item goes to the user. `blocksClose`: a choice a refuted premise's fix turns on, which
-    keeps the round from being clear. `seatFailed`: a seat whose run failed outright, or gave no
-    answer after its one retry. -/
+    keeps the round from being clear. -/
 inductive Reason
   | userValue
   | split
   | unverified
   | blocksClose
-  | seatFailed
 
 /-- Where an objection's point goes. `keepEarlier`: a repeat that keeps its earlier disposition,
     distinct from a refuted `drop`. -/
@@ -184,10 +180,9 @@ structure Exit where
   raw    : List (Seat × String)
   claim  : String
 
-/-- `openItems`: the items still open, as the prose carries them across rounds, a failed seat
-    among them. `rawAt`: where each seat's raw answers are kept — its raw files and its session
-    id. The panel's claim is made only where the consult stopped; an exit the user called earlier
-    says so instead. -/
+/-- `openItems`: the items still open, as the prose carries them across rounds. `rawAt`: where
+    each seat's raw answers are kept — its raw files and its session id. The panel's claim is
+    made only where the consult stopped; an exit the user called earlier says so instead. -/
 noncomputable def exit (s : Session) (current : Nat) (r : Round) (openItems : List (Point × Reason))
     (rawAt : Seat → String) : Exit :=
   { toUser := openItems,

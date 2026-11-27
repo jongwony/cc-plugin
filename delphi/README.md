@@ -6,7 +6,7 @@ The skill is the procedure for one invocation. The user invokes it. A rule about
 
 ## Prerequisites
 
-Install `codex-plus`, `agy-plus` and `stint` from this marketplace. The two runners carry the seats, and the brief follows `stint`'s consult guidance. Where a runner is missing, `/delphi` reports it and stops.
+The two seats run through `codex-plus` and `agy-plus`, and the brief follows `stint`'s consult guidance. Install all three from this marketplace.
 
 ## Lifecycle
 
@@ -14,14 +14,12 @@ Install `codex-plus`, `agy-plus` and `stint` from this marketplace. The two runn
 flowchart LR
   B[One read-only brief, numbered] --> P{{Codex and Antigravity, in parallel}}
   P --> R[Read each answer whole]
-  R -->|that seat, once, same session: a clean run with no evaluating answer, an incomplete run, or an old brief| P
-  R -->|a run that failed outright, or no answer after the retry| U[To the user]
   R --> V[Verify objection and endorsement premises against primary sources]
   V --> D{Dispose}
   D -->|holds, no user value left| A[Apply to the draft]
   D -->|refuted| X[Drop]
   D -->|repeat, nothing new| K[Keep its earlier disposition]
-  D -->|user-held value, surviving split, unverifiable premise, fix that turns on the user's choice| U
+  D -->|user-held value, surviving split, unverifiable premise, fix that turns on the user's choice| U[To the user]
   A --> H[Revised draft and items, to the user]
   X --> H
   K --> H
@@ -35,11 +33,11 @@ flowchart LR
 
 The Lean block in `skills/delphi/SKILL.md` fixes only what holds within one round. The routes an objection takes are the procedure's, written in prose, and the Lean block reads each route as a judgment.
 
-- **An answer.** Briefs are numbered, and a seat has answered when a run its plugin reports complete returned an answer that evaluates the current brief and is not blank. An incomplete run does not count, whatever text it returned; that text stays in its raw file. An applied change to the draft, a factual repair, a user decision and new context each make a new current brief before the stop is read, so the advisors answer the draft as it now stands before the consult can stop. A round in which a seat has not answered is incomplete, and an incomplete round never stops the consult. A round on an earlier brief never stops it either.
+- **An answer.** Briefs are numbered, and a seat has answered when its answer evaluates the current brief and is not blank. An applied change to the draft, a factual repair, a user decision and new context each make a new current brief before the stop is read, so the advisors answer the draft as it now stands before the consult can stop. A round stops the consult only when both seats answered the current brief. A round on an earlier brief never stops it.
 - **A clear round.** A round stops the consult only when the facilitator judges it clear: both answers evaluate the brief, verification has been attempted for every premise of the objections and endorsements, and no choice that blocks closing is pending. A premise that could not be verified goes to the user without blocking closing. An empty objection list does not stop a round in which a refuted premise's fix waits on the user's choice. The closing judgments read a seat-free view of the round: its brief, whether both seats answered, and its points.
 - **Agreement.** Agreement between the two advisors is provenance and not evidence. The disposition and the keeps-open judgment take an objection's point, so they are independent of the seats an objection lists. They still read the session, from which a judgment could infer who spoke; the procedure says to judge a point on its grounds, and the contract does not prove more than independence from the listed seats.
 - **The delta brief.** The brief that a resumed session gets has no field for a seat, a count or a verdict. The user's decisions go in it as constraints. The facts that those decisions lean on stay open to objection.
-- **The exit.** The exit hands over the items that are still open, as the procedure carries them, a seat that failed among them. Where such items remain, it also gives each advisor's raw-answer pointer, the answer files and the session id, so that the user can open the raw answers when they need them. The hand-over and the exit do not show the raw answers themselves. The consult claims that this panel raised no new grounded objection to the current brief in this material only when it stopped. When the user ends it earlier, the exit says that the consult ended before a stopping round.
+- **The exit.** The exit hands over the items that are still open, as the procedure carries them. Where such items remain, it also gives each advisor's raw-answer pointer, the answer files and the session id, so that the user can open the raw answers when they need them. The hand-over and the exit do not show the raw answers themselves. The consult claims that this panel raised no new grounded objection to the current brief in this material only when it stopped. When the user ends it earlier, the exit says that the consult ended before a stopping round.
 
 Across rounds, the procedure in the SKILL.md holds the rest, and each item's latest disposition governs. An item routed to the user goes into every later hand-over, into the open points of each delta brief and into the exit, until the user settles it or a later verification refutes it. A point that the user decided goes to the advisors as a decision, not again as an open point.
 

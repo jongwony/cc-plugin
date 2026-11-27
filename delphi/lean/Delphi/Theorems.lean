@@ -36,8 +36,8 @@ theorem stop_needs_both {s : Session} {cur : Nat} {r : Round} (h : stop s cur r 
   subst hd
   exact h.1.1.1.2
 
-/-- A round with a seat missing never stops the consult. -/
-theorem incomplete_never_stops {s : Session} {cur : Nat} {r : Round} (h : r.complete = false) :
+/-- A round in which a seat has not answered its brief never stops the consult. -/
+theorem unanswered_never_stops {s : Session} {cur : Nat} {r : Round} (h : r.complete = false) :
     stop s cur r = false := by
   simp [stop, Round.view, h]
 
@@ -121,8 +121,7 @@ theorem unclear_no_claim {s : Session} {cur : Nat} {r : Round} {items : List (Po
 theorem exit_hands_over {s : Session} {cur : Nat} {r : Round} {items : List (Point × Reason)}
     {rawAt : Seat → String} : (exit s cur r items rawAt).toUser = items := rfl
 
-/-- Where open items remain — a failed seat among them — the exit gives both seats' raw-answer
-    pointers. -/
+/-- Where open items remain, the exit gives both seats' raw-answer pointers. -/
 theorem exit_raw_when_open {s : Session} {cur : Nat} {r : Round} {items : List (Point × Reason)}
     {rawAt : Seat → String} (h : items ≠ []) :
     (exit s cur r items rawAt).raw = [(.first, rawAt .first), (.second, rawAt .second)] := by

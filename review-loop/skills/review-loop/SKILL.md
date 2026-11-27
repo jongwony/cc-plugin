@@ -583,8 +583,7 @@ Unreached axes, missing reach reports, open deferrals, and explicitly retained
 adaptation effects remain residual; they do not themselves force another round and are
 never reported as clearance.
 
-The user may exit at any point; an external interruption supplies no convergence
-evidence.
+An external interruption supplies no convergence evidence.
 
 ## Trace and Exit
 

@@ -178,8 +178,8 @@ inductive Class
       whose plausible shapes do not materially diverge -/
   | mechanical
   /-- Constitution: materially different repair trajectories (withholding a whole carrier, where
-      another repair keeps part of what it delivers, is one), unresolved design trade-offs, or
-      unentrusted scope/risk decisions -/
+      another repair keeps part of what it delivers, is one), unresolved design trade-offs,
+      unentrusted scope/risk decisions, or a repair that rests on a value only the user holds -/
   | judgment
 
 /-- **Your judgment** of a surviving finding that is to be repaired or whose disposition nothing
@@ -345,8 +345,8 @@ The phases run in order. A gate presents its question and ends the turn: silence
 nothing, what waits on the gate does not proceed, and the user's answer resumes the work
 where it held. A decision (`Handling.decide`) is not a gate: it is recorded, the round goes
 on with what is settled, and the exit hands it over; an answer that arrives earlier is
-carried out on the next apply pass. A decision that turns on a value only the user holds
-takes the user's own answer, carried in their words, not the starting session's.
+carried out on the next apply pass. A decision takes the user's own answer, carried in their
+words, not the starting session's, unless its repair is mechanical or self-evident.
 
 ### Phase 0 — Set the invocation and its ground
 

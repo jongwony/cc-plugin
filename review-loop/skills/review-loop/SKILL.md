@@ -345,7 +345,8 @@ The phases run in order. A gate presents its question and ends the turn: silence
 nothing, what waits on the gate does not proceed, and the user's answer resumes the work
 where it held. A decision (`Handling.decide`) is not a gate: it is recorded, the round goes
 on with what is settled, and the exit hands it over; an answer that arrives earlier is
-carried out on the next apply pass.
+carried out on the next apply pass. A decision that turns on a value only the user holds
+takes the user's own answer, not the starting session's.
 
 ### Phase 0 — Set the invocation and its ground
 
@@ -464,9 +465,9 @@ leave open: a decision showing both readings and any repair already landed in
 one direction, not a repair either reading settles.
 
 Each decision carries its consequence — who would act on the wrong answer, how soon,
-and what could take it back — and whether it blocks the merge: it does where that wrong
-answer would reach the running service, its users, or the sessions that load a changed
-rule or skill.
+and what could take it back — and whether it blocks the merge: it does where merging with
+that wrong answer would carry it to the running service, its users, or the sessions that
+load a changed rule or skill.
 
 Read every repair as an ablation before classifying it. A finding grounds a repair
 through the consequence it verified; a finding that shows only something unstated

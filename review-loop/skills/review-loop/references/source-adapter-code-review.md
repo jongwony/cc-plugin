@@ -5,17 +5,17 @@ Claude `/code-review` implementation to the Source Interface in `SKILL.md`.
 
 - At selection, reuse an available contract record matching the executable/version,
   selected skill implementation/version, and relevant configuration. Keep its exact
-  command, accepted scope, output format, finding cap, reach channel, and evidence
+  command, accepted scope, output format, reach channel, and evidence
   pointer on the trace for later invocations. Reuse capability evidence only; each
   call establishes its own authentication, reviewed scope, and completed result.
 - When a record is absent or its identity changes, start with the host's read-only
   review invocation and determine the contract from its skill expansion and output.
   Mark unknown limits until observed; refresh the affected record fields when runtime
   evidence differs. A contract that cannot be established remains an explicit gap.
-- Pass a designated effort level in the form the implementation parses, and read the
-  level actually used from its expansion or output onto the trace. A call that ran at
-  another level than designated, such as a remembered fallback, is a source mismatch
-  under Phase 1.
+- Pass a designated effort level, with `--max-findings all`, in the form the implementation
+  parses, and read the level actually used from its expansion or output onto the trace. A
+  call that ran at another level than designated, such as a remembered fallback, is a source
+  mismatch under Phase 1.
 - Establish that each review examined the requested local surface before normalizing
   it. A raw PR number alone addresses remote PR state and can omit local or stacked
   repairs.
@@ -30,7 +30,7 @@ Preserve the native result, then normalize only a completed review:
 - Skipped PRs, unavailable scope, blocked tools, malformed output, or no actual
   assessment contribute no completed review, even if no findings were returned.
 
-Keep any explicit finding cap or scope exclusions in the source trade-off at entry
+Keep any scope exclusions in the source trade-off at entry
 and residual at exit. In particular, Anthropic's public
 [code-review plugin](https://github.com/anthropics/claude-code/blob/main/plugins/code-review/commands/code-review.md)
 may have PR eligibility checks and an introduced-issues scope; it is not a universal

@@ -117,7 +117,7 @@
     {
       "name": "review-loop",
       "source": "./review-loop",
-      "description": "Convergence-paced review-resolve loop over a change and its governing surfaces — verifies each finding against the codebase and its base, then re-reviews until each is disposed of (/review-loop)"
+      "description": "Review-resolve loop over a change and its governing surfaces — verifies each finding against the codebase and its base, applies the repairs whose direction is settled, and re-reviews until a round adds none, handing what only the user can decide back as decisions (/review-loop)"
     },
     {
       "name": "motion",

@@ -269,16 +269,17 @@ axiom EditedSinceReview : Session → Prop
 axiom GoalRead : Session → Prop
 
 /-- **Your reading**, for one source, of its usable return in the latest round, on the current
-    reviewed artifact: it returned `approve`, or that round's full re-review returned zero new
-    non-refuted findings. A return from an earlier round does not count, even on the same
-    artifact. A finding is new in its
+    reviewed artifact: it returned `approve`, or that round's full review, as `FullyReviewed`
+    reads it, returned zero new non-refuted findings. A return from an earlier round does not
+    count, even on the same artifact. A finding is new in its
     discovery review even when deferred or handed over; its later return is not new and
     preserves the disposition. -/
 axiom Clear : Session → Source → Prop
 
 /-- **Your reading**: this source's usable return in the latest round is a full review of the
-    current reviewed artifact, whether the round's first review or a re-review; a review that
-    stopped at its finding cap is not full. -/
+    current reviewed artifact, whether the round's first review or a re-review. A full review is
+    one whose reach covered that artifact; a return its finding cap cut short is not, and goes to
+    Phase 1's question for a call ending without a usable review. -/
 axiom FullyReviewed : Session → Source → Prop
 
 /-- **Your reading**: the latest round, on the current reviewed artifact, left no repair that is
@@ -395,7 +396,8 @@ catches ends without a usable review, and its presentation shows the change and 
 whether to restore within the incomplete-call question, as one question settled before any
 further review call, Phase 2 verification, or apply pass.
 
-A call ending without a usable review contributes no verdict and satisfies neither
+A call ending without a usable review, a return its finding cap cut short included,
+contributes no verdict and satisfies neither
 `Converged` nor `Settled`. Show what returned and ask whether to continue this round without that
 source's review, switch source, or stop. A failure that persists makes the source
 unavailable under Phase 0 rule 1, where its designation is settled. An extraction
@@ -520,7 +522,7 @@ so far, so the driving session records rather than re-derives it.
    pass within the settled scope, reporting expansion.
 2. Risk is separate from Mechanical/Judgment classification. Route substrate actions
    to host permissions; an unsettled epistemic risk goes to the user for apply, defer,
-   or drop, and takes their own answer, carried in their words, as a decision does.
+   or drop, and takes the user's own answer, as a decision does.
    Rejection blocks an edit not yet written.
 3. Repeated fix-induced follow-ups across consecutive rounds move judgment, not
    writing: the next apply pass returns its enumerated predicate and sites to Phase 3
@@ -550,7 +552,7 @@ so far, so the driving session records rather than re-derives it.
    its authorized basis; the verdict alone does not authorize retaining it. Where the
    evidence and the user's direction leave what becomes of the landed effect genuinely
    open, this step holds on one question to the user, whether that effect stays in this
-   unit; the answer, the user's own carried in their words as for a decision, resumes the
+   unit; the answer, the user's own as for a decision, resumes the
    step, and an invocation that ends at that gate reports the effect as unresolved. Where either outcome is settled, reconcile the artifact to it and
    check it. After
    reconciliation and checks, including explicit unavailable-check limits, the writer

@@ -268,9 +268,9 @@ axiom EditedSinceReview : Session → Prop
     was found. -/
 axiom GoalRead : Session → Prop
 
-/-- **Your reading**, for one source, of its usable return in the latest round, on the current
-    reviewed artifact: it returned `approve`, or that round's full review, as `FullyReviewed`
-    reads it, returned zero new non-refuted findings. A return from an earlier round does not
+/-- **Your reading**, for one source, of its usable return in the latest round: on that round's
+    full review of the current reviewed artifact, as `FullyReviewed` reads it, it returned
+    `approve` or zero new non-refuted findings. A return from an earlier round does not
     count, even on the same artifact. A finding is new in its
     discovery review even when deferred or handed over; its later return is not new and
     preserves the disposition. -/

@@ -179,7 +179,8 @@ inductive Class
   | mechanical
   /-- Constitution: materially different repair trajectories (withholding a whole carrier, where
       another repair keeps part of what it delivers, is one), unresolved design trade-offs,
-      unentrusted scope/risk decisions, or a repair that rests on a value only the user holds -/
+      unentrusted scope/risk decisions, a repair that rests on a value only the user holds, or a
+      repair whose Mechanical diagnosis a recurrence after its diagnosed rewrite has discredited -/
   | judgment
 
 /-- **Your judgment** of a surviving finding that is to be repaired or whose disposition nothing
@@ -290,12 +291,14 @@ axiom NoSettledRepair : Session → Prop
 
 /-- Phase 3's root-resolved end, reached only once no finding's `handling` is `Handling.apply`:
     the loop ends as it stands, the round's relayed and decided findings go to the user
-    unrepaired with their dispositions, and no further repair is chosen or applied. -/
+    unrepaired, with their dispositions or as open decisions, and no further repair is chosen
+    or applied. -/
 def RootResolved (s : Session) : Prop :=
   match inForce s with
   | none   => False
   | some d => (∀ x ∈ d.toList, FullyReReviewed s x) ∧
-      ¬ SharedCause s ∧ RootsResolved s ∧ ¬ RecurrencePending s ∧ NoSettledRepair s
+      ¬ SharedCause s ∧ RootsResolved s ∧ ¬ RecurrencePending s ∧ ¬ EditedSinceReview s ∧
+      NoSettledRepair s
 
 /-- Convergence holds only of the current reviewed artifact, and only through reviews every source
     in force owes; before any designation exists there is nothing to converge on. -/
@@ -469,7 +472,7 @@ one direction, not a repair either reading settles.
 Each decision carries its consequence — who would act on the wrong answer, how soon,
 and what could take it back — and whether it blocks the merge: it does where merging with
 that wrong answer would carry it to the running service, its users, or the sessions that
-load a changed rule or skill.
+load a changed rule or skill, and where that reach cannot be established.
 
 Read every repair as an ablation before classifying it. A finding grounds a repair
 through the consequence it verified; a finding that shows only something unstated
@@ -527,7 +530,8 @@ so far, so the driving session records rather than re-derives it.
    pass within the settled scope, reporting expansion.
 2. Risk is separate from Mechanical/Judgment classification. Route substrate actions
    to host permissions; an unsettled epistemic risk goes to the user for apply, defer,
-   or drop. Rejection blocks an edit not yet written.
+   or drop, and takes their own answer, carried in their words, as a decision does.
+   Rejection blocks an edit not yet written.
 3. Repeated fix-induced follow-ups across consecutive rounds, or findings under one
    supported shared-cause reading that recur across rounds while their repairs keep
    adding case handling, move
@@ -561,8 +565,8 @@ so far, so the driving session records rather than re-derives it.
    its authorized basis; the verdict alone does not authorize retaining it. Where the
    evidence and the user's direction leave what becomes of the landed effect genuinely
    open, this step holds on one question to the user, whether that effect stays in this
-   unit; the answer resumes the step, and an invocation that ends at that gate reports the
-   effect as unresolved. Where either outcome is settled, reconcile the artifact to it and
+   unit; the answer, the user's own carried in their words as for a decision, resumes the
+   step, and an invocation that ends at that gate reports the effect as unresolved. Where either outcome is settled, reconcile the artifact to it and
    check it. After
    reconciliation and checks, including explicit unavailable-check limits, the writer
    commits to the settled landing for PR scope and pushes where that landing has a
@@ -585,7 +589,8 @@ the repair commits are judged from their content in the diff as part of the whol
 These reviews are the next round's: Phase 1's rules for parallel sources and failed
 calls apply to them, and their findings and direction go straight to Phase 2. End where
 `Converged` holds, or where `Settled` holds. The loop
-never merges; the caller reads the exit's merge-blocking decisions before it does.
+never merges; the session that started it reads the exit's merge-blocking decisions before
+it does.
 
 Unreached axes, missing reach reports, open deferrals, and explicitly retained
 adaptation effects remain residual; they do not themselves force another round and are

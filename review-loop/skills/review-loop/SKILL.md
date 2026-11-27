@@ -332,7 +332,7 @@ inductive Exit
 open Classical in
 /-- How any exit is reported: the user's, a stop, Phase 3's root-resolved end, or Phase 5's. An
     exit before any designation exists, at `Entry.missing` or at the first sources gate, is
-    reported as non-convergence. -/
+    reported as `Exit.notConverged`. -/
 noncomputable def exitAs (s : Session) : Exit :=
   if Converged s then .converged else if Settled s then .settled else .notConverged
 
@@ -428,8 +428,10 @@ new findings survive verification, consult across that split before reading the 
 the source still holding findings what in the artifact would turn its verdict to
 approve, and give those findings to the converged source to adjudicate, withholding the
 loop's dispositions from both. A consult is not a review. Its answers are material that
-Phase 2 and this reading weigh, never a verdict or a vote for either side. A split whose
-direction the consult and verification leave open is a decision, not a side the loop picks.
+Phase 2 and this reading weigh, never a verdict or a vote for either side. A finding that
+survives the consult goes to `handling` like any other; where the consult and verification
+leave its repair direction open, it reads as `judgment` there and becomes a decision, not a
+side the loop picks.
 
 Read the verified set for a shared mechanism, competing explanations, unexplained
 findings, and a falsifier. A source direction is one candidate, reconsidered after
@@ -484,8 +486,9 @@ decision conveyed requires diagnosis before convergence. A still-self-evident
 incomplete repair stays Mechanical and is rewritten once in the next apply pass with
 the recurrence history in its hand-off. A contested design decision becomes a decision
 with the recurrence history; a recurrence after that diagnosed rewrite discredits the
-Mechanical diagnosis and becomes a decision too, showing the repair already landed, and the
-loop does not repeat the fix.
+Mechanical diagnosis and becomes a decision too, showing the repair already landed and
+judging its consequence and merge-blocking flag with that repair in place, and the loop does
+not repeat the fix.
 End recurrence through repair or constituted direction, not reviewer suppression.
 
 Read trajectory from recurrence, causes, and base provenance, not finding-count

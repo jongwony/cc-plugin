@@ -429,8 +429,6 @@ side the loop picks.
 Read the verified set for a shared mechanism, competing explanations, unexplained
 findings, and a falsifier. A source direction is one candidate, reconsidered after
 verification; agreement with the loop's reading is not independent corroboration.
-Materially different root and local repairs are a plan-level judgment even when each
-isolated fix looks mechanical.
 
 A shared-cause reading may direct repair only while its falsifier holds off. It neither
 drops findings nor becomes constituted design intent. Recheck the falsifier when the
@@ -583,8 +581,7 @@ Unreached axes, missing reach reports, open deferrals, and explicitly retained
 adaptation effects remain residual; they do not themselves force another round and are
 never reported as clearance.
 
-The user may exit at any point; an external interruption supplies no convergence
-evidence.
+An external interruption supplies no convergence evidence.
 
 ## Trace and Exit
 
@@ -597,19 +594,16 @@ Call: observed settings or diagnostics, when present
 Goal: loop's goal reading and its findings, including none (omit if no declared goal)
 Roots: Phase 3 shared-cause reading — each shared cause with the findings it explains, or none; any split consult with its question and answer
 Relay: autonomously dispositioned findings → applied | dropped: basis | carried: reason
-Gated: findings a gate put to the user → applied | dropped: basis | carried: reason
-Decisions: findings recorded for the user → consequence, blocks the merge or not; answered → applied | dropped: basis | carried: reason
+Decisions: findings recorded for the user or put to a gate → consequence, blocks the merge or not; answered → applied | dropped: basis | carried: reason
 Apply: writer route (fork | brief | inline) → commits or new head, or tree state (omit if no pass ran)
 Landing: repair destination (PR only)
 ```
 
 Each verified finding carries base provenance; an applied fix also carries its predicate
 and sweep side effects. Carry the loop's check artifact, evidence, unexercised limits,
-and unavailable-check reasons with that repair's Relay/Gated/Decisions entry; keep this loop-side
-evidence distinct from the source-reported `Exercised` line. Assign exactly one
-Relay/Gated/Decisions home: Gated where a gate asked the user, epistemic risk gates
-included; Decisions where `handling` recorded one, a later Phase 4 gate's answer
-included. Record the fit pass as its own entry, with adaptation, any retroactive rejecting verdict, and
+and unavailable-check reasons with that repair's Relay/Decisions entry; keep this loop-side
+evidence distinct from the source-reported `Exercised` line. Record the fit pass as its own
+entry, with adaptation, any retroactive rejecting verdict, and
 the resulting artifact state and disposition. Preserve write discrepancies and their
 reconciliation; carried reasons are records, while subsequent reviews detect findings
 fresh.

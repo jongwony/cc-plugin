@@ -5,8 +5,7 @@ selection. Availability is the running host's advertised capability,
 not the model name or the presence of a plugin directory alone.
 
 - `code-review`: resolve the advertised skill and isolation route. Reuse matching
-  contract evidence under [Claude review output](source-adapter-code-review.md), and
-  confirm scope and reporting limits through the first read-only review call.
+  contract evidence under [Claude review output](source-adapter-code-review.md).
   When exposed metadata establishes `context: fork`, invoke that fork with the advertised skill name;
   otherwise use an available isolated reviewer subagent that calls the skill with
   only the review request. An inline `Skill(...)` call alone does not establish a

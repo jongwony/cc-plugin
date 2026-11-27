@@ -97,7 +97,7 @@ structure Sources where
 
 def Sources.toList (d : Sources) : List Source := d.first :: d.rest
 
-/-- A finding a source reported, or one the loop's own goal reading added. -/
+/-- A finding a source reported, or one the loop's own goal reading or fit pass added. -/
 structure Finding where
   source : Source
   site   : String
@@ -277,7 +277,8 @@ axiom GoalRead : Session → Prop
 axiom Clear : Session → Source → Prop
 
 /-- **Your reading**: this source's usable return in the latest round is a full review of the
-    current reviewed artifact, whether the round's first review or a re-review. -/
+    current reviewed artifact, whether the round's first review or a re-review; a review that
+    stopped at its finding cap is not full. -/
 axiom FullyReviewed : Session → Source → Prop
 
 /-- **Your reading**: the latest round, on the current reviewed artifact, left no repair that is
@@ -395,7 +396,7 @@ whether to restore within the incomplete-call question, as one question settled 
 further review call, Phase 2 verification, or apply pass.
 
 A call ending without a usable review contributes no verdict and satisfies neither
-convergence arm. Show what returned and ask whether to continue this round without that
+`Converged` nor `Settled`. Show what returned and ask whether to continue this round without that
 source's review, switch source, or stop. A failure that persists makes the source
 unavailable under Phase 0 rule 1, where its designation is settled. An extraction
 failure calls for inspecting raw output; it does not prove source failure. A capable
@@ -477,13 +478,13 @@ where that judgment goes, either way it is a plan-level Judgment item, not Mecha
 An initial uninformed return is absorbed by settled policy. Instance-specific
 dismissals/deferrals never enter reviewer context, so their returns keep that
 disposition and remain residual. A return after a fix was visible or a constituted
-decision conveyed requires diagnosis before convergence. A still-self-evident
+decision conveyed requires diagnosis before the loop ends. A still-self-evident
 incomplete repair stays Mechanical and is rewritten once in the next apply pass with
-the recurrence history in its hand-off. A contested design decision becomes a decision
-with the recurrence history; a recurrence after that diagnosed rewrite discredits the
-Mechanical diagnosis and becomes a decision too, showing the repair already landed and
-judging its consequence and merge-blocking flag with that repair in place, and the loop does
-not repeat the fix.
+the recurrence history in its hand-off; a recurrence after that diagnosed rewrite
+discredits the Mechanical diagnosis and becomes a decision, showing the repair already
+landed and judging its consequence and merge-blocking flag with that repair in place, and
+the loop does not repeat the fix. A contested design decision becomes a decision with the
+recurrence history.
 End recurrence through repair or constituted direction, not reviewer suppression.
 
 Read trajectory from recurrence, causes, and base provenance, not finding-count

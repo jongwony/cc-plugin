@@ -23,8 +23,9 @@ Load this reference when a delegated task needs capabilities beyond the core
 
 - `read_file` on a local video file hands it to the model as frames, one per
   second, plus its audio track; no shell or `ffmpeg` is involved.
-- Point `--add-dir` at the file's directory when it lies outside `-C DIR`, and
-  pass `-M plan` so the run only reads.
+- Audio and image files through `read_file` are unverified.
+- Pass the file's absolute path in the prompt and `--add-dir "$(dirname <file>)"`
+  when it lies outside `-C DIR`; pass `-M plan` so the run only reads.
 
 ## Structured Output & Print Controls
 

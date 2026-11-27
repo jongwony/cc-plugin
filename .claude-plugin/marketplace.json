@@ -148,11 +148,6 @@
       "description": "Report a session to aiward, choi's resident session, when the issue it carried settles or stops — aiward reads the session's own record and tells it to go on, pushes choi, or neither"
     },
     {
-      "name": "rail-route",
-      "source": "./rail-route",
-      "description": "Korean rail seat-finding across transfers and same-train splits when direct trains are sold out"
-    },
-    {
       "name": "api-cost",
       "source": "./api-cost",
       "description": "Links to the Anthropic, OpenAI and Gemini API cost and usage dashboards"

@@ -94,7 +94,7 @@ output. Exit code is propagated unchanged.
 Examples (<scratchpad> = the calling session's scratchpad directory):
   agy-run.sh <scratchpad>/agy_prompt_a3f9.txt
   agy-run.sh -m gemini-4-neon-high -C /path/to/repo <scratchpad>/agy_prompt_a3f9.txt
-  agy-run.sh -M plan -r high <scratchpad>/agy_prompt_a3f9.txt
+  agy-run.sh -r high <scratchpad>/agy_prompt_a3f9.txt
   agy-run.sh -S 7d3d885d-0ccd-494a-9746-a9881dfa9341 -m gemini-4-neon-high -C /path/to/repo <scratchpad>/agy_prompt_b1c2.txt
 USAGE
   exit "${1:-0}"

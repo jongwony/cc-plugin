@@ -7,9 +7,12 @@ namespace Delphi
 
 /-- Every judgment the block declares has an inhabited type, so none assumes what nothing
     inhabits. -/
-example : Nonempty Type := ⟨Unit⟩
-example : Nonempty (Session → Point → Verdict) := ⟨fun _ _ => .holds⟩
-example : Nonempty (Session → Point → Bool) := ⟨fun _ _ => false⟩
+example : Nonempty (type_of% @Session) := ⟨Unit⟩
+example : Nonempty (type_of% @verified) := ⟨fun _ _ => .holds⟩
+example : Nonempty (type_of% @userHeld) := ⟨fun _ _ => false⟩
+example : Nonempty (type_of% @split) := ⟨fun _ _ => false⟩
+example : Nonempty (type_of% @bears) := ⟨fun _ _ => false⟩
+example : Nonempty (type_of% @isNew) := ⟨fun _ _ => false⟩
 
 /-- An empty or whitespace-only answer is not an answer. -/
 theorem answered_nonempty {cur : Nat} {a : Answer} (h : answered cur (some a) = true) :
@@ -77,61 +80,33 @@ theorem settled_iff (d : Disposition) :
     d.settledByFacilitator = true ↔ d = .apply ∨ d = .drop := by
   cases d <;> simp [Disposition.settledByFacilitator]
 
-/-- A point the user has decided is never sent back to the seats as open. -/
-theorem decided_not_open {s : Session} {r : Round} {w : String} {e : List String}
-    {ds : List Decision} {p : Point} (hp : decided s p = true) :
-    p ∉ (delta s r w e ds).openPoints := by
-  simp only [delta, List.mem_map, List.mem_filter, not_exists, not_and]
-  intro o hm hop
-  subst hop
-  simp [hp] at hm
-
-/-- Every item the exit hands to the user is one `dispose` routed there, with that reason, and
-    one the user has not decided. -/
-theorem exit_items_routed {s : Session} {cur : Nat} {r : Round} {rawAt : Seat → String}
-    {p : Point} {why : Reason}
-    (h : (p, why) ∈ (exit s cur r rawAt).toUser) :
-    ∃ o ∈ r.objections, o.point = p ∧ dispose s o = .toUser why ∧ decided s p = false := by
-  simp only [exit, undecided, List.mem_filterMap] at h
-  obtain ⟨o, ho, hm⟩ := h
-  refine ⟨o, ho, ?_⟩
-  cases hdec : decided s o.point with
-  | true => simp [hdec] at hm
-  | false =>
-    cases hd : dispose s o with
-    | apply => simp [hdec, hd] at hm
-    | drop => simp [hdec, hd] at hm
-    | toUser w =>
-      simp [hdec, hd] at hm
-      obtain ⟨h1, h2⟩ := hm
-      subst h1
-      exact ⟨rfl, by rw [h2], hdec⟩
-
-/-- The exit claims that this panel found nothing further in this material only where the
-    consult stopped. -/
-theorem exit_claim_stop {s : Session} {cur : Nat} {r : Round} {rawAt : Seat → String}
-    (h : stop s cur r = true) :
-    (exit s cur r rawAt).claim = "this panel found no further objection in this material" := by
+/-- The exit makes the panel's claim only where the consult stopped. -/
+theorem exit_claim_stop {s : Session} {cur : Nat} {r : Round} {items : List (Point × Reason)}
+    {rawAt : Seat → String} (h : stop s cur r = true) :
+    (exit s cur r items rawAt).claim =
+      "this panel raised no new grounded objection to the current draft in this material" := by
   simp [exit, h]
 
 /-- An exit that did not stop says the consult ended before a stopping round. -/
-theorem exit_claim_early {s : Session} {cur : Nat} {r : Round} {rawAt : Seat → String}
-    (h : stop s cur r = false) :
-    (exit s cur r rawAt).claim = "the consult ended before a round on the current draft stopped it" := by
+theorem exit_claim_early {s : Session} {cur : Nat} {r : Round} {items : List (Point × Reason)}
+    {rawAt : Seat → String} (h : stop s cur r = false) :
+    (exit s cur r items rawAt).claim =
+      "the consult ended before a round on the current draft stopped it" := by
   simp [exit, h]
 
-/-- Where undecided items remain, the exit gives both seats' raw-answer pointers. -/
-theorem exit_raw_when_open {s : Session} {cur : Nat} {r : Round} {rawAt : Seat → String}
-    (h : (exit s cur r rawAt).toUser ≠ []) :
-    (exit s cur r rawAt).raw = [(.first, rawAt .first), (.second, rawAt .second)] := by
-  simp only [exit] at h ⊢
-  simp [h]
+/-- The exit hands over exactly the open items it is given. -/
+theorem exit_hands_over {s : Session} {cur : Nat} {r : Round} {items : List (Point × Reason)}
+    {rawAt : Seat → String} : (exit s cur r items rawAt).toUser = items := rfl
 
-/-- Where no undecided item remains, the exit gives no raw-answer pointer. -/
-theorem exit_no_raw_when_closed {s : Session} {cur : Nat} {r : Round} {rawAt : Seat → String}
-    (h : (exit s cur r rawAt).toUser = []) :
-    (exit s cur r rawAt).raw = [] := by
-  simp only [exit] at h ⊢
-  simp [h]
+/-- Where open items remain, the exit gives both seats' raw-answer pointers. -/
+theorem exit_raw_when_open {s : Session} {cur : Nat} {r : Round} {items : List (Point × Reason)}
+    {rawAt : Seat → String} (h : items ≠ []) :
+    (exit s cur r items rawAt).raw = [(.first, rawAt .first), (.second, rawAt .second)] := by
+  simp [exit, h]
+
+/-- Where no open item remains, the exit gives no raw-answer pointer. -/
+theorem exit_no_raw_when_closed {s : Session} {cur : Nat} {r : Round}
+    {rawAt : Seat → String} : (exit s cur r [] rawAt).raw = [] := by
+  simp [exit]
 
 end Delphi

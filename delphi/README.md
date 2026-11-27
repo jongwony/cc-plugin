@@ -10,7 +10,7 @@ The skill is the procedure for one invocation. The user invokes it. A rule about
 flowchart LR
   B[One read-only brief] --> P{{Codex and Antigravity, in parallel}}
   P --> R[Read each answer whole]
-  R -->|that seat only: empty, incomplete, or an old draft| P
+  R -->|that seat, once: empty, incomplete, or an old draft| P
   R --> V[Verify the grounds against primary sources]
   V --> D{Dispose}
   D -->|verified| A[Apply to the draft]
@@ -21,7 +21,7 @@ flowchart LR
   U --> H
   H --> S{Complete round on the current draft, no new grounded objection?}
   S -->|no| Q[Delta brief to the same sessions] --> P
-  S -->|yes| E[Exit: open items, and the claim this panel found nothing further]
+  S -->|yes| E[Exit: open items, and the claim that this panel raised no new grounded objection to the current draft]
 ```
 
 ## What the contract fixes
@@ -29,17 +29,18 @@ flowchart LR
 The Lean block in `skills/delphi/SKILL.md` fixes these points:
 
 - **An answer.** A seat has answered when its answer is not empty and is on the current draft. A round in which a seat has not answered is incomplete, and an incomplete round never stops the consult. A round on an earlier draft never stops it either.
-- **Agreement.** Agreement between the two advisors is provenance and not evidence. The place where an objection goes does not depend on which seats the objection lists. A verified objection from one seat can change the draft. An objection that no seat raised, such as a shared premise that failed verification, is recorded as the facilitator's.
+- **Agreement.** Agreement between the two advisors is provenance and not evidence. The place where an objection goes does not depend on which seats the objection lists. A verified objection from one seat can change the draft. An objection that no seat raised, such as a premise that failed or could not be verified, is recorded as the facilitator's.
 - **The user's items.** A value that only the user holds always goes to the user. A split that verification leaves open also goes to the user, and so does a ground that cannot be verified. The facilitator does not settle these items.
-- **The delta brief.** The brief that a resumed session gets has no field for a seat, a count or a verdict. The user's decisions go in it as constraints, and a point that the user decided is not sent again as open. The facts that those decisions lean on stay open to objection.
-- **The exit.** The exit hands over the routed items that the user has not decided. Where such items remain, it also gives each advisor's raw-answer pointer, the answer file and the session id, so that the user can open the raw answers when they need them. The hand-over and the exit do not show the raw answers themselves. The consult claims that this panel found no further objection in this material only when it stopped. When the user ends it earlier, the exit says that the consult ended before a stopping round.
+- **The delta brief.** The brief that a resumed session gets has no field for a seat, a count or a verdict. The user's decisions go in it as constraints. The facts that those decisions lean on stay open to objection.
+- **The exit.** The exit hands over the items that are still open, as the procedure carries them. Where such items remain, it also gives each advisor's raw-answer pointer, the answer files and the session id, so that the user can open the raw answers when they need them. The hand-over and the exit do not show the raw answers themselves. The consult claims that this panel raised no new grounded objection to the current draft in this material only when it stopped. When the user ends it earlier, the exit says that the consult ended before a stopping round.
 
-The Lean block holds within one round. Across rounds, the procedure in the SKILL.md holds the rest: an item routed to the user that the user has not settled goes into every later hand-over and into the exit.
+The Lean block holds within one round, and it takes what spans rounds as parameters. Across rounds, the procedure in the SKILL.md holds the rest. An item routed to the user that the user has not settled goes into every later hand-over, into the open points of each delta brief and into the exit. A point that the user decided is not sent to the advisors again. When an advisor raises a decided point again, the facilitator drops it, unless it comes with new evidence. Then it goes back to the user.
 
 The guarantees are proved in `lean/Delphi/Theorems.lean`. These proofs are made against a module that is generated from the block in the SKILL.md. To check them, install elan, which reads its toolchain from `lean/lean-toolchain`:
 
 ```bash
 curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh   # installs elan (lean + lake)
+source "$HOME/.elan/env"   # puts lean and lake on PATH in this shell
 delphi/lean/extract.sh   # writes lean/.contract/ from SKILL.md, then lake build --wfail
 ```
 

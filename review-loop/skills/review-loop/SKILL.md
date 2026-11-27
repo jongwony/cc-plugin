@@ -467,11 +467,11 @@ grounds none and is dropped on that basis. The repair is the least text that res
 that consequence and loses no other obligation — an existing carrier before a new one,
 a removal before an addition — and that reading is a recommendation, not the
 disposition. Before classifying a repair that closes one path, read it across the paths
-under the same cause: where it adds a case, conjunct or guard to a definition so that a
-judgment holds on that path, and the same judgment must hold on every path reaching the
-same end, the repair is that judgment placed once where every path passes, with the cases
-standing in for it removed — or, its alternative, the declared input domain or premises
-narrowed so the cause falls outside the contract. Unless a citable ground already settles
+under the same cause: where it adds a case, conjunct or guard to a definition or a rule
+so that a judgment holds on that path, and the same judgment must hold on every path
+reaching the same end, the repair is that judgment placed once where every path passes,
+with the cases standing in for it removed — or, its alternative, the declared input
+domain or premises narrowed so the cause falls outside the contract. Unless a citable ground already settles
 where that judgment goes, either way it is a plan-level Judgment item, not Mechanical.
 
 **Recurrence:** identify the same defect by clause/invariant, not phrasing or line.
@@ -563,7 +563,8 @@ so far, so the driving session records rather than re-derives it.
 
 ### Phase 5 — Re-review and stop on evidence
 
-When the processed round has not reached an end below, refresh changed files and
+When the processed round has not reached an end below, a settled repair still unwritten
+goes to Phase 4 first; then refresh changed files and
 design intent and obtain a **full** re-review from each source in force, including
 after dispositions that landed no edit. For PR scope, use the re-review pointer supplied
 by [PR scope](references/pr-scope.md). Where the ledger convention puts a repair's
@@ -606,14 +607,15 @@ and sweep side effects. Carry the loop's check artifact, evidence, unexercised l
 and unavailable-check reasons with that repair's Relay/Gated/Decisions entry; keep this loop-side
 evidence distinct from the source-reported `Exercised` line. Assign exactly one
 Relay/Gated/Decisions home: Gated where a gate asked the user, epistemic risk gates
-included; Decisions where `handling` recorded one. Record
-the fit pass as its own entry, with adaptation, any retroactive rejecting verdict, and
+included; Decisions where `handling` recorded one, a later Phase 4 gate's answer
+included. Record the fit pass as its own entry, with adaptation, any retroactive rejecting verdict, and
 the resulting artifact state and disposition. Preserve write discrepancies and their
 reconciliation; carried reasons are records, while subsequent reviews detect findings
 fresh.
 
-At every exit, present the exit as `exitAs` reads it, the open decisions heaviest
-consequence first with those that block the merge marked — each decision's consequence and
+At every exit, present the exit as `exitAs` reads it with the reviewed head (or
+working-tree state) and the sources in force, the open decisions heaviest consequence
+first with those that block the merge marked — each decision's consequence and
 merge-blocking flag judged afresh on the final reviewed artifact — and the accumulated
 dispositions and residual, including standing source limits. Read [exit handover](references/exit-handover.md)
 before offering durable recording.

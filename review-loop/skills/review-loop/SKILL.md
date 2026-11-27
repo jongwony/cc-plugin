@@ -202,8 +202,9 @@ inductive Handling
       decision -/
   | apply
   /-- a decision for the user, recorded with its consequence and whether it blocks the merge, and
-      left open and unrepaired — not yet a disposition; the loop neither picks a side nor repeats
-      the fix, and goes on with what is settled. The user's answer, a scope answer included, sets
+      left open and unrepaired — not yet a disposition; no further repair is written and one
+      already landed stays as it is; the loop neither picks a side nor repeats the fix, and goes
+      on with what is settled. The user's answer, a scope answer included, sets
       the disposition recorded. -/
   | decide
 
@@ -613,8 +614,8 @@ the resulting artifact state and disposition. Preserve write discrepancies and t
 reconciliation; carried reasons are records, while subsequent reviews detect findings
 fresh.
 
-At every exit, present the exit as `exitAs` reads it with the reviewed head (or
-working-tree state) and the sources in force, the open decisions heaviest consequence
+At every exit, present the exit as `exitAs` reads it with, where a review ran, the reviewed
+head (or working-tree state) and the sources in force, the open decisions heaviest consequence
 first with those that block the merge marked — each decision's consequence and
 merge-blocking flag judged afresh on the final reviewed artifact — and the accumulated
 dispositions and residual, including standing source limits. Read [exit handover](references/exit-handover.md)

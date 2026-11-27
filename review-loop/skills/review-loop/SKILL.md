@@ -280,14 +280,14 @@ axiom Clear : Session → Source → Prop
     current reviewed artifact, whether the round's first review or a re-review. -/
 axiom FullyReviewed : Session → Source → Prop
 
-/-- **Your reading**: the latest round, on the current reviewed artifact, left no surviving finding
-    whose `handling` is `Handling.apply` — every survivor relayed, or left open as a decision — and
-    no decision the user answered with a repair whose shape the answer or a cited ground settles
-    still awaits that repair; an answer that leaves the shape open keeps the finding a decision. -/
+/-- **Your reading**: the latest round, on the current reviewed artifact, left no repair that is
+    settled and writable now unwritten, whether `handling` gave it `Handling.apply` or a user's
+    answer settled it. A repair whose shape is still open, or whose sites wait on an open
+    decision, is not writable now and stays with that decision. -/
 axiom NoSettledRepair : Session → Prop
 
-/-- **Your reading**: every surfaced finding is dispositioned, or recorded as a decision
-    (`Handling.decide`) still awaiting the user's answer. -/
+/-- **Your reading**: every surfaced finding is dispositioned or left open as a decision
+    (`Handling.decide`). -/
 axiom AllHandled : Session → Prop
 
 /-- What every end the loop reaches on its own shares, on the current reviewed artifact: no

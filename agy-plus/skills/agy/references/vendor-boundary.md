@@ -23,9 +23,9 @@ media file, and before writing the prompt for such a run.
   itself.
 - None covers it → Claude gathers the service's context itself (its own
   connectors, files, downloads) and hands it over for `agy` to check.
-- A Google-service run is read-only: pass `-M plan` unless writing is the
-  task. A send, edit, or delete on a Google service goes to `agy` only with the
-  user's go-ahead.
+- A Google-service run is read-only unless writing is the task, and its
+  prompt declares a reading role. A send, edit, or delete on a Google service
+  goes to `agy` only with the user's go-ahead.
 
 ## How Claude hands it over
 

@@ -10,32 +10,36 @@ The skill is the procedure for one invocation. The user invokes it. A rule about
 flowchart LR
   B[One read-only brief] --> P{{Codex and Antigravity, in parallel}}
   P --> R[Read each answer whole]
-  R -->|empty, or answers an old draft| P
+  R -->|that seat only: empty, incomplete, or an old draft| P
   R --> V[Verify the grounds against primary sources]
   V --> D{Dispose}
   D -->|verified| A[Apply to the draft]
   D -->|refuted| X[Drop]
   D -->|user-held value, open split, unverifiable| U[To the user]
   A --> H[Revised draft and items, to the user]
+  X --> H
   U --> H
-  H --> S{New grounded objection?}
-  S -->|yes| Q[Delta brief to the same sessions] --> P
-  S -->|no| E[Exit: open items, and the claim this panel found nothing further]
+  H --> S{Complete round on the current draft, no new grounded objection?}
+  S -->|no| Q[Delta brief to the same sessions] --> P
+  S -->|yes| E[Exit: open items, and the claim this panel found nothing further]
 ```
 
 ## What the contract fixes
 
 The Lean block in `skills/delphi/SKILL.md` fixes these points:
 
-- **An answer.** A seat has answered when its answer is not empty and is on the current draft. A round in which a seat has not answered is incomplete, and an incomplete round never stops the consult.
-- **Agreement.** Agreement between the two advisors is provenance and not evidence. The place where an objection goes does not depend on which seats raised it. A verified objection from one seat can change the draft.
+- **An answer.** A seat has answered when its answer is not empty and is on the current draft. A round in which a seat has not answered is incomplete, and an incomplete round never stops the consult. A round on an earlier draft never stops it either.
+- **Agreement.** Agreement between the two advisors is provenance and not evidence. The place where an objection goes does not depend on which seats the objection lists. A verified objection from one seat can change the draft. An objection that no seat raised, such as a shared premise that failed verification, is recorded as the facilitator's.
 - **The user's items.** A value that only the user holds always goes to the user. A split that verification leaves open also goes to the user, and so does a ground that cannot be verified. The facilitator does not settle these items.
-- **The delta brief.** The brief that a resumed session gets has no field for a seat, a count or a verdict. The user's decisions go in it as constraints. The facts that those decisions lean on stay open to objection.
-- **The exit.** The consult can claim only that this panel found no further objection in this material.
+- **The delta brief.** The brief that a resumed session gets has no field for a seat, a count or a verdict. The user's decisions go in it as constraints, and a point that the user decided is not sent again as open. The facts that those decisions lean on stay open to objection.
+- **The exit.** The exit hands over the routed items that the user has not decided. The consult claims that this panel found no further objection in this material only when it stopped. When the user ends it earlier, the exit says that the consult ended before a stopping round.
 
-The guarantees are proved in `lean/Delphi/Theorems.lean`. These proofs are made against a module that is generated from the block in the SKILL.md. To check them, use elan, which reads its toolchain from `lean/lean-toolchain`:
+The Lean block holds within one round. Across rounds, the procedure in the SKILL.md holds the rest: an item routed to the user that the user has not settled goes into every later hand-over and into the exit.
+
+The guarantees are proved in `lean/Delphi/Theorems.lean`. These proofs are made against a module that is generated from the block in the SKILL.md. To check them, install elan, which reads its toolchain from `lean/lean-toolchain`:
 
 ```bash
+curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh   # installs elan (lean + lake)
 delphi/lean/extract.sh   # writes lean/.contract/ from SKILL.md, then lake build --wfail
 ```
 
@@ -53,7 +57,7 @@ The procedure keeps three properties of the classical method: separate first ans
 
 - **Shared errors.** Models from the same provider make more correlated errors. Models from different providers also share errors. On one benchmark, about 60% of the cases in which both models were wrong had the same wrong answer ([Kim et al., ICML 2025](https://icml.cc/virtual/2025/poster/44225)). This is why a shared premise is checked at its source.
 - **Feedback on agreement.** In five human Delphi studies with 628 experts, items reported at 75% agreement or more gained agreement in the next round. Items reported below 75% lost agreement ([feedback study](https://www.sciencedirect.com/science/article/abs/pii/S004016252031310X)). This is why the brief carries no agreement counts.
-- **Repetition and speaker labels.** In six open-weight models, a wrong answer that was presented again without a speaker turned 66.5% of the initially correct answers to wrong. A plain re-ask turned 10.3% ([preprint, 2026](https://arxiv.org/abs/2607.05545)). Speaker labels also caused identity bias, which became smaller when the labels were removed ([ACL 2026, appendix J](https://aclanthology.org/2026.acl-long.650.pdf)). This is why the brief carries no attribution and no repeated verdicts.
+- **Repetition and speaker labels.** In six open-weight models, a wrong answer that was presented again without a speaker turned 66.5% of the initially correct answers to wrong. A plain re-ask turned 10.3% ([preprint, 2026](https://arxiv.org/abs/2607.05545)). Speaker labels also caused identity bias, which became smaller when the labels were removed ([ACL 2026, Table 1](https://aclanthology.org/2026.acl-long.650.pdf)). This is why the brief carries no attribution and no repeated verdicts.
 
 ## Why it stops where it does
 

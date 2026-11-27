@@ -1,6 +1,6 @@
 ---
 name: delphi
-description: "Delphi-style consult just before a consequential commitment — a direction, a design, a policy: one identical read-only brief goes to two advisors from other vendors, the facilitator verifies the grounds their answers lean on, applies what verification settles, hands splits and user-held values to the user, then resumes the same advisor sessions with only what changed until no new grounded objection appears. User-invoked via /delphi."
+description: "User-invoked via /delphi. A Delphi-style consult on a draft decision: two advisors from other vendors answer one read-only brief, the facilitator verifies the grounds their answers lean on and applies what verification settles, the user decides user-held values and open splits, and the same advisor sessions are resumed with only what changed until a round on the current draft brings no new grounded objection."
 ---
 
 # Delphi
@@ -20,12 +20,14 @@ Each advisor runs through its own plugin; that plugin and the delegation rule in
 
 - **Brief.** One brief, identical for both seats, written as a consult per stint `references/prompting.md`: the reviewing role and that it changes no file, the decision, the settled constraints, the current draft, entry points to the evidence, and what would change the answer. Every path the brief names is one each advisor can read.
 - **Dispatch.** Both seats run in parallel. Record each seat's session id; every later round resumes that session.
-- **Read.** Read each answer whole, in its own words. A seat that has not `answered` (Lean block) — its run returned nothing, or it answered an earlier draft — is run again on the current draft before the round is processed.
-- **Verify.** Check each objection's factual grounds against its primary source, the ones both answers lean on included: two answers agreeing are two claims, not a check.
+- **Read.** Read each answer whole, in its own words. A seat that has not `answered` (Lean block), or whose run its plugin reports incomplete, is run again on the current draft before the round is processed; a seat that fails again goes to the user.
+- **Verify.** Check the factual grounds each answer leans on — its objections' and its endorsement's — against their primary sources: two answers agreeing are two claims, not a check. A shared premise that fails enters the round as an objection no seat raised.
 - **Dispose.** Each objection goes where `dispose` sends it, with its `provenance` recorded beside it.
-- **Hand over.** Present the revised draft, what was applied and on what ground, and each item routed to the user with its reason; then stop for the user's answer. The user's decisions become the next round's `Decision`s.
-- **Delta round.** Resume the same two sessions with a `DeltaBrief`. Its free text names no seat and counts no agreement either — no "you both", no tally, no repeated verdict.
-- **Stop.** End where `stop` holds, or where the user ends it, and hand over the `exit`.
+- **Hand over.** Present the revised draft, what was applied and on what ground, and each item routed to the user with its reason and what verification found of its grounds; where an item is routed to the user, stop for their answer. The user's decisions become the next round's `Decision`s.
+- **Stop.** End where `stop` holds on the current draft — an applied objection or a user decision that revises the draft makes a new current draft — or where the user ends it, and hand over the `exit`.
+- **Delta round.** Where `stop` does not hold, resume the same two sessions with a `DeltaBrief`. Its free text names no seat and counts no agreement either — no "you both", no tally, no repeated verdict.
+
+The Lean block holds within one round. Across rounds the prose holds: an item routed to the user that no answer of theirs has settled is carried into every later hand over and into the `exit`, and a decided point is not sent to the seats again.
 
 ## Lean
 
@@ -55,7 +57,7 @@ inductive Seat
   deriving BEq, DecidableEq -- elab: lets provenance test membership
 
 /-- What an advisor returned for one round: the draft it answered, by its round number, and its
-    text as returned. -/
+    text as returned by a run its plugin reports complete. -/
 structure Answer where
   draft : Nat
   text  : String
@@ -66,11 +68,13 @@ def answered (current : Nat) : Option Answer → Bool
   | some a => a.draft == current && !a.text.all Char.isWhitespace
   | none   => false
 
-/-- An objection's content, apart from who raised it. Every judgment below reads only this. -/
+/-- An objection's content, apart from who raised it. The judgments below take a point, never
+    the seats an objection lists. -/
 structure Point where
   text : String
 
-/-- An objection as raised in a round: its content and the seats that raised it. -/
+/-- An objection as raised in a round: its content and the seats that raised it — none for one
+    the facilitator raised, such as a shared premise that failed verification. -/
 structure Objection where
   point   : Point
   sources : List Seat
@@ -79,9 +83,12 @@ structure Objection where
 inductive Provenance
   | both
   | one
+  | facilitator
 
 def provenance (o : Objection) : Provenance :=
-  if o.sources.contains .first && o.sources.contains .second then .both else .one
+  if o.sources.contains .first && o.sources.contains .second then .both
+  else if o.sources.isEmpty then .facilitator
+  else .one
 
 /-- What verification against the primary source found for an objection's factual grounds. -/
 inductive Verdict
@@ -108,6 +115,9 @@ axiom bears : Session → Point → Bool
 /-- **Your judgment**: the point was not raised and disposed of in an earlier round, or it was and
     now comes with new evidence or a failure condition it lacked then. -/
 axiom isNew : Session → Point → Bool
+
+/-- **Your judgment**: a turn of the user's settled the point. -/
+axiom decided : Session → Point → Bool
 
 /-- Why an item goes to the user. -/
 inductive Reason
@@ -155,10 +165,11 @@ noncomputable def keepsOpen (s : Session) (o : Objection) : Bool :=
     (match verified s o.point with | .holds => true | _ => false) &&
     bears s o.point
 
-/-- The consult stops on a complete round that raised nothing that keeps it open. An incomplete
-    round never stops it. -/
-noncomputable def stop (s : Session) (r : Round) : Bool :=
-  r.complete && (r.objections.filter (keepsOpen s)).isEmpty
+/-- `current`: the number of the draft now standing. The consult stops on a complete round on
+    that draft that raised nothing that keeps it open. An incomplete round, or a round on an
+    earlier draft, never stops it. -/
+noncomputable def stop (s : Session) (current : Nat) (r : Round) : Bool :=
+  r.draft == current && r.complete && (r.objections.filter (keepsOpen s)).isEmpty
 
 /-- A user decision carried into the next round: the choice, as a constraint. The facts it leans
     on are not part of it and stay open to objection. -/
@@ -166,7 +177,7 @@ structure Decision where
   choice : String
 
 /-- What a resumed session receives. It has no field for a seat, a count, or a verdict: points
-    travel without their provenance, so the brief cannot say who raised what or how many agreed. -/
+    travel without their provenance. What its free text may say is the Delta round step's. -/
 structure DeltaBrief where
   changedWording : String
   newEvidence    : List String
@@ -177,17 +188,22 @@ noncomputable def delta (s : Session) (r : Round) (changedWording : String) (new
     (decisions : List Decision) : DeltaBrief :=
   { changedWording, newEvidence, decisions,
     openPoints := (r.objections.filter fun o =>
-      match dispose s o with | .toUser _ => true | _ => false).map (·.point) }
+      !decided s o.point &&
+        match dispose s o with | .toUser _ => true | _ => false).map (·.point) }
 
 /-- What the exit hands over. -/
 structure Exit where
   toUser : List (Point × Reason)
   claim  : String
 
-noncomputable def exit (s : Session) (r : Round) : Exit :=
+/-- The panel's claim is made only where the consult stopped; an exit the user called earlier
+    says so instead. -/
+noncomputable def exit (s : Session) (current : Nat) (r : Round) : Exit :=
   { toUser := r.objections.filterMap fun o =>
-      match dispose s o with | .toUser why => some (o.point, why) | _ => none,
-    claim := "this panel found no further objection in this material" }
+      if decided s o.point then none else
+        match dispose s o with | .toUser why => some (o.point, why) | _ => none,
+    claim := if stop s current r then "this panel found no further objection in this material"
+      else "the consult ended before a round on the current draft stopped it" }
 
 end Delphi
 ```

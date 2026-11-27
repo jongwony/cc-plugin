@@ -25,7 +25,7 @@ Load this reference when a delegated task needs capabilities beyond the core
   second, plus its audio track; no shell or `ffmpeg` is involved.
 - Audio and image files through `read_file` are unverified.
 - Pass the file's absolute path in the prompt and `--add-dir "$(dirname <file>)"`
-  when it lies outside `-C DIR`; pass `-M plan` so the run only reads.
+  when it lies outside `-C DIR`.
 
 ## Structured Output & Print Controls
 

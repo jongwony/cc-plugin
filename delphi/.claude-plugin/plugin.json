@@ -1,7 +1,7 @@
 {
   "name": "delphi",
   "description": "User-invoked via /delphi. Delphi-style consult on a draft decision: two other-vendor advisors (Codex, Antigravity) answer one brief, the facilitator verifies their grounds, splits and user-held values go to the user, and the same sessions are resumed with only what changed",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "author": {
     "name": "Jongwon Choi",
     "url": "https://github.com/jongwony"

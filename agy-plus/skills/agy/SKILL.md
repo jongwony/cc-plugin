@@ -27,8 +27,8 @@ Read `references/run-brief.md` before writing the prompt file: the role every pr
      - **Parallel multi-model runs**: when a decision benefits from independent perspectives or cross-checking, launch parallel subagent calls (one per model) in a single turn with the same prompt file and different `-m`.
 2. **Choose execution mode.**
    - Default is `--mode auto` (set by `agy-run.sh`). Because `auto` can edit files and run tools, the prompt's declared role is what keeps a reviewing/read-only run from modifying the tree — state the role explicitly.
-   - Where an account lacks `auto`, `agy` warns on stderr (`--mode auto is not available for this account; continuing in the default mode`) and its default mode still edits files; the declared role or `-M plan` stays the guard.
-   - Pass `-M plan` when you want `agy` enforced in read-only planning mode, or `-M accept-edits` when only file edits should be auto-accepted.
+   - Where an account lacks `auto`, `agy` warns on stderr (`--mode auto is not available for this account; continuing in the default mode`) and its default mode still edits files; the declared role stays the guard.
+   - Pass `-M accept-edits` when only file edits should be auto-accepted.
    - Pass `-s` (`--sandbox`) when terminal restrictions should be enforced inside `agy`.
 3. **Write the prompt** per `references/run-brief.md` to `<scratchpad>/agy_prompt_<suffix>.txt`.
 4. **Delegate execution to a Bash subagent** — never run `agy-run.sh` directly in the main session. This keeps raw JSON, tool logs, and verbose output out of the main context. Give the subagent:
@@ -53,7 +53,6 @@ Each command below runs **inside a Bash subagent**, which reads the raw JSON out
 Base patterns:
 - Default (`auto` mode, JSON output) — `${CLAUDE_PLUGIN_ROOT}/scripts/agy-run.sh -C <DIR> <scratchpad>/agy_prompt_<suffix>.txt`
 - Explicit model & effort — `${CLAUDE_PLUGIN_ROOT}/scripts/agy-run.sh -m <FAMILY> -r <EFFORT> -C <DIR> <scratchpad>/agy_prompt_<suffix>.txt` (e.g., `-m gemini-4-neon -r xhigh`)
-- Read-only plan mode — `${CLAUDE_PLUGIN_ROOT}/scripts/agy-run.sh -M plan -C <DIR> <scratchpad>/agy_prompt_<suffix>.txt`
 - Resume a session — `${CLAUDE_PLUGIN_ROOT}/scripts/agy-run.sh -S <SESSION_ID> [-m <SAME_MODEL>] -C <SAME_DIR> <scratchpad>/agy_prompt_<suffix>.txt`
 
 Modifiers (added to any base pattern):

@@ -20,9 +20,9 @@ prompt owes.
 - Every prompt states the role `agy` acts in, matching what the request asks for.
   A request for a judgment or review names a **reviewing** role: `agy` evaluates
   and reports without editing files.
-- Because `agy-run.sh` defaults to `--mode auto`, the declared role (or passing
-  `-M plan`) is what prevents a reviewing run from modifying the tree. State the
-  role explicitly rather than leaving it implied.
+- Because `agy-run.sh` defaults to `--mode auto`, the declared role is what
+  prevents a reviewing run from modifying the tree. State the role explicitly
+  rather than leaving it implied.
 
 ## Carry the decision when the run judges one
 

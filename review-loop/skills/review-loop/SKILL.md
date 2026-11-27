@@ -299,23 +299,31 @@ def Converged (s : Session) : Prop :=
   | some d => AllDispositioned s ∧ ¬ RecurrencePending s ∧ ¬ EditedSinceReview s ∧ GoalRead s ∧
       ((∀ x ∈ d.toList, Clear s x) ∨ RootResolved s)
 
+/-- **Your reading**: this source's usable return in the latest round is a full review of the
+    current reviewed artifact, whether the round's first review or a re-review. -/
+axiom FullyReviewed : Session → Source → Prop
+
+/-- **Your reading**: every surfaced finding is dispositioned, or recorded as a decision
+    (`Handling.decide`) still awaiting the user's answer. -/
+axiom AllHandled : Session → Prop
+
 /-- **Your reading**: the latest round, on the current reviewed artifact, left no surviving finding
-    whose `handling` is `Handling.apply` — every survivor relayed, or carried as a decision. -/
+    whose `handling` is `Handling.apply` — every survivor relayed, or carried as a decision — and
+    no decision the user answered with a repair still awaits that repair. -/
 axiom NoSettledRepair : Session → Prop
 
 /-- The loop has done what review can settle: a completed round on the current reviewed artifact,
-    with a full re-review from every source in force, added no further settled repair. What is
+    with a full review from every source in force, added no further settled repair. What is
     left is the user's to decide; every source converging is not required. -/
 def Settled (s : Session) : Prop :=
   match inForce s with
   | none   => False
-  | some d => (∀ x ∈ d.toList, FullyReReviewed s x) ∧ AllDispositioned s ∧ ¬ RecurrencePending s ∧
+  | some d => (∀ x ∈ d.toList, FullyReviewed s x) ∧ AllHandled s ∧ ¬ RecurrencePending s ∧
       ¬ EditedSinceReview s ∧ GoalRead s ∧ NoSettledRepair s
 
 inductive Exit
   | converged
-  /-- not convergence: the loop ends with its decisions handed to the user, heaviest consequence
-      first, each marked whether it blocks the merge — which the caller reads before merging -/
+  /-- not convergence: the loop ends with its decisions handed to the user -/
   | settled
   /-- reported as non-convergence, with the latest reviewed artifact, later edits, unfinished
       repairs, residuals, and retained decisions -/
@@ -419,8 +427,8 @@ new findings survive verification, consult across that split before reading the 
 the source still holding findings what in the artifact would turn its verdict to
 approve, and give those findings to the converged source to adjudicate, withholding the
 loop's dispositions from both. A consult is not a review. Its answers are material that
-Phase 2 and this reading weigh, never a verdict or a vote for either side. A split that
-survives the consult and verification is a decision, not a side the loop picks.
+Phase 2 and this reading weigh, never a verdict or a vote for either side. A split whose
+direction the consult and verification leave open is a decision, not a side the loop picks.
 
 Read the verified set for a shared mechanism, competing explanations, unexplained
 findings, and a falsifier. A source direction is one candidate, reconsidered after
@@ -552,7 +560,9 @@ so far, so the driving session records rather than re-derives it.
    commits to the settled landing for PR scope and pushes where that landing has a
    remote, then returns.
 6. After a judgment returned to Phase 3 is settled, resume the pending step in the
-   same apply pass with that answer.
+   same apply pass with that answer. Where Phase 3 records it as a decision instead, its
+   dependent repair is carried unrepaired with it, and the pending step resumes on the
+   sites that do not depend on it.
 
 ### Phase 5 — Re-review and stop on evidence
 
@@ -595,7 +605,7 @@ Landing: repair destination (PR only)
 
 Each verified finding carries base provenance; an applied fix also carries its predicate
 and sweep side effects. Carry the loop's check artifact, evidence, unexercised limits,
-and unavailable-check reasons with that repair's Relay/Gated entry; keep this loop-side
+and unavailable-check reasons with that repair's Relay/Gated/Decisions entry; keep this loop-side
 evidence distinct from the source-reported `Exercised` line. Assign exactly one
 Relay/Gated/Decisions home: Gated where a gate asked the user, epistemic risk gates
 included; Decisions where `handling` recorded one. Record

@@ -9,6 +9,8 @@ with its appropriate home; the user may redirect or decline the offer.
   declares a home, say so.
 - **Unsettled conflicts:** carry both governing surfaces, their disagreement, and
   the authority relation or its absence. Preserve the unsettled status.
+- **Open decisions:** carry each with its consequence and whether it blocks the merge,
+  heaviest consequence first. Preserve the open status.
 - **Successor work:** provide each handed-over finding's location and verifying
   evidence as entry points into the work, with its scope/disposition basis.
 - **Directions beyond this unit:** preserve the proposal and falsifier, marked

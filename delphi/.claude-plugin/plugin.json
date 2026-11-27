@@ -1,0 +1,9 @@
+{
+  "name": "delphi",
+  "description": "Delphi-style consult before a consequential commitment: two other-vendor advisors (Codex, Antigravity) answer one brief, the facilitator verifies their grounds, splits and user-held values go to the user, and the same sessions are resumed with only what changed (/delphi)",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jongwon Choi",
+    "url": "https://github.com/jongwony"
+  }
+}

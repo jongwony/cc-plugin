@@ -283,13 +283,19 @@ axiom SharedCause : Session → Prop
 /-- **Your reading**: every root on the trace maps to its resolution. -/
 axiom RootsResolved : Session → Prop
 
-/-- Phase 3's root-resolved end: the loop ends as it stands, the round's findings go to the user
-    unrepaired with their dispositions, and no repair is chosen or applied. -/
+/-- **Your reading**: the latest round, on the current reviewed artifact, left no surviving finding
+    whose `handling` is `Handling.apply` — every survivor relayed, or carried as a decision — and
+    no decision the user answered with a repair still awaits that repair. -/
+axiom NoSettledRepair : Session → Prop
+
+/-- Phase 3's root-resolved end, reached only once no finding's `handling` is `Handling.apply`:
+    the loop ends as it stands, the round's relayed and decided findings go to the user
+    unrepaired with their dispositions, and no further repair is chosen or applied. -/
 def RootResolved (s : Session) : Prop :=
   match inForce s with
   | none   => False
   | some d => (∀ x ∈ d.toList, FullyReReviewed s x) ∧
-      ¬ SharedCause s ∧ RootsResolved s ∧ ¬ RecurrencePending s
+      ¬ SharedCause s ∧ RootsResolved s ∧ ¬ RecurrencePending s ∧ NoSettledRepair s
 
 /-- Convergence holds only of the current reviewed artifact, and only through reviews every source
     in force owes; before any designation exists there is nothing to converge on. -/
@@ -306,11 +312,6 @@ axiom FullyReviewed : Session → Source → Prop
 /-- **Your reading**: every surfaced finding is dispositioned, or recorded as a decision
     (`Handling.decide`) still awaiting the user's answer. -/
 axiom AllHandled : Session → Prop
-
-/-- **Your reading**: the latest round, on the current reviewed artifact, left no surviving finding
-    whose `handling` is `Handling.apply` — every survivor relayed, or carried as a decision — and
-    no decision the user answered with a repair still awaits that repair. -/
-axiom NoSettledRepair : Session → Prop
 
 /-- The loop has done what review can settle: a completed round on the current reviewed artifact,
     with a full review from every source in force, added no further settled repair. What is
@@ -346,7 +347,8 @@ nothing, what waits on the gate does not proceed, and the user's answer resumes 
 where it held. A decision (`Handling.decide`) is not a gate: it is recorded, the round goes
 on with what is settled, and the exit hands it over; an answer that arrives earlier is
 carried out on the next apply pass. A decision takes the user's own answer, carried in their
-words, not the starting session's, unless its repair is mechanical or self-evident.
+words, not the starting session's, unless its repair is mechanical or self-evident and lies
+within this change's scope.
 
 ### Phase 0 — Set the invocation and its ground
 
@@ -447,9 +449,10 @@ trace: a previously matching site missed by a sweep calls for completing the
 enumeration; an instance outside that predicate calls for reconsidering the abstraction.
 A later-created or newly matching site does not falsify an earlier sweep.
 
-Where `RootResolved` holds on that reading, the loop ends there.
-
 `handling` settles each surviving finding.
+
+Where `RootResolved` holds on that reading once `handling` has settled them, the loop ends
+there.
 
 Reopen only a genuinely live competing judgment. Packaging an identical mechanical fix
 does not reopen disposition.

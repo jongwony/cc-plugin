@@ -19,12 +19,12 @@ Each advisor runs through its own plugin; that plugin and the delegation rule in
 ## Procedure
 
 - **Brief.** One brief, identical for both seats, written as a consult per stint `references/prompting.md`: the reviewing role and that it changes no file, the decision, the settled constraints, the current draft, entry points to the evidence, and what would change the answer. Every path the brief names is one each advisor can read.
-- **Dispatch.** Both seats run in parallel. Record each seat's session id; every later round resumes that session.
+- **Dispatch.** Both seats run in parallel. Record each seat's session id and the file its answers are kept in — saved by the facilitator where the seat's plugin returns the answer as text; every later round resumes that session.
 - **Read.** Read each answer whole, in its own words. A seat that has not `answered` (Lean block), or whose run its plugin reports incomplete, is run again on the current draft before the round is processed; a seat that fails again goes to the user.
 - **Verify.** Check the factual grounds each answer leans on — its objections' and its endorsement's — against their primary sources: two answers agreeing are two claims, not a check. A shared premise that fails enters the round as an objection no seat raised.
 - **Dispose.** Each objection goes where `dispose` sends it, with its `provenance` recorded beside it.
-- **Hand over.** Present the revised draft, what was applied and on what ground, and each item routed to the user with its reason and what verification found of its grounds; where an item is routed to the user, stop for their answer. The user's decisions become the next round's `Decision`s.
-- **Stop.** End where `stop` holds on the current draft — an applied objection or a user decision that revises the draft makes a new current draft — or where the user ends it, and hand over the `exit`.
+- **Hand over.** Present the revised draft, what was applied and on what ground, and each item routed to the user with its reason and what verification found of its grounds — the items, not the seats' raw answers; where an item is routed to the user, stop for their answer. The user's decisions become the next round's `Decision`s.
+- **Stop.** End where `stop` holds on the current draft — an applied objection or a user decision that revises the draft makes a new current draft — or where the user ends it, and hand over the `exit`. Where it leaves items the user has not decided, it also gives each seat's raw-answer pointer — its answer file and session id — for the user to open on demand.
 - **Delta round.** Where `stop` does not hold, resume the same two sessions with a `DeltaBrief`. Its free text names no seat and counts no agreement either — no "you both", no tally, no repeated verdict.
 
 The Lean block holds within one round. Across rounds the prose holds: an item routed to the user that no answer of theirs has settled is carried into every later hand over and into the `exit`, and a decided point is not sent to the seats again.
@@ -191,17 +191,25 @@ noncomputable def delta (s : Session) (r : Round) (changedWording : String) (new
       !decided s o.point &&
         match dispose s o with | .toUser _ => true | _ => false).map (·.point) }
 
-/-- What the exit hands over. -/
+/-- What the exit hands over: the undecided items, each seat's raw-answer pointer where any item
+    remains, and the claim. -/
 structure Exit where
   toUser : List (Point × Reason)
+  raw    : List (Seat × String)
   claim  : String
 
-/-- The panel's claim is made only where the consult stopped; an exit the user called earlier
-    says so instead. -/
-noncomputable def exit (s : Session) (current : Nat) (r : Round) : Exit :=
-  { toUser := r.objections.filterMap fun o =>
-      if decided s o.point then none else
-        match dispose s o with | .toUser why => some (o.point, why) | _ => none,
+/-- The items routed to the user in a round that the user has not decided. -/
+noncomputable def undecided (s : Session) (r : Round) : List (Point × Reason) :=
+  r.objections.filterMap fun o =>
+    if decided s o.point then none else
+      match dispose s o with | .toUser why => some (o.point, why) | _ => none
+
+/-- `rawAt`: where each seat's raw answers are kept — its answer file and session id. The
+    panel's claim is made only where the consult stopped; an exit the user called earlier says so
+    instead. -/
+noncomputable def exit (s : Session) (current : Nat) (r : Round) (rawAt : Seat → String) : Exit :=
+  { toUser := undecided s r,
+    raw := if (undecided s r).isEmpty then [] else [(.first, rawAt .first), (.second, rawAt .second)],
     claim := if stop s current r then "this panel found no further objection in this material"
       else "the consult ended before a round on the current draft stopped it" }
 

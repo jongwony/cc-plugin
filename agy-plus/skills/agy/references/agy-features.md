@@ -19,6 +19,14 @@ Load this reference when a delegated task needs capabilities beyond the core
 - `agy-run.sh` resolves existing relative `--add-dir` paths to absolute paths
   before switching into `-C DIR`.
 
+## Local Media
+
+- `read_file` on a local video file hands it to the model as frames, one per
+  second, plus its audio track; no shell or `ffmpeg` is involved.
+- Audio and image files through `read_file` are unverified.
+- Pass the file's absolute path in the prompt and `--add-dir "$(dirname <file>)"`
+  when it lies outside `-C DIR`; pass `-M plan` so the run only reads.
+
 ## Structured Output & Print Controls
 
 - `--json-schema <SCHEMA_OR_PATH>`: enforces a JSON schema on the final result

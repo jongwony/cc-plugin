@@ -9,4 +9,4 @@
   - any other E2E check — a smoke test of a plugin or skill after install, generation examples for dogfooding → Codex, wherever it can reach the target, with its model, service tier and effort all taken from the same run-brief.md section; the first bullet's `high` default does not govern this case either;
   - a single question sent to a person → no cross-model check;
   - prose cleanup, or drafting a message for a person → Gemini on `gemini-4-argon`;
-  - video or other media understanding → the Gemini API.
+  - video or other media understanding → Gemini: a local file (a URL Claude downloads first) → `agy` (agy-plus skill `skills/agy/references/vendor-boundary.md`); a URL without download, fps / clip control, or a timestamped transcript → the Gemini API (`google:video-understanding`), in the cloud.

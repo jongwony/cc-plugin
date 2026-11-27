@@ -1,14 +1,16 @@
 ---
 name: agy-plus
 description: |
-  This skill should be used when the user asks to "run agy", "use agy CLI", "use antigravity CLI", "delegate to agy", "agy resume", or "continue with agy". Executes tasks via Google Antigravity CLI (`agy --print`) with flexible model/effort selection, parallel delegation, and explicit session resume.
+  This skill should be used when the user asks to "run agy", "use agy CLI", "use antigravity CLI", "delegate to agy", "agy resume", or "continue with agy", and when a task touches a Google service (Gmail, Drive, Docs, Calendar, YouTube, Maps, Workspace) or asks to understand a video locally — a local file, or a YouTube URL Claude downloads first (a URL without download, or a timestamped transcript, belongs to `google:video-understanding` where it is enabled). Executes tasks via Google Antigravity CLI (`agy --print`) with flexible model/effort selection, parallel delegation, and explicit session resume.
 ---
 
 # Agy Skill Guide
 
-Prerequisite: the `agy` CLI on PATH (`curl -fsSL https://antigravity.google/cli/install.sh | bash`), signed in by running `agy` once interactively.
+Prerequisite: the `agy` CLI on PATH (`curl -fsSL https://antigravity.google/cli/install.sh | bash`), signed in by running `agy` once interactively. For media input, `yt-dlp` and `ffmpeg` (`brew install yt-dlp ffmpeg`).
 
 ## Prompt Delivery
+When the task touches a Google service or asks to understand a local media file, read `references/vendor-boundary.md` first: what goes to `agy`, and the context and file Claude prepares before handing it over.
+
 Read `references/run-brief.md` before writing the prompt file: the role every prompt declares, what a prompt judging a decision carries, and how model, effort, and parallel runs are chosen.
 
 1. Generate a short unique suffix (e.g., `a3f9`, timestamp fragment, or task keyword) for this invocation.
@@ -68,6 +70,7 @@ Modifiers (added to any base pattern):
 ## Progressive Disclosure — `agy`-Specific Features
 Keep the main workflow lean. Read `references/agy-features.md` only when the task actually needs `agy`-specific capabilities:
 - Custom agents (`--agent`, `agy agents`) or multi-directory workspaces (`--add-dir`)
+- Understanding a local media file (`read_file`)
 - Structured output (`--json-schema`), print timeouts (`--print-timeout`), disabling slash commands (`--disable-slash-commands`)
 - Remote agents (`--remote-agent`, `--project`) or session-only overrides (`--settings`)
 - Model catalog lookup (`agy models`), MCP/plugin inspection, or sandbox/auth troubleshooting

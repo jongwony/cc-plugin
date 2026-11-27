@@ -347,8 +347,8 @@ nothing, what waits on the gate does not proceed, and the user's answer resumes 
 where it held. A decision (`Handling.decide`) is not a gate: it is recorded, the round goes
 on with what is settled, and the exit hands it over; an answer that arrives earlier is
 carried out on the next apply pass. A decision takes the user's own answer, carried in their
-words, not the starting session's, unless its repair is mechanical or self-evident and lies
-within this change's scope.
+words, not the starting session's; a mechanical finding within this change's scope never
+becomes one, since `handling` applies it.
 
 ### Phase 0 — Set the invocation and its ground
 

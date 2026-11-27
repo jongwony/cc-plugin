@@ -277,9 +277,8 @@ axiom GoalRead : Session → Prop
 axiom Clear : Session → Source → Prop
 
 /-- **Your reading**: this source's usable return in the latest round is a full review of the
-    current reviewed artifact, whether the round's first review or a re-review. A full review is
-    one whose reach covered that artifact; a return its finding cap cut short is not, and goes to
-    Phase 1's question for a call ending without a usable review. -/
+    current reviewed artifact, whether the round's first review or a re-review: one whose reach
+    covered that artifact. -/
 axiom FullyReviewed : Session → Source → Prop
 
 /-- **Your reading**: the latest round, on the current reviewed artifact, left no repair that is
@@ -396,8 +395,7 @@ catches ends without a usable review, and its presentation shows the change and 
 whether to restore within the incomplete-call question, as one question settled before any
 further review call, Phase 2 verification, or apply pass.
 
-A call ending without a usable review, a return its finding cap cut short included,
-contributes no verdict and satisfies neither
+A call ending without a usable review contributes no verdict and satisfies neither
 `Converged` nor `Settled`. Show what returned and ask whether to continue this round without that
 source's review, switch source, or stop. A failure that persists makes the source
 unavailable under Phase 0 rule 1, where its designation is settled. An extraction

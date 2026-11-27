@@ -66,5 +66,13 @@ Load this reference when a delegated task needs capabilities beyond the core
   user's permission first.
 - **Auth expired / not signed in**: ask the user to run `agy` interactively in a
   terminal to complete Google Sign-In, or check `~/.gemini/antigravity-cli/settings.json`.
+- **Gemini API key (no sign-in)**: where no browser sign-in is possible, both
+  are required — `{"modelProvider": "gemini"}` merged into
+  `~/.gemini/antigravity-cli/settings.json`, and `GEMINI_API_KEY` exported in the
+  environment `agy` runs in. The key alone has no effect; `GOOGLE_API_KEY` and
+  `.env` files are not read. At startup the CLI only checks that the key is
+  non-empty, so a bad key surfaces on the first conversation; `/logout` has no
+  effect. Observed working in agy 1.5.18 with `agy-run.sh` JSON output and `-S`
+  resume. Source: https://antigravity.google/docs/install/
 - **Inspecting environment**: `agy mcp`, `agy plugin`, `agy changelog`, and
   `agy --help` show installed MCP servers, plugins, version notes, and flags.

@@ -15,7 +15,8 @@ reads the driving host's reference before starting it; that reference names how 
 is started. That session is the driving session. The
 session that started it stands where the user stands: each
 gate's question and the exit presentation go to it as a message, the turn ends at a gate,
-and its reply is read as the user's answer. A person who drives the loop directly is
+and its reply is read as the user's answer; where a decision or a gate takes the user's own
+answer, that reply carries their words. A person who drives the loop directly is
 addressed directly.
 
 ## Caller Signature
@@ -274,47 +275,31 @@ axiom GoalRead : Session → Prop
     preserves the disposition. -/
 axiom Clear : Session → Source → Prop
 
-/-- **Your reading**: this source's usable return in the latest round is a full re-review of the
-    current reviewed artifact; a re-review from an earlier round does not count. -/
-axiom FullyReReviewed : Session → Source → Prop
-
-/-- **Your reading** of Phase 3: the verified set names a shared cause. -/
-axiom SharedCause : Session → Prop
-
-/-- **Your reading**: every root on the trace maps to its resolution. -/
-axiom RootsResolved : Session → Prop
+/-- **Your reading**: this source's usable return in the latest round is a full review of the
+    current reviewed artifact, whether the round's first review or a re-review. -/
+axiom FullyReviewed : Session → Source → Prop
 
 /-- **Your reading**: the latest round, on the current reviewed artifact, left no surviving finding
     whose `handling` is `Handling.apply` — every survivor relayed, or carried as a decision — and
     no decision the user answered with a repair still awaits that repair. -/
 axiom NoSettledRepair : Session → Prop
 
-/-- Phase 3's root-resolved end, reached only once no finding's `handling` is `Handling.apply`:
-    the loop ends as it stands, the round's relayed and decided findings go to the user
-    unrepaired, with their dispositions or as open decisions, and no further repair is chosen
-    or applied. -/
-def RootResolved (s : Session) : Prop :=
-  match inForce s with
-  | none   => False
-  | some d => (∀ x ∈ d.toList, FullyReReviewed s x) ∧
-      ¬ SharedCause s ∧ RootsResolved s ∧ ¬ RecurrencePending s ∧ ¬ EditedSinceReview s ∧
-      NoSettledRepair s
+/-- **Your reading**: every surfaced finding is dispositioned, or recorded as a decision
+    (`Handling.decide`) still awaiting the user's answer. -/
+axiom AllHandled : Session → Prop
+
+/-- What every end the loop reaches on its own shares, on the current reviewed artifact: no
+    recurrence awaits diagnosis, no edit has landed since the latest review, the goal reading is
+    on the trace, and no settled repair is left to write. -/
+def Ended (s : Session) : Prop :=
+  ¬ RecurrencePending s ∧ ¬ EditedSinceReview s ∧ GoalRead s ∧ NoSettledRepair s
 
 /-- Convergence holds only of the current reviewed artifact, and only through reviews every source
     in force owes; before any designation exists there is nothing to converge on. -/
 def Converged (s : Session) : Prop :=
   match inForce s with
   | none   => False
-  | some d => AllDispositioned s ∧ ¬ RecurrencePending s ∧ ¬ EditedSinceReview s ∧ GoalRead s ∧
-      NoSettledRepair s ∧ ((∀ x ∈ d.toList, Clear s x) ∨ RootResolved s)
-
-/-- **Your reading**: this source's usable return in the latest round is a full review of the
-    current reviewed artifact, whether the round's first review or a re-review. -/
-axiom FullyReviewed : Session → Source → Prop
-
-/-- **Your reading**: every surfaced finding is dispositioned, or recorded as a decision
-    (`Handling.decide`) still awaiting the user's answer. -/
-axiom AllHandled : Session → Prop
+  | some d => Ended s ∧ AllDispositioned s ∧ ∀ x ∈ d.toList, Clear s x
 
 /-- The loop has done what review can settle: a completed round on the current reviewed artifact,
     with a full review from every source in force, added no further settled repair. What is
@@ -322,8 +307,7 @@ axiom AllHandled : Session → Prop
 def Settled (s : Session) : Prop :=
   match inForce s with
   | none   => False
-  | some d => (∀ x ∈ d.toList, FullyReviewed s x) ∧ AllHandled s ∧ ¬ RecurrencePending s ∧
-      ¬ EditedSinceReview s ∧ GoalRead s ∧ NoSettledRepair s
+  | some d => Ended s ∧ AllHandled s ∧ ∀ x ∈ d.toList, FullyReviewed s x
 
 inductive Exit
   | converged
@@ -334,7 +318,7 @@ inductive Exit
   | notConverged
 
 open Classical in
-/-- How any exit is reported: the user's, a stop, Phase 3's root-resolved end, or Phase 5's. An
+/-- How any exit is reported: the user's, a stop, or Phase 5's. An
     exit before any designation exists, at `Entry.missing` or at the first sources gate, is
     reported as `Exit.notConverged`. -/
 noncomputable def exitAs (s : Session) : Exit :=
@@ -472,14 +456,20 @@ one direction, not a repair either reading settles.
 Each decision carries its consequence — who would act on the wrong answer, how soon,
 and what could take it back — and whether it blocks the merge: it does where merging with
 that wrong answer would carry it to the running service, its users, or the sessions that
-load a changed rule or skill, and where that reach cannot be established.
+load a changed rule or skill.
 
 Read every repair as an ablation before classifying it. A finding grounds a repair
 through the consequence it verified; a finding that shows only something unstated
 grounds none and is dropped on that basis. The repair is the least text that resolves
 that consequence and loses no other obligation — an existing carrier before a new one,
 a removal before an addition — and that reading is a recommendation, not the
-disposition.
+disposition. Before classifying a repair that closes one path, read it across the paths
+under the same cause: where it adds a case, conjunct or guard to a definition so that a
+judgment holds on that path, and the same judgment must hold on every path reaching the
+same end, the repair is that judgment placed once where every path passes, with the cases
+standing in for it removed — or, its alternative, the declared input domain or premises
+narrowed so the cause falls outside the contract. Either way it is a plan-level Judgment
+item, not Mechanical.
 
 **Recurrence:** identify the same defect by clause/invariant, not phrasing or line.
 An initial uninformed return is absorbed by settled policy. Instance-specific
@@ -493,9 +483,6 @@ Mechanical diagnosis and becomes a decision too, showing the repair already land
 judging its consequence and merge-blocking flag with that repair in place, and the loop does
 not repeat the fix.
 End recurrence through repair or constituted direction, not reviewer suppression.
-
-Where `RootResolved` holds once `handling` has settled every surviving finding, the loop
-ends there.
 
 Read trajectory from recurrence, causes, and base provenance, not finding-count
 trends. Separate introduced, fix-induced, and pre-existing-side work when deciding
@@ -532,20 +519,14 @@ so far, so the driving session records rather than re-derives it.
    to host permissions; an unsettled epistemic risk goes to the user for apply, defer,
    or drop, and takes their own answer, carried in their words, as a decision does.
    Rejection blocks an edit not yet written.
-3. Repeated fix-induced follow-ups across consecutive rounds, or findings under one
-   supported shared-cause reading that recur across rounds while their repairs keep
-   adding case handling, move
-   judgment, not writing: the next apply pass returns its enumerated predicate and sites
-   to Phase 3 before writing. For fix-induced follow-ups, Phase 3 reads whether those
-   repairs have become a chain in which
+3. Repeated fix-induced follow-ups across consecutive rounds move judgment, not
+   writing: the next apply pass returns its enumerated predicate and sites to Phase 3
+   before writing. Phase 3 reads whether those repairs have become a chain in which
    each answers a problem the previous addition created rather than the original
    finding's subject. Such a chain suggests the first addition computed what the
    contract leaves to judgment; removing that surrogate with the machinery grown around
-   it, against adding the next case, is the plan-level root-or-local judgment. For a
-   recurring shared cause, narrowing the artifact's declared input domain or premises so
-   the cause falls outside the contract stands against the next repair, and against
-   the reconsidered abstraction Phase 3 calls for, in that same judgment. Return to
-   autonomous apply after a review without either pattern.
+   it, against adding the next case, is the plan-level root-or-local judgment. Return to
+   autonomous apply after a review without that pattern.
 4. Read every written and swept site against its disposition and exercise the repaired
    invariant through the transitions, orderings and recipients identified by the scan,
    absence paths included; a check offered as a guard shows that it rejects the failure
@@ -557,7 +538,8 @@ so far, so the driving session records rather than re-derives it.
    touched-surface conventions.
 5. An adaptation that `/contextualize` actually writes re-enters scan, site screening,
    sweep, and write verification once. What its sheet hands back as the user's returns
-   to Phase 3 as a Judgment item, with the handling the sheet proposed.
+   to Phase 3, where `handling` reads it; a decision it becomes carries the handling the
+   sheet proposed.
    Reconcile an already-written adaptation with its settled disposition before hand-forward.
    A self-evident repair stays within that disposition; a competing repair or a live
    judgment about evidence support returns to Phase 3 with the current artifact and
@@ -628,6 +610,7 @@ reconciliation; carried reasons are records, while subsequent reviews detect fin
 fresh.
 
 At every exit, present the exit as `exitAs` reads it, the open decisions heaviest
-consequence first with those that block the merge marked, and the accumulated
+consequence first with those that block the merge marked — each decision's consequence and
+merge-blocking flag judged afresh on the final head — and the accumulated
 dispositions and residual, including standing source limits. Read [exit handover](references/exit-handover.md)
 before offering durable recording.

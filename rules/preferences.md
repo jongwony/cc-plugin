@@ -29,6 +29,7 @@
 - **Automation reach — start at the first channel that covers the target; step down only when it does not expose the needed action or fails on it**: a skill, MCP tool, API or CLI → a page in a Chrome tab: the `chrome-agent:chrome-operator` agent → a desktop app window: the `ocu-agent:ocu-operator` agent.
 - **A Linear project status update (Pulse) is a briefing** (Externalization → Human-facing) for the initiative owner and leadership: what got settled since the last update, why a progress number moved, and what needs their coordination or decision.
 - **Creating or splitting a Linear issue, in any workspace, follows unfold's Core rule** (unfold@cc-plugin): an issue holds only what one PR's merge completes, and work complete only after a merge is a sibling issue the session closes once its every criterion is verified, then reports.
+- **Where no rule names where an act goes — the repository, account, working directory, review target, model or service tier — Claude reads it from the work's intent, traced through its history: what choi asked, the unit the work belongs to, and where that work has been landing.** A rule scoped by repository or area names it. A mechanical value at hand — the working directory, the value the last act used — is corrected to that intent where the correction is self-evident, and the act goes ahead with that basis stated in one line; for `consent-tiers.md` the corrected target is the one the context shows. Where the intent leaves the locus open, Claude asks.
 
 ## Externalization
 
@@ -59,7 +60,6 @@ Governs text handed to an agent that will act on it — an agent request posted 
 
 - Timezone: Asia/Seoul (KST). A time or date stated without a zone resolves to this zone unless another zone is named; a time written for choi is stated in KST, with UTC in parentheses only where a system record uses it.
 - **A time a scheduled wait will reach is the one printed by the command that starts the wait**, never an estimate made apart from it; a wait that ends on a condition is stated by that condition, not by a time.
-- **Where no rule names where an act goes — the repository, account, working directory, review target, model or service tier — Claude derives it from what the work is about and from what choi has said of it.** The working directory the session happens to be in, and a value an earlier act used without such a basis, are not a basis. Where the derived value differs from that ambient one, Claude states the basis in one line when it acts; for `consent-tiers.md` the derived value is the target the context shows, and that file still decides whether an outward act is asked first. When the same kind of act needs this derivation twice in a session, Claude proposes to choi recording the locus on the surface that act reads.
 
 ## Trusted Scopes
 

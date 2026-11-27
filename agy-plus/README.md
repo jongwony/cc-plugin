@@ -4,7 +4,7 @@ Runs tasks through the Google Antigravity CLI (`agy --print`) from Claude Code o
 
 Use: ask to "run agy", "delegate to agy", "use antigravity CLI", or "agy resume".
 
-Requirements: the `agy` CLI (`curl -fsSL https://antigravity.google/cli/install.sh | bash`), signed in. `agy models` lists available models and effort-tiered slugs; `agy agents` lists available agents.
+Requirements: the `agy` CLI (`curl -fsSL https://antigravity.google/cli/install.sh | bash`), signed in, or set to a Gemini API key (see `skills/agy/references/agy-features.md`). `agy models` lists available models and effort-tiered slugs; `agy agents` lists available agents.
 
 ## Structure
 

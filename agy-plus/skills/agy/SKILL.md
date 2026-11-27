@@ -6,7 +6,7 @@ description: |
 
 # Agy Skill Guide
 
-Prerequisite: the `agy` CLI on PATH (`curl -fsSL https://antigravity.google/cli/install.sh | bash`), signed in by running `agy` once interactively. For media input, `yt-dlp` and `ffmpeg` (`brew install yt-dlp ffmpeg`).
+Prerequisite: the `agy` CLI on PATH (`curl -fsSL https://antigravity.google/cli/install.sh | bash`), signed in by running `agy` once interactively, or set to a Gemini API key where no browser sign-in is possible (headless, CI, a cloud container) — `references/agy-features.md` § Sandbox & Authentication Troubleshooting. For media input, `yt-dlp` and `ffmpeg` (`brew install yt-dlp ffmpeg`).
 
 ## Prompt Delivery
 When the task touches a Google service or asks to understand a local media file, read `references/vendor-boundary.md` first: what goes to `agy`, and the context and file Claude prepares before handing it over.

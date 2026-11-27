@@ -614,9 +614,10 @@ the resulting artifact state and disposition. Preserve write discrepancies and t
 reconciliation; carried reasons are records, while subsequent reviews detect findings
 fresh.
 
-At every exit, present the exit as `exitAs` reads it with, where a review ran, the reviewed
-head (or working-tree state) and the sources in force, the open decisions heaviest consequence
-first with those that block the merge marked — each decision's consequence and
-merge-blocking flag judged afresh on the final reviewed artifact — and the accumulated
-dispositions and residual, including standing source limits. Read [exit handover](references/exit-handover.md)
-before offering durable recording.
+At every exit, present the exit as `exitAs` reads it, what ended it — the loop's own end, the
+user's stop, or an outside interruption — and, where a review ran, the reviewed head (or
+working-tree state) and the sources in force, the open decisions heaviest consequence first
+with those that block the merge marked — each decision's consequence and merge-blocking flag
+judged afresh on the final reviewed artifact — and the accumulated dispositions and residual,
+including standing source limits. Read [exit handover](references/exit-handover.md) before
+offering durable recording.

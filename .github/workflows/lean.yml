@@ -1,0 +1,75 @@
+name: Lean
+
+# Builds each Lean package (<plugin>/lean) whose contract can have changed:
+# extract.sh generates the contract module from the SKILL.md Lean block and runs
+# `lake build --wfail` against the package's pinned lean-toolchain. The detect
+# job decides which packages that is; a prose-only SKILL.md edit builds none.
+
+on:
+  pull_request:
+    paths:
+      - '*/skills/*/SKILL.md'
+      - '*/lean/**'
+      - '.github/workflows/lean.yml'
+      - '.github/scripts/lean-changed.sh'
+  push:
+    branches: [main]
+    paths:
+      - '*/skills/*/SKILL.md'
+      - '*/lean/**'
+      - '.github/workflows/lean.yml'
+      - '.github/scripts/lean-changed.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      packages: ${{ steps.changed.outputs.packages }}
+    steps:
+      # Full history: the base revision must be reachable to compare blocks.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: changed
+        env:
+          # HEAD is github.sha on both events: for a pull request that is the merge
+          # commit actions/checkout checks out, the tree the build compiles.
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: |
+          packages=$(bash .github/scripts/lean-changed.sh "$BASE" "$HEAD")
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          echo "Lean packages to build: $packages"
+
+  build:
+    needs: detect
+    if: needs.detect.outputs.packages != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.detect.outputs.packages) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Installs elan and the toolchain the package's lean-toolchain pins; the
+      # build itself runs through extract.sh, which needs the contract generated first.
+      - uses: leanprover/lean-action@v1.7.1
+        with:
+          lake-package-directory: ${{ matrix.package }}
+          auto-config: 'false'
+          build: 'false'
+          test: 'false'
+          lint: 'false'
+          use-github-cache: 'false'
+
+      - name: Generate the contract and build
+        env:
+          PKG: ${{ matrix.package }}
+        run: bash "$PKG/extract.sh"

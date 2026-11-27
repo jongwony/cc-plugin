@@ -202,8 +202,9 @@ inductive Handling
       decision -/
   | apply
   /-- a decision for the user, recorded with its consequence and whether it blocks the merge, and
-      carried unrepaired; the loop neither picks a side nor repeats the fix, and goes on with what
-      is settled. The user's answer, a scope answer included, sets the disposition recorded. -/
+      left open and unrepaired — not yet a disposition; the loop neither picks a side nor repeats
+      the fix, and goes on with what is settled. The user's answer, a scope answer included, sets
+      the disposition recorded. -/
   | decide
 
 open Classical in
@@ -280,8 +281,9 @@ axiom Clear : Session → Source → Prop
 axiom FullyReviewed : Session → Source → Prop
 
 /-- **Your reading**: the latest round, on the current reviewed artifact, left no surviving finding
-    whose `handling` is `Handling.apply` — every survivor relayed, or carried as a decision — and
-    no decision the user answered with a repair still awaits that repair. -/
+    whose `handling` is `Handling.apply` — every survivor relayed, or left open as a decision — and
+    no decision the user answered with a repair whose shape the answer or a cited ground settles
+    still awaits that repair; an answer that leaves the shape open keeps the finding a decision. -/
 axiom NoSettledRepair : Session → Prop
 
 /-- **Your reading**: every surfaced finding is dispositioned, or recorded as a decision
@@ -468,8 +470,8 @@ under the same cause: where it adds a case, conjunct or guard to a definition so
 judgment holds on that path, and the same judgment must hold on every path reaching the
 same end, the repair is that judgment placed once where every path passes, with the cases
 standing in for it removed — or, its alternative, the declared input domain or premises
-narrowed so the cause falls outside the contract. Either way it is a plan-level Judgment
-item, not Mechanical.
+narrowed so the cause falls outside the contract. Unless a citable ground already settles
+where that judgment goes, either way it is a plan-level Judgment item, not Mechanical.
 
 **Recurrence:** identify the same defect by clause/invariant, not phrasing or line.
 An initial uninformed return is absorbed by settled policy. Instance-specific
@@ -611,6 +613,6 @@ fresh.
 
 At every exit, present the exit as `exitAs` reads it, the open decisions heaviest
 consequence first with those that block the merge marked — each decision's consequence and
-merge-blocking flag judged afresh on the final head — and the accumulated
+merge-blocking flag judged afresh on the final reviewed artifact — and the accumulated
 dispositions and residual, including standing source limits. Read [exit handover](references/exit-handover.md)
 before offering durable recording.

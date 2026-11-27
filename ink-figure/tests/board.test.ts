@@ -5,9 +5,14 @@ const BASE = [{ id: 'intro', text: 'intro', scope: 'shared' as const }]
 const DEFERRED = 'The Artifact tool is deferred'
 
 // the engine beneath the plugin: the prompt it composes and the tools it lists
-const engine = (on: any, listed: string[] = ['Read']) => {
+const SESSION = '37f43d21-c7e0-552f-b8f4-9790423fc69f'
+const engine = (on: any, listed: string[] = ['Read'], sessionId: string | null = SESSION) => {
   on('prompt.compose', () => ({ sections: BASE }))
   on('tool.list', () => ({ value: listed.map(name => ({ name, description: '', mcp: false })) }))
+  on('session.id', () => {
+    if (sessionId === null) throw new Error('no session')
+    return { value: sessionId }
+  })
 }
 
 // the facts a system prompt is composed from, as the engine resolves them
@@ -34,13 +39,25 @@ test('the instruction names the drawn fences, the content, the order, the timing
   expect(boardSectionOf(true)).toContain(`${DEFERRED}: load it through ToolSearch first.`)
 })
 
+test('the title carries the session\'s short id when one is given, and the sentence is left out otherwise', () => {
+  expect(boardSectionOf(false, SESSION)).toContain("The place's title ends with this session's id, `· 37f43d21`")
+  expect(boardSectionOf(true, SESSION)).toContain(DEFERRED)
+  expect(boardSectionOf(false)).not.toContain('title')
+  expect(boardSectionOf(false, '  ')).not.toContain('title')
+})
+
+test('the section carries the id the engine gives, and goes without it when the read fails', ON, async ($, on) => {
+  engine(on, ['Read'], null)
+  expect(boardOf((await $.prompt.compose(facts({ tools: ['Read', 'Artifact'] }))).sections)?.text).toBe(boardSectionOf())
+})
+
 test('with the board on and the Artifact tool offered, the section is appended after the engine\'s', ON, async ($, on) => {
   engine(on)
   const { sections } = await $.prompt.compose(facts({ tools: ['Read', 'Artifact'] }))
   expect(sections.slice(0, BASE.length)).toEqual(BASE)
   const board = boardOf(sections)
   expect(board?.scope).toBe('session')
-  expect(board?.text).toBe(boardSectionOf())
+  expect(board?.text).toBe(boardSectionOf(false, SESSION))
   expect(sections.at(-1)?.id).toBe(BOARD_SECTION_ID)
 })
 
@@ -62,9 +79,9 @@ test('a teammate\'s render goes without the section', ON, async ($, on) => {
 
 test('a headless run and a session with no surface get the section', ON, async ($, on) => {
   engine(on)
-  expect(boardOf((await $.prompt.compose(facts({ traits: ['print'] }))).sections)?.text).toBe(boardSectionOf())
-  expect(boardOf((await $.prompt.compose(facts({ surfaces: [] }))).sections)?.text).toBe(boardSectionOf())
-  expect(boardOf((await $.prompt.compose(facts({ surfaces: [], traits: ['print'] }))).sections)?.text).toBe(boardSectionOf())
+  expect(boardOf((await $.prompt.compose(facts({ traits: ['print'] }))).sections)?.text).toBe(boardSectionOf(false, SESSION))
+  expect(boardOf((await $.prompt.compose(facts({ surfaces: [] }))).sections)?.text).toBe(boardSectionOf(false, SESSION))
+  expect(boardOf((await $.prompt.compose(facts({ surfaces: [], traits: ['print'] }))).sections)?.text).toBe(boardSectionOf(false, SESSION))
 })
 
 test('with the board off (the default), no section is added', async ($, on) => {

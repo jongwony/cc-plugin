@@ -75,7 +75,11 @@ export const register: Register = (on, options) => {
     try {
       const isOffered = e.tools.includes('Artifact')
       if (!isOffered && isArtifactDeferred === null && !(await $.tool.list()).some(t => t.name === 'Artifact')) return result
-      const text = boardSectionOf(isArtifactDeferred === true || !isOffered)
+      let sessionId: string | undefined
+      try {
+        sessionId = await $.session.id()
+      } catch {}
+      const text = boardSectionOf(isArtifactDeferred === true || !isOffered, sessionId)
       return { ...result, sections: [...result.sections, { id: BOARD_SECTION_ID, text, scope: 'session' as const }] }
     } catch (err) {
       $.ui.log(`figure board instruction left out: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })

@@ -203,6 +203,8 @@ one place the person can open away from the terminal — each figure with the
 paragraph that led into it and when, newest first. The medium is the model's
 choice (an Artifact page, a document, a deck), unless the person named one, and it
 stays the same place for the whole session, updated at the link it already has.
+Its title ends with the session's short id (the first 8 characters, `· 37f43d21`),
+so boards from different sessions are told apart.
 Pin the place to keep it at hand.
 
 The board is off by default. Turn it on from `/config`, the **Figure board** row.

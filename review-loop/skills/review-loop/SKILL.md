@@ -303,7 +303,7 @@ def Converged (s : Session) : Prop :=
   match inForce s with
   | none   => False
   | some d => AllDispositioned s ∧ ¬ RecurrencePending s ∧ ¬ EditedSinceReview s ∧ GoalRead s ∧
-      ((∀ x ∈ d.toList, Clear s x) ∨ RootResolved s)
+      NoSettledRepair s ∧ ((∀ x ∈ d.toList, Clear s x) ∨ RootResolved s)
 
 /-- **Your reading**: this source's usable return in the latest round is a full review of the
     current reviewed artifact, whether the round's first review or a re-review. -/
@@ -451,9 +451,6 @@ A later-created or newly matching site does not falsify an earlier sweep.
 
 `handling` settles each surviving finding.
 
-Where `RootResolved` holds on that reading once `handling` has settled them, the loop ends
-there.
-
 Reopen only a genuinely live competing judgment. Packaging an identical mechanical fix
 does not reopen disposition.
 
@@ -493,6 +490,9 @@ Mechanical diagnosis and becomes a decision too, showing the repair already land
 judging its consequence and merge-blocking flag with that repair in place, and the loop does
 not repeat the fix.
 End recurrence through repair or constituted direction, not reviewer suppression.
+
+Where `RootResolved` holds once `handling` has settled every surviving finding, the loop
+ends there.
 
 Read trajectory from recurrence, causes, and base provenance, not finding-count
 trends. Separate introduced, fix-induced, and pre-existing-side work when deciding
@@ -584,7 +584,7 @@ the repair commits are judged from their content in the diff as part of the whol
 
 These reviews are the next round's: Phase 1's rules for parallel sources and failed
 calls apply to them, and their findings and direction go straight to Phase 2. End where
-`Converged` holds, or where `Settled` holds, and report which as `exitAs` reads it. The loop
+`Converged` holds, or where `Settled` holds. The loop
 never merges; the caller reads the exit's merge-blocking decisions before it does.
 
 Unreached axes, missing reach reports, open deferrals, and explicitly retained

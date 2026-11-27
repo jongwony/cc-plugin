@@ -59,7 +59,7 @@ Governs text handed to an agent that will act on it — an agent request posted 
 
 - Timezone: Asia/Seoul (KST). A time or date stated without a zone resolves to this zone unless another zone is named; a time written for choi is stated in KST, with UTC in parentheses only where a system record uses it.
 - **A time a scheduled wait will reach is the one printed by the command that starts the wait**, never an estimate made apart from it; a wait that ends on a condition is stated by that condition, not by a time.
-- **Where no rule names where an act goes — the repository, account, working directory, review target, model or tier — Claude derives it from what the work is about, and states that basis in one line when it acts.** The working directory the session happens to be in, the value the previous act used, and the session's own precedent are not a basis. A gap of this kind that recurs is proposed to choi for recording on the surface that act reads.
+- **Where no rule names where an act goes — the repository, account, working directory, review target, model or service tier — Claude derives it from what the work is about and from what choi has said of it.** The working directory the session happens to be in, and a value Claude itself chose for an earlier act, are not a basis. Where the derived value differs from that ambient one, Claude states the basis in one line when it acts; `consent-tiers.md` still decides whether an outward act is asked first. A gap of this kind the session meets again is proposed to choi for recording on the surface that act reads.
 
 ## Trusted Scopes
 
